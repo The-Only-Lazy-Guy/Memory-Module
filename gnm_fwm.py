@@ -313,7 +313,11 @@ class FastWeightMemory(nn.Module):
                 Km, Vm, lg = M
                 tau = self.tau_h[t - 1].exp() if (t > 0 and self.tau_hop) else self.tau.exp()
                 a_ = torch.softmax(tau * qn @ Km.t() + lg, -1)
-                atts.append((qn, tau))
+                # the loop-only view of this hop's query for imitation: only the chaining map of hop >= 2 (Wn, hop_e)
+                # is trainable; the question view, the previous read and the shared key head are given
+                ql = None if t == 0 else F.normalize(self.Wn(torch.cat([hq.detach(), prev.detach()], -1))
+                                                     + self.hop_e.weight[t] - self.kmean.detach(), dim=-1)
+                atts.append((qn, tau, ql))
                 r = a_ @ Vm
             else:
                 r = qn @ M.t()
@@ -362,6 +366,8 @@ def main():
     P.add_argument("--cot-il", action="store_true", help="imitation: the CoT (a demonstration, possibly messy) "
                    "supervises each hop's lookup via aligned expert attention; Walker only says the answer")
     P.add_argument("--il-w", type=float, default=1.0)
+    P.add_argument("--il-loop-only", action="store_true", help="imitation trains only the chaining map of hops >= 2 "
+                   "(never the shared key head / question view)")
     P.add_argument("--il-conf", type=float, default=0.5, help="demonstration sentences whose expert attention "
                    "peaks below this are skipped (filler)")
     P.add_argument("--cot-text", action="store_true", help="Walker generates the whole natural-language CoT after "
@@ -546,20 +552,33 @@ def main():
                     astar = torch.softmax(mem.tau.exp() * ec @ Km.t() + lgm, -1)      # (S, N) expert actions
                 # the loop's action, with the MEMORY side detached (keys, gates): imitation may only move the
                 # queries. Without this the memory collapses (write gate -> 0) until expert and loop agree trivially
-                la = torch.stack([torch.log_softmax(tq.detach() * qn_ @ Km.detach().t() + lgm.detach(), -1)
-                                  for qn_, tq in mem.last_q], 1)                     # (B, hops, N)
-                il_terms, o = [], 0
+                # --il-loop-only: the imitation gradient reaches only the chaining map (hop >= 2); hop 1 takes part in
+                # the alignment without gradient. (il0 / il1: imitation through the shared key head dragged the reader;
+                # depth 1 fell .71 -> .10)
+                la = torch.stack([torch.log_softmax(tq.detach() * (
+                    (qn_.detach() if ql_ is None else ql_) if A.il_loop_only else qn_) @ Km.detach().t()
+                    + lgm.detach(), -1) for qn_, tq, ql_ in mem.last_q], 1)          # (B, hops, N)
+                il_terms, o, n_ok, n_pairs, n_keep, n_sent = [], 0, 0, 0, 0, 0
                 margin = math.log(Km.shape[0]) + 1.0          # early (uniform loop) every in-order match pays
                 for b_, ss in enumerate(sents):
                     ex = astar[o:o + len(ss)]
                     o += len(ss)
                     keep = (ex.max(-1).values > A.il_conf).nonzero().flatten()           # expert knows what to look up
+                    n_sent += len(ss)
+                    n_keep += len(keep)
                     if len(keep) == 0:
                         continue
                     ex = ex[keep]
                     C = (ex[None] * (torch.log(ex[None] + 1e-9) - la[b_][:, None])).sum(-1)   # (hops, J) KL
+                    gold_b = qs[b_][2]
                     for t_, j_ in align(C.detach().tolist(), margin):
-                        il_terms.append(C[t_, j_])
+                        if C[t_, j_].requires_grad:
+                            il_terms.append(C[t_, j_])
+                        if t_ < len(gold_b):              # diagnostic only: does the paired expert look up hop t's fact?
+                            n_pairs += 1
+                            n_ok += int(int(ex[j_].argmax()) == gold_b[t_])
+                episode.il_ok = n_ok / max(1, n_pairs)
+                episode.il_keep = n_keep / max(1, n_sent)
                 if il_terms:
                     il = torch.stack(il_terms).mean()
                     loss = loss + A.il_w * il
@@ -697,7 +716,7 @@ def main():
                   + " ".join(f"{d}:{float(acc[hop == d].mean()):.2f}" for d in sorted(set(hop.tolist())))
                   + f" | chain lands {float(dg['path_ok'].all(-1).float().mean()):.2f}"
                   f" | halt {dg['pi']} write-gate "
-                  f"{dg['gate_w']} tau {float(mem.tau.exp()):.1f} focus {float(mem.c_scale):.2f} tau-hop {[round(float(x), 1) for x in mem.tau_h.exp()]} inj {float(torch.tanh(gate)):.2f} cloze {getattr(episode, 'cloze_acc', -1):.2f} il {getattr(episode, 'il', -1):.2f} "
+                  f"{dg['gate_w']} tau {float(mem.tau.exp()):.1f} focus {float(mem.c_scale):.2f} tau-hop {[round(float(x), 1) for x in mem.tau_h.exp()]} inj {float(torch.tanh(gate)):.2f} cloze {getattr(episode, 'cloze_acc', -1):.2f} il {getattr(episode, 'il', -1):.2f} expert-ok {getattr(episode, 'il_ok', -1):.2f} kept {getattr(episode, 'il_keep', -1):.2f} "
                   f"[{time.time() - t0:.0f}s]", flush=True)
         if step % A.eval_every == 0 or step == A.steps:
             out = evaluate(step)

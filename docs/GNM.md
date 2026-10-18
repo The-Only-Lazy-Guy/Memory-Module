@@ -687,9 +687,21 @@ other nodes). **`--cot-il`** (built, smoke-tested only):
 4. Loss = answer (soft-min rollouts + halt, Walker says the answer) + `--il-w` · KL on the aligned pairs.
    Inference: no CoT.
 
-**PENDING (run later):** `python gnm_fwm.py --hf gpt2 --hops 6 --cloze 36 --tok-emb --wn-mlp --tau-hop0 3
---eval-every 1000 --steps 4000 --depths 1,2,3,4,5 --cot-il --il-conf 0 --cot-noise 1.0 --save
-runs/fwm_il1.pt` (noisy), and `--cot-noise 0` (clean); compare c1 (aligned tokens, 1.00/1.00/.98/.98/.92).
+**MoLab runs 2026-10-19 (RTX PRO 6000, repo github.com/The-Only-Lazy-Guy/Memory-Module), 4000 steps,
+new worlds, depth 1/2/3/4/5:**
+
+| run | accuracy | other-world |
+|---|---|---|
+| answer-only (no CoT) | **.71** / .11 / .18 / .12 / .16 | .00–.05 |
+| il0 imitation, clean CoT, `--il-conf 0` | .10 / .15 / .16 / .07 / .12 | .02–.04 |
+| il1 imitation, noisy CoT, `--il-conf 0` | .10 / .13 / .14 / .12 / .08 | .02–.04 |
+
+**Imitation as built fails (even clean) and hurts depth 1 (.71 → .10).** Suspect: the expert is circular —
+it comes from the model's own key head (untrained early → noisy targets; with `--il-conf 0` every sentence
+counts) and the imitation gradient flows through that shared key head into the memory's keys, dragging the
+reader. Next arms (code ready): `--il-conf 0.5 --il-w 0.1` (trusted experts only, gentle), `--il-loop-only`
+(imitation trains only the chaining map of hops ≥ 2; hop 1 aligned without gradient), diagnostic
+`expert-ok` (does the paired expert look up the right fact) and `kept` (fraction of trusted sentences).
 
 **Terminology.** "Every hop a rollout" = each hop count is one candidate (soft-min). The user's **N
 rollouts** = N parallel attempts of the same question, learn from the best — not built yet. Then 2-hop: hop 2 must build the next
