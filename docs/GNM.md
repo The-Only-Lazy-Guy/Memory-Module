@@ -703,6 +703,22 @@ reader. Next arms (code ready): `--il-conf 0.5 --il-w 0.1` (trusted experts only
 (imitation trains only the chaining map of hops ≥ 2; hop 1 aligned without gradient), diagnostic
 `expert-ok` (does the paired expert look up the right fact) and `kept` (fraction of trusted sentences).
 
+| MoLab 2026-10-19 (partial, 3000–4000 of 6000 steps) | depth 1 / 2–5 | kept / expert-ok |
+|---|---|---|
+| ila noisy, conf .5, w .1, loop-only | .23 / .09–.18 | **.00 / .00** |
+| ilb noisy, conf .5, w .1 | .15 / .14–.19 | **.01 / .00** |
+| ilc clean, conf .5, w .1, loop-only | .42 / .06–.15 | **.05 / .14** |
+
+**The attention expert is the failure, not imitation:** a CoT sentence through the model's own key head
+almost never gives a confident lookup (≤ 5%) and, when paired, hits the right fact ≤ 14% even on clean
+CoT — circular (it depends on the key head that is still learning). The runs were effectively answer-only.
+
+**`--il-mode content` (new default): imitate what each step FOUND.** Hop t's latent, read out through
+Walker's head (as in `--cot`, no CoT generation), must name an entity the aligned CoT sentence mentions;
+candidates = the sentence's tokens that are values stored in memory (filler / "is" give nothing); monotonic
+alignment, gaps free; loss = −log p on the pairs. The target comes from the demonstration's TEXT. Smoke
+(noisy CoT, steps 50–150): kept .85–.90, expert-ok (paired sentence names hop t's fact) .51–.74 from step 50.
+
 **Terminology.** "Every hop a rollout" = each hop count is one candidate (soft-min). The user's **N
 rollouts** = N parallel attempts of the same question, learn from the best — not built yet. Then 2-hop: hop 2 must build the next
 key from the first read (value space → key space); if it stays weak, a value→key consistency self-signal

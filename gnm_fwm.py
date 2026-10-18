@@ -366,6 +366,10 @@ def main():
     P.add_argument("--cot-il", action="store_true", help="imitation: the CoT (a demonstration, possibly messy) "
                    "supervises each hop's lookup via aligned expert attention; Walker only says the answer")
     P.add_argument("--il-w", type=float, default=1.0)
+    P.add_argument("--il-mode", choices=("content", "attn"), default="content",
+                   help="content: hop t's readout must name an entity of its aligned CoT sentence (target from the "
+                        "text); attn: match the expert attention of the sentence through the model's own key head "
+                        "(circular: kept <= .05, expert-ok <= .14 on MoLab)")
     P.add_argument("--il-loop-only", action="store_true", help="imitation trains only the chaining map of hops >= 2 "
                    "(never the shared key head / question view)")
     P.add_argument("--il-conf", type=float, default=0.5, help="demonstration sentences whose expert attention "
@@ -532,7 +536,38 @@ def main():
             cost = A.ponder * torch.arange(Th, device=dev, dtype=ce.dtype)
             w = torch.softmax(-(ce.detach() + cost), -1)
             loss = (w * ce).sum(-1).mean() - (w * torch.log(pi + 1e-9)).sum(-1).mean()   # + halt predicts it
-            if A.cot_il and train and A.act == "softmax":
+            if A.cot_il and train and A.il_mode == "content":
+                # IMITATION of what each step FOUND (not circular: the target comes from the demonstration's text).
+                # Hop t's latent, read out through Walker's head (as in --cot), should name an entity the paired CoT
+                # sentence mentions. Candidates = the sentence's tokens that are values stored in memory (so "is",
+                # "'s", filler give nothing). Monotonic alignment, gaps free; loss = -log p on the pairs. A wrong value
+                # in a messy sentence only mislabels that one pair.
+                crng = random.Random(int(torch.randint(0, 10 ** 9, (1,))))
+                vals = {tok.ids(" " + t_)[0] for _, _, t_ in facts_m}
+                logp = torch.log_softmax(lg[:len(qs)], -1)                            # (nq, hops, V)
+                margin = math.log(lg.shape[-1]) + 1.0          # early (uniform) every in-order match pays
+                il_terms, n_ok, n_pairs, n_keep, n_sent = [], 0, 0, 0, 0
+                for b_, (_, a_, gold) in enumerate(qs):
+                    ss = cot_steps(crng, facts, gold, a_, A.cot_noise)
+                    cands = [[c for c in tok.ids(" " + x) if c in vals] for x in ss]
+                    n_sent += len(ss)
+                    use = [j for j, c in enumerate(cands) if c]
+                    n_keep += len(use)
+                    if not use:
+                        continue
+                    C = torch.stack([-logp[b_][:, cands[j]].max(-1).values for j in use], 1)   # (hops, J)
+                    for t_, jj in align(C.detach().tolist(), margin):
+                        il_terms.append(C[t_, jj])
+                        if t_ < len(gold):                # diagnostic: does the paired sentence name hop t's fact?
+                            n_pairs += 1
+                            n_ok += int(tok.ids(" " + facts[gold[t_]][2])[0] in cands[use[jj]])
+                episode.il_ok = n_ok / max(1, n_pairs)
+                episode.il_keep = n_keep / max(1, n_sent)
+                if il_terms:
+                    il = torch.stack(il_terms).mean()
+                    loss = loss + A.il_w * il
+                    episode.il = float(il)
+            if A.cot_il and train and A.il_mode == "attn" and A.act == "softmax":
                 # IMITATION of the loop from the CoT (a demonstration, possibly messy). Each CoT sentence, encoded
                 # alone through the same encoder + key head, gives the expert's action: its attention over the
                 # memory, a*_j. The loop's action at hop t is its attention a_t. A monotonic alignment pairs hops
