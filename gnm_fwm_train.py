@@ -390,7 +390,7 @@ def main():
             n = acc["n"]
             rec = {"type": "train", "step": step, "lr": lr, "loss": acc["loss"] / n, "ce": acc["ce"] / n,
                    "addr": acc["addr"] / n, "exact": acc["exact"] / n, "first": acc["first"] / n,
-                   "read_right": acc["right"] / n, "tau": float(mem.tau.exp()), "sec_per_step": dt / n,
+                   "read_right": acc["right"] / n, "tau": float(mem.tau.detach().exp()), "sec_per_step": dt / n,
                    "data_wait": acc["wait"] / n, "units_per_memory": upm, "docs": at_step(sched, step),
                    "gpu_gib": torch.cuda.max_memory_allocated() / 2 ** 30 if dev.type == "cuda" else 0.0,
                    "time": time.time()}

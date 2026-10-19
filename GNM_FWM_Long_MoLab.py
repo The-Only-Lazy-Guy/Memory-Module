@@ -255,9 +255,13 @@ def _(mo, recs, status, tail):
             _ax[0][1].plot([r["step"] for r in _lg], [max(1e-3, 1 - r["exact"]) for r in _lg], marker="o", label=_s)
         _ax[0][0].set_title("exact match on never-seen memories (linear)")
         _ax[0][0].set_xlabel("step"); _ax[0][0].set_ylim(0, 1); _ax[0][0].legend(); _ax[0][0].grid(alpha=.3)
-        _ax[0][1].set_xscale("log"); _ax[0][1].set_yscale("log")
+        if any(r["step"] > 0 for r in evals):                    # log axes need at least one point
+            _ax[0][1].set_xscale("log"); _ax[0][1].set_yscale("log")
+        else:
+            _ax[0][1].text(0.5, 0.5, "appears after the first eval past step 0", ha="center",
+                           transform=_ax[0][1].transAxes)
         _ax[0][1].set_title("error (1 − exact), log-log: a straight falling line = power law")
-        _ax[0][1].set_xlabel("step"); _ax[0][1].legend(); _ax[0][1].grid(alpha=.3, which="both")
+        _ax[0][1].set_xlabel("step"); _ax[0][1].legend() if _ax[0][1].get_legend_handles_labels()[0] else None; _ax[0][1].grid(alpha=.3, which="both")
         # slope per eval interval: rising = accelerating, falling = decelerating
         for _s in sets:
             _e = [r for r in evals if r["set"] == _s]
@@ -267,7 +271,7 @@ def _(mo, recs, status, tail):
                 _ax[1][0].plot(_mid, _sl, marker="o", label=_s)
         _ax[1][0].axhline(0, color="gray", lw=.8)
         _ax[1][0].set_title("gain per 1000 steps between evals (rising = accelerating; needs 3+ evals)")
-        _ax[1][0].set_xlabel("step"); _ax[1][0].legend(); _ax[1][0].grid(alpha=.3)
+        _ax[1][0].set_xlabel("step"); _ax[1][0].legend() if _ax[1][0].get_legend_handles_labels()[0] else None; _ax[1][0].grid(alpha=.3)
         if train:
             _x = [r["step"] for r in train]
             _ax[1][1].plot(_x, [r["exact"] for r in train], label="train exact", alpha=.8)
