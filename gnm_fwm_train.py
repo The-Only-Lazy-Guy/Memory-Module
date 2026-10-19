@@ -367,7 +367,7 @@ def main():
         torch.nn.utils.clip_grad_norm_(params, 1.0)
         opt.step()
         for k_, v_ in (("loss", loss), ("ce", ce), ("addr", addr)):
-            acc[k_] += float(v_)
+            acc[k_] += float(v_.detach())
         acc["exact"] += float(em.mean()); acc["first"] += float(fi.mean()); acc["right"] += float(ri.mean())
         acc["n"] += 1
         if step % A.log_every == 0:
