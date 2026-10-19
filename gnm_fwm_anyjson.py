@@ -271,6 +271,8 @@ def main():
                     if inl:
                         rd = br.setdefault("READ(in list): " + c_, [0, 0.0, 0.0])
                         rd[0] += 1
+                    ra = br.setdefault("READALL: " + c_, [0, 0.0, 0.0])
+                    ra[0] += 1
                 for (kd, inl), e_, f_ in zip(episode.tags, e.tolist(), f.tolist()):
                     for key_ in (kd, "in list" if inl else "not in list"):
                         b_ = br.setdefault(key_, [0, 0.0, 0.0])
@@ -282,9 +284,13 @@ def main():
             if not off:
                 print("  by kind: " + " | ".join(f"{k_} {v_[1] / v_[0]:.2f}/{v_[2] / v_[0]:.2f} (n {v_[0]})"
                                                 for k_, v_ in sorted(br.items()) if not k_.startswith("READ")), flush=True)
-                nl = sum(v_[0] for k_, v_ in br.items() if k_.startswith("READ"))
+                nl = sum(v_[0] for k_, v_ in br.items() if k_.startswith("READ("))
                 print("  read (in-list questions): " + " | ".join(f"{k_[15:]} {v_[0] / max(1, nl):.2f}"
-                                                               for k_, v_ in sorted(br.items()) if k_.startswith("READ")),
+                                                               for k_, v_ in sorted(br.items()) if k_.startswith("READ(")),
+                      flush=True)
+                na = sum(v_[0] for k_, v_ in br.items() if k_.startswith("READALL"))
+                print("  read (ALL questions): " + " | ".join(f"{k_[9:]} {v_[0] / max(1, na):.2f}"
+                                                           for k_, v_ in sorted(br.items()) if k_.startswith("READALL")),
                       flush=True)
         mem.train()
         return out_score
