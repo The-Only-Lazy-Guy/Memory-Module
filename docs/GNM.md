@@ -1135,6 +1135,27 @@ its accuracy = the skill level (here ~.75–.8 = the fresh-document eval; the 55
 one write). Longer training raises the ceiling for all future knowledge at once; store size generalizes to ~3× the
 training-world size (global world, §9.4).
 
+### 9.10 Long run on MoLab (batched trainer `gnm_fwm_train.py`, notebook `molab_upload/GNM_FWM_Long_MoLab.py`)
+
+User (2026-10-20): longer run on MoLab with large batches; an interactive notebook for the full run.
+**Trainer:** E memories per step (default 32 × 32 questions ≈ 1000 questions per step), each a fresh random-schema JSON
+world (3 documents, overlap 0.5); all documents encoded by Walker in padded chunks, all units in ONE store with a
+per-memory mask (a question sees only its own memory's units; keys centred per memory), all questions decoded in one
+forward. Episodes are built by CPU worker processes (spawn pool, prefetch). Fixed eval sets of never-seen memories
+(written once, asked at once, zero training on them): standard (eval wording), overlap (renamed copies), held-out key
+vocabulary, big store (12 documents). Logs `runs/<run>.jsonl`; checkpoints `runs/<run>.pt` (resume) and `_best.pt`.
+**Local check (GPT-2, 4 memories/step, 400 steps, 3.3 min):** standard .78 / overlap .72 (read right .92) — vs the
+single-memory loop .71 after 1500 steps: batching works.
+**Notebook:** ① setup (clone/pull github.com/The-Only-Lazy-Guy/Memory-Module into /marimo/mm, download
+`Papatpong/Walker checkpoints/ckpt_best.pt`) ② widgets for every knob ③ the exact command ④ Start / Stop (detached
+process, pid file, survives notebook re-runs; Stop kills the process group) ⑤ live dashboard: eval table, exact vs
+step, error vs step on log-log (power law = straight line), gain per 1000 steps between evals (rising = accelerating),
+training curves, per-kind accuracy, log tail.
+**Expected curve shape (stated before the run):** on a FIXED task accuracy is bounded, so the curve cannot accelerate
+forever — skills that build on each other (addressing → decoding → in-list disambiguation) give S-shaped segments; the
+honest scaling readout is the error on log-log and the big-store / held-out-keys sets (does the skill transfer to
+bigger stores and new key words without training on them).
+
 ## 10. CHECKLIST (current — read this first; updated every session)
 
 Each item is decided: ✅ built · 🔨 build next (in order) · ⏸ defer (worth it, not now) · ❌ reject (not worth
