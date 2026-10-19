@@ -88,29 +88,35 @@ def _(mo):
     C = {}
     C["model"] = mo.ui.dropdown(options=["Walker 1B (checkpoint)", "gpt2 (fast check)"],
                                 value="Walker 1B (checkpoint)", label="model")
-    C["run"] = mo.ui.text(value="fwm1b_long", label="run name (runs/<run>.jsonl / .pt)")
+    C["run"] = mo.ui.text(value="fwm1b_c2", label="run name (runs/<run>.jsonl / .pt)")
     C["resume"] = mo.ui.checkbox(value=False, label="resume runs/<run>.pt (after a stop / box reset)")
-    C["steps"] = mo.ui.number(start=100, stop=200000, step=100, value=4000, label="steps")
+    C["init"] = mo.ui.text(value="runs/fwm1b_long_best.pt", label="init module from (e.g. runs/fwm1b_long_best.pt; blank = scratch)",
+                           full_width=True)
+    C["key_mix"] = mo.ui.slider(start=0.0, stop=0.9, step=0.05, value=0.5,
+                                label="key mix (share of made-up key words per memory)")
+    C["steps"] = mo.ui.number(start=100, stop=200000, step=100, value=3000, label="steps")
     C["episodes"] = mo.ui.number(start=1, stop=256, step=1, value=32,
                                  label="memories per step (batch; 32 ≈ 1000 questions)")
     C["nq"] = mo.ui.number(start=4, stop=64, step=4, value=32, label="questions per memory")
-    C["docs"] = mo.ui.text(value="3", label="documents per memory (or schedule docs:step, e.g. 3:0,6:2000)")
-    C["lr"] = mo.ui.number(start=0.00005, stop=0.01, step=0.00005, value=0.001, label="lr (peak)")
-    C["warmup"] = mo.ui.number(start=0, stop=5000, step=50, value=200, label="warmup steps")
+    C["docs"] = mo.ui.text(value="3:0,6:500,12:1500",
+                           label="documents per memory (or schedule docs:step, e.g. 3:0,6:2000)")
+    C["lr"] = mo.ui.number(start=0.00005, stop=0.01, step=0.00005, value=0.0005, label="lr (peak)")
+    C["warmup"] = mo.ui.number(start=0, stop=5000, step=50, value=100, label="warmup steps")
     C["addr"] = mo.ui.number(start=0.0, stop=5.0, step=0.1, value=1.0, label="addressing loss weight")
     C["overlap"] = mo.ui.slider(start=0.0, stop=1.0, step=0.05, value=0.5, label="overlap (renamed copies)")
     C["slots"] = mo.ui.number(start=0, stop=16, step=1, value=8, label="value slots (0 = off)")
     C["slot_read"] = mo.ui.dropdown(options=["soft", "hard"], value="soft", label="slot read")
     C["eval_every"] = mo.ui.number(start=25, stop=5000, step=25, value=250, label="eval every (steps)")
     C["eval_eps"] = mo.ui.number(start=4, stop=256, step=4, value=32, label="eval memories per set")
-    C["big_docs"] = mo.ui.number(start=3, stop=48, step=1, value=12, label="big-store eval: documents")
+    C["big_docs"] = mo.ui.number(start=3, stop=48, step=1, value=24, label="big-store eval: documents")
     C["workers"] = mo.ui.number(start=1, stop=32, step=1, value=8, label="CPU data workers")
     C["seed"] = mo.ui.number(start=0, stop=100000, step=1, value=0, label="seed")
     mo.vstack([
         mo.md("## ② Configure"),
         mo.hstack([C["model"], C["run"], C["resume"]], justify="start", gap=2),
+        C["init"],
         mo.hstack([C["steps"], C["episodes"], C["nq"], C["docs"]], justify="start", gap=2),
-        mo.hstack([C["lr"], C["warmup"], C["addr"], C["overlap"]], justify="start", gap=2),
+        mo.hstack([C["lr"], C["warmup"], C["addr"], C["overlap"], C["key_mix"]], justify="start", gap=2),
         mo.hstack([C["slots"], C["slot_read"], C["eval_every"], C["eval_eps"], C["big_docs"]],
                   justify="start", gap=2),
         mo.hstack([C["workers"], C["seed"]], justify="start", gap=2),
@@ -128,16 +134,19 @@ def _(C, CKPT, mo):
         argv += ["--ckpt", str(CKPT)]
     else:
         argv += ["--hf", "gpt2"]
-    argv += ["--run", C["run"].value.strip() or "fwm1b_long", "--steps", str(int(C["steps"].value)),
+    argv += ["--run", C["run"].value.strip() or "fwm1b_c2", "--steps", str(int(C["steps"].value)),
              "--episodes", str(int(C["episodes"].value)), "--nq", str(int(C["nq"].value)),
              "--docs", C["docs"].value.strip() or "3", "--lr", str(C["lr"].value),
              "--warmup", str(int(C["warmup"].value)), "--addr-loss", str(C["addr"].value),
-             "--overlap", str(C["overlap"].value), "--value-slots", str(int(C["slots"].value)),
+             "--overlap", str(C["overlap"].value), "--key-mix", str(C["key_mix"].value),
+             "--value-slots", str(int(C["slots"].value)),
              "--slot-read", C["slot_read"].value, "--eval-every", str(int(C["eval_every"].value)),
              "--eval-episodes", str(int(C["eval_eps"].value)), "--big-docs", str(int(C["big_docs"].value)),
              "--workers", str(int(C["workers"].value)), "--seed", str(int(C["seed"].value))]
     if C["resume"].value:
         argv += ["--resume"]
+    elif C["init"].value.strip():
+        argv += ["--init", C["init"].value.strip()]
     mo.vstack([mo.md("## ③ Command"), mo.md("```\npython -u " + " ".join(argv) + "\n```")])
     return (argv,)
 
@@ -155,7 +164,7 @@ def _(mo):
 def _(C, WORK, argv, os, signal, start_button, stop_button, subprocess, sys):
     # The run is a detached process (own session) that survives notebook re-runs; its PID lives in
     # runs/<run>.pid so Stop and the dashboard find it again after a kernel restart.
-    _run = C["run"].value.strip() or "fwm1b_long"
+    _run = C["run"].value.strip() or "fwm1b_c2"
     _pidf = WORK / "runs" / f"{_run}.pid"
 
     def _alive(pid):
@@ -187,7 +196,7 @@ def _(C, WORK, argv, os, signal, start_button, stop_button, subprocess, sys):
 @app.cell
 def _(C, WORK, json, mo, os, refresh):
     refresh.value
-    _run = C["run"].value.strip() or "fwm1b_long"
+    _run = C["run"].value.strip() or "fwm1b_c2"
     _jl, _out, _pidf = (WORK / "runs" / f"{_run}.jsonl", WORK / "runs" / f"{_run}.out",
                         WORK / "runs" / f"{_run}.pid")
     recs = []
