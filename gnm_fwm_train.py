@@ -61,7 +61,19 @@ def make_episode(task):
     seed, docs, nq, overlap, keys, wording, max_ans, max_tok = task
     H, AJ, tok = _W["H"], _W["AJ"], _W["tok"]
     rng = random.Random(seed)
-    vocab = H.KEYS_TRAIN if keys == "train" else H.KEYS_EVAL
+    vocab = H.KEYS_TRAIN if keys.startswith("train") else H.KEYS_EVAL
+    if keys.startswith("train+mix"):
+        # key diversity: a share of the vocabulary is fresh made-up words (syllables) for THIS memory, so key matching
+        # cannot lean on ~150 memorized names; the held-out English key words stay unseen
+        p_ = float(keys.split(":")[1])
+        n_gen = int(round(len(vocab) * p_ / max(1e-6, 1 - p_)))
+        held = set(H.KEYS_EVAL)
+        gen = set()
+        while len(gen) < n_gen:
+            w = "".join(rng.choice(H._SYL) for _ in range(rng.randint(2, 3)))
+            if w not in held and w.isalpha():
+                gen.add(w)
+        vocab = list(vocab) + sorted(gen)
     out_docs, meta, qs, first = [], [], [], None
     for di in range(docs):
         name = H._doc_name(rng)
@@ -148,6 +160,8 @@ def main():
     P.add_argument("--warmup", type=int, default=200)
     P.add_argument("--addr-loss", type=float, default=1.0)
     P.add_argument("--overlap", type=float, default=0.5)
+    P.add_argument("--key-mix", type=float, default=0.0,
+                   help="share of the training key vocabulary that is fresh made-up words per memory (0 = off)")
     P.add_argument("--value-slots", type=int, default=8)
     P.add_argument("--slot-read", choices=("soft", "hard"), default="soft")
     P.add_argument("--workers", type=int, default=max(1, min(8, (os.cpu_count() or 2) - 1)))
@@ -307,7 +321,8 @@ def main():
 
     def tasks_for(step):
         nd = at_step(sched, step)
-        return [(A.seed * 1_000_003 + step * 1009 + e, nd, A.nq, A.overlap, "train", "train", A.max_ans,
+        keys = f"train+mix:{A.key_mix}" if A.key_mix > 0 else "train"
+        return [(A.seed * 1_000_003 + step * 1009 + e, nd, A.nq, A.overlap, keys, "train", A.max_ans,
                  A.max_doc_tokens) for e in range(A.episodes)]
     pending = collections.OrderedDict()
 
