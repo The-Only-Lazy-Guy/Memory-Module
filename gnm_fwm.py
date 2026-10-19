@@ -217,7 +217,7 @@ class Pool(nn.Module):
 
 
 class FastWeightMemory(nn.Module):
-    def __init__(self, d, dk=128, hops=3, tie=True, center=True, tok_emb=False, act="softmax", tau0=10.0, sg_chain=False, wn_mlp=False, tau_hop0=0.0, ptr_pool=False, seg=False):
+    def __init__(self, d, dk=128, hops=3, tie=True, center=True, tok_emb=False, act="softmax", tau0=10.0, sg_chain=False, wn_mlp=False, tau_hop0=0.0, ptr_pool=False, seg=False, sup_q=False):
         super().__init__()
         self.dk, self.hops, self.tie, self.center, self.tok_emb, self.act = dk, hops, tie, center, tok_emb, act
         # act = the memory network's hidden activation. "linear": delta-rule matrix M (f1-f7; with the write
@@ -273,6 +273,13 @@ class FastWeightMemory(nn.Module):
         # segment vector added to POINTER tokens before pooling (zero-init): lets the pool tell a leaf's own pair from
         # the shared record label (anyjson: in-list misses were 'same record, other field' .18, never other record)
         self.seg = nn.Parameter(torch.zeros(di)) if seg else None
+        # query-dependent supersession: memory may carry S (how superseded each unit is); the QUERY decides how much
+        # it applies, lambda(q) = softplus(Wlam q) (init lambda = 1). History questions can learn lambda ~ 0
+        # (state streams: with S baked into the gain, 'before update k' stayed at .06-.13)
+        if sup_q:
+            self.Wlam = nn.Linear(dk, 1)
+            nn.init.zeros_(self.Wlam.weight)
+            nn.init.constant_(self.Wlam.bias, 0.5413)
         if ptr_pool:
             self.pp = Pool(di)
             self.Wkp = nn.Linear(di, dk)
@@ -351,8 +358,10 @@ class FastWeightMemory(nn.Module):
             q = hq if t == 0 else self.Wn(torch.cat([hq, prev], -1)) + self.hop_e.weight[t]
             qn = F.normalize(q - self.kmean, dim=-1)
             if self.act == "softmax":
-                Km, Vm, lg = M
+                Km, Vm, lg = M[:3]
                 tau = self.tau_h[t - 1].exp() if (t > 0 and self.tau_hop) else self.tau.exp()
+                if len(M) > 3 and hasattr(self, "Wlam"):        # (K, V, gain, S): the query decides lambda
+                    lg = lg - F.softplus(self.Wlam(q)) * M[3][None]
                 a_ = torch.softmax(tau * qn @ Km.t() + lg, -1)
                 # the loop-only view of this hop's query for imitation: only the chaining map of hop >= 2 (Wn, hop_e)
                 # is trainable; the question view, the previous read and the shared key head are given

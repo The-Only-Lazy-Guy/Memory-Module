@@ -937,6 +937,57 @@ aj11 = aj9 without (control), 10k steps each.
 hub's **held-out key vocabulary** (field names never used as keys in training): **.88 / .91** (in list .86, not in list
 .92; email .44; memory off .00) → label matching generalizes to new schemas. Default for JSON writes from now on: `--seg`.
 
+**CORRECTION (2026-10-19): an unnoticed change in the anyjson runs.** The position-aware-readout patch (aj3) also changed
+the injection hook so that the read is added ONLY at the first answer position (slice width 1); aj1 / aj2 added it at
+every answer position. All runs from aj3 on (aj4–aj11, incl. the .97) used first-position-only injection. So part of
+aj7→aj10's gain over aj1 may come from that change, not only from longer training; the segment-vector result (aj10
+.97 vs control aj11 .76, both first-position) is unaffected. To separate: a run of the aj1 config with first-position
+injection (pending).
+
+### 9.6 State streams of any schema (`gnm_fwm_state.py`, user 2026-10-19: "any kind of state JSON, universal and custom; the model distinguishes it from the k:v")
+
+A state = a random-schema JSON document (no schema-specific code). It changes: snapshot 0, then 1–4 ticks with 1–4
+value changes (same kind; ids / labels fixed). EVERY snapshot is written (history kept). Questions ask the CURRENT value
+(half about changed values). **The update is the model's: a learned overwrite gate** — on each write, every older
+unit's gain drops by `softplus(a·max_j cos(k_old, k_new_j) + b)·10` (a newer unit with the same key supersedes it; init
+a=5, b=−8 ≈ no suppression); no bookkeeping by path. Starting from the anyjson reader aj10 (first-position injection):
+one snapshot .91; up to 4 updates without the gate: unchanged .98 but **changed .20** (stale units win / blend).
+Runs: st1 = learned overwrite gate, st2 = no gate (control), 6000 steps each.
+
+| run (from aj10, stopped at step 5000 by a session end) | exact | changed values | unchanged | gate a, b |
+|---|---|---|---|---|
+| **st1: learned overwrite gate** | **.92** | **.87** (from .20) | .95 | 5.58, −7.30 |
+| st2: no gate (control) | .73 | .32 | .92 | — |
+
+**The model learns to supersede old snapshots on its own** (key match → older unit's gain drops); without the gate the
+read cannot tell current from stale (changed .32). Final at 6000: **st1 .93 / changed .89 / unchanged .94**; st2 (no gate)
+.72 / changed .29.
+
+**Partial updates** (`--partial`: an update writes only the changed top-level sections; paths / pointer chains identical
+to the full document): st1 ZERO-SHOT .92 / changed .88 / unchanged .93 — transfers without training.
+
+**History** (`--history`): each snapshot header carries its version (`"x.json initial"`, `"x.json after update k"`);
+current questions name only the document (newest wins through the gate), history questions use the hub wording
+"... before update k?" (answer = the value in the snapshot before update k). st1 zero-shot: current changed .82 /
+unchanged .88, **history .01**. st4 = st1 + `--history`, 6000 steps (the version cue must override recency).
+**st4: history stays .06–.13** (current changed .88 / unchanged .89). Cause: supersession is baked into the old unit's gain,
+independent of the question, and current-value questions push it stronger (b −7.28 → −6.99, ~2.5 nats per newer
+duplicate) → a "before update k" query cannot reach the old unit. **Fix `--sup-q`:** keep per-unit supersession S
+separately; the QUERY decides how much applies: `logits = τ q·K + gain − λ(q)·S`, `λ(q) = softplus(Wlam q)` (init λ = 1 =
+st1's behaviour, verified identical at step 0). Current questions can learn λ large, history questions λ ≈ 0 + the
+version cue. st5 = st1 + `--history --sup-q`, 6000 steps.
+**st5: history .10** (current .90 / .91). Diagnostic: wrong history answers are the CURRENT value 32% of the time, the
+rest miss the field or blend. The question format was the deeper problem: "before update k" had to match a header
+"after update k−1" (k−1 arithmetic inside one vector match). Real state streams carry a version / timestamp and queries
+name it. **New format:** headers `"x.json @ version k"` (initial = version 0); history questions "What was the {key} of
+{where} in {doc} at version k?" for a k whose value differs from the current one (2 train wordings, 1 held-out eval
+wording); answer = the value at version k. st6 = st5 + new format, 6000 steps.
+**st6: current changed .93 / unchanged .94, HISTORY .89** (from .00; answered with the current value only .02) — eval
+wording held out. The memory keeps every version, the newest wins for current questions through query-dependent
+supersession, and a named version retrieves the old value. Meets the G2 memory targets (JSON-state lookup ≥ .90,
+old-value history ≥ .85) on random-schema states. Recipe: anyjson reader (aj10, `--seg`) → state streams with the
+learned overwrite gate (st1) → `--history --sup-q` with versioned headers (st5 → st6).
+
 ## 10. CHECKLIST (current — read this first; updated every session)
 
 Each item is decided: ✅ built · 🔨 build next (in order) · ⏸ defer (worth it, not now) · ❌ reject (not worth
@@ -949,6 +1000,7 @@ fact units (key = learned label, value, write gate) → k hops inside the memory
 | encoder = Walker P blocks + one R pass, learned pooling, per-stream standardization (doc vs query stats) | ✅ | query-stats bug fix: retrieval .03 → .89 at init |
 | any JSON → one document → one unit per pair; a nested pair pools with its record key (pointer, §1.4) | ✅ | without the pointer 1-hop .14, with it 1.00 |
 | segment vector marking pointer tokens (record label / ancestors) before pooling (`--seg`) | ✅ | any-schema JSON .76 → .97 exact (in-list .66 → .97) |
+| state streams of any schema: every snapshot kept, learned overwrite gate, query-dependent supersession, versioned headers (`gnm_fwm_state.py --history --sup-q`) | ✅ | current .93 / .94, history .89 (st6); partial updates transfer zero-shot (.92) |
 | memory = one hidden unit per fact: `softmax(τ·cos(q, keys) + log g) · values`; write gate = unit gain | ✅ | 1-hop .39 → .73 vs the linear delta rule |
 | k hops inside the memory, Walker runs once (recurrence merged per RECURRENT/OPR) | ✅ | |
 | learned label match (no hand rules), question never shown to Walker, Walker verbalizes (no copy) | ✅ | |
