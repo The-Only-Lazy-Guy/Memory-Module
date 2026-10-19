@@ -137,6 +137,19 @@ def cot_steps(rng, facts, path, answer, noise=0.0):
     return [x for x in out if x]
 
 
+def new_info(tok, question, sentences, vals):
+    """Per CoT sentence: the stored-value tokens it REVEALS (not in the question, not in an earlier sentence).
+    "A's boss is B" -> {B}; "B's friend is C" -> {C}. Without this the subject A (also a stored value) counted
+    and a hop could satisfy imitation by naming the question's own subject."""
+    seen = set(tok.ids(" " + question))
+    out = []
+    for x in sentences:
+        ids = tok.ids(" " + x)
+        out.append([c for c in dict.fromkeys(ids) if c in vals and c not in seen])
+        seen |= set(ids)
+    return out
+
+
 def align(C, margin):
     """Monotonic alignment of loop steps (rows) to demonstration sentences (cols): a matched pair scores
     C - margin, gaps are free (filler / distractors / skipped steps are left out). Returns [(t, j)]."""
@@ -145,8 +158,12 @@ def align(C, margin):
     bk = [[0] * (J + 1) for _ in range(T + 1)]
     for t in range(1, T + 1):
         for j in range(1, J + 1):
-            opts = (dp[t - 1][j], dp[t][j - 1], dp[t - 1][j - 1] + C[t - 1][j - 1] - margin)
-            k = min(range(3), key=lambda i: opts[i])
+            # a match costs C - margin + a tiny per-hop cost, and ties go to the match: with uniform early costs the
+            # old tie order ("skip this hop" first) matched sentence 1 to a LATER hop and shifted every step
+            # (clean CoT: paired sentence named hop t's fact only .77)
+            opts = (dp[t - 1][j - 1] + C[t - 1][j - 1] - margin + 1e-2 * t, dp[t - 1][j], dp[t][j - 1])
+            k = (2, 0, 1)[min(range(3), key=lambda i: (opts[i], i))]
+            opts = (opts[1], opts[2], opts[0])
             dp[t][j], bk[t][j] = opts[k], k
     out, t, j = [], T, J
     while t > 0 and j > 0:
@@ -200,7 +217,7 @@ class Pool(nn.Module):
 
 
 class FastWeightMemory(nn.Module):
-    def __init__(self, d, dk=128, hops=3, tie=True, center=True, tok_emb=False, act="softmax", tau0=10.0, sg_chain=False, wn_mlp=False, tau_hop0=0.0):
+    def __init__(self, d, dk=128, hops=3, tie=True, center=True, tok_emb=False, act="softmax", tau0=10.0, sg_chain=False, wn_mlp=False, tau_hop0=0.0, ptr_pool=False, seg=False):
         super().__init__()
         self.dk, self.hops, self.tie, self.center, self.tok_emb, self.act = dk, hops, tie, center, tok_emb, act
         # act = the memory network's hidden activation. "linear": delta-rule matrix M (f1-f7; with the write
@@ -250,6 +267,17 @@ class FastWeightMemory(nn.Module):
         # a 1-hop from a 2-hop question and sent half the 1-hop questions to hop 2 (t3, t4)
         self.Wh = nn.Linear(3 * dk, 1)
         self.Wo = nn.Linear(dk, d)                      # read -> Walker's residual space
+        # optional separate pool for the POINTER chain (record label, ancestor keys): key = Wk(pool(own pair)) +
+        # Wkp(pool(pointer)); zero-init so it starts as the plain key (anyjson: in-list leaves .39 vs .72 outside)
+        self.ptr_pool = ptr_pool
+        # segment vector added to POINTER tokens before pooling (zero-init): lets the pool tell a leaf's own pair from
+        # the shared record label (anyjson: in-list misses were 'same record, other field' .18, never other record)
+        self.seg = nn.Parameter(torch.zeros(di)) if seg else None
+        if ptr_pool:
+            self.pp = Pool(di)
+            self.Wkp = nn.Linear(di, dk)
+            nn.init.zeros_(self.Wkp.weight)
+            nn.init.zeros_(self.Wkp.bias)
 
     def std(self, X):
         if self.training:
@@ -272,16 +300,29 @@ class FastWeightMemory(nn.Module):
             m[i, :len(q)] = True
         return X[idx], m
 
-    def write(self, Xdoc, rng, E=None):
-        """Delta-rule write of every fact span into a fresh M (dk x dk). Returns M, keys, values."""
+    def write(self, Xdoc, rng, E=None, ptr=None):
+        """Write every fact span (one unit each). ptr: per fact the pointer-chain positions (pooled separately)."""
         Xs = self.std(Xdoc)
         if self.tok_emb:
             Xs = torch.cat([Xs, self.lne(E)], -1)
         H, m = self.spans(Xs, rng)
+        if ptr is not None and self.seg is not None:
+            pos = [list(range(*r)) if isinstance(r, tuple) else list(r) for r in rng]
+            isp = torch.zeros(H.shape[:2], device=H.device)
+            for i, (q, ps) in enumerate(zip(pos, ptr)):
+                pset = set(ps)
+                for j, x in enumerate(q):
+                    if x in pset:
+                        isp[i, j] = 1.0
+            H = H + isp[..., None] * self.seg
         kr = self.Wk(self.pk(H, m))
+        if ptr is not None and self.ptr_pool:
+            Hp, mp = self.spans(Xs, [q if q else [0] for q in ptr])
+            kr = kr + self.Wkp(self.pp(Hp, mp))
         # centre the keys per world (and the queries with the same mean): untrained keys are near-orthogonal
         # (self-recall 1.00) but the answer loss pulled them onto one shared direction (key cos .68, recall .31)
         self.kmean = kr.mean(0, keepdim=True) if self.center else torch.zeros_like(kr[:1])
+        self.last_kraw = kr                             # raw keys: a persistent store centres them by ITS mean
         k = F.normalize(kr - self.kmean, dim=-1)
         v = self.Wv(self.pv(H, m))
         g = torch.sigmoid(self.Wg(self.pv(H, m))).squeeze(-1) * torch.sigmoid(self.beta)
@@ -547,9 +588,9 @@ def main():
                 logp = torch.log_softmax(lg[:len(qs)], -1)                            # (nq, hops, V)
                 margin = math.log(lg.shape[-1]) + 1.0          # early (uniform) every in-order match pays
                 il_terms, n_ok, n_pairs, n_keep, n_sent = [], 0, 0, 0, 0
-                for b_, (_, a_, gold) in enumerate(qs):
+                for b_, (q_, a_, gold) in enumerate(qs):
                     ss = cot_steps(crng, facts, gold, a_, A.cot_noise)
-                    cands = [[c for c in tok.ids(" " + x) if c in vals] for x in ss]
+                    cands = new_info(tok, q_, ss, vals)
                     n_sent += len(ss)
                     use = [j for j, c in enumerate(cands) if c]
                     n_keep += len(use)

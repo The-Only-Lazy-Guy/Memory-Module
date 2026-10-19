@@ -376,6 +376,8 @@ from the store-vs-new-text (no custom read).
 
 ## 8. Primitive-design checklist (status 2026-10-15, after the autonomous loop IT-1…IT-16)
 
+> **SUPERSEDED (2026-10-19) by §10, the current checklist.** Kept as the graph-era record.
+
 Legend: ✅ built+tested · 🟡 partial · ❌ not built.
 
 | § | primitive | status | where / note |
@@ -719,7 +721,295 @@ candidates = the sentence's tokens that are values stored in memory (filler / "i
 alignment, gaps free; loss = −log p on the pairs. The target comes from the demonstration's TEXT. Smoke
 (noisy CoT, steps 50–150): kept .85–.90, expert-ok (paired sentence names hop t's fact) .51–.74 from step 50.
 
+**Local run icn (`--il-mode content`, messy CoT, 4000 steps, per-episode worlds):** .15 / .20 / .14 / .14 / .10
+→ … → **.56 / .31 / .09 / .19 / .20** at 4000 (rising, weak; expert-ok .77, kept .84). c1 (aligned tokens) was at
+chance until step 1500 and jumped at 2000.
+
+### 9.4 One global world (user correction, 2026-10-19)
+
+The per-episode setup (a fresh random world every step) is **not a memory**: nothing is retained, capacity
+is never tested, the read only searches 68 fresh facts. It contradicts §7 correction 1 (one persistent
+world, new input attaches to a subworld). **`gnm_fwm_global.py`:** ONE world for the whole run (300 entities
++ 15 variables = 1515 facts = 1515 persistent units). Each step a component of 4 records is written as one
+JSON document (re-encoded with gradient; each fact may drift to a new value = an update); questions start in
+the component and chain through facts written in earlier steps (the read searches all 1515 units); masked
+recall of the written facts; the store is re-encoded without gradient every 200 steps (staleness). Eval:
+400 held-out question chains (never asked in training) on the CURRENT world; memory off. Entity names:
+single-token capitalized GPT-2 words. Supervision: clean per-hop CoT first (as `--cot`), imitation later.
+
 **Terminology.** "Every hop a rollout" = each hop count is one candidate (soft-min). The user's **N
 rollouts** = N parallel attempts of the same question, learn from the best — not built yet. Then 2-hop: hop 2 must build the next
 key from the first read (value space → key space); if it stays weak, a value→key consistency self-signal
 (the value of a read fact must work as the subject part of the next key), still no gold path.
+
+**g1 (global world, 300 entities = 1515 units, clean CoT, 4000 steps): FAILED** — held-out chains .01–.10 at
+every depth all run long (memory off .00), masked recall of just-written facts .06–.12, loss ~7. Suspect:
+**no key centring** (per-episode runs centred per world; the global store had `center=False`, so all 1515 keys
+shared one offset and the read could not discriminate) and/or scale (1515 vs 68 units). Fix: the store keeps
+RAW keys and the read centres them by the store's own mean (`centred()`). Binary search: g2 = fix at 300
+entities, g3 = fix at 12 entities (~75 units, persistent).
+
+| run (global world, clean CoT, centring fix, 4000 steps) | held-out chains depth 1/2/3/4/5 | recall of just-written facts |
+|---|---|---|
+| g2: 300 entities (1515 units) | .06 / .02 / .01 / .00 / .00 | .00 |
+| g3: 12 entities (~75 units) | .11 / .15 / .17 / .20 / .14 | .12 |
+
+**Both fail; g3 has the per-episode size (where c1 learned by step 2000) → scale is not the main wall, the
+global setup is.** Suspect: **stale units** — most units were encoded by older weights (refresh every 200
+steps) while key/query heads move fast; chains through old units meet keys that no longer match the
+queries, and only the ~20 freshly written units get gradient (c1 re-encoded its world with current weights
+every step). Test: g4 / g5 = g3 / g2 with `--refresh 1` (no staleness). If they learn, the proper fix is a
+momentum (EMA) encoder for the store (MoCo-style: stored units stay consistent without re-encoding all).
+
+**icc (content imitation, CLEAN CoT, per-episode, 4000 steps): .10 / .09 / .18 / .16 / .14** — worse than messy
+(icn .56 at depth 1). Diagnostic: even on clean CoT the paired sentence named hop t's fact only **.77**.
+**Bug found in `align`:** with uniform early costs the tie order preferred "skip this hop", so sentence 1 was
+matched to a LATER hop and every step shifted (hop t trained on step t+k's entity, self-reinforcing). Fix:
+ties go to the match + a tiny per-hop cost (earliest hop that fits). Uniform 6×3 costs now align
+(0,0),(1,1),(2,2). Rerun: icc2 (clean), then icn2 (messy).
+
+**Still failing after the align fix (2026-10-19):** icc2 (clean imitation) .19/.11/.12/.16/.12 with expert-ok .84;
+g4 (global, 12 entities, store re-encoded EVERY step = no staleness) ~.1–.2; g5 (300 entities, refresh 1) ≤ .05
+(stopped). → staleness is NOT the cause.
+- **Imitation bug found: a shortcut in the target.** Candidates were every stored value in the sentence, so for
+  "A's boss is B" both A and B counted; A is in the question, so a hop could satisfy the loss by naming the
+  subject. Fix `new_info`: a step's target = stored values it REVEALS (not in the question, not in an earlier
+  sentence): "A's boss is **B**" → {B}, "B's friend is **C**" → {C}; filler / "So the answer is X" → nothing.
+- **Global harness:** g6 = global code with the WHOLE 12-entity world written in one document every step, no
+  drift (must behave like c1); c1old / c1new = c1's exact command with the code at 6eab062 vs today
+  (regression test).
+
+**Regression + harness tests (2026-10-19):** c1old (code at 6eab062) and c1new (today) give IDENTICAL evals →
+no regression. **g6 (global code, the whole 12-entity world written in one document every step, no drift):
+.76 / .83 / .99 / 1.00 / 1.00 at step 2500, recall 1.00** → the global harness works. The g3/g4 failures come from
+component writes (only 4 records written with gradient, in a different document context than the store) or
+drift. Split: g7 = g6 with 4-record components (store refreshed every step, no drift); g8 = g6 + drift .05.
+
+| run (global, 12 entities, clean CoT) | held-out chains depth 1–5 | recall |
+|---|---|---|
+| g7: 4-record components, store refreshed every step, no drift | step 2000: .65 / .76 / .94 / .94 / .83 | 1.00 |
+| g8: whole world each step + drift .05 | step 2500: .07 / .12 / .13 / .13 / .12 | .00–.19, never learns |
+
+**Component writes are fine; drift breaks it.** But with a FIXED world, g6/g7 may have memorized the 12-entity
+world in their weights rather than learned to read memory (they "click" at ~500–1000 steps; c1 with random
+worlds clicked at ~1750 when reading itself started to work). "Memory off = 0" cannot tell (it removes the
+whole read path). **New eval arm: counterfactual world** — half the facts get new values, the store is
+re-encoded, the held-out chains are asked; a READER follows the new values, a memorizer answers the old ones.
+g9 = g7 + counterfactual; g10 = g8 for 6000 steps (does reading click later under drift?).
+
+| run (global code, 12 entities) | held-out chains depth 1–5 | counterfactual world (half the values changed, store re-encoded) |
+|---|---|---|
+| g9: trained ON the fixed world (4-record components, no drift), step 2500 | .67 / .88 / .98 / .99 / .95 | **.43 / .25 / .16 / .14 / .13** |
+| g10: trained on the world with drift .05, step 6000 | .33 / .11 / .16 / .14 / .18 | .35 / .04 / .07 / .04 / .08 |
+
+**Trained on a persistent world, the module MEMORIZES the world in its own weights instead of learning to
+read** (answers stay with the old values when memory changes). With stable answers, memorization (~1M params
+hold 12 entities easily) is the cheapest solution and blocks reading; drift does not escape that local optimum.
+Only fresh random worlds (c1) force genuine reading. **Decision: separate skill from storage** — TRAIN the
+read/write skill on a fresh random world every step (people drawn from a 1000-name vocabulary: nothing to
+memorize; `--train fresh`, default), and use the persistent global world only for EVALUATION/deployment
+(held-out chains, counterfactual = updates, capacity). g11 = train fresh (12-people worlds) → eval on the
+300-entity world (1515 units: does the skill scale?); g12 = same → eval on a 12-entity world (matched size).
+
+| run (`--train fresh`, 12-people fresh worlds) | eval world | held-out depth 1–5 (step 4000) | counterfactual |
+|---|---|---|---|
+| g12 | 12 entities | .91 / .68 / .30 / .16 / .18 | **.91** / .51 / .17 / .17 / .12 |
+| g11 | 300 entities (1515 units) | ~.03 everywhere | ~.03 |
+
+**g12 READS memory** (counterfactual depth 1 = held-out .91): skill/storage separation works; deep chains still
+rising at 4000 (1000-name pool = harder than c1's 40 names). **g11 never took off in TRAINING** (recall .12 vs
+.81 in g12, same training): bug — the 200-step refresh re-encoded the 1515-unit global world in train mode, pushing
+20 global documents into the running standardization stats each time. Fix: no global refresh while training in
+fresh mode. g13 = g11 fixed (6000 steps); g14 = fresh worlds of 60 people (~300 units, written as 5 documents of
+12 records; GPT-2 fits ≤ ~20 records per document) → trains the read over bigger stores.
+
+| run (`--train fresh`, eval on the 300-entity world = 1515 units), 6000 steps | held-out depth 1–5 | counterfactual | training |
+|---|---|---|---|
+| g13: 12-people fresh worlds (~75 units), refresh fix | **.58** / .10 / .01 / .05 / .02 | **.60** / .08 / .03 / .01 / .00 | .88/.86/.57/.50/.17, recall .94 |
+| g14: 60-people fresh worlds (~300 units, 5 documents) from scratch | .07 / .04 / .02 / .04 / .04 | ≤ .05 | never took off (recall .19) |
+
+**1-hop reading transfers to a store 20× larger than any training store (counterfactual .60 = genuine read);
+multi-hop does not** (hop 2 must pick 1 of 1515 after training on ~75; errors compound). Bigger stores from
+scratch do not start (g14). **Size curriculum:** g15 / g16 = continue g13 on 60- / 30-people fresh worlds.
+
+**Size curriculum works (eval on the 1515-unit world):**
+
+| run (continue g13) | held-out depth 1–5 | counterfactual |
+|---|---|---|
+| g16: 30-people fresh worlds, 4000 steps | **1.00 / .99 / .60** / .15 / .02 | 1.00 / .95 / .58 / .20 / .05 |
+| g15: 60-people fresh worlds, step 3000 | **1.00 / .96 / .77** / .20 / .11 | 1.00 / .98 / .69 / .35 / .17 |
+| g15 final (step 4000) | **1.00 / .99 / .89 / .51 / .27** | 1.00 / .99 / .86 / .59 / .28 |
+
+Depth 1–2 solved on a store 5–20× bigger than any training store, and genuinely READ (counterfactual
+matches). Depth 3 rising with training-world size. Training accuracy is 1.00 at all depths → depth 4–5 failures
+are per-hop errors compounding in the big store. Next: g17 = continue g15 on 150-people worlds (~750 units) vs g18 = continue g15 on 60-people worlds (size vs more steps).
+
+**Size beats steps (continue g15, eval 1515 units):** g17 = 150-people fresh worlds → **1.00 / 1.00 / 1.00 / .97 / .99**
+(counterfactual **1.00 ×5**); g18 = 60-people, 4000 more steps → 1.00 / 1.00 / .98 / .83 / .52. g17 on **5015 units:
+1.00 / 1.00 / .78 / .46 / .22** (cf 1.00 / 1.00 / .76 / .44 / .31; g15 there: .97 / .73 / .08 / .00 / .02). Rule so far:
+chains solved up to ~2× the training-world size. Next rung g19 = continue g17 on 300-people worlds (eval 5015 units);
+g20 = imitation from MESSY CoT, fresh 12-people worlds from scratch (`--sup il --cot-noise 1`, eval 12-entity world,
+compare g12 clean: .91 / .68 / .30 / .16 / .18 at 4000).
+
+**g19 (continue g17 on 300-people fresh worlds), eval on 5015 units: .99 / 1.00 / .99 / .92 / .83** (cf .99 / 1.00 /
+.99 / .90 / .86; g17 there .78/.46/.22 at depth 3–5) → the size curriculum keeps scaling.
+**g20 (imitation from MESSY CoT, from scratch, fresh 12-people worlds): fails** — ~.05, recall .00, il-ok .53.
+Messy CoT is too weak a signal to bootstrap a reader. **Decision:** the reader's skill comes from synthetic
+worlds with clean per-hop CoT (unlimited, generated); messy real CoT is an adaptation signal for an already
+working reader on real data (checklist updated).
+
+**Capacity curve (g15 checkpoint, largest training world ~300 units; `--steps 0 --entities E`):**
+
+| store size | held-out depth 1–5 | counterfactual |
+|---|---|---|
+| 515 units (100 people) | **1.00 / 1.00 / 1.00 / 1.00 / .94** | 1.00 / 1.00 / 1.00 / 1.00 / .96 |
+| 1515 units (300 people) | 1.00 / .99 / .89 / .51 / .27 | 1.00 / .99 / .86 / .59 / .28 |
+| 5015 units (1000 people) | **.97** / .73 / .08 / .00 / .02 | 1.00 / .73 / .05 / .00 / .01 |
+
+5-hop chains solved at ~1.7× the largest training store; 1-hop holds at 5k units; multi-hop degrades with store
+size (later hops build their query from the previous read → less precise than the question-built hop 1 → near
+misses among thousands of units, compounding). Capacity worlds stay within the 1000-name training pool (no
+unseen names); future training uses a 10k pool (10,937 single-token names exist) for bigger worlds.
+
+### 9.5 Any-schema JSON (`gnm_fwm_anyjson.py`, checklist #5, 2026-10-19)
+
+Each step 3 random JSON documents (`gmem_hub.random_doc`: arbitrary keys in mixed styles, nesting, lists of records,
+emails / codes / dates / floats / URLs / names; ~85 units per memory) are written into ONE memory; documents share
+key names, so the document name and the record label must disambiguate. One unit per scalar leaf, pooled over the
+leaf pair AND its pointer chain (document name, ancestor keys, the record's label pair by the hub's `record_label`
+rule). Keys of all documents centred by the memory's mean. Questions: hub lookup wording; eval uses the hub's
+held-out wording (`_T_LOOK['eval']`). The answer is the WHOLE value (≤ 8 tokens, multi-token): Walker decodes it
+with the read added at every answer position (inject block 6, dk 512). Metric: exact match on fresh documents;
+memory off. Documents > 1000 tokens are regenerated (GPT-2 positions). Run aj1: 6000 steps.
+
+**aj1 (6000 steps, ~10 min): fresh documents, held-out wording: exact .12 → .30 → .42 → .54 → .55 → .57**, first token
+.34 → .70; memory off .00 (training .73 / .80). Breakdown (step-1000 checkpoint — save bug: `evaluate` returned the
+memory-off score, so the best checkpoint stayed at step 1000; fixed): leaves **inside list records** much worse (first
+token .20 vs .60 outside lists → record disambiguation is the addressing weakness); **random strings** (codes,
+emails, free text) almost never exact even when the first token is right; bool / URL fine; train vs eval wording
+similar. **aj2** (combined): save fix + **position-aware readout** (answer position t gets `Wo(r) + U_t(r)`, so each
+position can emit its own token of a multi-token value; still Walker's head, no copy) + inject at block 4.
+**aj2 FAILED: exact .07** (first token .12; training loss stuck ~3.4) vs aj1 .57. Split (binary search): aj3 =
+position-aware readout only (inject 6); aj4 = inject 4 only.
+
+| run | exact / first token at 6000 |
+|---|---|
+| aj3: position-aware readout only | **.06 / .06** (stuck from step 1000) → **rejected** |
+| aj4: inject block 4 only | .51 / .66 (aj1 inject 6: .57 / .70) → block 6 stays |
+
+aj4 breakdown (final checkpoint): in list .39 vs not in list .72; number .83, bool .86, date .55, url .42, code .31,
+text .37, email .10. **aj5**: pointer chain pooled SEPARATELY into the key (`k = Wk(pool(own pair)) + Wkp(pool(pointer))`,
+zero-init; value from the own pair only) — the record label must not drown in one shared pool. aj1b = aj1 rerun with
+the save fix (clean baseline breakdown).
+
+| run | exact / first token at 6000 | breakdown |
+|---|---|---|
+| aj1b (aj1 rerun, save fix) | **.57 / .70** | in list .47 vs not .75; number .89, bool .97, date .73, code .35, text .44, url .42, **email .03** |
+| aj5 (own-pair key + separate pointer pool, value from own pair) | **.05 / .10** — never clicks | |
+
+aj5 diagnosis: its main key saw only the leaf pair, so at init it carried NO document / record identity (pointer
+part zero-init; 3 documents share key names) → ambiguous from step 1. **aj6**: strictly ADDITIVE — aj1's combined key
+pool kept, separate pointer pool added on top (zero-init = exactly aj1 at the start), values as aj1.
+**aj6: .26 / .39 at 6000** (learns slower than aj1; in list .12) → separate pointer pooling **rejected**; the training
+"click" is fragile and extra paths delay it. **aj1 config stays the anyjson baseline (.57).** aj7 = aj1 config for 15k
+steps (aj1's curve still rising .49 → .56 → .57).
+**aj7 (aj1 config, 15k steps): exact .32 → .48 → .57 → .66 → .68, first token .78** at 15k (fresh random JSON, held-out
+wording; memory off .00). Breakdown: not in list .87 / .94, in list .57 / .68; number .94, bool .91, url .74, date .73,
+text .61, code .45, email .17. More steps keep helping. aj8 = continue aj7 for 15k more (lr 5e-4).
+**aj8 (30k steps total): exact .64 → .67 → .70 → .71 → .75, first token .82.** Not in list **.94 / .99** (≈ solved); in list
+.65 / .73; number .96, bool .97, date .82, url .79, text .70, code .55, email .38. Why list records lag: only 12% of
+in-list leaves are named by position ("item #k", which the pointer chain cannot know), 88% by label; only 0.2% of
+questions are ambiguous (duplicate label) → genuinely harder (records share key names and ancestors; only the label
+pair separates them), still improving with training. aj9 = continue aj8 for 15k more (lr 3e-4).
+**aj9 (45k total): exact .76 / first .83 — plateau** (aj8 .75). Not in list .95 / .99, in list .66 / .74. **Read diagnostic
+(where attention peaks, in-list questions): right leaf .80, SAME RECORD OTHER FIELD .18, other record .00, other document
+.01.** The read finds the right record; it confuses fields within it — every field of a record pools the same (long) label
+pair, which dominates the key. Fix aj10: a zero-init **segment vector** added to pointer tokens before pooling (`--seg`;
+one vector, not a new pathway) so the pool can down-weight the shared label once the record is found. aj10 = aj9 + seg,
+aj11 = aj9 without (control), 10k steps each.
+
+| run (continue aj9, 10k steps) | exact / first | in list | email | read: right leaf (in list) |
+|---|---|---|---|---|
+| **aj10: + segment vector** | **.97 / .99** | **.97 / .99** | **.76 / .93** | **.99** |
+| aj11: control | .76 / .82 | .66 / .73 | .38 / .59 | .80 (same record other field .20) |
+
+**One zero-init vector (pointer tokens marked before pooling) takes any-schema JSON from .76 to .97 exact.** With the
+hub's **held-out key vocabulary** (field names never used as keys in training): **.88 / .91** (in list .86, not in list
+.92; email .44; memory off .00) → label matching generalizes to new schemas. Default for JSON writes from now on: `--seg`.
+
+## 10. CHECKLIST (current — read this first; updated every session)
+
+Each item is decided: ✅ built · 🔨 build next (in order) · ⏸ defer (worth it, not now) · ❌ reject (not worth
+it, with the reason). The design is the FWM hybrid (§9.3 picture): smart encoder → one persistent store of
+fact units (key = learned label, value, write gate) → k hops inside the memory → late injection → Walker says it.
+
+### 10.1 Built and validated
+| item | status | evidence |
+|---|---|---|
+| encoder = Walker P blocks + one R pass, learned pooling, per-stream standardization (doc vs query stats) | ✅ | query-stats bug fix: retrieval .03 → .89 at init |
+| any JSON → one document → one unit per pair; a nested pair pools with its record key (pointer, §1.4) | ✅ | without the pointer 1-hop .14, with it 1.00 |
+| segment vector marking pointer tokens (record label / ancestors) before pooling (`--seg`) | ✅ | any-schema JSON .76 → .97 exact (in-list .66 → .97) |
+| memory = one hidden unit per fact: `softmax(τ·cos(q, keys) + log g) · values`; write gate = unit gain | ✅ | 1-hop .39 → .73 vs the linear delta rule |
+| k hops inside the memory, Walker runs once (recurrence merged per RECURRENT/OPR) | ✅ | |
+| learned label match (no hand rules), question never shown to Walker, Walker verbalizes (no copy) | ✅ | |
+| clean per-hop CoT supervision (`--cot`), halt target = CoT length | ✅ | depths 1–6 ≈ 1.00, 7 .81–.91, 8 .79 (per-episode worlds) |
+| eval: held-out values / new assignments, never unseen names; memory-off and other-world controls | ✅ | |
+| typed facts (people, attributes, variables → numbers) | ✅ | |
+
+### 10.2 Build next (in this order)
+| # | item | why |
+|---|---|---|
+| 1 | **one global persistent world** (`gnm_fwm_global.py`) as the EVALUATION / deployment store (held-out chains, counterfactual = updates, capacity); the skill is TRAINED on fresh random worlds (`--train fresh`) — training on the persistent world itself memorizes (g9 counterfactual .43→.13) | 🔨 running (g11, g12) |
+| 2 | ~~CoT imitation from scratch~~ → **messy-CoT imitation as ADAPTATION of a trained reader on real data** | from scratch fails (g20 ~.05; icn/icc weak); the skill comes from synthetic clean CoT — revisit with real data (#5) |
+| 3 | **capacity** ✅ mostly: size curriculum 12→30→60→150→300-people fresh worlds; 5-hop solved on 1515 units (g17), .99/1.00/.99/.92/.83 on 5015 (g19); rule ≈ solved up to ~3× training-world size. Further scale = more curriculum + compute (needs a 10k name pool) | done for now |
+| 4 | **relation vector `r` for dependent updates** (user's purpose): update a fact → propagate to dependents via `σ(cos(r_j, r_i))`; test with derived facts ("Mark lives with Lucy" → Mark's city follows) | the only remaining purpose of `r` |
+| 5 | **general JSON** 🔨: any-schema random documents ✅ (`gnm_fwm_anyjson.py --seg`): exact **.97** on fresh documents, **.88** with never-seen field names; then PC-state JSON (act → new state), RoG-CWQ | north star: general data |
+| 6 | **port to the 1B** (Walker frozen) + do-no-harm on the official mix | only after 1–5 |
+
+### 10.2.1 Design proposal for #4 (relation vector = dependent updates) — for user review before building
+
+**Purpose (user):** facts depend on each other; when an ancestor is updated its descendants must follow; `r`
+also gives the context-dependent relation. Two ways a dependent fact can stay right:
+- **lazy** (already works): store the dependency itself ("Mark lives_with Lucy") and answer "Mark's city" by
+  chaining at query time (lives_with → Lucy → city). Nothing to propagate; costs hops at every read.
+- **eager** (what `r` is for): store "Mark's city" as its own unit; when Lucy's city is re-written, every unit
+  whose relation vector says "depends on Lucy's city" is refreshed. Reads stay 1-hop.
+
+**Proposed mechanism:** each unit gets `r = Wr(pool(span))` next to key/value. On a write that changes unit i
+(value delta Δv_i), dependent units j get `v_j += σ(cos(r_j, k_i)) · U(Δv_i)` — a gated, learned update
+(`r_j` = "what I depend on", matched against the changed unit's key; `U` maps the change). One propagation
+step per write (multi-level dependencies = repeated steps, like hops). Trained answer-only: after an update
+document, questions about dependents must give the new value; no gold dependency edges.
+**Test world:** add derived facts (`"Mark": {"city": "Paris", "lives_with": "Lucy"}` where Mark's city always equals
+Lucy's); update Lucy's city in a later document; ask "What is Mark's city?" (eager must say the new city without
+re-writing Mark). Compare with lazy (the model may learn to chain via lives_with instead).
+**Open question for the user:** is eager propagation what you want, or is lazy chaining (already supported)
+acceptable for dependents? Eager costs a propagation step per write and a new failure mode (stale dependents).
+
+### 10.3 Deferred (worth it, not now)
+| item | when / why |
+|---|---|
+| tool nodes {label, network} executing CoT steps inside memory ("substitute x = 3 in x²") | highest goal; after imitation works on lookups (imitation is the training path for tools too) |
+| length extrapolation (hop-shared state instead of per-hop embedding) | after the global world; needed for chains longer than trained |
+| N parallel rollouts, learn from the best (user's N) | if imitation from messy CoT stays weak: N samples of the loop, reward = answer |
+| usage stats / keep-strength / eviction | when capacity (10.2 #3) shows the store must forget |
+| contradiction / version signal (store vs new text) | updates currently overwrite by key (recency wins); add when two sources disagree in real data |
+| free-text reader (model-chosen spans; §7) for non-JSON documents | after real JSON data; JSON parse covers structured input |
+| question stored in memory via a write gate (§7 correction 3) | low value now: the question is the query and Walker never sees it |
+| image / sound encoder into the same space | after the 1B port |
+| a short joint phase where Walker adapts to the injected read | only if frozen Walker is not enough on the 1B |
+
+### 10.4 Rejected (not worth doing, with the reason)
+| item | reason |
+|---|---|
+| linear delta-rule memory (`--act linear`) | crosstalk: write gate drifts down, self-recall .50 even with the exact key |
+| answer-only staged recipe (read → chain → focus) | fragile (needs freezing / detach tricks; failed at 6 hops on JSON); clean CoT does it in one stage |
+| separate pointer pooling (`--ptr-pool`) | aj5 (own pair only) never clicks (.05); aj6 (additive) learns slower (.26 vs .57) |
+| position-aware readout (`--pos-readout`: answer position t gets its own projection of the read) | breaks learning (aj3 .06 vs aj1 .57) |
+| Walker generates the CoT (`--cot-text`) | user: Walker must not generate CoT; also failed (x0 .08–.22) |
+| imitation via expert attention through the model's own key head (`--il-mode attn`) | circular: kept ≤ .05, expert-ok ≤ .14 |
+| recurrence inside Walker (R loop / LOTUS+ in the trainer) for the memory | OPR: plain depth matches it at half the compute; LOTUS+ with Walker gradient hurt the LM (1.715 vs 1.689) |
+| graph traffic / relation-gated retrieval, dependence edges for READ, per-pass EDIT of node vectors, NEXT-pointer instruction channel (graph-era §1.2) | the hop loop in the memory replaces traversal; updates happen by re-writing a component; procedures go to tool nodes |
+| held-out (never seen) names as the test | user: tests decoding of unseen tokens, not memory |
+| a fresh random world every step (per-episode lab) as the main setting | not a memory (§9.4); kept only as a fast unit test of read/chain mechanics |
+
