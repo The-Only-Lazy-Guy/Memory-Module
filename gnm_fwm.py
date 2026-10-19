@@ -242,7 +242,7 @@ class Pool(nn.Module):
 
 
 class FastWeightMemory(nn.Module):
-    def __init__(self, d, dk=128, hops=3, tie=True, center=True, tok_emb=False, act="softmax", tau0=10.0, sg_chain=False, wn_mlp=False, tau_hop0=0.0, ptr_pool=False, seg=False, sup_q=False):
+    def __init__(self, d, dk=128, hops=3, tie=True, center=True, tok_emb=False, act="softmax", tau0=10.0, sg_chain=False, wn_mlp=False, tau_hop0=0.0, ptr_pool=False, seg=False, sup_q=False, vslots=0):
         super().__init__()
         self.dk, self.hops, self.tie, self.center, self.tok_emb, self.act = dk, hops, tie, center, tok_emb, act
         # act = the memory network's hidden activation. "linear": delta-rule matrix M (f1-f7; with the write
@@ -298,6 +298,14 @@ class FastWeightMemory(nn.Module):
         # segment vector added to POINTER tokens before pooling (zero-init): lets the pool tell a leaf's own pair from
         # the shared record label (anyjson: in-list misses were 'same record, other field' .18, never other record)
         self.seg = nn.Parameter(torch.zeros(di)) if seg else None
+        # per-token value slots: besides its pooled value a unit keeps its first `vslots` value-token states (slot t =
+        # value token t, its identity from the token stream; the caller drops a string's opening quote so slot t lines
+        # up with answer position t); the read returns them per answer position
+        # (anyjson: read right .91 but long values lost in one pooled vector: email exact .07, first token .45)
+        self.vslots = vslots
+        if vslots:
+            self.Wvs = nn.Linear(di, dk)
+            self.slot_e = nn.Parameter(torch.zeros(vslots, dk))
         # query-dependent supersession: memory may carry S (how superseded each unit is); the QUERY decides how much
         # it applies, lambda(q) = softplus(Wlam q) (init lambda = 1). History questions can learn lambda ~ 0
         # (state streams: with S baked into the gain, 'before update k' stayed at .06-.13)
@@ -325,27 +333,30 @@ class FastWeightMemory(nn.Module):
         """rng: per fact a (start, end) range or a list of token positions (pair + its parent record's key)."""
         pos = [list(range(*r)) if isinstance(r, tuple) else list(r) for r in rng]
         n = max(len(q) for q in pos)
-        idx = torch.zeros(len(pos), n, dtype=torch.long, device=X.device)
-        m = torch.zeros(len(pos), n, dtype=torch.bool, device=X.device)
-        for i, q in enumerate(pos):
-            idx[i, :len(q)] = torch.tensor(q, device=X.device)
-            m[i, :len(q)] = True
-        return X[idx], m
+        # built on the CPU, moved once (per-fact device tensors cost ~30% of a training step)
+        idx = torch.tensor([q + [0] * (n - len(q)) for q in pos], dtype=torch.long)
+        m = torch.tensor([[True] * len(q) + [False] * (n - len(q)) for q in pos])
+        return X[idx.to(X.device)], m.to(X.device)
 
-    def write(self, Xdoc, rng, E=None, ptr=None):
-        """Write every fact span (one unit each). ptr: per fact the pointer-chain positions (pooled separately)."""
+    def write(self, Xdoc, rng, E=None, ptr=None, vpos=None):
+        """Write every fact span (one unit each). ptr: per fact the pointer-chain positions (pooled separately).
+        vpos: per fact its value-token positions (value slots, `vslots`)."""
         Xs = self.std(Xdoc)
         if self.tok_emb:
             Xs = torch.cat([Xs, self.lne(E)], -1)
+        if self.vslots and vpos is not None:
+            S = self.vslots
+            idx = torch.tensor([(list(q[:S]) + [0] * S)[:S] for q in vpos], dtype=torch.long)
+            msk = torch.tensor([[t < len(q) for t in range(S)] for q in vpos])
+            self.last_vslots = (self.Wvs(Xs[idx.to(Xs.device)]) + self.slot_e) * msk.to(Xs.device)[..., None]
         H, m = self.spans(Xs, rng)
         if ptr is not None and self.seg is not None:
             pos = [list(range(*r)) if isinstance(r, tuple) else list(r) for r in rng]
-            isp = torch.zeros(H.shape[:2], device=H.device)
-            for i, (q, ps) in enumerate(zip(pos, ptr)):
+            rows = []
+            for q, ps in zip(pos, ptr):
                 pset = set(ps)
-                for j, x in enumerate(q):
-                    if x in pset:
-                        isp[i, j] = 1.0
+                rows.append([float(x in pset) for x in q] + [0.0] * (H.shape[1] - len(q)))
+            isp = torch.tensor(rows, device=H.device)
             H = H + isp[..., None] * self.seg
         kr = self.Wk(self.pk(H, m))
         if ptr is not None and self.ptr_pool:

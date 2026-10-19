@@ -7586,7 +7586,9 @@ def _canonical_stream_specs(specs):
         item["filters"] = item.get("filters") or {}
         if not item["dataset"]:
             raise ValueError(f"stream mix entry {i} has no dataset")
-        if not math.isfinite(item["weight"]) or item["weight"] <= 0:
+        # weight 0 retires an exhausted source: it stays in the mix (exact cursor, validation bank and
+        # mix-extension identity are kept) but is never sampled, so its EOF can no longer stop training
+        if not math.isfinite(item["weight"]) or item["weight"] < 0:
             raise ValueError(f"stream mix entry {item['name']!r} has invalid weight")
         if item["name"] in names:
             raise ValueError(f"duplicate stream mix source name: {item['name']!r}")
@@ -9048,10 +9050,12 @@ class _SmoothWeightedRoundRobin:
         self.current = [0.0] * len(self.weights)
 
     def pick(self):
-        best = 0
+        best = None
         for i, w in enumerate(self.weights):
+            if w <= 0.0:
+                continue  # retired source: never picked
             self.current[i] += w
-            if self.current[i] > self.current[best]:
+            if best is None or self.current[i] > self.current[best]:
                 best = i
         self.current[best] -= 1.0
         return best

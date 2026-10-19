@@ -1001,6 +1001,140 @@ stuff"). Order: any-schema JSON reader (`gnm_fwm_anyjson.py --seg`) → state st
 world). Do-no-harm: Walker is frozen and the read is injected only at memory answers, so the LM itself is untouched; the
 real do-no-harm check comes when memory reads are mixed into pretraining.
 
+**1B first runs (MoLab, any-schema JSON, `--seg`):** inject block 6 → step 4800: loss ~4.5, τ 10 → 4.3 (falling),
+eval step 2500 exact .04 with reads landing in the WRONG DOCUMENT .42 (≈ chance); inject 13 (± lr 3e-3) no better.
+GPT-2 at step 2000: loss 1.85, τ rising 16.7. **Untrained read, 1B by encoder layer** (right leaf / other document):
+L4 .07/.45, L7 .08/.43, L10 .08/.41, L13 .09/.35, L15 .11/.28; GPT-2 untrained .15/.23 → the 1B starts close to GPT-2;
+it fails to IMPROVE (weak answer→memory gradient, §6). **Logit-lens aux** (read → first answer token through Walker's
+frozen embedding), GPT-2 test: exact .08 at 3000 vs .58 without → **rejected** (fights what Walker needs from the read).
+**Local 1B works** (user: do everything locally first): `ckpt/checkpoints/ckpt_best.pt` (1.83 GB, weights only) on the
+laptop RTX 4050 (sm 8.9, fp8 OK), ~250 MB GPU, ~2 s/step. Oracle-read diagnostic (`--oracle-read`: read = the gold
+unit's value, perfect addressing): GPT-2 exact .24 @250 / .53 @500 (first .77); **1B exact .34 @250 / .57 @500 (first
+.81)** → decoding through the 1B works (better than GPT-2); **the 1B's wall is addressing credit** (learning WHERE to read):
+τ falls, reads blur into an average, values stay alike, the key-separating gradient stays tiny — symmetry never breaks.
+Combined local test (answer-only, no gold): 1 document per memory (~17 units, easier credit) + τ0 = 20 (reads commit) →
+`runs/aj_1b_d1t20.log`, 1500 steps.
+
+### 9.8 Multi-layer LM↔memory interface (user idea 2026-10-19: "more interaction between it and the LM … between multiple layers")
+
+The memory itself (write side, units, softmax read, overwrite / supersession) is kept; the INTERFACE was the weak part:
+one read, question encoded separately, added at one layer → one long gradient path (the 1B's addressing never starts;
+decoding is fine, oracle .57). **`--interface layers`:** the LM reads `question + " Answer:" + answer`; at blocks
+{¼, ½, ¾ depth, depth−2} every position forms its own query `q = W_l(LN(h_l))`, reads the shared units
+(`softmax(τ·cos + log g)·V`) and adds `tanh(g_l)·RMS(h_l)·norm(Wo_l(r))` (g_l = 0.1 at start). Gains: short gradient
+paths, the LM decides what to look up at each depth, hops interleave with the LM's own computation (latent multi-step),
+gates ~0 = the original LM. Rule note: the LM now reads the question tokens itself; the facts still live ONLY in the
+memory (memory-off control measures the no-shortcut condition). **aj_lay_gpt2 (answer loss only): exact .11 @1000,
+.06 @2000** (single point at those steps ~.05–.33) → as is, no better; the per-position queries share the same missing
+addressing signal (§9.9), now spread over 4 layers. **1B, 1 document + τ0 20 (aj_1b_d1t20): .08 @500, .00 @1000** →
+the 1B wall stays without a direct addressing signal. Retest: layers + addressing loss (§9.9).
+
+### 9.9 Why the memory learns slowly — staged memorization test (user, 2026-10-19)
+
+User protocol: small world → write it → ask the same questions at once; if that fails find out why; if it works add a
+DISJOINT subworld and ask both; then an OVERLAPPING one; also RAM and speed. `gnm_fwm_stages.py` (GPT-2, any-schema
+JSON, `--seg`, point interface): S1 world A (2 fixed documents, 17 units, 16 fixed questions) — train on A until exact
+≥ .95 (steps-to-solve); counterfactual A′ = the same documents and questions with other values (READ vs answers stored
+in the weights); S2 + disjoint B (2 new documents): A again (interference), B zero-shot, train A+B; S3 + overlapping C
+(A's documents renamed, same keys / record labels / paths, other values: only the document name separates them).
+Every eval prints where the read's attention lands and p(gold); grad norms per part; time per phase; GPU / CPU memory.
+
+| start | S1: A after write → steps to .95 | A′ (other values) | B zero-shot | S3 zero-shot A / C |
+|---|---|---|---|---|
+| scratch, answer loss only | .00 → 100 steps, **read at chance** (p(gold) .12, right leaf .06–.12) | .29 | .00 | .94 / .06 |
+| scratch + addressing loss | .00 → 75 steps, read right (p(gold) .98) | .35 (read .94) | .00 | 1.00 / .29 |
+| aj10 (trained 55k steps) | **1.00 at step 0** (read 1.00) | .76 (read 1.00) | **.85** | **.75 / .59** (44% of A's reads go to C's same path) |
+| aj_addr1 (fresh docs + addressing loss, 2500 steps) | .75 at step 0 (read .99) | .59 (first .94) | .50 (read .75) | .81 / .53 (p(gold) .5) |
+
+**Diagnosis.** (1) The answer loss alone never forces ADDRESSING: a small world is fitted by memorizing answers into the
+soft read pattern (the mixture of values acts as a code for the question) — read at chance yet 1.00 on A, .29 on A′.
+Addressing appears only when memorizing is impossible (fresh documents every step), which is why the skill needs
+thousands of steps; the 1B (weaker answer→memory gradient, §9.7) never gets there. (2) A trained module DOES memorize
+instantly (one write → 1.00); the slowness is skill learning, not writing. (3) Overlap is the weak spot: a renamed copy
+with the same paths takes the read — the document name barely enters the key. (4) Multi-token decoding is the second
+gap: read right and first token right (.94) but exact .59–.76.
+
+**Fix 1 — addressing loss (`--addr-loss w`).** −log p(gold unit) on the read's attention. The gold unit is known by
+construction (the question is generated from the leaf; in general data the same holds for self-supervised cloze recall
+of a written fact), so this is not a hand rule — the model still learns the match. Fresh documents, from scratch,
+3000 steps (exact / first token on fresh documents):
+
+| run | 500 | 1000 | 1500 | 2000 | 2500 | 3000 | train p(gold) |
+|---|---|---|---|---|---|---|---|
+| aj_base_seg (answer loss) | .06 / .09 | .05 / .16 | .11 / .42 | .33 / .53 | .42 / .57 | .46 / .62 | .62 |
+| **aj_addr1 (+ addressing loss 1)** | **.19 / .51** | **.42 / .60** | **.54 / .72** | **.64 / .80** | **.71 / .85** | (CUDA fault at 2650; best saved) | **.91–.99** |
+
+≈ 2.5× faster to .42 and far ahead after (.71 vs .42 at 2500). Addressing is the slow part; with a direct signal it is
+learned in a few hundred steps (p(gold) .99 at step 500 vs .21).
+
+**Speed / RAM.** Per step: Walker encodes the documents (no grad) 32–33%, the module write was 30% (per-token Python
+loops building spans and segment masks → built on the CPU and moved once: 10%), backward 15–20%, decode 12–22%, read
+2%. GPU peak 0.84 GiB (GPT-2), CPU RSS 1.7 GiB; the store costs 6 KiB per unit (key, value, gain at dk 512). On the
+laptop, system RAM (15.7 GB, ~3.5 GB free with other apps) limits parallel runs to two; a third run swapped and stalled.
+
+**Follow-ups (GPT-2, fresh documents, 3000 steps, addressing loss in all):**
+
+| run | 500 | 1000 | 1500 | 2000 | 2500 | 3000 | notes |
+|---|---|---|---|---|---|---|---|
+| aj_lay_addr1: layers interface (4 depths, per-position queries) | .11 | .14 | .24 | .35 | — | killed at 2450 (RAM) | behind the single point (.64 @2000) even with the addressing signal → **layers interface rejected as built** |
+| aj_addr_ov: `--overlap 0.5` (renamed copies = hard negatives) | .14 | .27 | .45 | .54 | .62 | .67 | standard eval slightly lower (harder training) |
+| **aj_addr_vs8: `--value-slots 8`** | **.31** | **.45** | **.60** | **.71** | **.77** | **.78** | email .07 → .28, text .63 → .73, date .68 → .77; read right .93 |
+
+**Overlap eval** (`--eval-overlap 1`: every further document in a memory is a renamed copy; n 412): aj_addr1 exact .49,
+reads to the OTHER document .16 → **aj_addr_ov .66, other document .01** (overlap training fixes document identity);
+aj_addr_vs8 .55 / .15. Stage test (n 16–20, noisy) agrees: overlap model C read .94 (was .59).
+
+**Value slots (`FastWeightMemory(vslots=S)`, anyjson `--value-slots S`).** Besides its pooled value a unit keeps its
+first S value-token states (`Wvs` + slot embedding; positions = the piece after its key prefix, `serialize(...,
+vprefix)`). Slot t = value token t (its identity comes from the token-embedding stream; a causal state cannot know
+the NEXT token), with a string's opening-quote token dropped so slot t lines up with answer position t; the read
+returns `att · slots` per answer position and `Us` adds slot t at answer position t (own gate, init 0 = the model
+without slots). **Bug found on the 1B (fixed):** the first version kept the opening quote, so every slot was one token
+behind — 1B codes / dates / emails exact .00 with first token .76–.82 (`--show`: 'G198-R' → 'G198-M', '2026-03-19' →
+'2026-07-15': prefix right, tail guessed). All value-slot numbers above (.78, comb .70) are with the misaligned slots. Walker's own blocks and head still produce every token (no copy head; the slots are memory content in the
+residual stream). Fixes the "read right, long value wrong" gap.
+
+**Speed / RAM of the runs:** point interface GPU peak 0.91 GiB, layers 2.07–2.15 GiB, RSS ~1.7 GiB each. With 3+ runs
+(or other GPU apps) Windows spills GPU memory into system RAM (WDDM shared memory): runs stall (a layers run took
+19 min for 50 steps), one CUDA "illegal memory access" — rule: at most 2 GPT-2 runs, the 1B alone.
+
+**Combined recipe (aj_comb: addressing loss + overlap 0.5 + value slots 8, 3000 steps):** standard eval **.70**
+(email .28, text .57), overlap eval **.70** (reads to the other document .01). vs aj_addr_vs8 .78 / .55 and aj_addr_ov
+.67 / .66. Overlap training costs ~.08 on the standard set at this budget (harder task, still rising) and buys the
+robustness → the combined recipe is the default for the 1B. (Eval-set note: an `--eval-overlap` draw at probability 0
+briefly shifted the eval rng — n 425; fixed, all numbers above are on the standard n 400 set.)
+**1B, combined recipe (aj_1b_comb, local, 1500 steps, misaligned slots):** exact .15 / .33 / .40 @500/1000/1500
+(first .35 / .67 / .73), **read right leaf .62 → .80 → .86**, memory off .00 — the addressing wall is gone (earlier 1B
+runs .04–.08, read ≈ chance), ~GPT-2's pace (comb .26 / .38 / .48). Multi-token kinds exact .00 = the slot bug above.
+Rerun with aligned slots (exact @500 / 1000 / 1500, standard eval):
+
+| run | 500 | 1000 | 1500 | notes |
+|---|---|---|---|---|
+| aj_comb (GPT-2, misaligned slots) | .26 | .38 | .48 | 3000: .70 |
+| **aj_comb2 (GPT-2, aligned)** | **.53** | **.62** | **.71** | code .78, date .73, email .17 |
+| aj_1b_comb (1B, misaligned) | .15 | .33 | .40 | multi-token kinds .00 |
+| **aj_1b_comb2 (1B, aligned)** | **.32** | **.63** | **.75** | code .80, date .68, email .34, text .69; read right .86; memory off .00 |
+
+**The 1B now learns the memory skill — faster than GPT-2 at equal steps** (the §9.7 addressing wall is gone: addressing
+loss + aligned value slots). 1B overlap eval (every further document a renamed copy): **.70, reads to the other
+document .00**. Remaining errors (`--show`): BLENDED answers when the read splits between units ('K540-Z' → '785-Z',
+'100.7' → '8.7': slots of two units mix token by token) and 'same field, other record' .06. Next: a sharper read for
+the slots (near one-hot: straight-through top-1 or own higher τ), then longer training; then chains / state streams on
+the 1B.
+**aj_comb3 (GPT-2, `--slot-read hard`: slots from the top unit only, straight-through):** .55 / .65 / .72 @500/1000/1500
+vs soft .53 / .62 / .71 — small gain (email .17 → .34), kept as an option. Exact (.72) ≈ first token (.78) now: the
+value tail is solved; what remains is WHICH unit is read (right leaf ~.86; misses mostly 'same field, other record'
+inside lists) → longer training / in-list addressing, not decoding.
+
+**New knowledge without training (user question 2026-10-19: once saturated to the harness, can the model use added
+knowledge at once?)** — 1B aj_1b_comb2, `gnm_fwm_stages.py --stage-steps 0` (ZERO training at every stage):
+A (3 docs, 30 q) .77; counterfactual A′ .68 (reads values, not memorized answers); + new B: **B .81 immediately, A
+unchanged .77**; + overlapping C (A renamed, other values): **C .74 immediately, A .77, B .81** — no interference.
+Training the harness teaches the write/lookup SKILL, never the facts: new knowledge costs one write (forward pass);
+its accuracy = the skill level (here ~.75–.8 = the fresh-document eval; the 55k-step GPT-2 module gives 1.00 after
+one write). Longer training raises the ceiling for all future knowledge at once; store size generalizes to ~3× the
+training-world size (global world, §9.4).
+
 ## 10. CHECKLIST (current — read this first; updated every session)
 
 Each item is decided: ✅ built · 🔨 build next (in order) · ⏸ defer (worth it, not now) · ❌ reject (not worth
@@ -1019,6 +1153,12 @@ fact units (key = learned label, value, write gate) → k hops inside the memory
 | learned label match (no hand rules), question never shown to Walker, Walker verbalizes (no copy) | ✅ | |
 | clean per-hop CoT supervision (`--cot`), halt target = CoT length | ✅ | depths 1–6 ≈ 1.00, 7 .81–.91, 8 .79 (per-episode worlds) |
 | eval: held-out values / new assignments, never unseen names; memory-off and other-world controls | ✅ | |
+| addressing loss (`--addr-loss`): −log p(gold unit) on the read (gold known by construction / cloze) | ✅ | §9.9: fresh docs .42 @1000 vs .05; .71 vs .42 @2500 |
+| staged memorization test (`gnm_fwm_stages.py`: A → +disjoint B → +overlapping C, counterfactual A′) | ✅ | §9.9: answer loss alone memorizes without addressing |
+| overlap hard negatives (`--overlap 0.5`: renamed copies in training memories) | ✅ | §9.9: overlap eval .49 → .66, reads to the other document .16 → .01 |
+| per-token value slots (`--value-slots 8`, opening quote dropped so slot t = answer token t) | ✅ | §9.9: GPT-2 .71 vs .48 @1500; **1B .75 vs .40 @1500** (misaligned version: 1B multi-token .00) |
+| 1B port of the memory skill (addressing loss + aligned slots + overlap) | ✅ | §9.9: 1B .32 / .63 / .75 @500/1000/1500, overlap eval .70, memory off .00 |
+| hard (top-1) slot read (`--slot-read hard`) | ✅ option | §9.9: .72 vs .71 — marginal |
 | typed facts (people, attributes, variables → numbers) | ✅ | |
 
 ### 10.2 Build next (in this order)
@@ -1072,7 +1212,9 @@ model learns from context which to use; no hand rule picks eager vs lazy. Build 
 | linear delta-rule memory (`--act linear`) | crosstalk: write gate drifts down, self-recall .50 even with the exact key |
 | answer-only staged recipe (read → chain → focus) | fragile (needs freezing / detach tricks; failed at 6 hops on JSON); clean CoT does it in one stage |
 | separate pointer pooling (`--ptr-pool`) | aj5 (own pair only) never clicks (.05); aj6 (additive) learns slower (.26 vs .57) |
+| logit-lens auxiliary loss (`--aux-lens`) | GPT-2 exact .08 vs .58 at 3000: the lens target fights what Walker needs from the injected read |
 | position-aware readout (`--pos-readout`: answer position t gets its own projection of the read) | breaks learning (aj3 .06 vs aj1 .57) |
+| multi-layer interface as built (`--interface layers`: per-position queries at 4 depths) | §9.8/9.9: .06 @2000 without the addressing loss, .35 @2000 with it vs .64 single point; 2.3× GPU memory. The user's "fully interactive" goal stays open — next form: the LM's own states write into / query the memory from the SAME single point first, then add depths one at a time |
 | Walker generates the CoT (`--cot-text`) | user: Walker must not generate CoT; also failed (x0 .08–.22) |
 | imitation via expert attention through the model's own key head (`--il-mode attn`) | circular: kept ≤ .05, expert-ok ≤ .14 |
 | recurrence inside Walker (R loop / LOTUS+ in the trainer) for the memory | OPR: plain depth matches it at half the compute; LOTUS+ with Walker gradient hurt the LM (1.715 vs 1.689) |
