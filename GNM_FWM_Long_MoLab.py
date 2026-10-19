@@ -242,8 +242,8 @@ def _(mo, recs, status, tail):
             _e = [r for r in evals if r["set"] == _s]
             _x = [r["step"] for r in _e]
             _ax[0][0].plot(_x, [r["exact"] for r in _e], marker="o", label=_s)
-            _xs = [max(1, x) for x in _x]
-            _ax[0][1].plot(_xs, [max(1e-3, 1 - r["exact"]) for r in _e], marker="o", label=_s)
+            _lg = [r for r in _e if r["step"] > 0]                  # log x: step 0 cannot be placed
+            _ax[0][1].plot([r["step"] for r in _lg], [max(1e-3, 1 - r["exact"]) for r in _lg], marker="o", label=_s)
         _ax[0][0].set_title("exact match on never-seen memories (linear)")
         _ax[0][0].set_xlabel("step"); _ax[0][0].set_ylim(0, 1); _ax[0][0].legend(); _ax[0][0].grid(alpha=.3)
         _ax[0][1].set_xscale("log"); _ax[0][1].set_yscale("log")
@@ -257,7 +257,7 @@ def _(mo, recs, status, tail):
                 _sl = [1000 * (b["exact"] - a["exact"]) / max(1, b["step"] - a["step"]) for a, b in zip(_e, _e[1:])]
                 _ax[1][0].plot(_mid, _sl, marker="o", label=_s)
         _ax[1][0].axhline(0, color="gray", lw=.8)
-        _ax[1][0].set_title("gain per 1000 steps between evals (rising = accelerating)")
+        _ax[1][0].set_title("gain per 1000 steps between evals (rising = accelerating; needs 3+ evals)")
         _ax[1][0].set_xlabel("step"); _ax[1][0].legend(); _ax[1][0].grid(alpha=.3)
         if train:
             _x = [r["step"] for r in train]
