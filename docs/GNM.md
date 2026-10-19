@@ -727,6 +727,12 @@ chance until step 1500 and jumped at 2000.
 
 ### 9.4 One global world (user correction, 2026-10-19)
 
+> **CORRECTION 2026-10-20 (user):** below, after g9 I switched training to fresh random worlds (`--train fresh`) and
+> kept the one world for evaluation only. That REVERSED the user's instruction ("keep a global world and for each step
+> only extract a small component") — it was never approved. The design: ONE big world in training too; the model
+> learns to assemble it from small pieces given each step (§9.13). Memorization in weights is prevented by the world
+> itself changing (new entities, updates) and checked with never-asked and counterfactual facts — not by resetting.
+
 The per-episode setup (a fresh random world every step) is **not a memory**: nothing is retained, capacity
 is never tested, the read only searches 68 fresh facts. It contradicts §7 correction 1 (one persistent
 world, new input attaches to a subworld). **`gnm_fwm_global.py`:** ONE world for the whole run (300 entities
@@ -1155,42 +1161,142 @@ training curves, per-kind accuracy, log tail.
 forever — skills that build on each other (addressing → decoding → in-list disambiguation) give S-shaped segments; the
 honest scaling readout is the error on log-log and the big-store / held-out-keys sets (does the skill transfer to
 bigger stores and new key words without training on them).
+**fwm1b_long (MoLab, 1B, 32 memories × 32 q per step, 2.4 s/step, GPU 45 GiB, data wait 0):** train exact .00 → .88
+in 190 steps (read right .97 by step 130; S-curve: addressing clicks first, steps 20–80, then whole values, 80–140).
+**Eval @250 (8k training memories): standard .84, overlap .82, big store (12 docs, trained on 3) .82, held-out field
+names .71** (train ~.92). Store size and renamed copies cost ~.02; the weak axis is unseen key words (training sees
+half the key vocabulary) = data diversity → more varied keys (real JSON, generated words) if it plateaus.
+@500: standard .93, overlap .91, big store .91, held-out names .82 (error halved in 250 steps). @750 / @1000: .92 / .93,
+overlap .89 / .93, big .90 / .93, held-out names .79 / .85 → **plateau from step 500 (train .975)**: the 3-document
+task is saturated. Remaining gaps are data diversity: unseen key words (.85) and unseen question wording (train .975 vs
+eval .93; ~7 training templates). Stopped at ~1000. Next run **fwm1b_c2**: `--init` from fwm1b_long_best, growing
+stores `--docs 3:0,6:500,12:1500`, `--key-mix 0.5` (half the training key vocabulary = fresh made-up words per memory;
+no held-out word leaks: 0 of 1124 keys in a check), big-store eval at 24 documents (2× the largest training store),
+lr 5e-4.
+**fwm1b_c2 evals (step 0 / 250 / 500 / 750):** standard .93 / .94 / .94 / **.965**, overlap .92 / .94 / .94 / **.96**,
+big store .92 / .935 / .93 / **.955**, held-out names .82 / .855 / .855 / **.89**. Flat on 3-document memories
+(0–500); the switch to 6 documents at step 500 gave a second rise (errors −30% in 250 steps, no dip; train ~.98) —
+progress comes from harder / more varied data, not more steps on saturated data; held-out-names gap .11 → .075 with
+`--key-mix`. 12 documents from step 1500. **Big store here = 24 documents** (`--big-docs 24`, confirmed from the
+command): the fwm1b_long module, trained only on 3-document memories, scored .92 on 24-document memories at step 0
+(8× the training store, zero training on it); .955 at step 750 while training on 6. Store size generalizes far past
+the training size. (`--init` = module weights only; optimizer, step and LR schedule start fresh.)
+@1000: standard .966, overlap .959, big store (24) .961, held-out names .885 (flat since 750); train ~.99. **Staircase:**
+every rise in data difficulty (3 → 6 documents) gives its gain within ~250 steps, then a plateau — progress is driven
+by data difficulty, not step count. → next trainer: an automatic curriculum (advance documents / key mix when train
+exact stays > .98) instead of fixed step boundaries. Held-out names stall at .885 even with key mix: needs per-error
+analysis (`--show` on the downloaded checkpoint) before the next change.
+@1250 / @1500 (end; session closed as 12-document stores began): standard .982 / .982, overlap .977 / .975, big store
+(24 docs) .966 / .963, held-out names .92 / .905. Final module: `runs/fwm1b_c2_best.pt` (user downloads it).
+
+### 9.11 Simplification before the next additions (2026-10-20, user: "find what to simplify first")
+
+Code audit of the FWM line:
+- **43% of the memory module's parameters were dead weight on the 1B path** (2.1M of 4.9M: the in-module hop loop
+  Wn / Wc / hop_e / Wh / tau_h and the untied query Wq / pq), and the read still ran that loop.
+- **Every data worker imported the 17k-line 1B trainer** (gmem_hub → gmem_ltm → gmem_v3 → trainer; 6.5 s per worker)
+  to use ~300 lines of document generation.
+- The document tokenization (spans / pointers / value positions), the injection hook and the episode builder existed
+  in 3–4 copies (anyjson, stages, train).
+New: **`fwm_data.py`** (torch-free: generator, serializer, wording, overlap copies, `doc_encoding`; verbatim copy —
+2000 seeds produce identical documents / questions / perturbations; import 0.02 s) and **`fwm_core.py`** (`Memory`:
+write / query / attend, `Store` for batched memories, `Readout` + `Inject`, `load_walker`, `walker_states`). The old hop
+loop's only effect on a 1-hop read is a fixed question-pool direction → folded into one vector `qdir` by `load_memory`:
+old checkpoints load with identical units and attention within 1e-4 (`test_fwm_core.py`). `gnm_fwm_train.py` now runs
+on the core: GPT-2 400-step check .81 / .74 (before .78 / .72), same speed; `--init` from old checkpoints works.
+**Design simplification for what comes next:** chains, tools and updates all become steps of ONE loop controlled by
+Walker (read / apply tool / halt), instead of an in-module hop loop plus separate tool machinery. The old GPT-2 lab
+scripts (gnm_fwm.py main, global, state, anyjson, stages) stay as history; new work uses the core.
+
+
+### 9.12 Where the FWM line left the design (found 2026-10-20 from the chat history)
+
+The design (§1, §1.5, §7 corrections) was right; the implementation drifted, step by step:
+1. **10-18:** the user's "memory = a small network, query → transformation" idea was to be merged INTO the design
+   ("since we already built a smart encoder…"). I built it as a separate line (`gnm_fwm.py`) and dropped the relation
+   vector r and the §1.2.1 edges, node edits, tool nodes and the question-as-node; r was then only noted as "not in
+   FWM yet" although the user restated its purpose the same day.
+2. **10-18 17:56 → 20:11:** the user: keep ONE global world, each step a small component. When g9 memorized I
+   switched training to fresh worlds and wrote it into §9.4 as if decided (see the note there).
+3. **10-19 04:50:** "any kind of state JSON" (the model's INPUT frame can be any state) became random JSON documents
+   stored in a fresh memory and quizzed with templates OUTSIDE the JSON (`gnm_fwm_anyjson.py`, `gnm_fwm_state.py`,
+   `gnm_fwm_train.py`, the MoLab runs §9.10).
+4. **10-19 12:13:** the user's staged test (small world → add a disjoint subworld → overlap) IS the one-world
+   assembly; I ran it as a side diagnostic and kept fresh memories for the long runs.
+5. **10-20:** `fwm_loop.py` / `fwm_world.py` handed the question text to Walker / used fresh worlds — withdrawn.
+**Kept (read side, valid on any nodes):** pair → latent node through Walker's early blocks; the addressing loss (the
+1B learned to read only with it); per-token value slots (Walker says multi-token values); one write = usable at once;
+`fwm_core` / `fwm_data`. §9.5–9.11 numbers measure that read skill in the quiz setup, nothing more.
+
+### 9.13 The rebuild on the design (`gnm_world.py`, 2026-10-20)
+
+Every part maps to §1:
+- **Input frames (§1, §1.4).** Each step the model sees small JSON frames: components of the ONE world (records of
+  entities; later frames add entities and update values) and frames `{"question": "…"}`. A frame is encoded once by
+  the smart encoder (Walker's early blocks) and dropped; its pairs become nodes. Its token states are kept (§2.2).
+- **Nodes (§1.1).** label l (= key head), value v (+ per-token value slots), relation r (own pooling + head), pointer
+  = the enclosing record's label node (nesting, §1.4), write gate g, usage count, time, version. Tool node = {l, r,
+  network}. All vectors are recomputed every step from the stored token states with the CURRENT heads (§2.2: no stale
+  vectors, every node gets gradient).
+- **One world, never reset (§7 corr. 1).** Capacity cap with eviction by usage / age (§1.1 usage stats). Updates:
+  a model-decided overwrite gate supersedes older nodes whose key a newer node matches (version + history kept).
+- **Questions are ordinary nodes (§1.5, §7 corr. 3).** Batched questions are processed as if sequential: a question
+  frame only sees nodes written before it (time mask); node age relative to the current frame is a node stat.
+- **Walker's pass loop (§1.2).** Pass p: Walker reads the latent tokens of what the loop has read (cross-read, no
+  text) → its state → q_mem → activation `τ·cos(q, l) + log g − supersession + w_rel·cos(q, r) + age` with
+  relation-gated pointer traffic and the §1.2.1 relation / dependence edges (zero at init) → ONE choice among nodes,
+  tool nodes and HALT (every action is the model's knob, §7 corr. 5) → READ, or APPLY a tool to the (label, value)
+  of the registers it points at, output written back as a node → gated EDIT of what it read (gate ≈ 0 at init) →
+  next pass. HALT → Walker's own head says the last register.
+- **Supervision (§9.3 user):** the CoT as a demonstration — per-pass action and arguments, Walker must say each tool
+  output (content target) and the answer. Walker never generates CoT.
+- **Tests (does the LM control the memory?):** facts never asked before (just written), old facts, updated facts
+  (current value), counterfactual updates written at eval time (answers must follow the store, not the weights),
+  2-hop chains, longer tool programs, held-out tool compositions.
 
 ## 10. CHECKLIST (current — read this first; updated every session)
 
 Each item is decided: ✅ built · 🔨 build next (in order) · ⏸ defer (worth it, not now) · ❌ reject (not worth
-it, with the reason). The design is the FWM hybrid (§9.3 picture): smart encoder → one persistent store of
-fact units (key = learned label, value, write gate) → k hops inside the memory → late injection → Walker says it.
+it, with the reason). **The design is §1 (+ §1.5 rules, §7 corrections); the current build is `gnm_world.py` (§9.13).**
+Check every new script against §1 before running it (§9.12: what went wrong when that was skipped).
 
-### 10.1 Built and validated
-| item | status | evidence |
+### 10.1 Built (§1 element → where)
+| §1 element | status | where / evidence |
 |---|---|---|
-| encoder = Walker P blocks + one R pass, learned pooling, per-stream standardization (doc vs query stats) | ✅ | query-stats bug fix: retrieval .03 → .89 at init |
-| any JSON → one document → one unit per pair; a nested pair pools with its record key (pointer, §1.4) | ✅ | without the pointer 1-hop .14, with it 1.00 |
-| segment vector marking pointer tokens (record label / ancestors) before pooling (`--seg`) | ✅ | any-schema JSON .76 → .97 exact (in-list .66 → .97) |
-| state streams of any schema: every snapshot kept, learned overwrite gate, query-dependent supersession, versioned headers (`gnm_fwm_state.py --history --sup-q`) | ✅ | current .93 / .94, history .89 (st6); partial updates transfer zero-shot (.92) |
-| memory = one hidden unit per fact: `softmax(τ·cos(q, keys) + log g) · values`; write gate = unit gain | ✅ | 1-hop .39 → .73 vs the linear delta rule |
-| k hops inside the memory, Walker runs once (recurrence merged per RECURRENT/OPR) | ✅ | |
-| learned label match (no hand rules), question never shown to Walker, Walker verbalizes (no copy) | ✅ | |
-| clean per-hop CoT supervision (`--cot`), halt target = CoT length | ✅ | depths 1–6 ≈ 1.00, 7 .81–.91, 8 .79 (per-episode worlds) |
-| eval: held-out values / new assignments, never unseen names; memory-off and other-world controls | ✅ | |
-| addressing loss (`--addr-loss`): −log p(gold unit) on the read (gold known by construction / cloze) | ✅ | §9.9: fresh docs .42 @1000 vs .05; .71 vs .42 @2500 |
-| staged memorization test (`gnm_fwm_stages.py`: A → +disjoint B → +overlapping C, counterfactual A′) | ✅ | §9.9: answer loss alone memorizes without addressing |
-| overlap hard negatives (`--overlap 0.5`: renamed copies in training memories) | ✅ | §9.9: overlap eval .49 → .66, reads to the other document .16 → .01 |
-| per-token value slots (`--value-slots 8`, opening quote dropped so slot t = answer token t) | ✅ | §9.9: GPT-2 .71 vs .48 @1500; **1B .75 vs .40 @1500** (misaligned version: 1B multi-token .00) |
-| 1B port of the memory skill (addressing loss + aligned slots + overlap) | ✅ | §9.9: 1B .32 / .63 / .75 @500/1000/1500, overlap eval .70, memory off .00 |
-| hard (top-1) slot read (`--slot-read hard`) | ✅ option | §9.9: .72 vs .71 — marginal |
-| typed facts (people, attributes, variables → numbers) | ✅ | |
+| input = one JSON frame of any state, incl. the question pair; frame not live | ✅ | `gnm_world.py` frames (state components, `{"question": …}`) |
+| smart encoder: pair → latent node through Walker's early blocks, learned pooling, per-stream standardization | ✅ | `fwm_core.Memory.write` (flat segment pooling); query-stats fix .03 → .89 |
+| node {l, v (+ value slots), r, pointer, gain, usage, time} | ✅ | l = key head, r = own pooling + `Wr`, pointer = record label node (nesting) |
+| ONE persistent world, never reset, in training too; frames attach as small components | ✅ | `World` + `Store` (capacity cap, eviction by usage / age) |
+| stale vectors (§2.2): store token states, recompute every node with the current heads every step | ✅ | `materialize()` |
+| question = ordinary node; Walker never handed it; batched questions as sequential frames (time mask) | ✅ | |
+| Walker's pass loop: pass state → query → label activation + log g + w_rel·cos(q,r) + age, relation-gated pointer traffic, §1.2.1 relation / dependence edges (zero at init) | ✅ | `run()` |
+| every action = the model's choice (read / tool / halt in one softmax; write gate; overwrite gate; edit gate) | ✅ | |
+| updates: overwrite gate supersedes older nodes whose key a newer node matches (history kept) | ✅ | from state streams (current .93 / history .89) |
+| EDIT after a read (gated delta on v, gate closed at init; persisted as a node delta) | ✅ built, untrained | no loss reaches it yet (§2.5: cross-step effects not trainable by backprop) |
+| tool node {l, r, small network on (label, value) of its arguments}; output written back as a node | ✅ | `ToolNode` add / sub / max / min |
+| Walker says the answer (own head; value slots for multi-token values) | ✅ | 1B read skill .98 (§9.10) |
+| addressing signal: the CoT demonstration's per-pass action (incl. which node) | ✅ | addressing loss was the 1B unlock (§9.9) |
+| CoT = demonstration for imitation (per-pass actions + tool-output content), Walker never generates CoT | ✅ | |
+| evals: never-asked new facts, old facts, updated facts, counterfactual updates, longer programs, held-out compositions | ✅ | `evaluate()` on a snapshot of the world |
+| lean code: `fwm_data` (torch-free), `fwm_core` (Memory / Store / Readout / Inject) | ✅ | §9.11 |
 
 ### 10.2 Build next (in this order)
 | # | item | why |
 |---|---|---|
-| 1 | **one global persistent world** (`gnm_fwm_global.py`) as the EVALUATION / deployment store (held-out chains, counterfactual = updates, capacity); the skill is TRAINED on fresh random worlds (`--train fresh`) — training on the persistent world itself memorizes (g9 counterfactual .43→.13) | 🔨 running (g11, g12) |
-| 2 | ~~CoT imitation from scratch~~ → **messy-CoT imitation as ADAPTATION of a trained reader on real data** | from scratch fails (g20 ~.05; icn/icc weak); the skill comes from synthetic clean CoT — revisit with real data (#5) |
-| 3 | **capacity** ✅ mostly: size curriculum 12→30→60→150→300-people fresh worlds; 5-hop solved on 1515 units (g17), .99/1.00/.99/.92/.83 on 5015 (g19); rule ≈ solved up to ~3× training-world size. Further scale = more curriculum + compute (needs a 10k name pool) | done for now |
-| 4 | **relation vector `r` for dependent updates** (user's purpose): update a fact → propagate to dependents via `σ(cos(r_j, r_i))`; test with derived facts ("Mark lives with Lucy" → Mark's city follows) | the only remaining purpose of `r` |
-| 5 | **general JSON** 🔨: any-schema random documents ✅ (`gnm_fwm_anyjson.py --seg`): exact **.97** on fresh documents, **.88** with never-seen field names; then PC-state JSON (act → new state), RoG-CWQ | north star: general data |
-| 6 | **port to the 1B** (Walker frozen) + do-no-harm on the official mix | only after 1–5 |
+| 1 | **validate `gnm_world.py`** on GPT-2 (run `gnm_world_g1`), then the 1B locally | §9.13 tests |
+| 2 | dependent updates through r / §1.2.1 edges (user's purpose of r): derived facts follow an updated ancestor | the model decides eager (edges) vs lazy (chain) — §10.2.1 |
+| 3 | instruction channel q_ins (procedural memory, NEXT pointers; built in the graph era, not in gnm_world) | §1.2 step 1 |
+| 4 | contradiction / consistency signal from the store (§7 corr. 2) + merge / dedupe | long-term world assembly |
+| 5 | real input frames: PC-state JSON (act → new state), STEM, then images into the same node space | north star |
+| 6 | 1B at scale on MoLab (batched), then do-no-harm on the official mix (G1) | after 1–5 |
+
+### 10.3 Deferred / superseded
+| item | status |
+|---|---|
+| `gnm_fwm_anyjson / _state / _train / _stages`, MoLab runs §9.10 | superseded: quiz setup, fresh memories (§9.12); their READ results carry over |
+| `gnm_fwm_global.py --train fresh` | ❌ violated the one-world instruction (§9.4 note) |
+| `fwm_loop.py`, `fwm_world.py` | ❌ question text handed to Walker / exact tools on parsed numbers / fresh worlds |
+| N parallel rollouts (user's N), length extrapolation, image / sound encoders, LoRA adaptation of Walker | ⏸ after #1–#5 |
 
 ### 10.2.1 Design proposal for #4 (relation vector = dependent updates) — for user review before building
 
@@ -1214,7 +1320,7 @@ itself based on patterns and other memories (relation nodes / tool nodes or what
 offers the pathways (relation vectors on units with a learned propagation gate, chaining hops, later tool nodes) and the
 model learns from context which to use; no hand rule picks eager vs lazy. Build when the 1B port is under way.
 
-### 10.3 Deferred (worth it, not now)
+### 10.5 Deferred (FWM-era list, kept for reference)
 | item | when / why |
 |---|---|
 | tool nodes {label, network} executing CoT steps inside memory ("substitute x = 3 in x²") | highest goal; after imitation works on lookups (imitation is the training path for tools too) |
@@ -1227,7 +1333,7 @@ model learns from context which to use; no hand rule picks eager vs lazy. Build 
 | image / sound encoder into the same space | after the 1B port |
 | a short joint phase where Walker adapts to the injected read | only if frozen Walker is not enough on the 1B |
 
-### 10.4 Rejected (not worth doing, with the reason)
+### 10.6 Rejected (with the reason; still valid)
 | item | reason |
 |---|---|
 | linear delta-rule memory (`--act linear`) | crosstalk: write gate drifts down, self-recall .50 even with the exact key |
