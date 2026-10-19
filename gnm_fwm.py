@@ -201,6 +201,31 @@ def json_pieces(facts):
     return pieces, at, parent
 
 
+def load_walker(hf="gpt2", ckpt="", enc_layer=0, dev=None):
+    """The LM the memory pairs with, frozen: the real 1B Walker from a checkpoint (``ckpt``) or a small HF stand-in
+    (``hf``, e.g. gpt2). Returns (model, raw tokenizer). The encoder (gnm_v2.WalkerStateEnc) reads the token states at
+    the input of block ``model.r_end``; continuation checkpoints retired the R loop (r_end = 0, plain block loop, so
+    r_end is otherwise unused), so it is set to ``enc_layer`` (default: 2/3 of the depth)."""
+    import train_walker_1b_continue as T
+    dev = dev or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if ckpt:
+        model, raw_tok, _cfg = T.build_model_for_inference(ckpt, device=dev)
+        model = model.to(dev).eval()
+        if getattr(model, "r_adapter", None) is None or not int(getattr(model, "r_end", 0) or 0):
+            model.r_end = int(enc_layer) or (2 * len(model.blocks)) // 3
+        print(f"Walker 1B from {ckpt}: {len(model.blocks)} blocks, d={model.emb.weight.shape[1]}, "
+              f"encoder states at block {model.r_end}", flush=True)
+    else:
+        import gnm_small
+        model = gnm_small.SmallWalker(hf).to(dev).eval()
+        raw_tok = T._load_tokenizer(hf)
+        if enc_layer:
+            model.r_end = int(enc_layer)
+    for p_ in model.parameters():
+        p_.requires_grad_(False)
+    return model, raw_tok
+
+
 # ---------------------------------------------------------------------------------------------- module
 class Pool(nn.Module):
     """Learned attention pooling over a token span (zero-init scorer = mean at start)."""

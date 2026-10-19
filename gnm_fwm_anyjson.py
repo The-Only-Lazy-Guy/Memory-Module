@@ -90,6 +90,9 @@ def kind_of(v):
 def main():
     P = argparse.ArgumentParser()
     P.add_argument("--hf", default="gpt2")
+    P.add_argument("--ckpt", default="", help="the real 1B Walker checkpoint (frozen); overrides --hf")
+    P.add_argument("--enc-layer", type=int, default=0, help="encoder reads states at the input of this block "
+                   "(0 = the R-pass layer for GPT-2 / 2/3 of the depth for the 1B)")
     P.add_argument("--docs", type=int, default=3, help="documents written into one memory per step")
     P.add_argument("--nq", type=int, default=32)
     P.add_argument("--max-ans", type=int, default=8, help="answer tokens (values longer are truncated)")
@@ -114,10 +117,10 @@ def main():
     import train_walker_1b_continue as T
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(A.seed)
-    model = gnm_small.SmallWalker(A.hf).to(dev).eval()
+    model, raw_tok = W.load_walker(A.hf, A.ckpt, A.enc_layer, dev)
     for p in model.parameters():
         p.requires_grad_(False)
-    tok = LT.Tok(T._load_tokenizer(A.hf))
+    tok = LT.Tok(raw_tok)
     enc = V2.WalkerStateEnc(model, tok)
     d = model.emb.weight.shape[1]
     mem = W.FastWeightMemory(d, A.dk, 1, tie=True, center=False, tok_emb=True, act="softmax", tau0=10.0,

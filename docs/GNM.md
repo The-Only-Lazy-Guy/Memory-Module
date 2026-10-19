@@ -941,8 +941,9 @@ hub's **held-out key vocabulary** (field names never used as keys in training): 
 the injection hook so that the read is added ONLY at the first answer position (slice width 1); aj1 / aj2 added it at
 every answer position. All runs from aj3 on (aj4–aj11, incl. the .97) used first-position-only injection. So part of
 aj7→aj10's gain over aj1 may come from that change, not only from longer training; the segment-vector result (aj10
-.97 vs control aj11 .76, both first-position) is unaffected. To separate: a run of the aj1 config with first-position
-injection (pending).
+.97 vs control aj11 .76, both first-position) is unaffected. **Resolved:** aj12 = aj1 config with first-position injection
+→ .08 / .23 / .38 / .49 / .56 / **.57** at 1k–6k (aj1, every position: .57) → injection position makes no difference; the gains
+came from longer training (.57 → .76) and the segment vector (.76 → .97) as reported.
 
 ### 9.6 State streams of any schema (`gnm_fwm_state.py`, user 2026-10-19: "any kind of state JSON, universal and custom; the model distinguishes it from the k:v")
 
@@ -987,6 +988,18 @@ wording held out. The memory keeps every version, the newest wins for current qu
 supersession, and a named version retrieves the old value. Meets the G2 memory targets (JSON-state lookup ≥ .90,
 old-value history ≥ .85) on random-schema states. Recipe: anyjson reader (aj10, `--seg`) → state streams with the
 learned overwrite gate (st1) → `--history --sup-q` with versioned headers (st5 → st6).
+
+### 9.7 Port to the 1B (2026-10-19, checklist #6)
+
+`gnm_fwm.load_walker(hf, ckpt, enc_layer)`: `--ckpt <1B checkpoint>` builds the real Walker frozen
+(`T.build_model_for_inference`); the scripts need only `model.blocks`, `model.emb`, `model(ids, r_active=False)` →
+`(logits, loss)` and a forward pre-hook on one block (`blk(x, …)`, x positional) — identical interface to the GPT-2
+stand-in. Continuation checkpoints retired the R loop (`r_end` = 0 → plain block loop, `r_end` otherwise unused), so the
+encoder layer is set explicitly (`--enc-layer`, default 2/3 of the depth). GPT-2 path verified unchanged (anyjson .97 /
+.99, state .92 / history .89). Laptop (6 GB) cannot hold the 1B checkpoint load → runs on the idle MoLab box ("GNM and
+stuff"). Order: any-schema JSON reader (`gnm_fwm_anyjson.py --seg`) → state streams (`gnm_fwm_state.py`) → chains (global
+world). Do-no-harm: Walker is frozen and the read is injected only at memory answers, so the LM itself is untouched; the
+real do-no-harm check comes when memory reads are mixed into pretraining.
 
 ## 10. CHECKLIST (current — read this first; updated every session)
 
@@ -1035,8 +1048,10 @@ document, questions about dependents must give the new value; no gold dependency
 **Test world:** add derived facts (`"Mark": {"city": "Paris", "lives_with": "Lucy"}` where Mark's city always equals
 Lucy's); update Lucy's city in a later document; ask "What is Mark's city?" (eager must say the new city without
 re-writing Mark). Compare with lazy (the model may learn to chain via lives_with instead).
-**Open question for the user:** is eager propagation what you want, or is lazy chaining (already supported)
-acceptable for dependents? Eager costs a propagation step per write and a new failure mode (stale dependents).
+**User decision (2026-10-19):** neither is fixed — "this depends on the whole context; the model should learn and decide
+itself based on patterns and other memories (relation nodes / tool nodes or whatever the model knows)". So the memory
+offers the pathways (relation vectors on units with a learned propagation gate, chaining hops, later tool nodes) and the
+model learns from context which to use; no hand rule picks eager vs lazy. Build when the 1B port is under way.
 
 ### 10.3 Deferred (worth it, not now)
 | item | when / why |

@@ -8113,6 +8113,136 @@ def _stream_fast_position(ds, n):
     return positioned, shard, row
 
 
+def _jsonl_fast_position(ds, n, hint=None):
+    """``(rows iterator starting at raw row n, description)`` for a plain JSON-Lines stream, or None.
+
+    A single huge .jsonl has no row groups, so the generic fast skip parses every
+    row before the cursor (sft_science_vendor: one 26.6 GB file, 19 min at row
+    221,598). Here the raw bytes are streamed and newlines counted (no JSON
+    parsing), and rows are then read with json.loads from that byte offset.
+    Exactness: only unshuffled Json-builder streams over uncompressed .jsonl
+    files without explicit features or a nested field qualify, and a file with
+    blank lines refuses (the builder would not count them), so row i here is
+    row i of the builder. TB_STREAM_JSONL_SEEK=0 disables. ``hint`` is the
+    checkpoint's {row, file, byte} for this cursor: then the file is opened at
+    that byte directly (after a line-boundary check), no scan.
+    """
+    if os.environ.get("TB_STREAM_JSONL_SEEK", "1") != "1":
+        return None
+    import datasets.iterable_dataset as hf_iterable
+    import fsspec
+    base = getattr(ds, "_ex_iterable", None)
+    if (type(base) is not hf_iterable.ArrowExamplesIterable or getattr(ds, "_shuffling", None)
+            or getattr(ds, "epoch", 0) or getattr(ds, "_distributed", None)):
+        return None
+    builder = getattr(base.generate_tables_fn, "__self__", None)
+    config = getattr(builder, "config", None)
+    try:   # hub datasets get a per-dataset subclass of the packaged Json builder
+        from datasets.packaged_modules.json.json import Json as _Json
+    except Exception:
+        return None
+    if (not isinstance(builder, _Json) or getattr(config, "field", None)
+            or getattr(config, "features", None) is not None):
+        return None
+    files = []
+
+    def _flat(x):
+        if isinstance(x, (str, os.PathLike)):
+            files.append(str(x))
+        else:
+            for y in x:
+                _flat(y)
+    _flat(base.kwargs.get("files") or base.kwargs.get("files_iterables") or [])
+    if not files or not all(f.endswith(".jsonl") and "::" not in f for f in files):
+        return None
+    if isinstance(hint, dict) and int(hint.get("row", -1)) == int(n) and hint.get("file") in files:
+        fi, byte = files.index(hint["file"]), int(hint.get("byte", 0))
+        ok = byte == 0
+        if byte > 0:
+            with fsspec.open(files[fi], "rb") as f:
+                f.seek(byte - 1)
+                ok = f.read(1) == b"\n"
+        if ok:
+            return _JsonlRows(files, fi, byte, n), f"jsonl checkpoint offset file {fi} byte {byte:,}"
+    remaining, start_file, start_pos = int(n), None, 0
+    for fi, path in enumerate(files):
+        with fsspec.open(path, "rb") as f:
+            pos, last = 0, b"\n"
+            while True:
+                buf = f.read(16 << 20)
+                if not buf:
+                    break
+                if b"\n\n" in buf or b"\n\r\n" in buf or (last == b"\n" and buf[:1] in (b"\n", b"\r")):
+                    return None                           # blank lines: the builder would not count them
+                c = buf.count(b"\n")
+                if c >= remaining:
+                    idx = -1
+                    for _ in range(remaining):
+                        idx = buf.index(b"\n", idx + 1)
+                    start_file, start_pos = fi, pos + idx + 1
+                    remaining = 0
+                    break
+                remaining -= c
+                pos += len(buf)
+                last = buf[-1:]
+            if start_file is not None:
+                break
+            if pos and last != b"\n":                   # last line without a newline is still a row
+                remaining -= 1
+            if remaining < 0:
+                return None
+    if start_file is None:
+        return None
+
+    return _JsonlRows(files, start_file, start_pos, n), f"jsonl file {start_file} byte {start_pos:,}"
+
+
+class _JsonlRows:
+    """Rows of JSON-Lines files from a byte offset; knows the byte offset of every recent row (checkpointed as
+    ``jsonl_seek`` so the next resume is a direct seek instead of a scan)."""
+
+    def __init__(self, files, file_index, pos, index):
+        self.files, self.fi, self.pos, self.index = list(files), int(file_index), int(pos), int(index)
+        self.recent = collections.deque(maxlen=256)     # (row index, file index, start byte)
+        self._f = None
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        import fsspec
+        while True:
+            if self._f is None:
+                if self.fi >= len(self.files):
+                    raise StopIteration
+                self._f = fsspec.open(self.files[self.fi], "rb").open()
+                if self.pos:
+                    self._f.seek(self.pos)
+            line = self._f.readline()
+            if not line:
+                self._f.close()
+                self._f, self.fi, self.pos = None, self.fi + 1, 0
+                continue
+            start = self.pos
+            self.pos += len(line)
+            text = line.strip()
+            if not text:
+                continue
+            self.recent.append((self.index, self.fi, start))
+            self.index += 1
+            return json.loads(text)
+
+    def offset_of(self, row):
+        """{row, file, byte} where raw row ``row`` starts, if it is the next row or a recent one."""
+        row = int(row)
+        if row == self.index and self.fi < len(self.files):
+            return {"row": row, "file": self.files[self.fi], "byte": int(self.pos)}
+        for j, f, b in self.recent:
+            if j == row:
+                return {"row": row, "file": self.files[f], "byte": int(b)}
+        return None
+
+
 class _BackgroundPosition:
     """Row iterator for a stream positioned at raw row n by a background thread.
 
@@ -8123,10 +8253,11 @@ class _BackgroundPosition:
     snapshot taken meanwhile is exact), and any other caller of next() blocks.
     """
 
-    def __init__(self, ds, n, name, on_ready):
+    def __init__(self, ds, n, name, on_ready, hint=None):
         self._ready = threading.Event()
         self._head, self._error, self._it = [], None, None
         self._on_ready = on_ready
+        self._hint = hint
         threading.Thread(target=self._position, args=(ds, int(n), name), daemon=True,
                          name=f"position-{name}").start()
 
@@ -8139,11 +8270,21 @@ class _BackgroundPosition:
         t0 = time.time()
         try:
             how = None
+            jsonl = None
             try:
-                found = _stream_fast_position(ds, n)
+                jsonl = _jsonl_fast_position(ds, n, hint=self._hint)
             except Exception as exc:
-                found, how = None, f"{type(exc).__name__}: {str(exc)[:200]}"
-            if found is None:
+                print(f"STREAM jsonl seek unavailable for {name} ({type(exc).__name__}: "
+                      f"{_redact_hf_credential(exc)[:200]}); using the generic skip", flush=True)
+            found = None
+            if jsonl is None:
+                try:
+                    found = _stream_fast_position(ds, n)
+                except Exception as exc:
+                    found, how = None, f"{type(exc).__name__}: {str(exc)[:200]}"
+            if jsonl is not None:
+                self._it, how = jsonl
+            elif found is None:
                 print(f"STREAM fast skip unavailable for {name} "
                       f"({how or 'not a plain sequential Arrow stream'}); replaying {n:,} rows",
                       flush=True)
@@ -8362,6 +8503,7 @@ class StreamSource:
         self.thread.start()
 
     def _run(self):
+        fails = 0                                       # consecutive read errors (reopen with backoff)
         try:
             while True:
                 with self.cond:
@@ -8380,7 +8522,23 @@ class StreamSource:
                         self.cond.wait()
                     if self._pause_requested.is_set():
                         continue
-                self._pump(32)
+                try:
+                    self._pump(32)
+                    fails = 0
+                except Exception as e:
+                    # A failed read used to mark the source exhausted and crash the run (step 46319,
+                    # sft_science_vendor). Reopen at the (rolled-back) cursor with backoff instead.
+                    fails += 1
+                    retries = int(os.environ.get("TB_STREAM_REOPEN_RETRIES", "8") or 0)
+                    if fails > retries or getattr(self, "ds", None) is None or getattr(self, "shuffle_buffer", 0):
+                        raise
+                    wait = min(300, 15 * 2 ** (fails - 1))
+                    print(f"STREAM read error on {getattr(self, 'source_name', '?')} ({fails}/{retries}): "
+                          f"{type(e).__name__}: {_redact_hf_credential(e)[:300]}; reopening at raw row "
+                          f"{self.raw_cursor:,} in {wait}s", flush=True)
+                    time.sleep(wait)
+                    self._reopen()
+                    continue
                 with self.cond:
                     self.cond.notify_all()
         except Exception as e:
@@ -8411,6 +8569,8 @@ class StreamSource:
                         self.rejected_reasons["duplicate"] += 1
                     return None, None
                 self._dedup_seen.add(key)
+                if getattr(self, "_dedup_log", None) is not None:
+                    self._dedup_log.append(key)
         if self.message_field:
             template = getattr(self, "template", "")
             parts = _render_message_parts(row.get(self.message_field), template=template,
@@ -8506,13 +8666,25 @@ class StreamSource:
     def _pump(self, n):
         import numpy as np
         rows = []
-        for _ in range(n):
-            row = self._next_training_row()
-            if row is None:
-                break
-            text, parts = self._extract_parts(row)
-            if text is not None:
-                rows.append((row, text, parts))
+        # A read error while collecting rolls the cursor and the dedup keys back to the start of this pump, so the
+        # reopened stream replays exactly these rows (nothing was buffered yet).
+        start_cursor = self.raw_cursor
+        self._dedup_log = []
+        try:
+            for _ in range(n):
+                row = self._next_training_row()
+                if row is None:
+                    break
+                text, parts = self._extract_parts(row)
+                if text is not None:
+                    rows.append((row, text, parts))
+        except Exception:
+            for key in self._dedup_log:
+                self._dedup_seen.discard(key)
+            self.raw_cursor = start_cursor
+            raise
+        finally:
+            self._dedup_log = None
         if not rows:
             return
 
@@ -8573,7 +8745,7 @@ class StreamSource:
         if (n > 0 and os.environ.get("TB_STREAM_FAST_SKIP", "1") == "1"
                 and not getattr(self, "shuffle_buffer", 0) and getattr(self, "ds", None) is not None):
             self.it = _BackgroundPosition(self.ds, n, getattr(self, "source_name", "?"),
-                                          self._notify_stream)
+                                          self._notify_stream, hint=getattr(self, "_jsonl_hint", None))
             self.raw_cursor = n
             self.consumed = n
             return
@@ -8586,6 +8758,25 @@ class StreamSource:
                 self.done = True
                 return
         self.consumed = n
+
+    def _reopen(self):
+        """Re-open the stream at the current raw cursor after a read error (positioned in the background)."""
+        n = int(self.raw_cursor)
+        if n > 0 and os.environ.get("TB_STREAM_FAST_SKIP", "1") == "1" and getattr(self, "ds", None) is not None:
+            self.it = _BackgroundPosition(self.ds, n, getattr(self, "source_name", "?"), self._notify_stream,
+                                          hint=self.jsonl_seek_state())
+        else:
+            self.it = iter(self.ds)
+            for _ in range(n):
+                next(self.it)
+
+    def jsonl_seek_state(self):
+        """{row, file, byte} of the current raw cursor when the stream reads JSON-Lines by offset, else None."""
+        it = getattr(self, "it", None)
+        reader = getattr(it, "_it", None) if isinstance(it, _BackgroundPosition) else it
+        if isinstance(reader, _JsonlRows):
+            return reader.offset_of(self.raw_cursor)
+        return None
 
     def skip_more(self, n):
         """Advance the iterator n rows past the current cursor WITHOUT resetting
@@ -8633,6 +8824,8 @@ class StreamSource:
                                                count=len(self._dedup_seen))
                                    if getattr(self, "dedup", "") else None),
                     "raw_cursor": int(self.raw_cursor),
+                    # byte offset of the cursor for JSON-Lines sources (next resume seeks directly; old readers ignore)
+                    "jsonl_seek": self.jsonl_seek_state(),
                     "consumed": int(self.consumed),
                     "buffers": buffers,
                     # SFT prompt masks, parallel to buffers (zeros = unmasked).
@@ -9025,6 +9218,7 @@ class MixedStreamSource:
             if old.get("name") != spec["name"] or old.get("dataset") != spec["dataset"]:
                 raise RuntimeError(f"mixed stream source mismatch at {spec['name']}")
             child = old.get("state") or {}
+            src._jsonl_hint = child.get("jsonl_seek")
             src.skip(int(child.get("raw_cursor", 0)))
             result = src.restore_checkpoint_state(child)
             total_discarded += int(result.get("discarded_tokens", 0))
@@ -9048,6 +9242,7 @@ class MixedStreamSource:
             if old.get("dataset") != spec["dataset"]:
                 raise RuntimeError(f"mix extension changed the dataset of {spec['name']}")
             child = dict(old.get("state") or {})
+            src._jsonl_hint = child.get("jsonl_seek")
             src.skip(int(child.get("raw_cursor", 0)))
             if spec["name"] in getattr(self, "rerendered", ()):
                 # Prefetched rows were rendered in the old format: drop them
@@ -17300,6 +17495,13 @@ def run_stream_integrity_probe(rows_per_source=4):
     return reports
 
 def main():
+    try:   # `kill -USR1 <pid>` prints every thread's Python stack into the log (py-spy cannot attach on MoLab)
+        import faulthandler
+        import signal
+        if hasattr(signal, "SIGUSR1"):
+            faulthandler.register(signal.SIGUSR1, all_threads=True)
+    except Exception:
+        pass
     argv = __import__("sys").argv
     if _is_infer_request(argv):
         # parse but allow fallback for `python file.py ckpt.pt` without flag
