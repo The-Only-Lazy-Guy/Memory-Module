@@ -1254,6 +1254,89 @@ Every part maps to §1:
   (current value), counterfactual updates written at eval time (answers must follow the store, not the weights),
   2-hop chains, longer tool programs, held-out tool compositions.
 
+**Building it (GPT-2, local), in order:**
+- Speed / memory: per-row picks of the big node tensors cost a full-size gradient each (backward 7 s) → one gather
+  per pass; padded span pooling (414 MB) → flat segment pooling (`Pool.flat`, identical result, test passes); Walker's
+  activations for every pass of every question exceeded the 6 GB card (peak 6.6 GiB, spill into system RAM) →
+  activation checkpointing per pass (2.7 GiB). 4.7 → ~1–2 s/step at 1500 nodes. The world is bounded by a fixed
+  attribute set per entity (otherwise protected current facts grew without limit).
+- **Pass 0 (find its own question node) was right only .15–.19** even teacher-forced: before anything is read the
+  query is the same for every question, so the only cue is the node's age (the current frame); the age table and the
+  other scalar knobs moved ~lr = 5e-4 per step. Knobs (age, gates, edge / traffic weights, τ) got their own lr ×50
+  → pass 0 1.00 within 125 steps. Next query also from the node just read (graph-era `qr`, starts as its key, gated).
+- **Run 4 @500:** old facts lookup .90 (gold nodes read .95, program right .80), updated facts .87 — but **new
+  (just written) facts .03, counterfactual .00**: the loop found its question and never read a fresh node. Training
+  questions almost only targeted old facts (4 of ~1200 facts are new per step) → the age bias learned "young nodes
+  are never the answer". Data fix (the model is asked about what it just saw too): `--recent 0.35` of the training
+  questions target facts of the last 3 steps.
+- **Train / eval gap (teacher-forced .99, free-running reads .4–.7):** scoring the eval questions teacher-forced
+  showed the eval data was fine (.90–1.00); two eval-only artefacts broke pass 0: (1) free-running questions wrote
+  their (untrained) tool outputs back stamped "now" and eval never evicted, so hundreds of them captured the pass-0
+  query — a thought's result is now memory from the next frame on (time t + ½) and eval evicts like training;
+  (2) the free age table left buckets never seen in training (questions written further back than 23 frames) at 0,
+  above the trained negative buckets — replaced by a smooth function (is-current, log-age, log-age²).
+- **@300 after the fixes (96 eval questions per set):** counterfactual lookups **1.00** (answers follow the store,
+  not the weights), updated facts **.93**, new (just written) lookups .71, old lookups .60; gold nodes read
+  .75–.96; tool programs weak (1 op .15–.29, longer / held-out compositions .03). Full run `gnm_world_g1` (3000
+  steps) running.
+- **Value slots 32 → 64:** 3–4-op questions are 42–57 tokens; a node with 32 slots cut them off, so the loop could
+  not see the end of a longer question (the earlier "longer programs" numbers were invalid).
+- **Run `gnm_world_g1` (64 slots) @500 / @1000:** updated facts .97 / **.98**; new facts .50 / **.71** (lookups .74 /
+  .90, program right .72 / .92); counterfactual lookups **.94** / .35; old-fact lookups .27 / .42; held-out
+  compositions: program right .05 / **.62** (gold nodes read .87) but the answer right only .14 when the program is
+  right — the LEARNED tool networks do not generalize to new compositions; longer programs .01. Teacher-forced actions
+  .98–.99. **Open:** (1) the recency balance swings between evals (old vs new / counterfactual) — likely the ×50 knob
+  lr on the age function; (2) learned tools: arithmetic on latent values generalizes poorly (exact core inside a tool
+  node = the doc's "exact calc" tool kind, latent in / latent out, is the next candidate); (3) longer programs.
+- **@1500 (run 6):** updated 1.00, new .67 (lookups .82), old .31 (lookups .48), counterfactual .41 — old, never-updated
+  facts are read worse than new ones. Suspect: the overwrite gate compares RAW keys, which pool the record label, so
+  a newer frame about the same entity (another attribute) looks like a newer version of every older attribute.
+  **Run 7** (supersession through its own learned projection, identity at init): WORSE — teacher-forced reads stuck
+  at .4–.5 by step 1000 (run 6: .98) → reverted. Reference run (run-6 config) relaunched to 3000 steps. Next for
+  this: supersession only between nodes with the same key NAME under the same record (the pointer is known at
+  ingestion, §1.4) — a structural, not learned, candidate set; the gate stays the model's.
+- **Reference rerun (run-6 config) @500 / @1000:** updated .99 / .96; new-fact lookups .81 / .26; counterfactual
+  lookups .91 / .21; teacher-forced actions .97 throughout → the swing reproduces: the free-running read of RECENT nodes
+  flips between evals while teacher-forced stays high. Prime suspect: the age function (knob lr ×50) oscillating —
+  next test: knob lr ×10 or the age stat out of the knob group, eval every 250 to see the oscillation.
+- **Reference @1500–3000:** new facts .54 / .91 / .34 / .82, counterfactual .40 / .21 / .79 / .25 — they ALTERNATE;
+  updated .93–1.00; held-out compositions .02–.22; old .19–.42. **Failure dump** (`--load … --sim-steps 300`, the
+  failed reads with kind / age / version): the loop **re-reads its own question node** pass after pass. The
+  read-driven next query starts as the key of the node just read, so after the question it points back at the
+  question. This is the graph-era bug of §3 ("the node just read is not re-read next pass, log(1 − a_prev)"), whose
+  fix I had dropped in the rebuild → restored: each pass adds Σ log(1 − p_read) of the earlier passes (soft, the
+  model's own attention, detached).
+- **Run 8 @500 / @1000** (no-re-read restored): counterfactual still swung .74 → .21. Cause: each eval set wrote all
+  96 questions before answering, so the facts asked were ~100–200 frames old — beyond the ages training sees (≤ ~84,
+  24 questions per step). Eval now writes and answers in chunks of 24 and evicts after each chunk, like training.
+- **Run 9 @1000 — the memory side holds:** old facts lookups **.96** (gold nodes read .98, program right .93);
+  updated facts **.99**; new (just written, never asked) lookups **.91** (gold read .97); counterfactual lookups
+  **1.00** (gold read 1.00 — answers follow the store, not the weights). The loop finds its own question node, reads
+  the right nodes and follows updates. **Open — tools:** held-out compositions: gold nodes read .97, program right
+  .35, but the answer right only .03 when the program is right (the learned tool networks compute wrong values on
+  new combinations); longer programs (3–4 ops) program right .00.
+- **Run 9 @1500 / @2000:** old facts .68 / **.81** (lookups .96 / .98, program right .97 / .99); new .79 / **.89**
+  (lookups .98 / 1.00, program .94 / .99); counterfactual .80 / .77 (lookups 1.00, program .95 / .99); updated 1.00;
+  1-op answers .58–.81; held-out compositions .21 / **.38** (program .47 / .62, answer given program .36 / .39 — tools
+  improving with training); longer programs program right .00 (3–4 ops never trained: no plan extrapolation).
+- **Run 9 FINAL @3000** (`runs/gnm_world_g1.pt`, GPT-2, one world, frozen Walker):
+
+  | set | exact | lookups | 1 op | 2 ops | gold nodes read | program right |
+  |---|---|---|---|---|---|---|
+  | old facts | **.91** | 1.00 | .83 | .74 | 1.00 | 1.00 |
+  | updated facts (current value) | **1.00** | 1.00 | | | 1.00 | 1.00 |
+  | new facts (just written, never asked) | **.90** | 1.00 | .81 | .61 | 1.00 | 1.00 |
+  | counterfactual updates (written at eval) | **.84** | 1.00 | .86 | .52 | 1.00 | .99 |
+  | held-out tool compositions | .35 | | | | .99 | .41 |
+  | longer programs (3–4 ops) | .04 | | | | .73 | .00 |
+
+  **Answer to the user's question (does the LM control the memory?):** yes, within what was trained — Walker's pass
+  state finds its own question node, chooses which nodes to read, which tool node to apply to which registers, and
+  when to halt; free-running programs are right .99–1.00 on new worlds, and answers follow the store (counterfactual
+  lookups 1.00). **Not yet:** generalizing the PLAN to unseen tool compositions (.41) and to longer programs (.00),
+  and the learned tool networks compute right only ~.5 on unseen compositions. Next decisions (user): exact-calc tool
+  kind (latent in/out, exact core) vs purely learned tools; longer programs via curriculum.
+
 ## 10. CHECKLIST (current — read this first; updated every session)
 
 Each item is decided: ✅ built · 🔨 build next (in order) · ⏸ defer (worth it, not now) · ❌ reject (not worth

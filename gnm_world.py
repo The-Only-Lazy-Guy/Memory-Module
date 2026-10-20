@@ -47,8 +47,8 @@ HELD_PAIRS = {("max", "sub"), ("min", "add")}
 class World:
     """Truth of the one world: entities with numeric and entity-valued attributes. Emits small component frames."""
 
-    def __init__(self, rng, n_num=40, n_ent=6, n_groups=4, max_ents=150):
-        self.max_ents = max_ents
+    def __init__(self, rng, n_num=40, n_ent=6, n_groups=4, max_ents=150, attrs=8):
+        self.max_ents, self.attrs, self.schema = max_ents, attrs, {}
         used = set()
         mk = lambda: D._style(D._key(rng, D.KEYS_TRAIN, used), rng)
         self.num_keys = [mk() for _ in range(n_num)]
@@ -74,6 +74,8 @@ class World:
             if not self.ents or (rng.random() < p_new and len(self.ents) < self.max_ents):
                 nm = D._name(rng, 2, self.names)
                 self.ents[nm] = {}
+                # each entity has a fixed attribute set (bounded world; re-stating = updates)
+                self.schema[nm] = rng.sample(self.num_keys, self.attrs - 2) + rng.sample(self.ent_keys, 2)
             else:
                 nm = rng.choice(sorted(self.ents))
             e = self.ents[nm]
@@ -83,7 +85,7 @@ class World:
                 if upd and rng.random() < 0.5:
                     k = rng.choice(upd)
                 else:
-                    k = rng.choice(self.num_keys + self.ent_keys)
+                    k = rng.choice(self.schema[nm])
                 if k in self.ent_keys:
                     others = sorted(set(self.ents) - {nm})
                     if not others:
@@ -201,7 +203,9 @@ class Graph(nn.Module):
         self.tau_r = nn.Parameter(torch.tensor(math.log(5.0)))
         self.g_traffic = nn.Parameter(torch.tensor(0.0))   # pointer traffic (opened by training)
         self.ow = nn.Parameter(torch.tensor([5.0, -8.0]))  # overwrite gate: supersession by newer matching nodes
-        self.age = nn.Parameter(torch.zeros(16))           # node stat: age relative to the current frame
+        # node stat: age relative to the current frame, as a SMOOTH function (is-current, log-age, log-age^2): a free
+        # table per age bucket left buckets never seen in training at 0, and they hijacked the first read
+        self.age = nn.Parameter(torch.zeros(3))
 
     def nodes(self, X, E, spans, ptr, vpos):
         kraw, v, logg, slots, g = self.mem.write(X, E, spans, ptr, vpos)
@@ -238,6 +242,14 @@ class Loop(nn.Module):
     def __init__(self, d, dk, vslots, max_regs):
         super().__init__()
         self.Wq = nn.Linear(d, dk)
+        nn.init.zeros_(self.Wq.weight); nn.init.zeros_(self.Wq.bias)
+        # next query also from the node just read (graph-era qr: "next query from the read nodes, starting as the
+        # label head"): starts as that node's own key, gated by the pass state
+        self.Wqr = nn.Linear(dk, dk)
+        with torch.no_grad():
+            self.Wqr.weight.copy_(torch.eye(dk)); self.Wqr.bias.zero_()
+        self.Wgq = nn.Linear(d, 1)
+        nn.init.zeros_(self.Wgq.weight); nn.init.zeros_(self.Wgq.bias)
         self.halt = nn.Parameter(torch.randn(dk) / dk ** 0.5)
         self.Wa = nn.ModuleList([nn.Linear(d, dk) for _ in range(2)])
         self.Wrk = nn.Linear(dk, dk)
@@ -268,9 +280,12 @@ def main():
     P.add_argument("--max-ents", type=int, default=150, help="entities in the world (then only new facts / updates)")
     P.add_argument("--mix", default="lookup:0.3,chain:0.2,arith:0.5")
     P.add_argument("--train-ops", default="1,2")
+    P.add_argument("--recent", type=float, default=0.35,
+                   help="share of training questions about facts written in the last 3 steps (else the read learns "
+                        "'young nodes are never the answer': new facts .03 at step 500)")
     P.add_argument("--long-ops", default="3,4")
     P.add_argument("--dk", type=int, default=512)
-    P.add_argument("--vslots", type=int, default=32)
+    P.add_argument("--vslots", type=int, default=64, help="value slots per node: a node carries its whole value (3-4-op questions are 42-57 tokens)")
     P.add_argument("--tool-slots", type=int, default=2)
     P.add_argument("--inject", type=int, default=6)
     P.add_argument("--lr", type=float, default=5e-4)
@@ -279,6 +294,8 @@ def main():
     P.add_argument("--max-ans", type=int, default=6)
     P.add_argument("--seed", type=int, default=0)
     P.add_argument("--save", default="runs/gnm_world.pt")
+    P.add_argument("--load", default="", help="analysis: load a trained gnm_world checkpoint, evolve a world, evaluate")
+    P.add_argument("--sim-steps", type=int, default=300, help="analysis: steps of frames + questions before the eval")
     P.add_argument("--log", default="runs/gnm_world.jsonl")
     A = P.parse_args()
     import fwm_core as C
@@ -310,7 +327,15 @@ def main():
     params = [p for p in list(graph.parameters()) + list(ro.parameters()) + list(loop.parameters())
               + list(tools.parameters())]
     params = list({id(p): p for p in params}.values())
-    opt = torch.optim.AdamW(params, lr=A.lr, weight_decay=0.01)
+    # scalar knobs (age table, gates, edge / traffic weights, tau): Adam moves a parameter ~lr per step, so at 5e-4 a
+    # gate needs thousands of steps to open (pass 0 found its own question only .15-.19 at step 150) -> own lr
+    knob_names = ("age", "ow", "w_edge", "w_op", "w_rel", "g_traffic", "tau_r", "tau_o", "tau", "beta", "gate", "gs")
+    knobs = [p for n, p in list(graph.named_parameters()) + list(ro.named_parameters()) + [("tau", mem.tau)]
+             if n.split(".")[-1] in knob_names]
+    knob_ids = {id(p) for p in knobs}
+    opt = torch.optim.AdamW([{"params": [p for p in params if id(p) not in knob_ids], "lr_mult": 1.0},
+                             {"params": list({id(p): p for p in knobs}.values()), "lr_mult": 50.0,
+                              "weight_decay": 0.0}], lr=A.lr, weight_decay=0.01)
     inject = C.Inject(model, A.inject % nL, ro)
     ans_ids = tok.ids(" Answer:")
     a0 = len(ans_ids) - 1
@@ -396,7 +421,7 @@ def main():
             v = v + torch.stack([e if e is not None else torch.zeros(A.dk, device=dev) for e in edits])
         row_of = {nid: k for k, nid in enumerate(rows)}
         par = torch.tensor([row_of.get(store.nodes[i]["par"], k) for k, i in enumerate(rows)], device=dev)
-        tim = torch.tensor([store.nodes[i]["time"] for i in rows], device=dev)
+        tim = torch.tensor([float(store.nodes[i]["time"]) for i in rows], device=dev)
         kind_q = torch.tensor([store.nodes[i]["kind"] == "question" for i in rows], device=dev)
         nsl = torch.tensor([min(store.nodes[i]["nslots"], A.vslots) for i in rows], device=dev)
         return {"kraw": kraw, "V": v, "S": slots, "logg": logg, "R": r, "par": par, "time": tim, "q": kind_q,
@@ -475,24 +500,33 @@ def main():
                 rws += [b] * x.shape[0]
                 cols += list(range(len(start_ids), len(start_ids) + x.shape[0]))
                 vecs.append(x)
-        if vecs:
-            fb["pos"] = (torch.tensor(rws, device=dev), torch.tensor(cols, device=dev))
-            fb["vec"] = torch.cat(vecs, 0)
-        got = {}
+        pos = (torch.tensor(rws, device=dev), torch.tensor(cols, device=dev)) if vecs else None
+        last = torch.tensor(lens, device=dev) - 1
 
-        def grab(_m, a, kw):
-            got["x"] = a[0] if a else kw["x"]
-            raise C._Stop
-        h = model.blocks[ctrl_layer].register_forward_pre_hook(grab, with_kwargs=True)
-        try:
-            with torch.autocast(dev.type, dtype=torch.bfloat16, enabled=dev.type == "cuda"):
-                model(ids, r_active=False)
-        except C._Stop:
-            pass
-        finally:
-            h.remove()
-            fb["pos"] = fb["vec"] = None
-        return got["x"].float()[torch.arange(len(regs), device=dev), torch.tensor(lens, device=dev) - 1]
+        def walker(vec):                                   # Walker reads the latent tokens; state at the last position
+            fb["pos"], fb["vec"] = (pos, vec) if pos is not None else (None, None)
+            got = {}
+
+            def grab(_m, a, kw):
+                got["x"] = a[0] if a else kw["x"]
+                raise C._Stop
+            h = model.blocks[ctrl_layer].register_forward_pre_hook(grab, with_kwargs=True)
+            try:
+                with torch.autocast(dev.type, dtype=torch.bfloat16, enabled=dev.type == "cuda"):
+                    model(ids, r_active=False)
+            except C._Stop:
+                pass
+            finally:
+                h.remove()
+                fb["pos"] = fb["vec"] = None
+            return got["x"].float()[torch.arange(len(regs), device=dev), last]
+        vec = torch.cat(vecs, 0) if vecs else torch.zeros(1, d, device=dev)
+        if torch.is_grad_enabled() and vecs:
+            # activation checkpointing: Walker's activations are recomputed in backward instead of kept for every
+            # pass of every question (the peak was > the 6 GB card); the gradient is identical
+            from torch.utils.checkpoint import checkpoint
+            return checkpoint(walker, vec, use_reentrant=False)
+        return walker(vec)
 
     def run(qs, teacher):
         M = materialize()
@@ -506,11 +540,13 @@ def main():
         logg = logg - F.softplus(graph.ow[0] * sup + graph.ow[1]) * 10.0
         adj = graph.adj(V, R, par)
         B = len(qs)
-        tq = torch.tensor([store.nodes[q["qnid"]]["time"] for q in qs], device=dev)
+        tq = torch.tensor([float(store.nodes[q["qnid"]]["time"]) for q in qs], device=dev)
         age = (tq[:, None] - M["time"][None]).clamp(min=0)
         visible = M["time"][None] <= tq[:, None]           # sequential frames: nothing written after the question
-        age_b = graph.age[torch.log2(age.float() + 1).long().clamp(max=15)]
+        la = torch.log1p(age.float()) / 5.0
+        age_b = graph.age[0] * (age < 0.75).float() + graph.age[1] * la + graph.age[2] * la * la
         regs = [[] for _ in range(B)]                      # (label, value, slots, n_slots, latent block)
+        acts = [[] for _ in range(B)]                      # diagnostic: the loop's actions ('read', nid) / ('op', tool)
         nsl_list = M["nsl"].tolist()
 
         def block(v, s, n):                                # a register as Walker's latent input tokens
@@ -518,9 +554,12 @@ def main():
         done = [False] * B
         losses, n_act, ok_act, say = [], 0, 0, []
         T = max(len(q["prog"]) for q in qs) + 1 if teacher else max_regs
+        keep = None                                        # GNM.md 3 (graph era): what was read is not re-read:
+                                                           # + sum over earlier passes of log(1 - p_read) (detached)
         for t in range(T):
             h = ctrl_state(regs)
-            qr = loop.Wq(h)
+            klast = torch.stack([row[-1][0] if row else torch.zeros(A.dk, device=dev) for row in regs])
+            qr = loop.Wq(h) + torch.sigmoid(loop.Wgq(h)) * loop.Wqr(klast)
             qn = F.normalize(qr - kmean, dim=-1)
             tau = mem.tau.exp()
             cos_r = F.normalize(qr, dim=-1) @ F.normalize(R, dim=-1).t()
@@ -538,10 +577,14 @@ def main():
             down = torch.zeros_like(e)
             down[:, has] = gate[:, has] * c[:, par[has]]
             s = (e + graph.g_traffic * (up + down) + c @ adj).masked_fill(~visible, -1e4)
+            if keep is not None:
+                s = s + keep
             tk = torch.stack([tl.label for tl in tools] + [loop.halt])
             lt = tau * qn @ F.normalize(tk, dim=-1).t()
             logits = torch.cat([s, lt], -1)
             N = s.shape[1]
+            p_read = torch.softmax(logits, -1)[:, :N].detach()
+            keep = (keep if keep is not None else 0) + torch.log1p(-p_read.clamp(max=1 - 1e-6))
             arg_lg = None
             if t:
                 nr = max(len(r) for r in regs)
@@ -565,6 +608,10 @@ def main():
                 losses.append(F.cross_entropy(logits, g, ignore_index=-100, reduction="sum"))
                 vv = g != -100
                 n_act += int(vv.sum()); ok_act += int(((logits.argmax(-1) == g) & vv).sum())
+                hit = (logits.argmax(-1) == g) & vv
+                for name_, m_ in (("read", vv & (g < N)), ("tool", (g >= N) & (g < N + HALT)), ("halt", g == N + HALT)):
+                    if bool(m_.any()):
+                        run.per_pass[name_] = run.per_pass.get(name_, []) + [float((hit & m_).sum() / m_.sum())]
                 if arg_lg is not None:
                     for i in range(2):
                         tg = torch.tensor([r[i] if len(r) > i else -100 for r in gargs], device=dev)
@@ -584,14 +631,16 @@ def main():
                     continue
                 if c_ < N:
                     reads.append((b, c_))
+                    acts[b].append(("read", M["rows"][c_]))
                     store.nodes[M["rows"][c_]]["usage"] += 1
                 elif c_ - N == HALT or not regs[b]:
                     done[b] = True
                 else:
                     apply.setdefault(c_ - N, []).append(b)
+                    acts[b].append(("op", c_ - N))
             if reads:                                      # one gather per pass (a per-row pick of the big node
                 ix = torch.tensor([c_ for _, c_ in reads], device=dev)   # tensors costs a full-size grad each)
-                Kc, Vc, Sc = K[ix], V[ix], S[ix]
+                Kc, Vc, Sc = kraw[ix], V[ix], S[ix]
                 fv, fs = loop.Wfv(Vc), loop.Wfs(Sc) + loop.spos
                 for j, (b, c_) in enumerate(reads):
                     n_ = int(nsl_list[c_])
@@ -602,7 +651,7 @@ def main():
                 b_ = tuple(torch.stack([pick(1, b)[k] for b in rws]) for k in range(3))
                 ol, ov, orr, osl = tools[ti](a_, b_)
                 full = torch.cat([osl, torch.zeros(len(rws), A.vslots - A.tool_slots, A.dk, device=dev)], 1)
-                on = F.normalize(ol - kmean, dim=-1)
+                on = ol
                 fv, fs = loop.Wfv(ov), loop.Wfs(osl) + loop.spos[:A.tool_slots]
                 for j, b in enumerate(rws):
                     regs[b].append((on[j], ov[j], full[j], A.tool_slots, torch.cat([fv[j][None], fs[j]], 0)))
@@ -610,7 +659,11 @@ def main():
                         say.append((b, len(regs[b]) - 1, qs[b]["vals"][len(regs[b]) - 1]))
                     if True:                              # written back into the one world (persistent node)
                         nid = len(store.nodes)
-                        store.nodes.append({"frame": None, "j": 0, "par": nid, "time": store.time, "alive": True,
+                        # the result of thinking at frame t is memory from then on: time t + 1/2 (invisible to its
+                        # own frame, an ordinary node for later frames); stamping it 'now' made untrained tool
+                        # outputs capture the pass-0 query of later questions (eval reads collapsed to one node)
+                        store.nodes.append({"frame": None, "j": 0, "par": nid, "time": float(tq[b]) + 0.5,
+                                            "alive": True,
                                             "usage": 0, "kind": "tool", "meta": None, "edit": None,
                                             "nslots": A.tool_slots})
                         store.tools_out[nid] = (ol[j].detach(), ov[j].detach(), orr[j].detach(), full[j].detach())
@@ -634,7 +687,33 @@ def main():
         say_loss = F.cross_entropy(lo.reshape(-1, lo.shape[-1]), tgt.reshape(-1), ignore_index=-100)
         em = ((lo.argmax(-1) == tgt) | (tgt == -100)).all(-1).float()
         act = sum(losses) / max(1, n_act) if losses else torch.zeros((), device=dev)
+        run.diag = []
+        if __import__("os").environ.get("GW_DEBUG") and not teacher:
+            q0 = qs[0]
+            print("    DEBUG", q0["text"], "| prog", [(k, x) for k, x, _ in q0["prog"]], "| acts", acts[0],
+                  "| q node alive", store.nodes[q0["qnid"]]["alive"], "time", store.nodes[q0["qnid"]]["time"],
+                  "| in rows", q0["qnid"] in M["row_of"],
+                  "| pass-0 read:", [(store.nodes[x]["kind"], store.nodes[x]["time"]) for k, x in acts[0][:1] if k == "read"],
+                  "| store time", store.time, "| n question nodes alive",
+                  sum(1 for n in store.nodes if n["alive"] and n["kind"] == "question"), flush=True)
+        if getattr(run, "dump", 0) and not teacher:
+            for b, q in enumerate(qs):
+                gold_reads = [x for kd, x, _ in q["prog"] if kd == "read"]
+                mine = [x for kd, x in acts[b] if kd == "read"]
+                if mine[:len(gold_reads)] != gold_reads and run.dump > 0:
+                    run.dump -= 1
+                    info = lambda x: (store.nodes[x]["kind"], store.nodes[x]["meta"], round(float(tq[b]) - float(store.nodes[x]["time"]), 1),
+                                      world.version.get(store.nodes[x]["meta"], 0) if store.nodes[x]["meta"] else None)
+                    print("    FAIL", q["text"][:70], "| gold", [info(x) for x in gold_reads], "| read", [info(x) for x in mine[:4]],
+                          flush=True)
+        for b, q in enumerate(qs):                         # did the loop read the gold nodes / follow the program?
+            gold_reads = [x for kd, x, _ in q["prog"] if kd == "read"]
+            mine = {x for kd, x in acts[b] if kd == "read"}
+            gold_seq = [(kd, x) for kd, x, _ in q["prog"]]
+            run.diag.append((sum(x in mine for x in gold_reads) / len(gold_reads), float(acts[b] == gold_seq)))
         return act + say_loss, em[:B], ok_act / max(1, n_act), (em[B:].mean().item() if len(em) > B else None)
+
+    run.per_pass = {}
 
     # ------------------------------------------------------------------ evaluation (on a snapshot of the world)
     logf = open(A.log, "a", encoding="utf-8")
@@ -648,46 +727,89 @@ def main():
         er = random.Random(50_000 + step)
         out = {}
 
-        def score(name, qs):
-            em_ = []
-            for j in range(0, len(qs), A.questions):
-                _, em, _, _ = run(qs[j:j + A.questions], False)
+        def score(name, gen):
+            em_, dg_ = [], []
+            run.dump = 4 if A.load else 0                  # analysis: show 4 failed reads per set
+            tf_ = []
+            qs = []
+            # questions arrive and are answered in chunks like training (writing all 96 first aged the facts asked
+            # far beyond the training range: counterfactual lookups swung .74 -> .21)
+            for j in range(0, A.eval_q, A.questions):
+                chunk = gen(A.questions)
+                if not chunk:
+                    continue
+                qs += chunk
+                _, em, _, _ = run(chunk, False)
                 em_ += em.tolist()
+                dg_ += run.diag
+                run.per_pass = {}
+                _, _, tf, _ = run(chunk, True)                      # same questions, teacher-forced actions
+                store.evict(A.cap, protect=set(cur.values()))       # after every chunk, as after every training step
+                tf_.append(tf)
+                print(f"    teacher-forced on these questions: action acc {tf:.2f} "
+                      f"{ {k: round(sum(v) / len(v), 2) for k, v in run.per_pass.items()} }", flush=True)
+                run.per_pass = {}
             by = {}
             for q, e in zip(qs, em_):
                 by.setdefault(q["ops"], []).append(e)
-            out[name] = {"exact": sum(em_) / max(1, len(em_)), "n": len(em_),
-                         "by_ops": {k: round(sum(v) / len(v), 3) for k, v in sorted(by.items())}}
+            n_ = max(1, len(em_))
+            prog_ok = [d[1] for d in dg_]
+            ok_given = [e for e, d in zip(em_, dg_) if d[1] == 1.0]
+            out[name] = {"exact": sum(em_) / n_, "n": len(em_),
+                         "by_ops": {k: round(sum(v) / len(v), 3) for k, v in sorted(by.items())},
+                         "gold_read": sum(d[0] for d in dg_) / n_, "program_ok": sum(prog_ok) / n_,
+                         "exact_given_program": sum(ok_given) / max(1, len(ok_given))}
             print(f"EVAL step {step} {name}: Walker said the answer exactly {out[name]['exact']:.3f} | by #ops "
-                  f"{out[name]['by_ops']} | n {len(em_)}", flush=True)
+                  f"{out[name]['by_ops']} | gold nodes read {out[name]['gold_read']:.3f} | program right "
+                  f"{out[name]['program_ok']:.3f} | exact when the program was right "
+                  f"{out[name]['exact_given_program']:.3f} | n {len(em_)}", flush=True)
             logf.write(json.dumps({"type": "eval", "step": step, "set": name, **out[name]}) + "\n")
             logf.flush()
+            store.evict(A.cap, protect=set(cur.values()))   # same deployment rule as training
         old_time = store.time
         old = {f for f, nid in cur.items() if store.nodes[nid]["time"] < old_time - 200}
         upd = {f for f in cur if world.version.get(f, 0) > 1}
-        score("old_facts", ask(er, A.eval_q, "lookup:0.4,chain:0.2,arith:0.4", pool=old) if old else [])
+        if old:
+            score("old_facts", lambda n: ask(er, n, "lookup:0.4,chain:0.2,arith:0.4", pool=old))
         if upd:
-            score("updated_facts", ask(er, A.eval_q, "lookup:1.0", pool=upd))
-        score("longer_programs", ask(er, A.eval_q, "arith:1.0", lo_ops))
-        score("held_compositions", ask(er, A.eval_q, "arith:1.0", (2, 2), "held"))
+            score("updated_facts", lambda n: ask(er, n, "lookup:1.0", pool=upd))
+        score("longer_programs", lambda n: ask(er, n, "arith:1.0", lo_ops))
+        score("held_compositions", lambda n: ask(er, n, "arith:1.0", (2, 2), "held"))
         before = set(cur)
         add_components(12, er)                             # new facts, written now, never asked before
         new = {f for f in cur if f not in before or store.nodes[cur[f]]["time"] > old_time}
-        score("new_facts", ask(er, A.eval_q, "lookup:0.4,chain:0.2,arith:0.4", pool=new))
+        score("new_facts", lambda n: ask(er, n, "lookup:0.4,chain:0.2,arith:0.4", pool=new))
         # counterfactual: rewrite existing facts now (update frames), ask them: answers must follow the store
         before_v = dict(world.version)
         add_components(12, er, only_update=True)
         cf = {f for f, v in world.version.items() if v > before_v.get(f, 0)}
-        score("counterfactual_updates", ask(er, A.eval_q, "lookup:0.5,arith:0.5", pool=cf))
+        score("counterfactual_updates", lambda n: ask(er, n, "lookup:0.5,arith:0.5", pool=cf))
         # restore the training world
         world.__dict__.update(snap[0]); store.frames = snap[1]
         store.nodes = [dict(n, edit=e) for n, e in zip(snap[2], snap[3])]
         store.time = snap[4]; store.tools_out = snap[5]; store.next_fid = snap[7]
         cur.clear(); cur.update(snap[6])
+        if dev.type == "cuda":
+            torch.cuda.empty_cache()
         mem.train()
         return out
 
     # ------------------------------------------------------------------ train on the ONE world
+    if A.load:                                         # analysis: trained model, a world evolved without training
+        st = torch.load(A.load, map_location=dev)
+        C.load_memory(mem, st["mem"]); ro.load(st)
+        graph.load_state_dict(st["graph"], strict=False); loop.load_state_dict(st["loop"]); tools.load_state_dict(st["tools"])
+        add_components(A.warm_frames)
+        for i in range(A.sim_steps):
+            add_components(A.frames_per_step)
+            qs = ask(rng, A.questions, A.mix, tr_ops)
+            for q in qs:
+                store.nodes[q["qnid"]]["alive"] = False
+            store.evict(A.cap, protect=set(cur.values()))
+        print(f"ANALYSIS world: {len(world.ents)} entities, {len(store.alive())} live nodes, time {store.time}", flush=True)
+        run.dump = 12
+        evaluate(-1)
+        return
     add_components(A.warm_frames)
     print(f"WORLD: {len(world.ents)} entities, {len(store.alive())} nodes after {A.warm_frames} warm frames", flush=True)
     q0 = ask(random.Random(1), 3, A.mix)
@@ -697,18 +819,24 @@ def main():
         store.nodes[q["qnid"]]["alive"] = False
     evaluate(0)
     t0, best = time.time(), -1.0
+    import collections
+    recent_times = collections.deque(maxlen=3)
     for step in range(1, A.steps + 1):
         lr = A.lr * min(1.0, step / 100) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / A.steps)))
         for gp in opt.param_groups:
-            gp["lr"] = lr
+            gp["lr"] = lr * gp.get("lr_mult", 1.0)
         _T = __import__("time"); _dbg = __import__("os").environ.get("GW_DEBUG"); _ts = [_T.time()]
 
         def _lap():
             if _dbg:
                 torch.cuda.synchronize(); _ts.append(_T.time())
+        t_before = store.time
         add_components(A.frames_per_step)                  # small pieces of detail; the world keeps growing
+        recent_times.append(t_before)
         _lap()
-        qs = ask(rng, A.questions, A.mix, tr_ops)
+        recent = {f for f, nid in cur.items() if store.nodes[nid]["time"] > recent_times[0]}
+        n_rec = int(round(A.recent * A.questions)) if recent else 0
+        qs = ask(rng, n_rec, A.mix, tr_ops, pool=recent) + ask(rng, A.questions - n_rec, A.mix, tr_ops)
         _lap()
         loss, em, act, tool_said = run(qs, True)
         _lap()
@@ -720,9 +848,14 @@ def main():
         _lap()
         store.evict(A.cap, protect=set(cur.values()))
         _lap()
+        if step % 10 == 0 and dev.type == "cuda":
+            torch.cuda.empty_cache()                       # variable shapes: keep the reserved pool inside the card
         if _dbg:
             print("STEP", [round(b - a, 3) for a, b in zip(_ts, _ts[1:])], "(add, ask, run, backward, opt, evict)",
+                  f"GPU peak {torch.cuda.max_memory_allocated() / 2**30:.2f} GiB, now "
+                  f"{torch.cuda.memory_allocated() / 2**30:.2f}, reserved {torch.cuda.memory_reserved() / 2**30:.2f}",
                   flush=True)
+            torch.cuda.reset_peak_memory_stats()
         for f in [f for f, nid in cur.items() if not store.nodes[nid]["alive"]]:
             del cur[f]
         if step % 25 == 0:
@@ -730,7 +863,10 @@ def main():
             print(f"step {step} loss {float(loss):.3f} action acc {act:.2f} answer said {float(em.mean()):.2f} "
                   f"tool outputs said {tool_said if tool_said is None else round(tool_said, 2)} | world "
                   f"{len(world.ents)} entities, {n_live} live nodes [{time.time() - t0:.0f}s]", flush=True)
-            logf.write(json.dumps({"type": "train", "step": step, "loss": float(loss), "action": act,
+            pp = {t: round(sum(v) / len(v), 2) for t, v in sorted(run.per_pass.items())}
+            run.per_pass = {}
+            print(f"  action accuracy by gold action (teacher-forced): {pp}", flush=True)
+            logf.write(json.dumps({"type": "train", "step": step, "loss": float(loss), "action": act, "per_pass": pp,
                                    "said": float(em.mean()), "tool_said": tool_said, "nodes": n_live}) + "\n")
         if step % A.eval_every == 0 or step == A.steps:
             out = evaluate(step)
