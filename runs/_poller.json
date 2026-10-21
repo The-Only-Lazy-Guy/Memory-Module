@@ -1,0 +1,8 @@
+{
+ "alive": "2026-10-21 10:18:41",
+ "running": [
+  "smoke1"
+ ],
+ "gpu_free_gb": 95.0,
+ "code": "13fafd9"
+}
