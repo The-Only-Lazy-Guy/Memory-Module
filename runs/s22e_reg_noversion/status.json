@@ -1,8 +1,10 @@
 {
- "state": "running",
+ "state": "done",
  "pid": 10397,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/gnm_main20_step500.pt --corrections 2 --steps 500 --eval-every 250 --skip-eval0 --q-slots-mode reg --early-version 0 --save /marimo/gnm-lab/ckpt/s22e_reg_noversion.pt --log /marimo/gnm-lab/runs/runs/s22e_reg_noversion/train.jsonl",
  "code": "1e81841",
  "started": "2026-10-21 10:49:01",
- "updated": "2026-10-21 10:49:01"
+ "updated": "2026-10-21 11:11:14",
+ "exit_code": 0,
+ "ended": "2026-10-21 11:11:14"
 }
