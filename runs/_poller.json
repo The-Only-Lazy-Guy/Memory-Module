@@ -1,6 +1,9 @@
 {
- "alive": "2026-10-21 10:47:59",
- "running": [],
+ "alive": "2026-10-21 10:49:01",
+ "running": [
+  "s22d_reg_both",
+  "s22e_reg_noversion"
+ ],
  "gpu_free_gb": 95.0,
  "code": "1e81841"
 }
