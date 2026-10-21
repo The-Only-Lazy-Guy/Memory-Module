@@ -442,3 +442,6 @@ EVAL 1000 corrected_facts: exact 0.990 | by {'before': 0.978, '0': 0.995} | gold
 EVAL 1000 corrected_facts why wrong (by ops): 0: {'wrong read @0/2: unrelated': 1} | before: {'wrong read @1/2: same fact, other node': 2}
 EVAL 1000 duplicates: 56 of 614 facts held by >1 current node | nodes per fact 1.10
 EVAL 1000 roundtrip (encode -> say): numbers 1.000 | names 0.625 | unseen strings 0.854
+EVAL 1000 identity_lookup: update -> its identity node is the best match: raw label 1.000 | Wself query 0.917 | n 24
+FIRST FRAME: stored 18/19 facts | answered 17/18 = 0.944 | read the right node 1.000
+EVAL 1000 first_frame: exact 0.944 | read the right node 1.000

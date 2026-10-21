@@ -430,3 +430,18 @@ EVAL 1000 one_exposure_heldkeys_after0 why wrong (by ops): 0: {'program right, a
 EVAL 1000 one_exposure_dependents: follow 0.000 of 8 dependents
 EVAL 1000 one_exposure_dependents: exact 0.000 | by {} | gold read 0.000 | program 0.000 | exact|program 0.000 | n 0
 EVAL 1000 one_exposure_rule: totals held 0.000 of 8 (rule: add)
+EVAL 1000 one_exposure_rule: exact 0.000 | by {} | gold read 0.000 | program 0.000 | exact|program 0.000 | n 0
+EVAL 1000 one_exposure_coexist: both values held 0.000 of 8
+EVAL 1000 one_exposure_coexist: exact 0.000 | by {} | gold read 0.000 | program 0.000 | exact|program 0.000 | n 0
+EVAL 1000 integrate by kind (mean store gate / NEW / replace weight): {'replace into own fact': {'n': 42, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'propagated': {'n': 0, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'name': {'n': 105, 'store': 0.06, 'new': 0.62, 'replace': 0.01}, 'multi': {'n': 20, 'store': 0.91, 'new': 0.9, 'replace': 0.06}, 'noise': {'n': 9, 'store': 0.08, 'new': 0.87, 'replace': 0.01}, 'fact': {'n': 70, 'store': 0.91, 'new': 0.66, 'replace': 0.28}, 'how fact (n, rule read, copy)': {'n': 70, 'store': 0.0, 'new': 0.51, 'replace': 0.0}, 'dependent': {'n': 11, 'store': 0.47, 'new': 0.93, 'replace': 0.01}, 'delta': {'n': 21, 'store': 0.99, 'new': 0.1, 'replace': 0.8}, 'how delta (n, rule read, copy)': {'n': 21, 'store': 0.0, 'new': 0.51, 'replace': 0.0}, 'decided drop': {'n': 1868, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'decided new': {'n': 87, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'decided replace': {'n': 42, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'state': {'n': 1761, 'store': 0.08, 'new': 0.3, 'replace': 0.02}, 'decided attach': {'n': 1, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'rule': {'n': 1, 'store': 0.94, 'new': 0.0, 'replace': 0.05}}
+EVAL 1000 corrections by the loop: edit said right 1.000 | program right 0.917 | n 24
+EVAL 1000 correction writes: {'replace': 24} | first notes did (* = the target): [['read', 'read*', 'edit', 'read*', 'read*'], ['read', 'read*', 'edit', 'read*', 'read*'], ['read', 'read*', 'edit', 'read*', 'read*']]
+EVAL 1000 correction write records (target, gate, replace, confidence, gate_new, same): [[('proposal TGT', 0.46, 0.98, 1.0, 0.74, True), ('look TGT', 0.98, 0.98, 1.0, 0.69, True)], [('proposal TGT', 0.66, 0.88, 1.0, 0.85, True), ('look TGT', 0.98, 0.98, 1.0, 0.5, True)], [('proposal TGT', 0.36, 0.36, 1.0, 0.66, True), ('look TGT', 0.98, 0.98, 1.0, 0.17, True)], [('proposal TGT', 0.28, 0.98, 1.0, 0.57, True), ('look TGT', 0.98, 0.98, 1.0, 0.55, True)]]
+EVAL 1000 correction look (proposed -> after looking): {'note: new -> replace': 16, 'note: replace -> replace': 3, 'note: drop -> replace': 5}
+EVAL 1000 corrected_facts: exact 0.997 | by {'before': 1.0, '0': 0.995} | gold read 0.995 | program 0.993 | exact|program 1.000 | n 288
+EVAL 1000 corrected_facts why wrong (by ops): 0: {'wrong read @0/2: unrelated': 1}
+EVAL 1000 duplicates: 75 of 608 facts held by >1 current node | nodes per fact 1.13
+EVAL 1000 roundtrip (encode -> say): numbers 0.917 | names 0.812 | unseen strings 0.854
+EVAL 1000 identity_lookup: update -> its identity node is the best match: raw label 1.000 | Wself query 1.000 | n 24
+FIRST FRAME: stored 16/19 facts | answered 15/16 = 0.938 | read the right node 1.000
+EVAL 1000 first_frame: exact 0.938 | read the right node 1.000
