@@ -42,15 +42,24 @@ def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
+def ident(repo):
+    sh("git", "config", "user.name", "gnm-lab poller", cwd=repo)
+    sh("git", "config", "user.email", "poller@gnm-lab.invalid", cwd=repo)
+
+
 def setup():
     os.makedirs(BASE, exist_ok=True)
     for d in (JOBS, CKPT):
         os.makedirs(d, exist_ok=True)
     if not os.path.isdir(os.path.join(CODE, ".git")):
         sh("git", "clone", "-q", REPO_URL, CODE)
+    ident(CODE)
+    have = sh("git", "ls-remote", "--heads", REPO_URL, "runs")
+    if os.path.isdir(RUNS) and (not have or not os.path.isdir(os.path.join(RUNS, ".git"))):
+        shutil.rmtree(RUNS)                  # a half-made runs checkout (e.g. a crash before its first push)
     if not os.path.isdir(os.path.join(RUNS, ".git")):
         sh("git", "clone", "-q", REPO_URL, RUNS)
-        have = sh("git", "ls-remote", "--heads", "origin", "runs", cwd=RUNS)
+        ident(RUNS)
         if have:
             sh("git", "checkout", "-q", "-B", "runs", "origin/runs", cwd=RUNS)
         else:                                # first start: an empty orphan branch
@@ -65,9 +74,6 @@ def setup():
             sh("git", "add", "-A", cwd=RUNS)
             sh("git", "commit", "-qm", "runs branch", cwd=RUNS)
             sh("git", "push", "-q", "-u", "origin", "runs", cwd=RUNS)
-    for repo in (CODE, RUNS):
-        sh("git", "config", "user.name", "gnm-lab poller", cwd=repo)
-        sh("git", "config", "user.email", "poller@gnm-lab.invalid", cwd=repo)
 
 
 def gpu_free_gb():

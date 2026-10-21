@@ -35,5 +35,5 @@ Runs go through this repo, never through a direct link between machines:
 Start on MoLab (once per machine reset):
 
 ```bash
-gh auth setup-git && git clone -q https://github.com/The-Only-Lazy-Guy/Memory-Module /marimo/gnm-lab/code 2>/dev/null; nohup python -u /marimo/gnm-lab/code/lab/poller.py > /marimo/gnm-lab/poller.log 2>&1 &
+gh auth setup-git && git clone -q https://github.com/The-Only-Lazy-Guy/Memory-Module /marimo/gnm-lab/code 2>/dev/null; git -C /marimo/gnm-lab/code pull -q; nohup python -u /marimo/gnm-lab/code/lab/poller.py > /marimo/gnm-lab/poller.log 2>&1 &
 ```
