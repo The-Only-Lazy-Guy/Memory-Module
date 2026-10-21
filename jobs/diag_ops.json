@@ -1,0 +1,13 @@
+{
+ "name": "diag_ops",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "0",
+  "--eval-q",
+  "288"
+ ],
+ "init": "tok_s1.pt",
+ "gpu_gb": 6
+}

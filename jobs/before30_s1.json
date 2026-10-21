@@ -1,0 +1,20 @@
+{
+ "name": "before30_s1",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "1000",
+  "--eval-every",
+  "500",
+  "--eval-q",
+  "288",
+  "--skip-eval0",
+  "--mix",
+  "lookup:0.2,chain:0.1,arith:0.3,before:0.3,multi:0.1",
+  "--seed",
+  "1"
+ ],
+ "init": "tok_s1.pt",
+ "gpu_gb": 6
+}

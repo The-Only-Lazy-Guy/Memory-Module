@@ -1,0 +1,22 @@
+{
+ "name": "len13_s1",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "1000",
+  "--eval-every",
+  "500",
+  "--eval-q",
+  "288",
+  "--skip-eval0",
+  "--train-ops",
+  "1,3",
+  "--long-ops",
+  "4,4",
+  "--seed",
+  "1"
+ ],
+ "init": "tok_s1.pt",
+ "gpu_gb": 6
+}

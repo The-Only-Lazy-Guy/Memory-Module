@@ -2675,8 +2675,13 @@ def main():
                     return "operands swapped" if sorted([ia, ib]) == sorted(ra) else "wrong operands"
                 if xa is None or xb is None:
                     return "operand not decoded"
-                if (xa, xb) != (q["vals"][ia], q["vals"][ib]):
-                    return "operand misread"
+                if (xa, xb) != (q["vals"][ia], q["vals"][ib]):        # which operand, of what kind, how far off
+                    bad_i, bad_x = (ia, xa) if xa != q["vals"][ia] else (ib, xb)
+                    gold_v = q["vals"][bad_i]
+                    src_ = "computed result" if q["prog"][bad_i][0] == "op" else "stored number"
+                    how = ("the other operand's value" if bad_x in (q["vals"][ia], q["vals"][ib])
+                           else "near (+-2)" if isinstance(gold_v, int) and abs(bad_x - gold_v) <= 2 else "far")
+                    return f"operand misread: {src_}, {how}"
             if q["ops"] == 0 and isinstance(q.get("ans"), str):
                 return ("mis-said: a NAME value (said the start right)" if (said or "").strip()[:2] == q["ans"][:2]
                         else "mis-said: a NAME value")
