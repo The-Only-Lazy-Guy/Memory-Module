@@ -1,10 +1,8 @@
 {
- "alive": "2026-10-21 12:00:46",
+ "alive": "2026-10-21 12:03:49",
  "running": [
-  "c1k_nover_s2",
-  "c1k_ver_s1",
   "c1k_ver_s2"
  ],
- "gpu_free_gb": 81.3,
+ "gpu_free_gb": 90.8,
  "code": "161a8aa"
 }

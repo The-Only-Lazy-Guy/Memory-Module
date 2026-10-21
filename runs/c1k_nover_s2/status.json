@@ -1,8 +1,10 @@
 {
- "state": "running",
+ "state": "done",
  "pid": 16333,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/gnm_main20_step500.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --early-version 0 --seed 2 --save /marimo/gnm-lab/ckpt/c1k_nover_s2.pt --log /marimo/gnm-lab/runs/runs/c1k_nover_s2/train.jsonl",
  "code": "161a8aa",
  "started": "2026-10-21 11:12:16",
- "updated": "2026-10-21 11:12:16"
+ "updated": "2026-10-21 12:03:49",
+ "exit_code": 0,
+ "ended": "2026-10-21 12:03:49"
 }
