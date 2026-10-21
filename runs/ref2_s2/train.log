@@ -416,3 +416,17 @@ EVAL 1000 longer_programs why wrong (by ops): 3: {'wrong tool': 28, 'wrong read 
 EVAL 1000 one_exposure_after0: stored 0.812 of 16 new / updated facts
 EVAL 1000 one_exposure_after0: exact 0.802 | by {'before': 0.75, '0': 0.933, '1': 0.593, '2': 0.378} | gold read 0.973 | program 0.917 | exact|program 0.864 | n 288
 EVAL 1000 one_exposure_after0 why wrong (by ops): 0: {'program right, answer mis-said': 12} | 1: {'operand misread': 11} | 2: {'operand misread': 12, 'op instead of read @4/4': 3, 'op instead of read @3/4': 2, 'ran on': 2, 'wrong read @2/4: another operand (order)': 1, 'wrong tool': 1, 'wrong operands': 1, 'stopped early': 1} | before: {'wrong read @1/2: same fact, other node': 11}
+EVAL 1000 one_step_after0: exact 0.747 | by {'before': 0.442, '0': 0.925, '1': 0.6, '2': 0.355} | gold read 0.948 | program 0.865 | exact|program 0.847 | n 288
+EVAL 1000 one_step_after0 why wrong (by ops): 0: {'program right, answer mis-said': 13} | 1: {'operand misread': 15, 'ran on': 1} | 2: {'operand misread': 8, 'op instead of read @2/4': 4, 'op instead of read @3/4': 2, 'wrong operands': 2, 'wrong read @2/4: unrelated': 1, 'wrong tool': 1, 'op instead of read @4/4': 1, 'ran on': 1} | before: {'wrong read @1/2: same fact, other node': 24}
+EVAL 1000 one_exposure_after10: stored 0.833 of 24 new / updated facts
+EVAL 1000 one_exposure_after10: exact 0.809 | by {'before': 0.804, '0': 0.897, '1': 0.688, '2': 0.486} | gold read 0.982 | program 0.951 | exact|program 0.843 | n 288
+EVAL 1000 one_exposure_after10 why wrong (by ops): 0: {'program right, answer mis-said': 18} | 1: {'operand misread': 10} | 2: {'operand misread': 14, 'wrong operands': 1, 'stopped early': 1, 'ran on': 1, 'op instead of read @4/4': 1} | before: {'wrong read @1/2: same fact, other node': 9}
+EVAL 1000 one_exposure_after100: stored 0.522 of 23 new / updated facts
+EVAL 1000 one_exposure_after100: exact 0.809 | by {'0': 0.906, '1': 0.583, '2': 0.5} | gold read 0.996 | program 0.972 | exact|program 0.825 | n 288
+EVAL 1000 one_exposure_after100 why wrong (by ops): 0: {'program right, answer mis-said': 20} | 1: {'operand misread': 15} | 2: {'operand misread': 13, 'op instead of read @3/4': 4, 'ran on': 1, 'wrong operands': 1, 'wrong tool': 1}
+EVAL 1000 one_exposure_heldkeys_after0: stored 0.600 of 15 new / updated facts
+EVAL 1000 one_exposure_heldkeys_after0: exact 0.642 | by {'before': 1.0, '0': 0.543, '1': 0.789, '2': 0.484} | gold read 0.953 | program 0.872 | exact|program 0.701 | n 288
+EVAL 1000 one_exposure_heldkeys_after0 why wrong (by ops): 0: {'program right, answer mis-said': 59, 'wrong read @1/2: same fact, other node': 20} | 1: {'operand misread': 7, 'wrong read @2/3: unrelated': 1} | 2: {'operand misread': 8, 'ran on': 2, 'op instead of read @4/4': 2, 'wrong operands': 1, 'wrong read @2/4: unrelated': 1, 'wrong read @2/3: unrelated': 1, 'wrong tool': 1}
+EVAL 1000 one_exposure_dependents: follow 0.000 of 8 dependents
+EVAL 1000 one_exposure_dependents: exact 0.000 | by {} | gold read 0.000 | program 0.000 | exact|program 0.000 | n 0
+EVAL 1000 one_exposure_rule: totals held 0.000 of 8 (rule: add)
