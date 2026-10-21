@@ -1,0 +1,15 @@
+{
+ "name": "diag_said",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "0",
+  "--eval-q",
+  "288",
+  "--early-version",
+  "1"
+ ],
+ "init": "c1k_ver_s1.pt",
+ "gpu_gb": 6
+}

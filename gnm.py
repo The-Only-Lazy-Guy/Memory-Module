@@ -1247,7 +1247,7 @@ def main():
     P.add_argument("--vslots", type=int, default=64)
     P.add_argument("--tool-slots", type=int, default=2)
     P.add_argument("--object-tools", type=int, default=1, help="arithmetic on decoded values (decode -> exact -> encode)")
-    P.add_argument("--early-version", type=int, default=1, help="a replace decided in training makes its version at once")
+    P.add_argument("--early-version", type=int, default=0, help="a replace decided in training makes its version at once")
     P.add_argument("--q-slots-mode", default="reg", choices=["mem", "reg"],
                    help="mem: question / note nodes keep q-slots in memory; reg: only Walker's register gets them")
     P.add_argument("--q-slots", type=int, default=48, help="value slots of question / note nodes (the current input)")
@@ -2635,7 +2635,7 @@ def main():
         er = random.Random(50_000 + step)
         out = {}
 
-        def why_wrong(q, acts_b, ops_b):
+        def why_wrong(q, acts_b, ops_b, said=None):
             """where a wrong answer's program first went wrong (eval diagnosis)"""
             gold = [("read" if kd in ("read", "write") else kd, x) for kd, x, _ in q["prog"]]
             n_reads = sum(1 for g in gold if g[0] == "read") - 1        # operands (the question is read first)
@@ -2669,6 +2669,26 @@ def main():
                     return "operand not decoded"
                 if (xa, xb) != (q["vals"][ia], q["vals"][ib]):
                     return "operand misread"
+            if q["ops"] == 0 and isinstance(q.get("ans"), str):
+                return ("mis-said: a NAME value (said the start right)" if (said or "").strip()[:2] == q["ans"][:2]
+                        else "mis-said: a NAME value")
+            if q["ops"] == 0 and isinstance(q.get("ans"), int):   # WHAT was said instead (value readout diagnosis)
+                m_ = re.search(r"-?\d+", said or "")
+                sv = int(m_.group()) if m_ else None
+                fct = fact_of(gold[-1][1])[0] if gold[-1][0] == "read" else None
+                if sv is None:
+                    return "mis-said: no number"
+                if fct:
+                    nm_, k_ = fct
+                    if sv in world.hist.get((nm_, k_), []):
+                        return "mis-said: another value of the same fact (older / newer)"
+                    if sv in {v_ for kk, v_ in world.ents.get(nm_, {}).items() if kk != k_ and isinstance(v_, int)}:
+                        return "mis-said: same entity, other attribute's value"
+                    if sv in {e_.get(k_) for n2, e_ in world.ents.items() if n2 != nm_}:
+                        return "mis-said: same attribute, other entity's value"
+                if abs(sv - q["ans"]) <= 2:
+                    return "mis-said: near (+-2)"
+                return "mis-said: other number"
             return "program right, answer mis-said"
 
         def score(name, specs, mix, ops=(1, 2), mode="any"):
@@ -2681,7 +2701,8 @@ def main():
                 qs_ += qs
                 _, em, _, _ = run(qs, False)
                 em_ += em.tolist(); dg_ += run.diag
-                wh_ += ["right" if float(e) else why_wrong(q, a_, o_) for q, e, a_, o_ in zip(qs, em, run.acts, run.oprec)]
+                wh_ += ["right" if float(e) else why_wrong(q, a_, o_, sd_)
+                        for q, e, a_, o_, sd_ in zip(qs, em, run.acts, run.oprec, run.said)]
                 evict()
             n_ = max(1, len(em_))
             ok_given = [e for e, d_ in zip(em_, dg_) if d_[1] == 1.0]
@@ -2832,6 +2853,10 @@ def main():
         out["duplicates"] = {"exact": dup / max(1, len(ids_)), "n": len(ids_)}
         rt = roundtrip(er)
         print(f"EVAL {step} roundtrip (encode -> say): " + " | ".join(f"{k} {v:.3f}" for k, v in rt.items()), flush=True)
+        frt = frame_roundtrip(er)
+        if frt is not None:
+            print(f"EVAL {step} frame-pair roundtrip (a value encoded inside a record, said from its node, no memory "
+                  f"ops): {frt:.3f}", flush=True)
         ir_, is_, n_ = identity_lookup(er)
         out["identity_lookup"] = {"exact": is_, "raw": ir_, "n": n_}
         print(f"EVAL {step} identity_lookup: update -> its identity node is the best match: raw label {ir_:.3f} | "
@@ -3095,6 +3120,35 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             res[kind_] = sum(str(v) == x.strip().split(" ")[0].rstrip(".,") or x.strip().startswith(str(v))
                              for v, x in zip(vals, said)) / len(vals)
         return res
+
+    @torch.no_grad()
+    def frame_roundtrip(irng, n=48):
+        """eval: values encoded inside a multi-pair record (siblings, a group key) — the way facts are stored —
+        then said straight from their node encoding (no memory operations): exact?"""
+        facts = [(nm, k) for nm, e in world.ents.items() for k in e if k in world.num_keys]
+        if len(facts) < 4:
+            return None
+        ok = tot = 0
+        for nm, k in irng.sample(facts, min(n, len(facts))):
+            sib = [x for x in world.schema[nm] if x != k and x in world.num_keys]
+            rec = {"name": nm}
+            for x in irng.sample(sib, min(len(sib), irng.randint(1, 3))):
+                rec[x] = irng.randint(1, 30)
+            v = irng.randint(1, 30)
+            rec[k] = v
+            items = list(rec.items())
+            irng.shuffle(items)
+            obj = {irng.choice(world.groups): [dict(items)]}
+            e = doc_encoding(tok.ids, tok.decode, obj, "state")[0]
+            X = walker_states(model, torch.tensor([e["ids"]], device=dev))
+            j = next(i for i, lf in enumerate(serialize(obj, "state")[1]) if lf[0][-1] == k)
+            with torch.no_grad():
+                E = model.emb(torch.tensor(e["ids"], device=dev)).float()
+            _, v_, _, s_, _ = graph.nodes(X[0, :len(e["ids"])].float(), E, [e["spans"][j]], [e["ptr"][j]], [e["vpos"][j]])
+            said = decode(v_, s_[:, :A.mem_slots], text=True)[0]
+            ok += said.strip().split(" ")[0].rstrip(".,") == str(v)
+            tot += 1
+        return ok / max(1, tot)
 
     def roundtrip_loss(wr, n=16):
         """encode -> say: values become pairs, the model's own head must say them exactly (loss, accuracy)"""
