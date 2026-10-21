@@ -1,10 +1,6 @@
 {
- "alive": "2026-10-21 10:42:57",
- "running": [
-  "s22a_versions_only",
-  "s22b_qslots_only",
-  "s22c_both"
- ],
- "gpu_free_gb": 80.5,
- "code": "afc68d9"
+ "alive": "2026-10-21 10:47:59",
+ "running": [],
+ "gpu_free_gb": 95.0,
+ "code": "1e81841"
 }
