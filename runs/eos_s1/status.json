@@ -1,0 +1,8 @@
+{
+ "state": "running",
+ "pid": 57754,
+ "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/tok_s1.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --seed 1 --save /marimo/gnm-lab/ckpt/eos_s1.pt --log /marimo/gnm-lab/runs/runs/eos_s1/train.jsonl",
+ "code": "00b6c65",
+ "started": "2026-10-21 20:24:53",
+ "updated": "2026-10-21 20:24:53"
+}
