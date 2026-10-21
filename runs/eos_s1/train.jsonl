@@ -25,3 +25,11 @@
 {"type": "eval", "step": 500, "set": "one_exposure_after0", "exact": 0.8958333333333334, "n": 288, "by": {"before": 1.0, "0": 0.975, "1": 1.0, "2": 0.375}, "gold_read": 0.9644097222222222, "program_ok": 0.8680555555555556, "exact_given_program": 0.996}
 {"type": "eval", "step": 500, "set": "one_step_after0", "exact": 0.9409722222222222, "n": 288, "by": {"0": 1.0, "1": 1.0, "2": 0.528}, "gold_read": 0.9927662037037037, "program_ok": 0.9166666666666666, "exact_given_program": 0.9848484848484849}
 {"type": "eval", "step": 500, "set": "one_exposure_after10", "exact": 0.7569444444444444, "n": 288, "by": {"before": 0.082, "0": 1.0, "1": 0.839, "2": 0.259}, "gold_read": 0.9748263888888888, "program_ok": 0.7430555555555556, "exact_given_program": 0.9953271028037384}
+{"type": "eval", "step": 500, "set": "one_exposure_after100", "exact": 0.9375, "n": 288, "by": {"before": 1.0, "0": 1.0, "1": 0.882, "2": 0.659}, "gold_read": 0.9785879629629629, "program_ok": 0.9166666666666666, "exact_given_program": 0.9924242424242424}
+{"type": "eval", "step": 500, "set": "one_exposure_heldkeys_after0", "exact": 0.8645833333333334, "n": 288, "by": {"before": 1.0, "0": 0.967, "1": 0.878, "2": 0.31}, "gold_read": 0.9464699074074073, "program_ok": 0.8402777777777778, "exact_given_program": 1.0}
+{"type": "eval", "step": 500, "set": "one_exposure_dependents", "exact": 0.0, "n": 0, "by": {}, "gold_read": 0.0, "program_ok": 0.0, "exact_given_program": 0.0}
+{"type": "eval", "step": 500, "set": "one_exposure_rule", "exact": 0.0, "n": 0, "by": {}, "gold_read": 0.0, "program_ok": 0.0, "exact_given_program": 0.0}
+{"type": "eval", "step": 500, "set": "one_exposure_coexist", "exact": 0.0, "n": 0, "by": {}, "gold_read": 0.0, "program_ok": 0.0, "exact_given_program": 0.0}
+{"type": "eval", "step": 500, "set": "corrected_facts", "exact": 0.9756944444444444, "n": 288, "by": {"before": 0.91, "0": 1.0}, "gold_read": 0.9861111111111112, "program_ok": 0.9722222222222222, "exact_given_program": 1.0}
+{"type": "eval", "step": 500, "set": "identity_lookup", "exact": 0.8333333333333334, "raw": 1.0, "n": 24}
+{"type": "eval", "step": 500, "set": "first_frame", "exact": 1.0, "program_ok": 1.0}
