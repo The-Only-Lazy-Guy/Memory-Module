@@ -32,7 +32,7 @@ Runs go through this repo, never through a direct link between machines:
 - `runs` (written by `lab/poller.py` on MoLab): `runs/<name>/{status.json, train.log, train.jsonl}`.
 - `ckpt`: checkpoints a job starts from (transfer only; checkpoints are never on `main`).
 
-Start on MoLab (once per machine reset):
+Start on MoLab (once per machine reset; a second start exits on the lock):
 
 ```bash
 gh auth setup-git && git clone -q https://github.com/The-Only-Lazy-Guy/Memory-Module /marimo/gnm-lab/code 2>/dev/null; git -C /marimo/gnm-lab/code pull -q; nohup python -u /marimo/gnm-lab/code/lab/poller.py > /marimo/gnm-lab/poller.log 2>&1 &

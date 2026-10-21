@@ -140,6 +140,14 @@ def push_runs(msg):
 
 
 def main():
+    import fcntl
+    os.makedirs(BASE, exist_ok=True)
+    lock = open(os.path.join(BASE, "poller.lock"), "w")
+    try:                                     # one poller per machine (a re-run start command exits here)
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log("another poller holds the lock: exiting")
+        return
     setup()
     procs, last_push = {}, 0.0
     log(f"poller up: code {CODE}, runs {RUNS}, ckpt {CKPT}")
