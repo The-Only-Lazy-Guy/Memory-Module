@@ -1,0 +1,1 @@
+{"name": "smoke1", "args": ["--corrections", "2", "--smoke", "--skip-eval0"], "init": "gnm_main20_step500.pt", "init_from": "ckpt", "gpu_gb": 4}

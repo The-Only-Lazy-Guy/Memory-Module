@@ -7991,7 +7991,7 @@ def _stream_repository_files(repo, revision):
 
 
 _STREAM_FILTER_OPS = frozenset({"eq", "gte", "lte", "max_gte", "in", "not_in"})
-_STREAM_DEDUP_MODES = frozenset({"", "first_user"})
+_STREAM_DEDUP_MODES = frozenset({"", "first_user", "text_head"})
 
 
 def _first_user_key(messages):
@@ -8004,6 +8004,20 @@ def _first_user_key(messages):
             return int.from_bytes(hashlib.blake2b(text.encode("utf-8"), digest_size=8).digest(),
                                   "little")
     return None
+
+
+def _text_head_key(text, sep="\n\n\n", cap=4000):
+    """64-bit key of a plain-text row's head: the text before the first blank-line
+    run (``sep``; question before its worked answer), at most ``cap`` characters,
+    normalized like _first_user_key. None for an empty head."""
+    if not isinstance(text, str) or not text:
+        return None
+    head = text[:cap].split(sep, 1)[0]
+    head = re.sub(r"\s+", " ", head.lower())
+    head = re.sub(r"[^a-z0-9 ]", "", head).strip()
+    if not head:
+        return None
+    return int.from_bytes(hashlib.blake2b(head.encode("utf-8"), digest_size=8).digest(), "little")
 
 
 def _row_matches_filters(row, filters):
@@ -8354,12 +8368,16 @@ class StreamSource:
         # dedup="first_user": skip a conversation whose normalized first user
         # turn was already seen this epoch (validation captures count too, so
         # training never repeats a held-out prompt). The seen-set is saved in
-        # checkpoints and cleared on epoch rollover.
+        # checkpoints and cleared on epoch rollover. dedup="text_head": the same
+        # for plain-text rows, keyed on the text before the first blank-line run
+        # (a question repeated with several sampled worked answers).
         self.dedup = str(dedup or "").strip()
         if self.dedup not in _STREAM_DEDUP_MODES:
             raise ValueError(f"unknown stream dedup mode {self.dedup!r}")
-        if self.dedup and not self.message_field:
+        if self.dedup == "first_user" and not self.message_field:
             raise ValueError("dedup='first_user' needs a message_field source")
+        if self.dedup == "text_head" and self.message_field:
+            raise ValueError("dedup='text_head' is for plain-text sources (no message_field)")
         self._dedup_seen = set()
         self.template = str(template or "").strip()
         if self.template not in SFT_TEMPLATES:
@@ -8562,8 +8580,10 @@ class StreamSource:
                 self.rejected_rows += 1
                 self.rejected_reasons["row_filter"] += 1
             return None, None
-        if getattr(self, "dedup", "") == "first_user":
-            key = _first_user_key(row.get(self.message_field))
+        dedup = getattr(self, "dedup", "")
+        if dedup:
+            key = (_first_user_key(row.get(self.message_field)) if dedup == "first_user"
+                   else _text_head_key(row.get(self.text_field)))
             if key is not None:
                 if key in self._dedup_seen:
                     if count_rejection:
@@ -8783,6 +8803,7 @@ class StreamSource:
     def skip_more(self, n):
         """Advance the iterator n rows past the current cursor WITHOUT resetting
         consumed (used to jump over a previously-captured held-out region)."""
+        self.thaw()
         for _ in range(n):
             try:
                 next(self.it)
@@ -8792,9 +8813,28 @@ class StreamSource:
                 return
         self.consumed += n
 
+    def freeze(self, state):
+        """Retired source (weight 0, never sampled): keep its checkpoint state verbatim and never open the
+        stream. Resuming used to reposition and pump every retired source anyway (sft_science_vendor: a seek
+        into one 26.6 GB JSONL, or a full scan without a saved byte offset) for rows nothing reads."""
+        self.frozen_state = dict(state)
+        self.raw_cursor = self.consumed = int(state.get("raw_cursor", 0))
+        self._jsonl_hint = state.get("jsonl_seek")
+
+    def thaw(self):
+        """Open a frozen source at its saved cursor (only if something needs its rows after all)."""
+        state = getattr(self, "frozen_state", None)
+        if state is None:
+            return
+        self.frozen_state = None
+        self.skip(int(state.get("raw_cursor", 0)))
+        self.restore_checkpoint_state(state)
+
     def checkpoint_state(self, timeout=600):
         """Compact, exact token-buffer snapshot for a deterministic restart."""
         import numpy as np
+        if getattr(self, "frozen_state", None) is not None:
+            return self.frozen_state
         should_resume = self.thread is not None and self.thread.is_alive()
         if should_resume:
             self._pause_requested.set()
@@ -8911,6 +8951,7 @@ class StreamSource:
         TB_SFT_MASK=1 (answer-only validation); raw_rows = iterator advances
         consumed, so a resume that predates the capture can skip_more(raw_rows)
         to jump the whole region exactly."""
+        self.thaw()                                     # a retired source opens only if its rows are needed
         import numpy as np
         ids_all = []
         msk_all = []
@@ -9145,8 +9186,8 @@ class MixedStreamSource:
         return ident
 
     def start(self):
-        for src in self.sources:
-            if src.thread is None:
+        for src, w in zip(self.sources, self.weights):
+            if src.thread is None and w > 0:     # a retired source is never sampled: no pump
                 src.start()
         self.thread = True
 
@@ -9222,6 +9263,9 @@ class MixedStreamSource:
             if old.get("name") != spec["name"] or old.get("dataset") != spec["dataset"]:
                 raise RuntimeError(f"mixed stream source mismatch at {spec['name']}")
             child = old.get("state") or {}
+            if float(spec["weight"]) <= 0:
+                src.freeze(child)
+                continue
             src._jsonl_hint = child.get("jsonl_seek")
             src.skip(int(child.get("raw_cursor", 0)))
             result = src.restore_checkpoint_state(child)
@@ -9246,6 +9290,11 @@ class MixedStreamSource:
             if old.get("dataset") != spec["dataset"]:
                 raise RuntimeError(f"mix extension changed the dataset of {spec['name']}")
             child = dict(old.get("state") or {})
+            if float(spec["weight"]) <= 0:
+                src.freeze(child)
+                print(f"MIX extend: {spec['name']} is retired (weight 0): cursor kept, stream not opened",
+                      flush=True)
+                continue
             src._jsonl_hint = child.get("jsonl_seek")
             src.skip(int(child.get("raw_cursor", 0)))
             if spec["name"] in getattr(self, "rerendered", ()):
