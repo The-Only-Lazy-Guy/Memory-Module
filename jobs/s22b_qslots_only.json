@@ -1,0 +1,17 @@
+{
+ "name": "s22b_qslots_only",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "500",
+  "--eval-every",
+  "250",
+  "--skip-eval0",
+  "--early-version",
+  "0"
+ ],
+ "init": "gnm_main20_step500.pt",
+ "init_from": "ckpt",
+ "gpu_gb": 6
+}

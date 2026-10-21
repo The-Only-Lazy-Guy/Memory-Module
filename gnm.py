@@ -1233,6 +1233,7 @@ def main():
     P.add_argument("--vslots", type=int, default=64)
     P.add_argument("--tool-slots", type=int, default=2)
     P.add_argument("--object-tools", type=int, default=1, help="arithmetic on decoded values (decode -> exact -> encode)")
+    P.add_argument("--early-version", type=int, default=1, help="a replace decided in training makes its version at once")
     P.add_argument("--q-slots", type=int, default=48, help="value slots of question / note nodes (the current input)")
     P.add_argument("--mem-slots", type=int, default=16, help="value slots a node keeps in memory (answers use <= max-ans)")
     P.add_argument("--write-slots", type=int, default=16, help="value slots Walker reads of a frame row's candidate")
@@ -2361,7 +2362,7 @@ def main():
                 rep_ = None
                 for c, o in plans_b:
                     if o[0] == "replace":                     # the value moves INTO the target (identity kept)
-                        if o[1] not in store.pending_ver:     # its old value becomes a version NOW (askable as
+                        if A.early_version and o[1] not in store.pending_ver:   # its old value becomes a version NOW (askable as
                             store.pending_ver[o[1]] = version(o[1])   # "before" this step; at commit it was too late:
                         #   replaced facts' "before" got no training -> corrected "before" .78 -> .08, main20 @500)
                         store.soft[c] = torch.tensor(-1e4, device=dev)
