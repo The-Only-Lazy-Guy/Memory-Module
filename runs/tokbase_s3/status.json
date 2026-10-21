@@ -1,0 +1,8 @@
+{
+ "state": "running",
+ "pid": 29496,
+ "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/tok_s1.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --seed 3 --save /marimo/gnm-lab/ckpt/tokbase_s3.pt --log /marimo/gnm-lab/runs/runs/tokbase_s3/train.jsonl",
+ "code": "5ee2901",
+ "started": "2026-10-21 18:59:49",
+ "updated": "2026-10-21 18:59:49"
+}
