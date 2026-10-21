@@ -1,0 +1,23 @@
+{
+ "name": "wd_r_s2",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "1000",
+  "--eval-every",
+  "500",
+  "--eval-q",
+  "288",
+  "--skip-eval0",
+  "--write-deltas",
+  "r",
+  "--early-version",
+  "0",
+  "--seed",
+  "2"
+ ],
+ "init": "gnm_main20_step500.pt",
+ "init_from": "ckpt",
+ "gpu_gb": 6
+}
