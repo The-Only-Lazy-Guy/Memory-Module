@@ -1,10 +1,9 @@
 {
- "alive": "2026-10-21 16:22:55",
+ "alive": "2026-10-21 16:24:58",
  "running": [
   "wd_r_s1",
-  "wd_r_s2",
   "c1k_ver_s2"
  ],
- "gpu_free_gb": 87.0,
+ "gpu_free_gb": 91.6,
  "code": "3a5900d"
 }
