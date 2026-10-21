@@ -76,6 +76,14 @@ def setup():
             sh("git", "push", "-q", "-u", "origin", "runs", cwd=RUNS)
 
 
+def max_jobs():
+    """lab/config.json {"max_jobs": n} (read every poll: no restart needed to change it)"""
+    try:
+        return int(json.load(open(os.path.join(CODE, "lab", "config.json"))).get("max_jobs", MAX_JOBS))
+    except Exception:
+        return MAX_JOBS
+
+
 def gpu_free_gb():
     try:
         out = sh("nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits")
@@ -150,6 +158,15 @@ def main():
         return
     setup()
     procs, last_push = {}, 0.0
+    orphans = {}                             # jobs started by a previous poller that are still running
+    for st_p in (os.path.join(RUNS, "runs", n_, "status.json") for n_ in os.listdir(os.path.join(RUNS, "runs"))
+                 if os.path.isdir(os.path.join(RUNS, "runs", n_))):
+        try:
+            st = json.load(open(st_p))
+            if st.get("state") == "running" and st.get("pid") and os.path.exists(f"/proc/{st['pid']}"):
+                orphans[os.path.basename(os.path.dirname(st_p))] = st["pid"]
+        except Exception:
+            pass
     log(f"poller up: code {CODE}, runs {RUNS}, ckpt {CKPT}")
     while True:
         try:
@@ -174,7 +191,7 @@ def main():
                     continue
                 if name in procs or os.path.exists(status_path(name)) or job.get("cancel"):
                     continue
-                if len(procs) >= MAX_JOBS or gpu_free_gb() < float(job.get("gpu_gb", 6)) + 2:
+                if len(procs) + len(orphans) >= max_jobs() or gpu_free_gb() < float(job.get("gpu_gb", 6)) + 2:
                     continue
                 try:
                     start_job(job, procs)
@@ -182,6 +199,11 @@ def main():
                     write_status(name, state="failed to start", error=str(e)[-500:])
                     log(f"{name} failed to start: {e}")
                 changed = True
+            for name, pid in list(orphans.items()):
+                if not os.path.exists(f"/proc/{pid}"):
+                    write_status(name, state="ended (adopted)", ended=time.strftime("%Y-%m-%d %H:%M:%S"))
+                    del orphans[name]
+                    changed = True
             for name, (p, lf) in list(procs.items()):
                 rc = p.poll()
                 if rc is not None:
@@ -191,7 +213,7 @@ def main():
                     del procs[name]
                     changed = True
                     log(f"{name} ended ({rc})")
-            json.dump({"alive": time.strftime("%Y-%m-%d %H:%M:%S"), "running": sorted(procs),
+            json.dump({"alive": time.strftime("%Y-%m-%d %H:%M:%S"), "running": sorted(procs) + sorted(orphans),
                        "gpu_free_gb": round(gpu_free_gb(), 1), "code": sh("git", "rev-parse", "--short", "HEAD", cwd=CODE)},
                       open(os.path.join(RUNS, "runs", "_poller.json"), "w"), indent=1)
             if changed or time.time() - last_push > PUSH:

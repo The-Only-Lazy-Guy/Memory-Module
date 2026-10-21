@@ -14,6 +14,7 @@ import copy
 import io
 import dataclasses
 import json
+import os
 import math
 import random
 import re
@@ -1190,6 +1191,19 @@ class Loop(nn.Module):
         with torch.no_grad():                   # it (trained on every demonstrated read); frame rows address with it
             self.Wself.weight.copy_(torch.eye(dk)); self.Wself.bias.zero_()
         self.look_vec = nn.Parameter(torch.zeros(d))   # marks the look register: "the target after my write"
+        # COMPOSE (user, 2026-10-21: refine / create a node out of pre-existing nodes as context): a tool node that
+        # takes MANY registers. Inclusion gate per register, attention by a query from Walker's state; the output is
+        # a refinement of the candidate (label / value / relation deltas, zero at init: composing changes nothing
+        # until it helps answers)
+        self.compose_lab = nn.Parameter(torch.randn(dk) / dk ** 0.5)
+        self.skip_lab = nn.Parameter(torch.randn(dk) / dk ** 0.5)   # "don't compose" (HALT's label is trained by
+        #                                                             questions: it won every compose decision)
+        self.Wset = nn.Linear(d, dk)             # which registers to include
+        self.Wcq = nn.Linear(d, dk)              # attention query over the included registers
+        self.comp_ln = nn.LayerNorm(2 * dk + d)   # (raw labels / values / Walker state: unnormalized input made the
+        #                                           deltas jump 0 -> 17 in two steps)
+        self.Wcomp = nn.Linear(2 * dk + d, 3 * dk)   # (context [k; v], Walker state) -> (dk, dv, dr)
+        nn.init.zeros_(self.Wcomp.weight); nn.init.zeros_(self.Wcomp.bias)
         self.Wlook = nn.Linear(d, 3)             # the look's correction of the proposal (gate, mode, NEW-gate logits)
         nn.init.zeros_(self.Wlook.weight); nn.init.zeros_(self.Wlook.bias)
         self.Wage = nn.Linear(d, 3)              # the query's own say on recency (is-current, log-age, log-age^2)
@@ -1242,6 +1256,10 @@ def main():
     P.add_argument("--note-expect", type=int, default=1, help="a correction the note did not write is still asked")
     P.add_argument("--w-commit", type=float, default=1.0, help="commit target from the model's own answers (notes)")
     P.add_argument("--commit-margin", type=float, default=0.1)
+    P.add_argument("--refine", type=int, default=0, help="refine on write: gather passes (context reads) before a "
+                   "compose pass, then the write (0 = off)")
+    P.add_argument("--compose-cap", type=float, default=0.3, help="a compose delta is at most this x the vector's norm")
+    P.add_argument("--compose-k", type=int, default=1, help="compose may adjust the label too")
     P.add_argument("--look-lr", type=float, default=1.0, help="lr multiplier of the look's correction head")
     P.add_argument("--look-frames", type=int, default=0, help="frame rows look before commit too")
     P.add_argument("--look", type=int, default=1, help="look before commit: a write into a node is first a proposal; "
@@ -1268,7 +1286,7 @@ def main():
     P.add_argument("--eval-q", type=int, default=96)
     P.add_argument("--max-ans", type=int, default=6)
     P.add_argument("--seed", type=int, default=0)
-    P.add_argument("--save", default="runs/gnm.pt")
+    P.add_argument("--save", default="", help="checkpoint path (default E:/WEIGHTS/gnm_runs/gnm.pt when E: exists)")
     P.add_argument("--load", default="", help="evaluate a trained checkpoint (no training)")
     P.add_argument("--log", default="runs/gnm.jsonl")
     P.add_argument("--smoke", action="store_true", help="build check: a few steps + a small eval")
@@ -1283,6 +1301,16 @@ def main():
     P.add_argument("--warm-tools", type=int, default=0, help="warm-up steps of encode -> decode round trips first")
     P.add_argument("--vram-frac", type=float, default=0.9, help="hard VRAM cap: OOM instead of spilling into RAM")
     A = P.parse_args()
+    ckpt_home = "E:/WEIGHTS/gnm_runs"               # user (2026-10-21): checkpoints live on E:, never on C: (full)
+    if os.path.isdir("E:/WEIGHTS"):
+        os.makedirs(ckpt_home, exist_ok=True)
+        if not A.save:
+            A.save = f"{ckpt_home}/gnm.pt"
+        elif os.path.splitdrive(os.path.abspath(A.save))[0].upper() == "C:":
+            print(f"checkpoint path {A.save} is on C: -> {ckpt_home}/{os.path.basename(A.save)}", flush=True)
+            A.save = f"{ckpt_home}/{os.path.basename(A.save)}"
+    elif not A.save:
+        A.save = "runs/gnm.pt"
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if dev.type == "cuda":
         torch.cuda.set_per_process_memory_fraction(A.vram_frac)
@@ -2024,15 +2052,18 @@ def main():
         #   head shared with ~50 frame rows / step, mostly noise to decline, learned "lower the gate" for notes too)
         look = [0] * B                               # look before commit: 0 none, 1 proposed (next pass looks), 2 looked
         comp_reg = {}                                # b -> register of this pass's chosen computed value (object tools)
+        R_ = A.refine if kind == "frame" else 0      # refine on write: R_ gather passes, one compose pass, then write
+        w0 = R_ + 1 if R_ else 0                     # the first write pass (frame rows)
+        comp_d = [None] * B                          # b -> compose deltas (k, v, r) added to the candidate's write
         if kind == "frame":
-            T = A.write_passes + (1 if lookk else 0)
+            T = w0 + A.write_passes + (1 if lookk else 0)
         else:
             T = max(len(r["prog"]) for r in rows) + 1 if teacher else max_regs
         tau = mem.tau.exp()
         lab = F.normalize(torch.cat([loop.new_lab[None], tools.labels, loop.halt[None]]), dim=-1)
         stat_rows = []
         for t in range(T):
-            if kind == "frame" and lookk and t >= A.write_passes:
+            if kind == "frame" and lookk and t >= w0 + A.write_passes:
                 for b in range(B):                   # only a row that proposed a write into a node gets the look pass
                     if look[b] != 1:
                         done[b] = True
@@ -2041,10 +2072,43 @@ def main():
             h = ctrl_states(regs)
             klast = torch.stack([row[-1][0] if row else torch.zeros(A.dk, device=dev) for row in regs])
             if kind == "frame":                      # "what would someone ask to get this, and who answers it?"
+                klast = torch.stack([row[0][0] for row in regs])   # the candidate's own label (not a gathered node's)
                 qr = loop.Wq(h) + loop.Wself(klast)
             else:
                 qr = loop.Wq(h) + torch.sigmoid(loop.Wgq(h)) * loop.Wqr(klast)
             qn = F.normalize(qr - kmean, dim=-1)
+            phase = "write" if (kind != "frame" or t >= w0) else ("gather" if t < R_ else "compose")
+            if phase == "compose":                   # COMPOSE or skip (HALT label); the tool reads every register
+                lc = tau * qn @ F.normalize(torch.stack([loop.compose_lab, loop.skip_lab]), dim=-1).t()
+                pc = torch.softmax(lc, -1)[:, 0]
+                qc = loop.Wcq(h)
+                for b in range(B):
+                    if done[b] or not regs[b]:
+                        continue
+                    kr = torch.stack([r_[0] for r_ in regs[b]])
+                    vr_ = torch.stack([r_[1] for r_ in regs[b]])
+                    inc = torch.sigmoid((F.normalize(loop.Wset(h[b]), dim=-1) * F.normalize(loop.Wrk(kr - kmean[0]), dim=-1)).sum(-1) * tau)
+                    inc = torch.cat([torch.ones_like(inc[:1]), inc[1:]])          # the candidate itself is always in
+                    att = torch.softmax((qc[b] * kr).sum(-1) / A.dk ** 0.5, 0) * inc
+                    att = att / att.sum().clamp(min=1e-6)
+                    ctx = torch.cat([(att[:, None] * kr).sum(0), (att[:, None] * vr_).sum(0), h[b]])
+                    m_ = (1.0 if float(pc[b]) > 0.5 else 0.0) + pc[b] - pc[b].detach()   # hard use, soft gradient
+                    raw_ = loop.Wcomp(loop.comp_ln(ctx)).split(A.dk)
+                    r0 = regs[b][0]
+                    cap_ = (A.compose_cap * r0[0].norm(), A.compose_cap * r0[1].norm(), A.compose_cap * r0[1].norm())
+                    dk_, dv_, dr_ = (m_ * x_ * (c_x / x_.norm().clamp(min=1e-6)).clamp(max=1.0)   # a refinement:
+                                     for x_, c_x in zip(raw_, cap_))                                  # <= cap x its size
+                    comp_d[b] = (dk_ if A.compose_k else torch.zeros_like(dk_), dv_, dr_)
+                    #                                   the candidate's register, refined (what the write head reads)
+                    v_new = r0[1] + dv_
+                    regs[b][0] = (r0[0] + comp_d[b][0], v_new, r0[2], r0[3],
+                                  torch.cat([loop.Wfv(v_new)[None], r0[4][1:]], 0), r0[5])
+                    acts[b].append(("compose", int(float(pc[b]) > 0.5)))
+                    run.comp_stats.append((float(pc[b]), float(inc[1:].mean()) if len(inc) > 1 else 1.0,
+                                           float(dv_.norm()), float(comp_d[b][0].norm())))
+                continue
+            if kind == "frame" and R_ and t == w0:
+                read_mask.zero_()                    # the write may address the nodes it gathered
             cos_r = F.normalize(qr, dim=-1) @ F.normalize(R, dim=-1).t()
             age_b = (age_f * (graph.age[None, None] + loop.Wage(h)[:, None])).sum(-1)   # the query decides recency
             e = tau * qn @ K.t() + logg[None] + graph.w_rel * cos_r + age_b
@@ -2065,6 +2129,8 @@ def main():
                 le = torch.cat([le[:, :1], torch.full_like(le[:, 1:], -1e4)], -1)   # (HALT ate facts: its label is
                 #                                  trained by question rows, frame queries inherited its pull)
             logits = torch.cat([e, le], -1)          # [nodes | NEW | tools | HALT]
+            if phase == "gather":                    # gather: read existing nodes as context (no write, no NEW)
+                logits = torch.cat([logits[:, :N], torch.full_like(logits[:, N:], -1e4)], -1)
             arg_lg = None
             if t and kind != "frame" and any(regs):
                 nr = max(len(r_) for r_ in regs)
@@ -2118,13 +2184,15 @@ def main():
                     for b in range(B):
                         if choice[b] >= N and float(mcl[b]) > float(Pn[b, choice[b]]):
                             choice[b] = int(js[b])
+            if phase == "gather":                    # nothing readable (e.g. an empty memory): read nothing
+                choice = [c_ if float(logits[b, c_]) > -1e3 else -1 for b, c_ in enumerate(choice)]
             lk_rows = [b for b in range(B) if lookk and look[b] == 1 and proposal[b] is not None
                        and len(proposal[b]) == 5 and not done[b]]
             for b in lk_rows:                        # the look pass decides AT the proposed address (commit / mode /
                 choice[b] = proposal[b][1]           # NEW / discard); it does not address again (its own address
             #                                          was unlearned: confidence ~0 turned every correction into NEW)
             # ---- the write head (same Walker state, same address): source, gate, mode; HOW: a procedure
-            if writer:
+            if writer and phase == "write":
                 srcreg = [regs[b][own[b][-1]] if own[b] else None for b in range(B)]
                 zk = torch.zeros(A.dk, device=dev)
                 xk = torch.stack([s_[0] if s_ is not None else zk for s_ in srcreg])
@@ -2219,11 +2287,13 @@ def main():
                     dd_ = (loop.Wdk(h[b]) if "k" in A.write_deltas else zk_,  # value / relation the model adjusts)
                            loop.Wdv(h[b]) if "v" in A.write_deltas else zk_,
                            loop.Wdr(h[b]) if "r" in A.write_deltas else zk_)  # the vectors the model writes:
+                    if comp_d[b] is not None:                                  # + the compose tool's refinement
+                        dd_ = tuple(a_ + c_d for a_, c_d in zip(dd_, comp_d[b]))
                     store.live[src] = dd_                                     # encoder proposal + its own deltas
                     if b in comp_now:
                         store.live[comp_now[b]] = dd_
                     same_id = (F.normalize(xk[b] - kmean[0], dim=-1) @ K.t() > A.cluster_cos).float()   # its own fact
-                    if t == 0 and kind == "frame":
+                    if t == w0 and kind == "frame":
                         stat_rows.append((b, float(w_keep[b] + w_rep[b].sum()), float(P[b, I_NEW]),
                                           float(w_rep[b].sum()), int(pj[b]) < N, float(kap[b]) if kap is not None else 1.0))
                     if c_ > I_NEW:                   # a tool / HALT pass writes nothing: it must not replace the soft
@@ -2272,7 +2342,7 @@ def main():
                     acts[b].append(("read", M["rows"][c_]))
                     store.nodes[M["rows"][c_]]["usage"] += 1
                     store.nodes[M["rows"][c_]]["act"] += 1.0
-                    if kind == "question":
+                    if kind == "question" or phase == "gather":
                         read_mask[b, c_] = True               # read-once (write rows may address again)
                 elif c_ == I_NEW:
                     acts[b].append(("new", None))
@@ -2497,6 +2567,7 @@ def main():
     run.per_pass = {}
     run.commit_items = {}
     run.commit_stats = []
+    run.comp_stats = []
     import collections as _co
     run.look_tr = _co.Counter()
     run.note_rec = {}
@@ -3255,6 +3326,12 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 print(f"  step time ({tt_ / n_:.1f} s / step): " + " | ".join(
                     f"{k_} {v_ / n_:.2f} ({100 * v_ / tt_:.0f}%)" for k_, v_ in tsum.items()), flush=True)
                 tsum.clear()
+            if run.comp_stats:
+                cs_ = run.comp_stats
+                print(f"  compose (refine on write): P(compose) {sum(x[0] for x in cs_) / len(cs_):.2f} | used "
+                      f"{sum(x[0] > 0.5 for x in cs_) / len(cs_):.2f} | context included {sum(x[1] for x in cs_) / len(cs_):.2f}"
+                      f" | |dv| {sum(x[2] for x in cs_) / len(cs_):.3f} |dk| {sum(x[3] for x in cs_) / len(cs_):.3f}", flush=True)
+                run.comp_stats = []
             if run.commit_stats:
                 cs_ = run.commit_stats
                 print(f"  commit target (writing helps) {sum(x[0] for x in cs_) / len(cs_):.2f} | gate {sum(x[1] for x in cs_) / len(cs_):.2f}"
