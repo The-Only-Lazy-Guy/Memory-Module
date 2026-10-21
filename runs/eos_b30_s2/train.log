@@ -1,0 +1,23 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2144.64it/s]
+INIT from /marimo/gnm-lab/ckpt/tok_s1.pt: 119 tensors loaded, 0 skipped (new heads / interface / shape changes)
+WORLD: 36 entities, 151 nodes after 60 warm frames
+/marimo/gnm-lab/jobs/eos_b30_s2/gnm.py:2205: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if choice[b] >= N and float(mcl[b]) > float(Pn[b, choice[b]]):
+step 25 loss 4.898 action acc 0.92 answer said 1.00 tool outputs said 1.0 | world 115 entities, 1102 live nodes | peak VRAM 2.26 GB [108s]
+  read actions: {'halt': 0.91, 'read': 0.81, 'tool': 0.88} | integrate by kind (n, store, NEW, replace): {'replace into own fact': (73, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into OTHER fact': (8, 0.0, 0.0, 0.0), 'rule': (11, 0.83, 0.64, 0.0), 'name': (238, 0.05, 0.77, 0.01), 'fact': (312, 0.93, 0.74, 0.23), 'how fact (n, rule read, copy)': (312, 0.0, 0.65, 0.0), 'noise': (62, 0.05, 0.77, 0.01), 'multi': (46, 0.96, 0.93, 0.06), 'dependent': (37, 0.95, 0.97, 0.0), 'delta': (6, 0.97, 0.5, 0.44), 'how delta (n, rule read, copy)': (6, 0.0, 0.65, 0.0), 'decided new': (318, 0.0, 0.0, 0.0), 'decided drop': (5648, 0.0, 0.0, 0.0), 'decided replace': (82, 0.0, 0.0, 0.0), 'state': (667, 0.05, 0.87, 0.0), 'decided attach': (3, 0.0, 0.0, 0.0), 'absorbed copies': (1, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> new': 8, 'note: new -> replace': 23, 'note: replace -> replace': 12, 'note: attach -> replace': 7}
+  step time (4.3 s / step): frames 1.49 (35%) | notes 0.51 (12%) | ask 0.01 (0%) | questions 1.77 (41%) | roundtrip+invariance 0.13 (3%) | backward 0.33 (8%) | commit+step 0.06 (1%) | other (log / evict / eval) 0.00 (0%)
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 3.65
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.5, 0.74, 0.84, 0.75, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.84, 0.37, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 0.98
+step 50 loss 1.182 action acc 0.90 answer said 1.00 tool outputs said 1.0 | world 150 entities, 2054 live nodes | peak VRAM 2.67 GB [221s]
+  read actions: {'halt': 0.94, 'read': 0.84, 'tool': 0.88} | integrate by kind (n, store, NEW, replace): {'state': (709, 0.05, 0.98, 0.0), 'decided drop': (5333, 0.0, 0.0, 0.0), 'decided new': (190, 0.0, 0.0, 0.0), 'name': (151, 0.05, 0.98, 0.0), 'fact': (217, 0.84, 0.64, 0.23), 'how fact (n, rule read, copy)': (217, 0.0, 0.65, 0.0), 'multi': (28, 0.87, 0.79, 0.13), 'noise': (49, 0.05, 0.88, 0.0), 'rule': (4, 0.83, 1.0, 0.0), 'decided replace': (60, 0.0, 0.0, 0.0), 'replace into own fact': (55, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'dependent': (17, 0.93, 1.0, 0.0), 'delta': (4, 0.97, 0.25, 0.59), 'how delta (n, rule read, copy)': (4, 0.0, 0.65, 0.0), 'replace into OTHER fact': (5, 0.0, 0.0, 0.0), 'absorbed copies': (4, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> new': 12, 'note: replace -> replace': 23, 'note: new -> replace': 6, 'note: attach -> replace': 8, 'note: drop -> replace': 1}
+  step time (4.5 s / step): other (log / evict / eval) 0.01 (0%) | frames 1.67 (37%) | notes 0.53 (12%) | ask 0.02 (0%) | questions 1.80 (40%) | roundtrip+invariance 0.12 (3%) | backward 0.32 (7%) | commit+step 0.08 (2%)
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 4.04
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.59, 0.66, 0.75, 0.81, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.75, 0.34, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.99
+  roundtrip in training (said exactly): 0.98
