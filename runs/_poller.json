@@ -1,5 +1,5 @@
 {
- "alive": "2026-10-21 20:15:46",
+ "alive": "2026-10-21 20:20:50",
  "running": [
   "before30_s2",
   "before30_s3",
@@ -7,6 +7,6 @@
   "tokbase_s4",
   "c1k_ver_s2"
  ],
- "gpu_free_gb": 95.0,
+ "gpu_free_gb": 77.1,
  "code": "d282b3b"
 }
