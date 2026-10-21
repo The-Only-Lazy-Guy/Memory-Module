@@ -1234,7 +1234,7 @@ def main():
     P.add_argument("--tool-slots", type=int, default=2)
     P.add_argument("--object-tools", type=int, default=1, help="arithmetic on decoded values (decode -> exact -> encode)")
     P.add_argument("--early-version", type=int, default=1, help="a replace decided in training makes its version at once")
-    P.add_argument("--q-slots-mode", default="mem", choices=["mem", "reg"],
+    P.add_argument("--q-slots-mode", default="reg", choices=["mem", "reg"],
                    help="mem: question / note nodes keep q-slots in memory; reg: only Walker's register gets them")
     P.add_argument("--q-slots", type=int, default=48, help="value slots of question / note nodes (the current input)")
     P.add_argument("--mem-slots", type=int, default=16, help="value slots a node keeps in memory (answers use <= max-ans)")
