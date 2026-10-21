@@ -1,8 +1,6 @@
 {
- "alive": "2026-10-21 16:40:08",
+ "alive": "2026-10-21 16:42:11",
  "running": [
-  "diag_said",
-  "diag_said_nover",
   "c1k_ver_s2"
  ],
  "gpu_free_gb": 95.0,

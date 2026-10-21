@@ -1,8 +1,10 @@
 {
- "state": "running",
+ "state": "done",
  "pid": 7899,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/c1k_ver_s1.pt --corrections 2 --steps 0 --eval-q 288 --early-version 1 --save /marimo/gnm-lab/ckpt/diag_said.pt --log /marimo/gnm-lab/runs/runs/diag_said/train.jsonl",
  "code": "a77e09a",
  "started": "2026-10-21 16:40:08",
- "updated": "2026-10-21 16:40:08"
+ "updated": "2026-10-21 16:42:11",
+ "exit_code": 0,
+ "ended": "2026-10-21 16:42:11"
 }
