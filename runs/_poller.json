@@ -1,10 +1,9 @@
 {
- "alive": "2026-10-21 20:05:39",
+ "alive": "2026-10-21 20:10:42",
  "running": [
-  "len13_s1",
   "len14_s1",
   "c1k_ver_s2"
  ],
- "gpu_free_gb": 85.3,
+ "gpu_free_gb": 91.4,
  "code": "5ee2901"
 }
