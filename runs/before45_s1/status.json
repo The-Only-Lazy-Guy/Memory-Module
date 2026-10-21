@@ -1,0 +1,8 @@
+{
+ "state": "running",
+ "pid": 47871,
+ "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/tok_s1.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --mix lookup:0.15,chain:0.1,arith:0.2,before:0.45,multi:0.1 --seed 1 --save /marimo/gnm-lab/ckpt/before45_s1.pt --log /marimo/gnm-lab/runs/runs/before45_s1/train.jsonl",
+ "code": "d282b3b",
+ "started": "2026-10-21 20:15:46",
+ "updated": "2026-10-21 20:15:46"
+}
