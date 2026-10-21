@@ -1,0 +1,25 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1827.77it/s]
+INIT from /marimo/gnm-lab/ckpt/gnm_main20_step500.pt: 109 tensors loaded, 0 skipped (new heads / interface / shape changes)
+WORLD: 36 entities, 152 nodes after 60 warm frames
+/marimo/gnm-lab/jobs/ref2_s2/gnm.py:2188: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  choice = [c_ if float(logits[b, c_]) > -1e3 else -1 for b, c_ in enumerate(choice)]
+step 25 loss 3.336 action acc 0.82 answer said 0.88 tool outputs said 0.85 | world 114 entities, 1246 live nodes | peak VRAM 2.67 GB [96s]
+  read actions: {'halt': 0.94, 'read': 0.65, 'tool': 0.66} | integrate by kind (n, store, NEW, replace): {'replace into own fact': (44, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into OTHER fact': (26, 0.0, 0.0, 0.0), 'rule': (9, 0.65, 0.74, 0.01), 'name': (226, 0.3, 0.61, 0.08), 'fact': (313, 0.65, 0.54, 0.21), 'how fact (n, rule read, copy)': (313, 0.0, 0.77, 0.0), 'noise': (67, 0.51, 0.52, 0.12), 'multi': (41, 0.64, 0.66, 0.19), 'dependent': (31, 0.75, 0.56, 0.11), 'delta': (4, 0.75, 0.49, 0.21), 'how delta (n, rule read, copy)': (4, 0.0, 0.77, 0.0), 'decided new': (446, 0.0, 0.0, 0.0), 'decided drop': (6320, 0.0, 0.0, 0.0), 'decided replace': (112, 0.0, 0.0, 0.0), 'state': (691, 0.32, 0.43, 0.05), 'absorbed copies': (10, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: replace -> replace': 21, 'note: new -> new': 9, 'note: drop -> replace': 4, 'note: new -> replace': 13, 'note: drop -> new': 3}
+  step time (3.8 s / step): frames 1.58 (41%) | notes 0.35 (9%) | ask 0.01 (0%) | questions 1.33 (35%) | roundtrip+invariance 0.09 (2%) | backward 0.41 (11%) | commit+step 0.05 (1%) | other (log / evict / eval) 0.01 (0%)
+  compose (refine on write): P(compose) 0.26 | used 0.18 | context included 0.32 | |dv| 0.321 |dk| 0.346
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 5.55
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.48, 0.97, 0.68, 0.74, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.68, 0.46, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.98
+  roundtrip in training (said exactly): 0.85
+step 50 loss 3.213 action acc 0.83 answer said 0.88 tool outputs said 0.75 | world 150 entities, 2369 live nodes | peak VRAM 2.90 GB [202s]
+  read actions: {'halt': 0.88, 'read': 0.64, 'tool': 0.77} | integrate by kind (n, store, NEW, replace): {'state': (746, 0.36, 0.2, 0.12), 'decided drop': (8079, 0.0, 0.0, 0.0), 'decided new': (344, 0.0, 0.0, 0.0), 'decided replace': (70, 0.0, 0.0, 0.0), 'name': (159, 0.31, 0.55, 0.07), 'fact': (221, 0.63, 0.37, 0.21), 'how fact (n, rule read, copy)': (221, 0.0, 0.76, 0.0), 'noise': (55, 0.48, 0.28, 0.16), 'dependent': (18, 0.79, 0.44, 0.12), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (26, 0.0, 0.0, 0.0), 'replace into OTHER fact': (12, 0.0, 0.0, 0.0), 'multi': (33, 0.7, 0.46, 0.26), 'absorbed copies': (6, 0.0, 0.0, 0.0), 'rule': (4, 0.74, 0.08, 0.22), 'delta': (14, 0.9, 0.2, 0.31), 'how delta (n, rule read, copy)': (14, 0.0, 0.76, 0.0), 'decided attach': (13, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> new': 24, 'note: replace -> replace': 24, 'note: new -> replace': 2}
+  step time (4.2 s / step): other (log / evict / eval) 0.01 (0%) | frames 1.98 (47%) | notes 0.37 (9%) | ask 0.01 (0%) | questions 1.29 (30%) | roundtrip+invariance 0.08 (2%) | backward 0.43 (10%) | commit+step 0.07 (2%)
+  compose (refine on write): P(compose) 0.50 | used 0.53 | context included 0.42 | |dv| 4.415 |dk| 5.173
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 6.84
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.75, 0.98, 0.48, 0.9, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.48, 0.23, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.99
+  roundtrip in training (said exactly): 0.84
