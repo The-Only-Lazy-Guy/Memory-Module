@@ -426,6 +426,8 @@ def doc_encoding(tok_ids, decode, obj, name):
         v1 = list(range(rt[pi][1] - nv, rt[pi][1]))
         if v1 and decode([pt[len(pt) - nv]]).strip() == '"':
             v1 = v1[1:]
+        if v1 and decode([pt[-1]]).strip() == '"':        # the closing quote is not part of the value either (it was
+            v1 = v1[:-1]                                   # a junk slot after every string value)
         vpos.append(v1)
     return {"ids": ids, "spans": spans, "ptr": ptr, "vpos": vpos}, leaves
 
@@ -1990,10 +1992,16 @@ def main():
         execute_rows(pend)
         pend.clear()
 
+    def ans_tok(v):
+        """the tokens Walker says for a value: a number as " 12" (as stored), a STRING exactly as its slots store it
+        inside the JSON quotes ("Gorpel" -> G|orp|el, no leading space): the say path reads slot t for answer token t,
+        and " Gorpel" splits differently (" That|or" vs "Th|ator") -> names were said wrong after the first token"""
+        return tok.ids(v) if isinstance(v, str) else tok.ids(" " + str(v))
+
     @torch.no_grad()
     def say_nll(rv, rs, answers):
         """per row: the model's own NLL of saying `answers` from value vectors rv + slots rs (no gradient)"""
-        ys = [tok.ids(" " + str(v))[:A.max_ans] for v in answers]
+        ys = [ans_tok(v)[:A.max_ans] for v in answers]
         Lm = max(map(len, ys))
         inp = torch.tensor([ans_ids + y[:-1] + [0] * (Lm - len(y)) for y in ys], device=dev)
         tgt_ = torch.full((len(ys), len(ans_ids) + Lm - 1), -100, dtype=torch.long, device=dev)
@@ -2531,7 +2539,7 @@ def main():
         zero = (torch.zeros(A.dk, device=dev), torch.zeros(1, A.dk, device=dev))
         rv = torch.stack([regs[b][r_][1] if regs[b] and 0 <= r_ < len(regs[b]) else zero[0] for b, r_, _ in targets])
         rs = stackS([regs[b][r_][2] if regs[b] and 0 <= r_ < len(regs[b]) else zero[1] for b, r_, _ in targets])
-        ys = [tok.ids(" " + str(v))[:A.max_ans] for _, _, v in targets]
+        ys = [ans_tok(v)[:A.max_ans] for _, _, v in targets]
         Lm = max(map(len, ys))
         inp = torch.tensor([ans_ids + y[:-1] + [0] * (Lm - len(y)) for y in ys], device=dev)
         tgt_ = torch.full((len(ys), len(ans_ids) + Lm - 1), -100, dtype=torch.long, device=dev)
@@ -3167,7 +3175,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             with torch.no_grad():
                 E = model.emb(torch.tensor(ids, device=dev)).float()
             _, v_, _, s_, _ = graph.nodes(torch.cat(Xs).float(), E, spans, ptr, vpos)
-            ys = [tok.ids(" " + str(v))[:A.max_ans] for v in vals]
+            ys = [ans_tok(v)[:A.max_ans] for v in vals]
             Lm = max(map(len, ys))
             inp = torch.tensor([ans_ids + y[:-1] + [0] * (Lm - len(y)) for y in ys], device=dev)
             tgt_ = torch.full((len(ys), len(ans_ids) + Lm - 1), -100, dtype=torch.long, device=dev)
