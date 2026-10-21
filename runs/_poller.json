@@ -1,8 +1,10 @@
 {
- "alive": "2026-10-21 16:36:05",
+ "alive": "2026-10-21 16:40:08",
  "running": [
+  "diag_said",
+  "diag_said_nover",
   "c1k_ver_s2"
  ],
  "gpu_free_gb": 95.0,
- "code": "3a5900d"
+ "code": "a77e09a"
 }
