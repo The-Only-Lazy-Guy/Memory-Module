@@ -1,10 +1,9 @@
 {
- "alive": "2026-10-21 17:37:49",
+ "alive": "2026-10-21 17:40:51",
  "running": [
   "tok_s1",
-  "tok_s2",
   "c1k_ver_s2"
  ],
- "gpu_free_gb": 85.6,
+ "gpu_free_gb": 91.5,
  "code": "fe0f586"
 }
