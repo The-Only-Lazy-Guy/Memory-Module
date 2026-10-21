@@ -1,0 +1,19 @@
+{
+ "name": "s22e_reg_noversion",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "500",
+  "--eval-every",
+  "250",
+  "--skip-eval0",
+  "--q-slots-mode",
+  "reg",
+  "--early-version",
+  "0"
+ ],
+ "init": "gnm_main20_step500.pt",
+ "init_from": "ckpt",
+ "gpu_gb": 6
+}

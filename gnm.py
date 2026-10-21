@@ -1234,6 +1234,8 @@ def main():
     P.add_argument("--tool-slots", type=int, default=2)
     P.add_argument("--object-tools", type=int, default=1, help="arithmetic on decoded values (decode -> exact -> encode)")
     P.add_argument("--early-version", type=int, default=1, help="a replace decided in training makes its version at once")
+    P.add_argument("--q-slots-mode", default="mem", choices=["mem", "reg"],
+                   help="mem: question / note nodes keep q-slots in memory; reg: only Walker's register gets them")
     P.add_argument("--q-slots", type=int, default=48, help="value slots of question / note nodes (the current input)")
     P.add_argument("--mem-slots", type=int, default=16, help="value slots a node keeps in memory (answers use <= max-ans)")
     P.add_argument("--write-slots", type=int, default=16, help="value slots Walker reads of a frame row's candidate")
@@ -1451,11 +1453,13 @@ def main():
         if gsrc:
             got.update(encode_sources(sorted(gsrc, key=lambda s_: s_[1:]), True))
         ks, vs, gs_, sls, rs, nsl = [], [], [], [], [], []
+        qfull = {}
         zg = torch.zeros((), device=dev)
         for i in live:
             nd = store.nodes[i]
             L_, V_ = nd["lsrc"], nd["vsrc"]
-            cap_ = A.q_slots if nd["kind"] in ("question", "note") else A.mem_slots   # the current input keeps its
+            q_in = nd["kind"] in ("question", "note")
+            cap_ = A.q_slots if (q_in and A.q_slots_mode == "mem") else A.mem_slots   # the current input keeps its
             #   whole text: 16 slots cut a 1-operation question inside its 2nd operand's name and dropped the 2nd /
             #   3rd operands of a 2-operation one (the 2nd read failed: "unrelated" / tool fired early, read .70)
             if L_ is not None and L_[0] == "tok":
@@ -1465,6 +1469,8 @@ def main():
                 ks.append(vec[0]); rs.append(vec[2])
             if V_[0] == "tok":
                 vs.append(got[V_][1]); sls.append(got[V_][3][:cap_]); gs_.append(got[V_][2])
+                if q_in and A.q_slots_mode == "reg":      # whole text for Walker's register only (memory stays 16 wide)
+                    qfull[len(vs) - 1] = got[V_][3][:A.q_slots]
             else:
                 vec = store.vecs[V_]
                 vs.append(vec[1]); sls.append(vec[3][:cap_]); gs_.append(zg)
@@ -1518,7 +1524,7 @@ def main():
                 graph.kmu.mul_(f).add_((1 - f) * kraw.detach().mean(0))
                 graph.kmu_n.add_(1)
         kmean = graph.kmu[None] if float(graph.kmu_n) > 0 else kraw.mean(0, keepdim=True)
-        return {"kraw": kraw, "K": F.normalize(kraw - kmean, dim=-1), "kmean": kmean, "V": v, "S": slots,
+        return {"qfull": qfull, "kraw": kraw, "K": F.normalize(kraw - kmean, dim=-1), "kmean": kmean, "V": v, "S": slots,
                 "logg": logg + F.logsigmoid(graph.keep_logit(ver, use)), "R": r,
                 "time": torch.tensor([float(store.nodes[i]["time"]) for i in live], device=dev),
                 "nsl": torch.tensor(nsl, device=dev), "rows": live, "row_of": row_of}
@@ -1640,8 +1646,17 @@ def main():
         ix = torch.tensor(ix_list, device=dev)
         Kc, Vc, Sc = M["kraw"][ix], M["V"][ix], M["S"][ix]
         fv, fs = loop.Wfv(Vc), loop.Wfs(Sc) + loop.spos[:Sc.shape[1]]
-        return [(Kc[j], Vc[j], Sc[j], int(M["nsl"][c_]), torch.cat([fv[j][None], fs[j, :int(M["nsl"][c_])]], 0),
-                 M["rows"][c_]) for j, c_ in enumerate(ix_list)]
+        out = []
+        for j, c_ in enumerate(ix_list):
+            qf = M.get("qfull", {}).get(c_)
+            if qf is not None:                     # a question / note: its whole text as the register (mode "reg")
+                n_ = min(int(store.nodes[M["rows"][c_]]["nslots"]), qf.shape[0])
+                out.append((Kc[j], Vc[j], qf, n_, torch.cat([fv[j][None], loop.Wfs(qf[:n_]) + loop.spos[:n_]], 0),
+                            M["rows"][c_]))
+                continue
+            out.append((Kc[j], Vc[j], Sc[j], int(M["nsl"][c_]), torch.cat([fv[j][None], fs[j, :int(M["nsl"][c_])]], 0),
+                        M["rows"][c_]))
+        return out
 
     # ------------------------------------------------------------------ frames in + INTEGRATE
     def leaf_meta(obj, kind):

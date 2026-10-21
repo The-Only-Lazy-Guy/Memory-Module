@@ -1,0 +1,17 @@
+{
+ "name": "s22d_reg_both",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "500",
+  "--eval-every",
+  "250",
+  "--skip-eval0",
+  "--q-slots-mode",
+  "reg"
+ ],
+ "init": "gnm_main20_step500.pt",
+ "init_from": "ckpt",
+ "gpu_gb": 6
+}
