@@ -1,0 +1,15 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights:  51%|█████     | 75/148 [00:00<00:00, 747.58it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1255.22it/s]
+INIT from /marimo/gnm-lab/ckpt/tok_s1.pt: 119 tensors loaded, 0 skipped (new heads / interface / shape changes)
+WORLD: 43 entities, 168 nodes after 60 warm frames
+/marimo/gnm-lab/jobs/len13_s1/gnm.py:2193: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if choice[b] >= N and float(mcl[b]) > float(Pn[b, choice[b]]):
+step 25 loss 0.923 action acc 0.93 answer said 1.00 tool outputs said 1.0 | world 101 entities, 1128 live nodes | peak VRAM 2.58 GB [98s]
+  read actions: {'halt': 0.93, 'read': 0.79, 'tool': 0.71} | integrate by kind (n, store, NEW, replace): {'replace into own fact': (107, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'rule': (11, 0.95, 0.58, 0.01), 'name': (236, 0.06, 0.78, 0.01), 'fact': (338, 0.94, 0.7, 0.25), 'how fact (n, rule read, copy)': (338, 0.0, 0.65, 0.0), 'dependent': (39, 0.94, 0.97, 0.0), 'multi': (47, 0.95, 0.83, 0.15), 'noise': (74, 0.06, 0.6, 0.01), 'decided new': (321, 0.0, 0.0, 0.0), 'decided attach': (5, 0.0, 0.0, 0.0), 'decided drop': (6467, 0.0, 0.0, 0.0), 'decided replace': (109, 0.0, 0.0, 0.0), 'state': (786, 0.06, 0.69, 0.01), 'delta': (3, 1.0, 0.0, 0.89), 'how delta (n, rule read, copy)': (3, 0.0, 0.65, 0.0), 'replace into OTHER fact': (1, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: attach -> replace': 11, 'note: new -> new': 2, 'note: replace -> replace': 17, 'note: new -> replace': 20}
+  step time (3.9 s / step): frames 1.17 (30%) | notes 0.38 (10%) | ask 0.01 (0%) | questions 1.86 (48%) | roundtrip+invariance 0.09 (2%) | backward 0.34 (9%) | commit+step 0.05 (1%) | other (log / evict / eval) 0.01 (0%)
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 6.92
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.57, 0.67, 0.97, 0.8, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.97, 0.44, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.99
+  roundtrip in training (said exactly): 0.96
