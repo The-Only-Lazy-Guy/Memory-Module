@@ -1286,6 +1286,7 @@ def main():
     P.add_argument("--lr", type=float, default=5e-4)
     P.add_argument("--eval-every", type=int, default=500)
     P.add_argument("--eval-q", type=int, default=96)
+    P.add_argument("--ans-eos", type=int, default=1, help="answers are trained with an end token; decode stops there")
     P.add_argument("--max-ans", type=int, default=6)
     P.add_argument("--seed", type=int, default=0)
     P.add_argument("--save", default="", help="checkpoint path (default E:/WEIGHTS/gnm_runs/gnm.pt when E: exists)")
@@ -1320,6 +1321,7 @@ def main():
     rng = random.Random(A.seed)
     model, raw = load_walker(A.hf, A.ckpt, A.enc_layer, dev)
     tok = Tok(raw)
+    EOS_ID = raw.eos_token_id if getattr(raw, "eos_token_id", None) is not None else tok.ids("\n")[0]
     d = model.emb.weight.shape[1]
     nL = len(model.blocks)
     ctrl_layer = A.ctrl_layer % nL
@@ -1616,7 +1618,16 @@ def main():
                 for b, n_ in enumerate(lo[:, -1].argmax(-1).tolist()):
                     seq[b].append(n_)
             for sq in seq:
-                tx = tok.decode(sq[len(ans_ids):])
+                gen = sq[len(ans_ids):]
+                if EOS_ID in gen:                    # the answer ends here (trained with an end token)
+                    gen = gen[:gen.index(EOS_ID)]
+                    tx = tok.decode(gen)
+                else:                                # no end token: keep only the first token when it is a
+                    tx = tok.decode(gen)             # number, so untrained continuation ("19") cannot glue on
+                    k_ = 2 if tok.decode(gen[:1]).strip() == "-" else 1   # a sign is its own token
+                    first = tok.decode(gen[:k_])
+                    if not text and NUM.fullmatch(first.strip() or "x"):
+                        tx = first
                 if text:
                     out.append(tx)
                     continue
@@ -1996,7 +2007,8 @@ def main():
         """the tokens Walker says for a value: a number as " 12" (as stored), a STRING exactly as its slots store it
         inside the JSON quotes ("Gorpel" -> G|orp|el, no leading space): the say path reads slot t for answer token t,
         and " Gorpel" splits differently (" That|or" vs "Th|ator") -> names were said wrong after the first token"""
-        return tok.ids(v) if isinstance(v, str) else tok.ids(" " + str(v))
+        ids_ = tok.ids(v) if isinstance(v, str) else tok.ids(" " + str(v))
+        return ids_ + [EOS_ID] if A.ans_eos else ids_   # an answer ENDS (greedy decode ran on: 17 -> "1719")
 
     @torch.no_grad()
     def say_nll(rv, rs, answers):
@@ -2550,7 +2562,8 @@ def main():
         inject.clear()
         lo = lo.float()
         say_loss = F.cross_entropy(lo.reshape(-1, lo.shape[-1]), tgt_.reshape(-1), ignore_index=-100)
-        em = ((lo.argmax(-1) == tgt_) | (tgt_ == -100)).all(-1).float()
+        em = ((lo.argmax(-1) == tgt_) | (tgt_ == -100) | (tgt_ == EOS_ID)).all(-1).float()   # value tokens decide
+        #                                                                                    (the end token is trained)
         pr = lo.argmax(-1)
         run.said = [tok.decode(pr[i, a0:a0 + len(ys[i])].tolist()) for i in range(B)]
         act = sum(losses) / max(1, n_act) if losses else torch.zeros((), device=dev)
@@ -2643,6 +2656,8 @@ def main():
         er = random.Random(50_000 + step)
         out = {}
 
+        op_examples = []
+
         def why_wrong(q, acts_b, ops_b, said=None):
             """where a wrong answer's program first went wrong (eval diagnosis)"""
             gold = [("read" if kd in ("read", "write") else kd, x) for kd, x, _ in q["prog"]]
@@ -2681,6 +2696,9 @@ def main():
                     src_ = "computed result" if q["prog"][bad_i][0] == "op" else "stored number"
                     how = ("the other operand's value" if bad_x in (q["vals"][ia], q["vals"][ib])
                            else "near (+-2)" if isinstance(gold_v, int) and abs(bad_x - gold_v) <= 2 else "far")
+                    nid_ = acts_b[bad_i][1] if bad_i < len(acts_b) and acts_b[bad_i][0] == "read" else None
+                    held_ = value_of(store.prov.get(store.nodes[nid_]["vsrc"])) if nid_ is not None else None
+                    op_examples.append((gold_v, bad_x, held_, store.nodes[nid_]["kind"] if nid_ is not None else "-"))
                     return f"operand misread: {src_}, {how}"
             if q["ops"] == 0 and isinstance(q.get("ans"), str):
                 return ("mis-said: a NAME value (said the start right)" if (said or "").strip()[:2] == q["ans"][:2]
@@ -2706,6 +2724,7 @@ def main():
 
         def score(name, specs, mix, ops=(1, 2), mode="any"):
             em_, dg_, qs_, wh_ = [], [], [], []
+            op_examples.clear()
             for _ in range(0, A.eval_q, A.questions):
                 qs = ask(er, [(A.questions * n // max(1, sum(n_ for n_, _ in specs)), p) for n, p in specs], mix,
                          ops, mode)
@@ -2734,6 +2753,10 @@ def main():
                 if w_ != "right":
                     k_ = "before" if q["before"] else q["ops"]
                     fails.setdefault(k_, Counter_())[w_] += 1
+            if op_examples:
+                n_h = sum(1 for g_, d_, h_, _ in op_examples if h_ == d_ and h_ != g_)
+                print(f"EVAL {step} {name} operand misreads (true, decoded, value the node holds, node kind): "
+                      f"{op_examples[:8]} | node holds the decoded (not the asked) value: {n_h}/{len(op_examples)}", flush=True)
             if fails:
                 print(f"EVAL {step} {name} why wrong (by ops): " + " | ".join(
                     f"{k_}: {dict(v_.most_common())}" for k_, v_ in sorted(fails.items(), key=lambda x: str(x[0]))),
@@ -3190,7 +3213,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             lo, _ = model(inp, r_active=False)
             inject.clear()
             loss_ = F.cross_entropy(lo.float().reshape(-1, lo.shape[-1]), tgt_.reshape(-1), ignore_index=-100)
-            return loss_, float(((lo.argmax(-1) == tgt_) | (tgt_ == -100)).all(-1).float().mean())
+            return loss_, float(((lo.argmax(-1) == tgt_) | (tgt_ == -100) | (tgt_ == EOS_ID)).all(-1).float().mean())
 
     def warm_roundtrip(n_steps):
         """warm-up (user): encode -> decode of many values before the main run, so values are objects the tools
