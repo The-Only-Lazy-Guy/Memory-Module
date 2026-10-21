@@ -1,0 +1,8 @@
+{
+ "state": "running",
+ "pid": 5862,
+ "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/gnm_main20_step500.pt --corrections 2 --steps 500 --eval-every 250 --skip-eval0 --early-version 0 --save /marimo/gnm-lab/ckpt/s22b_qslots_only.pt --log /marimo/gnm-lab/runs/runs/s22b_qslots_only/train.jsonl",
+ "code": "afc68d9",
+ "started": "2026-10-21 10:22:45",
+ "updated": "2026-10-21 10:22:45"
+}
