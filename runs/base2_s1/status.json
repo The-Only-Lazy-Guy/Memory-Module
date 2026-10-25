@@ -1,8 +1,10 @@
 {
- "state": "running",
+ "state": "failed",
  "pid": 501,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/gnm_main20_step500.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --seed 1 --save /marimo/gnm-lab/ckpt/base2_s1.pt --log /marimo/gnm-lab/runs/runs/base2_s1/train.jsonl",
  "code": "0ae9f7a",
  "started": "2026-10-25 14:56:04",
- "updated": "2026-10-25 14:56:04"
+ "updated": "2026-10-25 15:27:20",
+ "exit_code": -15,
+ "ended": "2026-10-25 15:27:20"
 }
