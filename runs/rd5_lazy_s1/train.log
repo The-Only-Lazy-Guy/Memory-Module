@@ -1,0 +1,8 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3018.48it/s]
+INIT from /marimo/gnm-lab/ckpt/gnm_main22.pt: 103 tensors loaded, 6 skipped (new heads / interface / shape changes)
+RESET loop.Wdr (pre-R checkpoint: the model writes r from scratch)
+WORLD: 43 entities, 138 nodes after 60 warm frames
+/marimo/gnm-lab/jobs/rd5_lazy_s1/gnm.py:2526: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if choice[b] >= N and float(mcl[b]) > float(Pn[b, choice[b]]):
