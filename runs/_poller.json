@@ -1,11 +1,13 @@
 {
- "alive": "2026-10-25 15:39:32",
+ "alive": "2026-10-25 15:43:34",
  "running": [
+  "fc_guard0_s1",
+  "fc_guard1_s1",
   "r_demo_s1",
   "r_demo_s2",
   "r_task_s1",
   "r_task_s2"
  ],
- "gpu_free_gb": 95.0,
- "code": "e5bb87d"
+ "gpu_free_gb": 78.0,
+ "code": "b050778"
 }

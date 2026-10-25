@@ -1,0 +1,27 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1672.54it/s]
+INIT from /marimo/gnm-lab/ckpt/gnm_main22.pt: 103 tensors loaded, 6 skipped (new heads / interface / shape changes)
+WORLD: 43 entities, 138 nodes after 60 warm frames
+/marimo/gnm-lab/jobs/r_task_s1/gnm.py:2472: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if choice[b] >= N and float(mcl[b]) > float(Pn[b, choice[b]]):
+step 25 loss 6.493 action acc 0.95 answer said 1.00 tool outputs said 1.0 | world 120 entities, 1061 live nodes | peak VRAM 2.65 GB [77s]
+  read actions: {'halt': 0.92, 'read': 0.76, 'tool': 0.81} | integrate by kind (n, store, NEW, replace): {'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (40, 0.0, 0.0, 0.0), 'replace into OTHER fact': (8, 0.0, 0.0, 0.0), 'rule': (13, 0.89, 0.46, 0.12), 'name': (240, 0.17, 0.79, 0.02), 'fact': (318, 0.74, 0.83, 0.09), 'how fact (n, rule read, copy)': (318, 0.0, 0.86, 0.0), 'dependent': (45, 0.78, 0.98, 0.0), 'multi': (52, 0.95, 0.87, 0.1), 'noise': (65, 0.05, 0.89, 0.0), 'decided new': (298, 0.0, 0.0, 0.0), 'decided replace': (49, 0.0, 0.0, 0.0), 'decided attach': (13, 0.0, 0.0, 0.0), 'decided drop': (5639, 0.0, 0.0, 0.0), 'state': (698, 0.08, 0.88, 0.0), 'absorbed copies': (6, 0.0, 0.0, 0.0), 'delta': (4, 0.99, 0.0, 0.59), 'how delta (n, rule read, copy)': (4, 0.0, 0.86, 0.0)}
+  look (proposed -> after looking): {'note: attach -> replace': 33, 'note: new -> replace': 7, 'note: new -> new': 10}
+  step time (3.1 s / step): frames 0.79 (26%) | notes 0.32 (10%) | ask 0.01 (0%) | questions 1.22 (40%) | roundtrip+invariance 0.09 (3%) | backward 0.33 (11%) | commit+step 0.31 (10%) | other (log / evict / eval) 0.00 (0%)
+  reference re-read (inside the parts above): 0.12 s / step | calls 79 | rows 1374 | new texts 79 / step | texts cached 1972
+  reference edges: dependents -> their source 0.00 | other facts -> none 1.00 | dependents / step 23.8 | misses hit: {'none': 595}
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 3.67
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.65, 0.03, 0.76, 0.84, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.76, 0.57, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.99
+  roundtrip in training (said exactly): 0.32
+step 50 loss 1.590 action acc 0.86 answer said 1.00 tool outputs said 1.0 | world 150 entities, 2010 live nodes | peak VRAM 3.05 GB [159s]
+  read actions: {'halt': 0.95, 'read': 0.82, 'tool': 0.84} | integrate by kind (n, store, NEW, replace): {'state': (669, 0.11, 0.68, 0.01), 'decided drop': (5515, 0.0, 0.0, 0.0), 'name': (149, 0.27, 0.91, 0.03), 'fact': (205, 0.82, 0.59, 0.31), 'how fact (n, rule read, copy)': (205, 0.0, 0.85, 0.0), 'dependent': (22, 0.54, 0.92, 0.02), 'noise': (40, 0.06, 0.74, 0.01), 'delta': (8, 0.98, 0.35, 0.46), 'how delta (n, rule read, copy)': (8, 0.0, 0.85, 0.0), 'multi': (26, 0.96, 0.72, 0.22), 'decided replace': (89, 0.0, 0.0, 0.0), 'decided new': (162, 0.0, 0.0, 0.0), 'replace into own fact': (70, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'rule': (4, 0.91, 0.09, 0.42), 'absorbed copies': (7, 0.0, 0.0, 0.0), 'decided attach': (1, 0.0, 0.0, 0.0), 'replace into OTHER fact': (16, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> new': 9, 'note: attach -> replace': 37, 'note: new -> replace': 4}
+  step time (3.3 s / step): other (log / evict / eval) 0.01 (0%) | frames 0.88 (27%) | notes 0.36 (11%) | ask 0.02 (0%) | questions 1.13 (34%) | roundtrip+invariance 0.07 (2%) | backward 0.32 (10%) | commit+step 0.51 (15%)
+  reference re-read (inside the parts above): 0.14 s / step | calls 95 | rows 2296 | new texts 60 / step | texts cached 3470
+  reference edges: dependents -> their source 0.00 | other facts -> none 0.04 | dependents / step 28.2 | misses hit: {'other fact': 642, 'source attribute, other entity': 30, 'none': 25, "the dependent's own entity": 5, "the source's version node": 4}
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 3.69
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.69, 0.04, 0.82, 0.86, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.82, 0.44, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 0.41
