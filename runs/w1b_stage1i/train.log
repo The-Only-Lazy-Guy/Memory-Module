@@ -1,0 +1,18 @@
+inference: TB_WALK_FORWARD_SCALE=1.0 (as trained)
+inference: TB_PHASE_WALK_FORWARD_SCALE=0.0 (as trained)
+RoPE: ON — global base=10000, windowed base=W_max (constant), null_key=ON, pos_emb unused
+trajectory gradient interface: phaseA rho=1 alpha=1; phaseB rho=1 alpha=0 (rho changes backward only)
+quantization: ACTUAL=['fp8'] on 64 linears | fast_linears=0 | fp4_usable=False | fp8_act_scale=rowwise-causal (fast path verified after first forward; STE routed per-quant type — fp4 uses /6 e2m1 scales, fp8 uses /448 e4m3)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+inference ready: weights=/marimo/gnm-lab/ckpt/hf/checkpoints/branch47750_ckpt_best.pt | D=2048 L=16 n_head=16 vocab=50257 max_t=16384 | device=cuda
+Walker 1B from /marimo/gnm-lab/ckpt/hf/checkpoints/branch47750_ckpt_best.pt: 16 blocks, d=2048, encoder states at block 10
+SWAP (core only) from /marimo/gnm-lab/ckpt/rd4_s1.pt: 86 tensors loaded, 51 skipped (new heads / interface / shape changes)
+RESET graph.kmu (new LM: keys from a new encoder)
+FREEZE core: 87 tensors frozen, training the interface only
+  QLinear fast path OK (fp8, rel err 0.00397)
+WORLD: 48 entities, 285 nodes after 60 warm frames
+roundtrip before warm-up: {'numbers': 0.0, 'names': 0.0, 'unseen strings': 0.0}
+/marimo/gnm-lab/jobs/w1b_stage1i/gnm.py:3855: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"warm roundtrip {st_}: loss {float(loss_):.3f} said exactly {ok_:.2f}{inv_}", flush=True)
+warm roundtrip 50: loss 2.115 said exactly 0.08 | label invariance 0.99
