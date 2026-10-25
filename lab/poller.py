@@ -135,9 +135,12 @@ def fetch_ckpt(name, src):
             return dst
     if src == "ckpt":                        # one-off transfer branch
         sh("git", "fetch", "-q", "origin", "ckpt", cwd=CODE)
-        with open(dst + ".part", "wb") as f:
-            subprocess.run(["git", "show", f"origin/ckpt:{name}"], cwd=CODE, stdout=f, check=True)
-        os.replace(dst + ".part", dst)
+        files = sh("git", "ls-tree", "--name-only", "origin/ckpt", cwd=CODE).splitlines()
+        parts = sorted((f for f in files if f.startswith(name + ".part")), key=lambda f: int(f.rsplit("part", 1)[1]))
+        with open(dst + ".tmp", "wb") as f:  # a checkpoint > 90 MB is stored in parts (GitHub: 100 MB per file)
+            for nm_ in (parts or [name]):
+                subprocess.run(["git", "show", f"origin/ckpt:{nm_}"], cwd=CODE, stdout=f, check=True)
+        os.replace(dst + ".tmp", dst)
         return dst
     if src.startswith("hf:"):                # a Walker checkpoint on the Hub: "hf:<repo>" + name = path in the repo
         from huggingface_hub import hf_hub_download
@@ -173,9 +176,22 @@ def keep_ckpt(name):
     if not os.path.isdir(os.path.join(repo, ".git")):
         sh("git", "clone", "-q", "--single-branch", "-b", "ckpt", REPO_URL, repo)
         ident(repo)
-    sh("git", "pull", "-q", "origin", "ckpt", cwd=repo)
-    shutil.copy2(src, os.path.join(repo, name + ".pt"))
-    sh("git", "add", name + ".pt", cwd=repo)
+    sh("git", "fetch", "-q", "origin", "ckpt", cwd=repo)       # drop local commits of earlier failed pushes
+    sh("git", "reset", "-q", "--hard", "origin/ckpt", cwd=repo)
+    chunk = 90 * 1024 * 1024                 # GitHub rejects files > 100 MB: larger checkpoints go in parts
+    if os.path.getsize(src) <= chunk:
+        shutil.copy2(src, os.path.join(repo, name + ".pt"))
+        sh("git", "add", name + ".pt", cwd=repo)
+    else:
+        with open(src, "rb") as f:
+            i = 0
+            while True:
+                b = f.read(chunk)
+                if not b:
+                    break
+                open(os.path.join(repo, f"{name}.pt.part{i}"), "wb").write(b)
+                sh("git", "add", f"{name}.pt.part{i}", cwd=repo)
+                i += 1
     sh("git", "commit", "-qm", f"ckpt: {name}", cwd=repo)
     sh("git", "push", "-q", "origin", "ckpt", cwd=repo)
     log(f"kept {name}.pt on the ckpt branch")
@@ -255,6 +271,20 @@ def main():
                 adopted_end(n_)
         except Exception:
             pass
+    try:                                     # finished jobs whose checkpoint never reached the ckpt branch (pushes
+        sh("git", "fetch", "-q", "origin", "ckpt", cwd=CODE)   # of > 100 MB files failed): keep them now
+        on_branch = sh("git", "ls-tree", "--name-only", "origin/ckpt", cwd=CODE).splitlines()
+        for n_ in os.listdir(os.path.join(RUNS, "runs")):
+            try:
+                st_ = json.load(open(status_path(n_))).get("state", "")
+                job_ = json.load(open(os.path.join(CODE, "jobs", n_ + ".json")))
+            except Exception:
+                continue
+            have = any(f == n_ + ".pt" or f.startswith(n_ + ".pt.part") for f in on_branch)
+            if st_.startswith("done") and job_.get("keep") and not have and os.path.exists(os.path.join(CKPT, n_ + ".pt")):
+                keep_ckpt(n_)
+    except Exception as e:
+        log(f"catch-up keep failed: {e}")
     me = os.path.abspath(__file__)
     my_hash = file_hash(me)
     started = float(os.environ.get("LAB_STARTED", time.time()))
