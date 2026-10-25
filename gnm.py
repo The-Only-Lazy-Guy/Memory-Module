@@ -1446,6 +1446,8 @@ def main():
     knob_names = ("age", "keep", "w_prop", "w_rel", "tau_o", "tau", "beta", "gate", "gs", "w_id")   # write heads: normal lr
     knobs = [p for n, p in list(graph.named_parameters()) + list(ro.named_parameters()) + list(loop.named_parameters())
              + [("tau", mem.tau)] if n.split(".")[-1] in knob_names]
+    knobs += list(graph.Wf_feat.parameters())    # the forget head's 8 weights: at the base lr they had not moved
+    #                                              after 100 steps (MoLab r_* runs: exactly the init)
     knob_ids = {id(p) for p in knobs}
     ref_ps = list(graph.Wref.parameters()) + list(graph.Wrs.parameters()) + list(graph.Wrr.parameters()) + [graph.tau_ref]
     ref_sc = [graph.b_ver, graph.r_pool] + list(graph.Wnone.parameters())   # small heads: at 1e-3 the version bias moved .025 in
@@ -1480,10 +1482,15 @@ def main():
         return n_ok, n_skip
 
     if A.init_full or A.swap_from:
-        n_ok, n_skip = load_matching(torch.load(A.init_full or A.swap_from, map_location=dev, weights_only=False),
-                                     only_core=bool(A.swap_from))
+        st0 = torch.load(A.init_full or A.swap_from, map_location=dev, weights_only=False)
+        n_ok, n_skip = load_matching(st0, only_core=bool(A.swap_from))
         print(f"{'SWAP (core only)' if A.swap_from else 'INIT'} from {A.init_full or A.swap_from}: {n_ok} tensors "
               f"loaded, {n_skip} skipped (new heads / interface / shape changes)", flush=True)
+        if "Wrr.weight" not in st0.get("graph", {}):     # a checkpoint from before r was THE relation (2026-10-25):
+            with torch.no_grad():                         # its relation-delta head wrote for the old meaning of r
+                nn.init.zeros_(loop.Wdr.weight); nn.init.zeros_(loop.Wdr.bias)   # (noise up to .3 x on every
+            print("RESET loop.Wdr (pre-R checkpoint: the model writes r from scratch)", flush=True)   # pointer)
+        del st0
     if A.reset_wself:                                     # a collapsed Wself (old cosine objective) -> identity again
         with torch.no_grad():
             loop.Wself.weight.copy_(torch.eye(A.dk)); loop.Wself.bias.zero_()
@@ -1930,13 +1937,15 @@ def main():
         return vn
 
     def propagate(D, rows, row_of, tgt, time_):
-        """hard propagation: nodes whose dependence edge points at the replaced node take its new value source
-        (one gated step; the dependent's old value is versioned)"""
+        """hard propagation: nodes whose r edge points at the replaced node take its new value source (the
+        dependent's old value is versioned). D = (P(has a relation), top node) — the model's two decisions, as every
+        other hard choice (argmax): the edge PROBABILITY was split over the source's copies (argmax right .97,
+        probability < .5 -> 0 propagated at the step-500 eval)"""
         if D is None or tgt not in row_of:
             return 0
-        col = D[:, row_of[tgt]]                       # reference edges: a dependent follows what it mentions
+        has_, top_ = D
         n_ = 0
-        for j in (col > 0.5).nonzero().flatten().tolist():
+        for j in ((has_ > 0.5) & (top_ == row_of[tgt])).nonzero().flatten().tolist():
             nid = rows[j]
             nd = store.nodes[nid]
             if nid == tgt or not nd["alive"] or nd["kind"] not in ("item", "state"):
@@ -1952,7 +1961,8 @@ def main():
             M0 = materialize()
             if M0 is None:
                 return None, [], {}
-            D = graph.dep_ref(M0["K"], M0["R"], M0["kmean"], M0["ver"])
+            L_ = graph.ref_logits(M0["K"], M0["R"], M0["kmean"], M0["ver"])
+            D = (torch.sigmoid(-L_[:, -1]), L_[:, :-1].argmax(-1))
         return D, M0["rows"], M0["row_of"]
 
     # ------------------------------------------------------------------ truth lookups (bookkeeping, from provenance)
