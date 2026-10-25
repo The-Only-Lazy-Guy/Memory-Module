@@ -1,14 +1,13 @@
 {
- "alive": "2026-10-25 18:29:27",
+ "alive": "2026-10-25 18:31:10",
  "running": [
   "rd2_g0_s1",
-  "rd2_s1",
   "rd2_s2",
   "rd4_s1",
   "rd4_s2",
   "rd5_lazy_s1",
   "rd5_lazy_s2"
  ],
- "gpu_free_gb": 61.8,
+ "gpu_free_gb": 66.1,
  "code": "f045b7f"
 }
