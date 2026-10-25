@@ -342,3 +342,15 @@ step 625 loss 2.000 action acc 0.88 answer said 1.00 tool outputs said 1.0 | wor
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.12, 0.75, 0.9, 0.26, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.9, 0.34, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+step 650 loss 1.426 action acc 0.95 answer said 0.96 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 4.13 GB [4261s]
+  read actions: {'halt': 1.0, 'read': 0.86, 'tool': 0.93} | integrate by kind (n, store, NEW, replace): {'state': (765, 0.31, 0.47, 0.18), 'decided drop': (4075, 0.0, 0.0, 0.0), 'decided new': (288, 0.0, 0.0, 0.0), 'rule': (5, 0.11, 0.11, 0.02), 'name': (142, 0.4, 0.34, 0.13), 'fact': (166, 0.95, 0.09, 0.73), 'how fact (n, rule read, copy)': (166, 0.44, 0.59, 0.0), 'delta': (77, 0.89, 0.19, 0.48), 'how delta (n, rule read, copy)': (77, 0.36, 0.62, 0.0), 'noise': (41, 0.09, 0.03, 0.03), 'decided replace': (187, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (141, 0.0, 0.0, 0.0), 'multi': (22, 0.94, 0.58, 0.34), 'replace into OTHER fact': (8, 0.0, 0.0, 0.0), 'absorbed copies': (6, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: drop -> replace': 42, 'note: drop -> new': 6, 'note: new -> replace': 2}
+  step time (7.7 s / step): other (log / evict / eval) 0.21 (3%) | frames 2.19 (28%) | notes 0.75 (10%) | ask 0.28 (4%) | questions 2.27 (29%) | roundtrip+invariance 0.13 (2%) | backward 0.45 (6%) | commit+step 1.44 (19%)
+  reference re-read (inside the parts above): 0.32 s / step | calls 101 | rows 4656 | new texts 63 / step | texts cached 4711
+  reference edges: dependents -> their source 1.00 | other facts -> none 0.93 | dependents / step 2.0 | misses hit: {}
+  frame commit target (writing here keeps that fact right) 0.43 | gate there 0.46 | writes into nodes / step 10.2
+  forget (model's choice): 10.8 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.0, 0.49, 0.0, 0.99, 0.99, -0.01, -0.01]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 4.86
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.11, 0.68, 0.87, 0.24, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.87, 0.36, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
