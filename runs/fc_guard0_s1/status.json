@@ -1,9 +1,9 @@
 {
- "state": "ended (adopted)",
+ "state": "done (adopted)",
  "pid": 7775,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/gnm_main22.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --seed 1 --id-guard 0 --save /marimo/gnm-lab/ckpt/fc_guard0_s1.pt --log /marimo/gnm-lab/runs/runs/fc_guard0_s1/train.jsonl",
  "code": "b050778",
  "started": "2026-10-25 15:43:34",
- "updated": "2026-10-25 17:36:44",
- "ended": "2026-10-25 17:36:44"
+ "updated": "2026-10-25 18:08:24",
+ "ended": "2026-10-25 18:08:24"
 }
