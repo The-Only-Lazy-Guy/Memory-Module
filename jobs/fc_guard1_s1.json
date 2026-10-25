@@ -1,0 +1,21 @@
+{
+ "name": "fc_guard1_s1",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "1000",
+  "--eval-every",
+  "500",
+  "--eval-q",
+  "288",
+  "--skip-eval0",
+  "--seed",
+  "1"
+ ],
+ "init": "gnm_main22.pt",
+ "init_from": "ckpt",
+ "gpu_gb": 6,
+ "keep": true,
+ "cancel": false
+}

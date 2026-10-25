@@ -1353,6 +1353,10 @@ def main():
     P.add_argument("--note-expect", type=int, default=1, help="a correction the note did not write is still asked")
     P.add_argument("--w-commit", type=float, default=1.0, help="commit target from the model's own answers (notes)")
     P.add_argument("--commit-margin", type=float, default=0.1)
+    P.add_argument("--w-commit-frames", type=float, default=1.0, help="frame rows: writing into a node is trained by "
+                   "whether that node's fact is still answered right (the model's own answers)")
+    P.add_argument("--id-guard", type=int, default=1, help="(rule) a replace into a node whose label is not ~identical "
+                   "becomes NEW; 0 = the model's write decision alone")
     P.add_argument("--refine", type=int, default=0, help="refine on write: gather passes (context reads) before a "
                    "compose pass, then the write (0 = off)")
     P.add_argument("--compose-cap", type=float, default=0.3, help="a compose delta is at most this x the vector's norm")
@@ -2174,7 +2178,7 @@ def main():
                     or store.nodes[tgt]["kind"] not in ("item", "state")):
                 out = ("new",)                    # NEW, or not confident where it belongs: its own node
             else:
-                if r["u"] >= 0.5 and not r.get("same", True):
+                if A.id_guard and r["u"] >= 0.5 and not r.get("same", True):
                     out = ("new",)                    # a replace updates the SAME fact: into another fact it would
                 else:                                 # corrupt it (its own label decides: identity cluster) -> own node
                     out = ("replace", tgt, r.get("absorb", [])) if r["u"] >= 0.5 else ("attach", tgt)
@@ -2601,6 +2605,13 @@ def main():
                         rec_ = {"src": s_, "tgt": M["rows"][c_], "g": float(g_node[b, c_]),
                                 "u": float(u_node[b, c_]), "p": p_cl, "g_new": float(g_new[b]),
                                 "absorb": absorb, "same": same}
+                        if kind == "frame" and soft and A.w_commit_frames and t == w0:   # "if I write this here, is
+                            tl_ = store.prov.get(store.nodes[M["rows"][c_]]["lsrc"]) if store.nodes[M["rows"][c_]]["lsrc"] else None
+                            if tl_ and tl_[0] == "fact" and tl_[2] in world.ents.get(tl_[1], {}):   # that fact still
+                                wv_ = comp_reg[b] if b in comp_now else srcreg[b]                   # answered right?"
+                                run.fcommit.append((sb(gl_node[b, c_]), sb(ul_node[b, c_]), V[c_].detach(),
+                                                    M["S"][c_].detach(), wv_[1].detach(), wv_[2].detach(),
+                                                    world.ents[tl_[1]][tl_[2]], tl_[2] in world.multi_keys))
                         if kind == "note" and soft and A.w_commit and not (lookk and look[b] == 0):
                             run.commit_items[b] = (sb(gl_node[b, c_]), sb(ul_node[b, c_]), V[c_].detach(), M["S"][c_].detach(),
                                                    srcreg[b][1].detach(), srcreg[b][2].detach(), rows[b]["ans"])
@@ -2832,6 +2843,21 @@ def main():
                 for _, o in plans:
                     wstats.setdefault("decided " + o[0], [0, 0.0, 0.0, 0.0])[0] += 1
                 run.plans = plans
+                if soft and run.fcommit:                      # writing into a node must not make ITS fact worse: the
+                    it_ = run.fcommit                         # node's fact answered from its value as it is vs as
+                    run.fcommit = []                          # written (into another fact: worse -> don't; an update
+                    l_old = say_nll(torch.stack([x[2] for x in it_]), stackS([x[3] for x in it_]), [x[6] for x in it_])
+                    l_new = say_nll(torch.stack([x[4] for x in it_]), stackS([x[5] for x in it_]), [x[6] for x in it_])
+                    lab = (l_new <= l_old + A.commit_margin).float()   # / a restatement: not worse -> write)
+                    glc = torch.stack([x[0] for x in it_]).reshape(-1)
+                    ulc = torch.stack([x[1] for x in it_]).reshape(-1)
+                    single = torch.tensor([not x[7] for x in it_], device=dev)
+                    c_l = F.binary_cross_entropy_with_logits(glc, lab)
+                    pm = (lab > 0) & single                   # replace for a single-valued fact it does not hurt
+                    if bool(pm.any()):
+                        c_l = c_l + F.binary_cross_entropy_with_logits(ulc[pm], lab[pm])
+                    cost = cost + A.w_commit_frames * c_l
+                    run.fcommit_stats.append((float(lab.mean()), float(torch.sigmoid(glc).mean()), len(it_)))
                 return cost, None, 0.0, None
         # ---- Walker says the answer (questions) / the computed new value (notes)
         if kind == "note":
@@ -2884,6 +2910,7 @@ def main():
     run.commit_stats = []
     run.comp_stats = []
     run.forget_stats = []
+    run.fcommit, run.fcommit_stats = [], []
     import collections as _co
     run.look_tr = _co.Counter()
     run.note_rec = {}
@@ -3919,6 +3946,12 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                       f"{sum(x[2] for x in ref_stats) / len(ref_stats):.1f} | misses hit: "
                       f"{dict(sum((x[3] for x in ref_stats), Counter_()).most_common())}", flush=True)
                 ref_stats.clear()
+            if run.fcommit_stats:
+                fs_ = run.fcommit_stats
+                print(f"  frame commit target (writing here keeps that fact right) {sum(x[0] for x in fs_) / len(fs_):.2f} | "
+                      f"gate there {sum(x[1] for x in fs_) / len(fs_):.2f} | writes into nodes / step "
+                      f"{sum(x[2] for x in fs_) / len(fs_):.1f}", flush=True)
+                run.fcommit_stats = []
             if run.forget_stats:
                 print(f"  forget (model's choice): {sum(run.forget_stats) / len(run.forget_stats):.1f} nodes / step | keep "
                       f"head weights [ver, log use, log age, log act, gate, state, question] "
