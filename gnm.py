@@ -1415,6 +1415,7 @@ def main():
     P.add_argument("--viz-min", type=float, default=0.3, help="weakest dependence / relation edge drawn")
     P.add_argument("--first-warm", type=int, default=0, help="control for --first: memory first holds N other frames")
     P.add_argument("--skip-eval0", action="store_true")
+    P.add_argument("--warm-inv", type=float, default=1.0, help="warm-up: weight of the label-identity (invariance) loss")
     P.add_argument("--warm-tools", type=int, default=0, help="warm-up steps of encode -> decode round trips first")
     P.add_argument("--vram-frac", type=float, default=0.9, help="hard VRAM cap: OOM instead of spilling into RAM")
     A = P.parse_args()
@@ -3839,6 +3840,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         wr = random.Random(A.seed + 3)
         for st_ in range(1, n_steps + 1):
             loss_, ok_ = roundtrip_loss(wr)
+            if A.warm_inv:                       # labels learn IDENTITY too (a fresh encoder made every key alike on
+                loss_ = loss_ + A.warm_inv * invariance_loss(wr)   # the 1B: label invariance .17, facts replaced
+            #                                      existing nodes instead of NEW)
             opt.zero_grad(set_to_none=True)
             loss_.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
@@ -3846,7 +3850,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 gp["lr"] = A.lr * gp.get("lr_mult", 1.0)
             opt.step()
             if st_ % 50 == 0 or st_ == n_steps:
-                print(f"warm roundtrip {st_}: loss {float(loss_):.3f} said exactly {ok_:.2f}", flush=True)
+                inv_ = f" | label invariance {sum(inv_stats) / len(inv_stats):.2f}" if inv_stats else ""
+                inv_stats.clear()
+                print(f"warm roundtrip {st_}: loss {float(loss_):.3f} said exactly {ok_:.2f}{inv_}", flush=True)
         heads_changed()
 
     @torch.no_grad()
