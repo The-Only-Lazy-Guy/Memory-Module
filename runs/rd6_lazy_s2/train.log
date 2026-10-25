@@ -317,3 +317,25 @@ step 600 loss 0.616 action acc 0.99 answer said 1.00 tool outputs said 1.0 | wor
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.65, 0.43, 0.93, 0.84, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.93, 0.33, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+step 625 loss 70.703 action acc 0.93 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 3.99 GB [4155s]
+  read actions: {'halt': 0.97, 'read': 0.95, 'tool': 0.95} | integrate by kind (n, store, NEW, replace): {'state': (929, 0.05, 0.92, 0.0), 'decided drop': (5047, 0.0, 0.0, 0.0), 'name': (157, 0.06, 0.93, 0.0), 'fact': (166, 0.98, 0.16, 0.72), 'how fact (n, rule read, copy)': (166, 1.0, 0.0, 0.0), 'delta': (103, 0.99, 0.1, 0.81), 'how delta (n, rule read, copy)': (103, 1.0, 0.0, 0.0), 'multi': (30, 0.98, 0.36, 0.56), 'noise': (53, 0.05, 0.79, 0.01), 'decided replace': (252, 0.0, 0.0, 0.0), 'decided new': (51, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (70, 0.0, 0.0, 0.0), 'rule': (3, 0.93, 0.67, 0.23), 'absorbed copies': (3, 0.0, 0.0, 0.0), 'dependent': (1, 0.94, 1.0, 0.0)}
+  look (proposed -> after looking): {'note: attach -> replace': 20, 'note: new -> replace': 6, 'note: replace -> replace': 23, 'note: new -> new': 1}
+  step time (7.2 s / step): other (log / evict / eval) 0.21 (3%) | frames 1.96 (27%) | notes 0.71 (10%) | ask 0.20 (3%) | questions 2.22 (31%) | roundtrip+invariance 0.14 (2%) | backward 0.41 (6%) | commit+step 1.40 (19%)
+  reference re-read (inside the parts above): 0.32 s / step | calls 96 | rows 4730 | new texts 76 / step | texts cached 5104
+  reference edges: dependents -> their source 1.00 | other facts -> none 1.00 | dependents / step 2.0 | misses hit: {}
+  forget (model's choice): 1.9 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-0.91, -0.19, -0.3, 0.28, 0.51, -0.87, -0.85]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 6.20
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.63, 0.59, 0.96, 0.83, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.96, 0.37, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+step 650 loss 0.538 action acc 0.99 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 3.99 GB [4329s]
+  read actions: {'halt': 0.99, 'read': 0.93, 'tool': 0.97} | integrate by kind (n, store, NEW, replace): {'state': (760, 0.05, 0.9, 0.0), 'decided drop': (4495, 0.0, 0.0, 0.0), 'name': (153, 0.06, 0.92, 0.0), 'fact': (168, 0.98, 0.08, 0.77), 'how fact (n, rule read, copy)': (168, 1.0, 0.0, 0.0), 'delta': (93, 0.98, 0.19, 0.7), 'how delta (n, rule read, copy)': (93, 1.0, 0.0, 0.0), 'noise': (43, 0.06, 0.69, 0.01), 'decided replace': (242, 0.0, 0.0, 0.0), 'decided new': (42, 0.0, 0.0, 0.0), 'replace into own fact': (70, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'multi': (20, 0.97, 0.3, 0.6), 'rule': (2, 0.82, 1.0, 0.0), 'absorbed copies': (1, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: replace -> replace': 14, 'note: attach -> replace': 18, 'note: new -> replace': 18}
+  step time (7.0 s / step): other (log / evict / eval) 0.21 (3%) | frames 1.86 (27%) | notes 0.73 (10%) | ask 0.19 (3%) | questions 2.29 (33%) | roundtrip+invariance 0.15 (2%) | backward 0.41 (6%) | commit+step 1.14 (16%)
+  reference re-read (inside the parts above): 0.22 s / step | calls 61 | rows 4616 | new texts 128 / step | texts cached 2311
+  reference edges: dependents -> their source 1.00 | other facts -> none 1.00 | dependents / step 1.9 | misses hit: {}
+  forget (model's choice): 1.4 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-0.91, -0.19, -0.3, 0.28, 0.51, -0.87, -0.85]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 6.77
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.53, 0.51, 0.97, 0.77, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.97, 0.29, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
