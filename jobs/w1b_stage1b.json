@@ -23,5 +23,5 @@
  ],
  "gpu_gb": 24,
  "keep": true,
- "cancel": false
+ "cancel": true
 }

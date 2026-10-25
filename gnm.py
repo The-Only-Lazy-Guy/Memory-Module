@@ -1501,6 +1501,10 @@ def main():
         n_ok, n_skip = load_matching(st0, only_core=bool(A.swap_from))
         print(f"{'SWAP (core only)' if A.swap_from else 'INIT'} from {A.init_full or A.swap_from}: {n_ok} tensors "
               f"loaded, {n_skip} skipped (new heads / interface / shape changes)", flush=True)
+        if A.swap_from:                                   # a new LM = a new encoder: the running key mean (dk space,
+            with torch.no_grad():                         # so loaded as "core") belongs to the OLD encoder's keys;
+                graph.kmu.zero_(); graph.kmu_n.zero_()    # at .9995 per step it took thousands of steps to follow
+            print("RESET graph.kmu (new LM: keys from a new encoder)", flush=True)
         if "Wrr.weight" not in st0.get("graph", {}):     # a checkpoint from before r was THE relation (2026-10-25):
             with torch.no_grad():                         # its relation-delta head wrote for the old meaning of r
                 nn.init.zeros_(loop.Wdr.weight); nn.init.zeros_(loop.Wdr.bias)   # (noise up to .3 x on every
