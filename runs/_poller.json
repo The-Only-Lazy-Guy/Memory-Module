@@ -1,14 +1,13 @@
 {
- "alive": "2026-10-25 17:33:42",
+ "alive": "2026-10-25 17:36:44",
  "running": [
   "rd3_s1",
   "rd3_s2",
-  "fc_guard0_s1",
   "fc_guard1_s1",
   "rd2_g0_s1",
   "rd2_s1",
   "rd2_s2"
  ],
- "gpu_free_gb": 76.3,
+ "gpu_free_gb": 67.5,
  "code": "24380eb"
 }

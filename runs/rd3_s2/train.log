@@ -1,0 +1,19 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2636.66it/s]
+INIT from /marimo/gnm-lab/ckpt/gnm_main22.pt: 103 tensors loaded, 6 skipped (new heads / interface / shape changes)
+RESET loop.Wdr (pre-R checkpoint: the model writes r from scratch)
+WORLD: 36 entities, 121 nodes after 60 warm frames
+/marimo/gnm-lab/jobs/rd3_s2/gnm.py:2502: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if choice[b] >= N and float(mcl[b]) > float(Pn[b, choice[b]]):
+step 25 loss 10.214 action acc 0.95 answer said 0.88 tool outputs said 0.79 | world 98 entities, 1032 live nodes | peak VRAM 2.66 GB [118s]
+  read actions: {'halt': 0.91, 'read': 0.76, 'tool': 0.86} | integrate by kind (n, store, NEW, replace): {'replace into own fact': (63, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into OTHER fact': (15, 0.0, 0.0, 0.0), 'rule': (8, 0.71, 0.94, 0.03), 'name': (231, 0.16, 0.75, 0.02), 'fact': (306, 0.78, 0.71, 0.18), 'how fact (n, rule read, copy)': (306, 0.0, 0.86, 0.0), 'noise': (66, 0.05, 0.93, 0.0), 'multi': (44, 0.95, 0.81, 0.15), 'dependent': (34, 0.81, 1.0, 0.0), 'delta': (10, 0.96, 0.5, 0.42), 'how delta (n, rule read, copy)': (10, 0.0, 0.86, 0.0), 'decided drop': (5629, 0.0, 0.0, 0.0), 'decided new': (264, 0.0, 0.0, 0.0), 'decided replace': (79, 0.0, 0.0, 0.0), 'state': (742, 0.08, 0.93, 0.0), 'decided attach': (1, 0.0, 0.0, 0.0), 'absorbed copies': (3, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> new': 12, 'note: attach -> replace': 33, 'note: new -> replace': 4, 'note: replace -> replace': 1}
+  step time (4.7 s / step): frames 1.44 (31%) | notes 0.50 (11%) | ask 0.01 (0%) | questions 1.82 (39%) | roundtrip+invariance 0.12 (3%) | backward 0.34 (7%) | commit+step 0.47 (10%) | other (log / evict / eval) 0.00 (0%)
+  reference re-read (inside the parts above): 0.19 s / step | calls 71 | rows 1345 | new texts 84 / step | texts cached 2100
+  reference edges: dependents -> their source 0.11 | other facts -> none 0.94 | dependents / step 12.1 | misses hit: {'other fact': 192, 'source entity, other attribute': 44, 'none': 19, 'a state / state node': 11, 'source attribute, other entity': 1}
+  frame commit target (writing here keeps that fact right) 0.44 | gate there 0.41 | writes into nodes / step 2.2
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 3.68
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.63, 0.04, 0.75, 0.82, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.75, 0.53, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.99
+  roundtrip in training (said exactly): 0.33
