@@ -1,0 +1,8 @@
+{
+ "state": "running",
+ "pid": 3104,
+ "cmd": "gnm.py --ckpt /marimo/gnm-lab/ckpt/hf/checkpoints/branch47750_ckpt_best.pt --swap-from /marimo/gnm-lab/ckpt/rd4_s1.pt --warm-tools 600 --freeze-core --corrections 2 --steps 1000 --eval-every 500 --eval-q 96 --skip-eval0 --forget-q 0.2 --save /marimo/gnm-lab/ckpt/w1b_stage1i.pt --log /marimo/gnm-lab/runs/runs/w1b_stage1i/train.jsonl",
+ "code": "92e496d",
+ "started": "2026-10-25 20:16:36",
+ "updated": "2026-10-25 20:16:36"
+}
