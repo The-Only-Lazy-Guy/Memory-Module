@@ -212,3 +212,22 @@ step 475 loss 0.581 action acc 0.96 answer said 1.00 tool outputs said 1.0 | wor
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.79, 0.68, 0.93, 0.9, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.93, 0.39, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+step 500 loss 0.609 action acc 0.97 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 4.09 GB [3308s]
+  read actions: {'halt': 1.0, 'read': 0.96, 'sub': 0.99, 'tool': 0.98} | integrate by kind (n, store, NEW, replace): {'state': (737, 0.06, 0.6, 0.01), 'decided drop': (5009, 0.0, 0.0, 0.0), 'name': (148, 0.06, 0.77, 0.01), 'multi': (15, 0.98, 0.33, 0.6), 'noise': (37, 0.08, 0.14, 0.03), 'delta': (91, 0.99, 0.1, 0.81), 'how delta (n, rule read, copy)': (91, 1.0, 0.0, 0.0), 'fact': (171, 0.98, 0.09, 0.78), 'how fact (n, rule read, copy)': (171, 1.0, 0.0, 0.0), 'decided replace': (245, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (59, 0.0, 0.0, 0.0), 'rule': (6, 0.86, 0.42, 0.38), 'decided new': (39, 0.0, 0.0, 0.0), 'absorbed copies': (2, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> replace': 8, 'note: attach -> replace': 18, 'note: replace -> replace': 24}
+  step time (6.7 s / step): other (log / evict / eval) 0.18 (3%) | frames 1.90 (28%) | notes 0.73 (11%) | ask 0.17 (2%) | questions 2.08 (31%) | roundtrip+invariance 0.13 (2%) | backward 0.38 (6%) | commit+step 1.12 (17%)
+  reference re-read (inside the parts above): 0.21 s / step | calls 51 | rows 4902 | new texts 77 / step | texts cached 3866
+  reference edges: dependents -> their source 1.00 | other facts -> none 1.00 | dependents / step 1.0 | misses hit: {}
+  forget (model's choice): 1.7 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.39, 0.05, 0.0, 0.53, 0.35, -1.1, -1.04]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 8.39
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.63, 0.62, 0.99, 0.82, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.99, 0.25, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+EVAL 500 old_facts: exact 0.934 | by {'0': 0.966, '1': 0.966, '2': 0.796} | gold read 0.980 | program 0.951 | exact|program 0.967 | n 288
+EVAL 500 old_facts operand misreads (true, decoded, value the node holds, node kind): [(3, 4, None, '-'), (25, 13, None, '-'), (20, 21, None, '-'), (24, 22, None, '-'), (29, 50, None, '-'), (1, 20, None, '-'), (7, 6, None, '-'), (-5, 3, None, '-')] | node holds the decoded (not the asked) value: 0/9
+EVAL 500 old_facts why wrong (by ops): 0: {'wrong read @1/3: same entity': 2, 'wrong read @1/3: same fact, other node': 1, 'wrong read @2/3: same attribute': 1, 'wrong read @1/3: same attribute': 1, 'wrong read @2/3: same entity': 1} | 1: {'wrong read @2/3: unrelated': 1, 'wrong read @1/3: same fact, other node': 1} | 2: {'operand misread: stored number, far': 5, 'operand misread: stored number, near (+-2)': 4, 'wrong sub-question span @2': 1, 'wrong read @1/2: same attribute': 1}
+EVAL 500 versions_before: exact 0.865 | by {'before': 0.865} | gold read 0.932 | program 0.865 | exact|program 1.000 | n 288
+EVAL 500 versions_before why wrong (by ops): before: {'wrong read @1/2: same fact, other node': 39}
+EVAL 500 held_compositions: exact 0.938 | by {'2': 0.938} | gold read 0.986 | program 0.931 | exact|program 0.981 | n 288
+EVAL 500 held_compositions operand misreads (true, decoded, value the node holds, node kind): [(-2, 21, None, '-'), (20, -1, None, '-'), (27, 14, None, '-'), (2, 23, None, '-'), (14, 13, None, '-')] | node holds the decoded (not the asked) value: 0/5
+EVAL 500 held_compositions why wrong (by ops): 2: {'stopped early': 5, 'operand misread: stored number, far': 4, 'wrong read @1/2: same fact, other node': 2, 'wrong read @2/2: same entity': 2, 'wrong read @2/2: same fact, other node': 2, 'wrong read @1/2: unrelated': 1, 'wrong sub-question span @2': 1, "operand misread: stored number, the other operand's value": 1}
