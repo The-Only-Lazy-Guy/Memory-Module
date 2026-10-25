@@ -1116,6 +1116,8 @@ class Graph(nn.Module):
         self.rop = nn.Linear(dk, dk, bias=False)           # dependence edges (source = relation-linked neighbours)
         self.tau_o = nn.Parameter(torch.tensor(math.log(5.0)))
         self.tau_r = nn.Parameter(torch.tensor(math.log(10.0)))   # relation-edge temperature (cosine scores)
+        self.Wrec = nn.Linear(2 * dk, dk)        # a node's RECORD context in its relation vector: its siblings' mean
+        nn.init.zeros_(self.Wrec.weight); nn.init.zeros_(self.Wrec.bias)   # (label, value); zero at init
         self.w_rel = nn.Parameter(torch.tensor(0.0))
         self.age = nn.Parameter(torch.zeros(3))            # node stat: age (smooth)
         self.keep = nn.Parameter(torch.tensor([4.0, -1.0, 0.5]))     # keep knob: base, version, log usage
@@ -1573,6 +1575,21 @@ def main():
         if lsel:                                                   # attach: linked to its target by r
             r = r.index_add(0, torch.tensor([a_ for a_, _ in lsel], device=dev),
                             r[torch.tensor([b_ for _, b_ in lsel], device=dev)])
+        recs_ = {}                                                 # record context: a pair's own tokens do not say
+        for k_, nid in enumerate(live):                            # which record (entity) it belongs to; its
+            rk_ = store.nodes[nid].get("rec")                      # siblings (incl. the name pair) do
+            if rk_ is not None:
+                recs_.setdefault(rk_, []).append(k_)
+        if recs_:
+            grp = torch.full((len(live),), -1, dtype=torch.long, device=dev)
+            for g_i, ks_ in enumerate(recs_.values()):
+                grp[torch.tensor(ks_, device=dev)] = g_i
+            hasg = grp >= 0
+            feat = torch.cat([F.normalize(kraw - graph.kmu[None], dim=-1), F.normalize(v, dim=-1)], -1)
+            gsum = torch.zeros(len(recs_), feat.shape[1], device=dev).index_add(0, grp[hasg], feat[hasg])
+            gcnt = torch.zeros(len(recs_), device=dev).index_add(0, grp[hasg], torch.ones(int(hasg.sum()), device=dev))
+            ctx = (gsum / gcnt[:, None].clamp(min=1))[grp.clamp(min=0)]
+            r = r + hasg[:, None].float() * graph.Wrec(ctx) * r.norm(dim=-1, keepdim=True).clamp(min=1.0) / 8.0
         mix = [(row_of[t_], row_of[c_], m_) for t_, c_, m_ in store.mix if c_ in row_of and t_ in row_of]
         if mix:                                                    # soft writes of this step (training)
             rt = torch.tensor([x[0] for x in mix], device=dev)
