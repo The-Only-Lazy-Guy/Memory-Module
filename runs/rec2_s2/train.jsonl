@@ -30,3 +30,6 @@
 {"type": "eval", "step": 500, "set": "one_exposure_dependents", "exact": 0.0, "n": 288, "by": {"0": 0.0}, "gold_read": 0.3333333333333333, "program_ok": 0.0, "exact_given_program": 0.0}
 {"type": "eval", "step": 500, "set": "one_exposure_rule", "exact": 0.0, "n": 0, "by": {}, "gold_read": 0.0, "program_ok": 0.0, "exact_given_program": 0.0}
 {"type": "eval", "step": 500, "set": "one_exposure_coexist", "exact": 0.0, "n": 0, "by": {}, "gold_read": 0.0, "program_ok": 0.0, "exact_given_program": 0.0}
+{"type": "eval", "step": 500, "set": "corrected_facts", "exact": 0.8263888888888888, "n": 288, "by": {"before": 0.607, "0": 0.925}, "gold_read": 0.9131944444444444, "program_ok": 0.8263888888888888, "exact_given_program": 1.0}
+{"type": "eval", "step": 500, "set": "identity_lookup", "exact": 0.08333333333333333, "raw": 0.9583333333333334, "n": 24}
+{"type": "eval", "step": 500, "set": "first_frame", "exact": 0.9473684210526315, "program_ok": 0.8947368421052632}
