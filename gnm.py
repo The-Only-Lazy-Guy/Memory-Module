@@ -974,6 +974,33 @@ def render(t):
     return tpl.format(*[f"({render(c)})" if c[0] == "op" else render(c) for c in t[2]])
 
 
+def render_sp(t):
+    """render(t) plus the character span of every operation subtree inside the text (its words, without the
+    parentheses): {id(subtree): (start, end)}"""
+    if t[0] == "leaf":
+        return leaf(t[1], t[2]), {}
+    tpl = next(x for x in TOOLS if x[0] == t[1])[2]
+    pre, rest = tpl.split("{0}")
+    mid, post = rest.split("{1}")
+    out, spans, pos = pre, {}, len(pre)
+    for i, c in enumerate(t[2]):
+        tx, sp = render_sp(c)
+        op = c[0] == "op"
+        start = pos + (1 if op else 0)
+        if op:
+            spans[id(c)] = (start, start + len(tx))
+            for k_, (a_, b_) in sp.items():
+                spans[k_] = (a_ + start, b_ + start)
+        w = f"({tx})" if op else tx
+        out += w
+        pos += len(w)
+        if i == 0:
+            out += mid
+            pos += len(mid)
+    out += post
+    return out, spans
+
+
 def has_held(t):
     if t[0] == "leaf":
         return False
@@ -1208,6 +1235,11 @@ class Loop(nn.Module):
         nn.init.zeros_(self.Wcomp.weight); nn.init.zeros_(self.Wcomp.bias)
         self.Wlook = nn.Linear(d, 3)             # the look's correction of the proposal (gate, mode, NEW-gate logits)
         nn.init.zeros_(self.Wlook.weight); nn.init.zeros_(self.Wlook.bias)
+        # RECURSION (long chains): SUB hands a span of the row's question (its register 0 slots) to a child row; the
+        # child's answer returns as a register. Every row stays <= one operation: depth-independent programs.
+        self.sub_lab = nn.Parameter(torch.randn(dk) / dk ** 0.5)
+        self.Wss, self.Wse = nn.Linear(d, dk), nn.Linear(d, dk)   # span start / end queries from Walker's state
+        self.Wsk = nn.Linear(dk, dk)                              # keys of the question's slots (start / end)
         self.Wage = nn.Linear(d, 3)              # the query's own say on recency (is-current, log-age, log-age^2)
         nn.init.zeros_(self.Wage.weight); nn.init.zeros_(self.Wage.bias)
         self.Wop, self.Wup = nn.Linear(dk, 1 + N_ARITH), nn.Linear(dk, 1)   # [copy | add sub max min] (object tools)
@@ -1252,7 +1284,10 @@ def main():
     P.add_argument("--early-version", type=int, default=0, help="a replace decided in training makes its version at once")
     P.add_argument("--q-slots-mode", default="reg", choices=["mem", "reg"],
                    help="mem: question / note nodes keep q-slots in memory; reg: only Walker's register gets them")
-    P.add_argument("--q-slots", type=int, default=48, help="value slots of question / note nodes (the current input)")
+    P.add_argument("--recurse", type=int, default=0, help="long chains by recursion: SUB hands a span of the question "
+                   "to a child row whose answer returns as a register (every row <= one operation)")
+    P.add_argument("--max-depth", type=int, default=6)
+    P.add_argument("--q-slots", type=int, default=128, help="value slots of question / note nodes (the current input)")
     P.add_argument("--mem-slots", type=int, default=16, help="value slots a node keeps in memory (answers use <= max-ans)")
     P.add_argument("--write-slots", type=int, default=16, help="value slots Walker reads of a frame row's candidate")
     P.add_argument("--note-expect", type=int, default=1, help="a correction the note did not write is still asked")
@@ -1861,6 +1896,8 @@ def main():
         t = rand_tree(qrng, nums, qrng.randint(*ops), mode)
         if t is None:
             return None
+        if A.recurse:
+            return rec_question(t, H)
         steps, vals = [], []
 
         held_in = {}                                      # a fact already in a register is pointed at, not re-read
@@ -1880,6 +1917,60 @@ def main():
         go(t)
         return f"What is {render(t)}?", steps, vals, vals[-1]
 
+    span_memo = {}
+
+    def tok_spans(Q):
+        """character end offset of every token of Q (the question node's value tokens = its slots)"""
+        if Q not in span_memo:
+            ids_ = tok.ids(Q)
+            span_memo[Q] = [len(tok.decode(ids_[:i + 1])) for i in range(len(ids_))]
+        return span_memo[Q]
+
+    def char_to_tok(ends, a, b):
+        s_ = next(i for i, e in enumerate(ends) if e > a)
+        e_ = next((i for i, e in enumerate(ends) if e >= b), len(ends) - 1)
+        return s_, e_ + 1
+
+    def rec_question(t, H):
+        """a question whose program is recursive: every row does <= one operation; an operand that is itself an
+        operation is a SUB call on its words (a token span of the row's question). Returns (text, root steps,
+        root values, answer, child rows [(span in root tokens, steps, values, answer, ops)])."""
+        text, spans = render_sp(t)
+        Q = f"What is {text}?"
+        ends = tok_spans(Q)
+        base = len("What is ")
+        children = []
+
+        def value(n):
+            if n[0] == "leaf":
+                return world.ents[n[1]][n[2]]
+            ti = next(i for i, x in enumerate(TOOLS) if x[0] == n[1])
+            return TOOLS[ti][1](*[value(c) for c in n[2]])
+
+        def row_prog(n, tok0):
+            steps, vals, regs_ = [], [], []
+            for c in n[2]:
+                if c[0] == "leaf":
+                    steps.append(("read", gold_node(H, c[1], c[2], world.ents[c[1]][c[2]])))
+                else:
+                    a_, b_ = spans[id(c)]
+                    ts, te = char_to_tok(ends, base + a_, base + b_)
+                    steps.append(("sub", (ts - tok0, te - tok0)))
+                    cs, cv = row_prog(c, ts)
+                    children.append(((ts, te), cs, [None] + cv, value(c), count_ops(c)))
+                vals.append(value(c))
+                regs_.append(len(steps))
+            ti = next(i for i, x in enumerate(TOOLS) if x[0] == n[1])
+            steps.append(("op", ti, regs_))
+            vals.append(value(n))
+            return steps, vals
+
+        steps, vals = row_prog(t, 0)
+        return Q, steps, vals, vals[-1], children
+
+    def count_ops(n):
+        return 0 if n[0] == "leaf" else 1 + sum(count_ops(c) for c in n[2])
+
     def ask(qrng, specs, mix, ops=(1, 2), mode="train", soft=False):
         """specs: list of (n, pool) — n questions drawn from pool (None = any fact the memory holds)"""
         H, Hv = holders()
@@ -1890,19 +1981,24 @@ def main():
             while got < n and tries < 40 * n:
                 tries += 1
                 q = make_question(qrng, qrng.choices(kinds, wts)[0], H, Hv, ops, mode, pool)
-                if q is not None and all(s_[1] is not None for s_ in q[1] if s_[0] == "read"):
+                if q is not None and all(s_[1] is not None for s_ in q[1] if s_[0] == "read") and \
+                        all(s_[1] is not None for ch in (q[4] if len(q) > 4 else []) for s_ in ch[1] if s_[0] == "read"):
                     qs.append(q); got += 1
         if not qs:
             return []
         nid_lists, _ = see([{"question": q[0]} for q in qs], "question", soft)
         out = []
+        conv = lambda st: [(s_[0], s_[1], []) if s_[0] in ("read", "sub") else ("op", s_[1], s_[2]) for s_ in st]
         for q, nl in zip(qs, nid_lists):
-            text, steps, vals, ans = q
-            prog = [("read", nl[0], [])] + [(s_[0], s_[1], []) if s_[0] == "read" else ("op", s_[1], s_[2])
-                                           for s_ in steps]
+            text, steps, vals, ans = q[:4]
+            prog = [("read", nl[0], [])] + conv(steps)
             out.append({"text": text, "qnid": nl[0], "prog": prog, "vals": [None] + vals, "ans": ans,
-                        "ops": sum(1 for s_ in steps if s_[0] == "op"), "before": text.endswith("before?"),
-                        "multi": text.startswith("What is the sum of both")})
+                        "ops": sum(1 for s_ in steps if s_[0] == "op") + len(q[4] if len(q) > 4 else []),   # one op per row
+                        "before": text.endswith("before?"), "multi": text.startswith("What is the sum of both")})
+            if soft and len(q) > 4:                  # training: every sub-question is its own (teacher-forced) row
+                for span, st, cv, cans, cops in q[4]:
+                    out.append({"text": text, "qnid": nl[0], "span": span, "prog": conv(st), "vals": cv, "ans": cans,
+                                "ops": cops, "before": False, "multi": False, "child": True})
         return out
 
     def corrections(crng, n):
@@ -2025,7 +2121,18 @@ def main():
         ce = F.cross_entropy(lo.float().transpose(1, 2), tgt_, ignore_index=-100, reduction="none")
         return ce.sum(-1) / (tgt_ != -100).sum(-1).clamp(min=1)
 
-    def run(rows, teacher, kind="question", soft=False):
+    def span_reg(reg, s_, e_):
+        """a register holding the words [s_, e_) of a question register (a child row's question)"""
+        n_ = int(reg[3])
+        s_, e_ = max(0, min(s_, n_ - 1)), max(1, min(e_, n_))
+        if e_ <= s_:
+            e_ = s_ + 1
+        S_ = reg[2][s_:e_]
+        v_ = S_.mean(0)
+        return (reg[0], v_, S_, S_.shape[0], torch.cat([loop.Wfv(v_)[None], loop.Wfs(S_) + loop.spos[:S_.shape[0]]], 0),
+                None)
+
+    def run(rows, teacher, kind="question", soft=False, depth=0):
         """Walker's loop for a batch of rows of one kind: 'frame' (a candidate pair to integrate; free-running),
         'note' (a text note: read it, read the target, compute, write), 'question'. Every pass: ADDRESS one of
         [memory nodes | NEW | tools | HALT] -> READ the node (value before this pass's write) / run the tool ->
@@ -2042,6 +2149,7 @@ def main():
         K, V, R, logg, kmean = M["K"], M["V"], M["R"], M["logg"], M["kmean"]
         N, nT = K.shape[0], len(TOOLS)
         I_NEW, I_HALT = N, N + 1 + nT
+        I_SUB = I_HALT + 1                           # (only with --recurse; masked otherwise)
         tq = torch.tensor([float(store.nodes[r["qnid"]]["time"]) for r in rows], device=dev)
         age = (tq[:, None] - M["time"][None]).clamp(min=0)
         if kind == "frame":                          # a candidate integrates into OLDER item / state nodes
@@ -2052,6 +2160,13 @@ def main():
         la = torch.log1p(age.float()) / 5.0
         age_f = torch.stack([(age < 0.75).float(), la, la * la], -1)            # (B, N, 3)
         regs = [[] for _ in range(B)]
+        pre = [b for b in range(B) if rows[b].get("span") is not None]
+        for b, rg in zip(pre, regs_from(M, [M["row_of"][rows[b]["qnid"]] for b in pre])):
+            regs[b].append(span_reg(rg, *rows[b]["span"]))   # a training sub-question: words of its root question
+        for b in range(B):
+            if rows[b].get("reg0") is not None:
+                regs[b].append(rows[b]["reg0"])          # a sub-question made during a free run
+        has0 = [1 if regs[b] else 0 for b in range(B)]
         own = [[] for _ in range(B)]                 # registers that are write sources (not read from memory)
         if kind == "frame":                          # register 0 = the candidate (Walker reads it, 16 slots)
             for b, rg in enumerate(regs_from(M, [M["row_of"][r["qnid"]] for r in rows])):
@@ -2080,7 +2195,7 @@ def main():
         else:
             T = max(len(r["prog"]) for r in rows) + 1 if teacher else max_regs
         tau = mem.tau.exp()
-        lab = F.normalize(torch.cat([loop.new_lab[None], tools.labels, loop.halt[None]]), dim=-1)
+        lab = F.normalize(torch.cat([loop.new_lab[None], tools.labels, loop.halt[None], loop.sub_lab[None]]), dim=-1)
         stat_rows = []
         for t in range(T):
             if kind == "frame" and lookk and t >= w0 + A.write_passes:
@@ -2148,7 +2263,18 @@ def main():
             if kind == "frame":                      # no tools, and no HALT: "don't store" is NEW with a closed gate
                 le = torch.cat([le[:, :1], torch.full_like(le[:, 1:], -1e4)], -1)   # (HALT ate facts: its label is
                 #                                  trained by question rows, frame queries inherited its pull)
-            logits = torch.cat([e, le], -1)          # [nodes | NEW | tools | HALT]
+            if not (A.recurse and kind == "question" and depth < A.max_depth):
+                le = torch.cat([le[:, :-1], torch.full_like(le[:, -1:], -1e4)], -1)   # no SUB
+            logits = torch.cat([e, le], -1)          # [nodes | NEW | tools | HALT | SUB]
+            sp_lg = None
+            if A.recurse and kind == "question" and any(regs):   # span pointer over each row's question slots
+                n0 = max(int(r_[0][3]) if r_ else 1 for r_ in regs)
+                Sq = torch.stack([padS(r_[0][2][:int(r_[0][3])], n0) if r_ else torch.zeros(n0, A.dk, device=dev)
+                                  for r_ in regs])
+                kq = F.normalize(loop.Wsk(Sq), dim=-1)
+                m0 = torch.tensor([[j < (int(r_[0][3]) if r_ else 0) for j in range(n0)] for r_ in regs], device=dev)
+                sp_lg = [(tau * torch.einsum("bd,btd->bt", F.normalize(W_(h), dim=-1), kq)).masked_fill(~m0, -1e4)
+                         for W_ in (loop.Wss, loop.Wse)]
             if phase == "gather":                    # gather: read existing nodes as context (no write, no NEW)
                 logits = torch.cat([logits[:, :N], torch.full_like(logits[:, N:], -1e4)], -1)
             arg_lg = None
@@ -2166,8 +2292,14 @@ def main():
                 for b, r in enumerate(rows):
                     if t < len(r["prog"]):
                         kd, x, ra = r["prog"][t]
-                        gold.append(M["row_of"].get(x, -100) if kd in ("read", "write") else N + 1 + x)
+                        gold.append(M["row_of"].get(x, -100) if kd in ("read", "write") else I_SUB if kd == "sub"
+                                    else N + 1 + x)
                         gargs.append(list(ra))
+                        if kd == "sub" and sp_lg is not None:            # the span: start / end-1 token
+                            for W_i, tgt_i in ((0, x[0]), (1, x[1] - 1)):
+                                losses.append(F.cross_entropy(sp_lg[W_i][b:b + 1], torch.tensor([tgt_i], device=dev),
+                                                              reduction="sum"))
+                                n_act += 1; ok_act += int(int(sp_lg[W_i][b].argmax()) == tgt_i)
                     else:
                         gold.append(I_HALT if t == len(r["prog"]) else -100)
                         gargs.append([])
@@ -2182,7 +2314,8 @@ def main():
                     run.self_pairs.append((loop.Wself(M["kraw"][xi].detach()), qr[bi].detach(), kmean.detach()))
                 hit = (logits.argmax(-1) == g_) & vv
                 n_act += int(vv.sum()); ok_act += int(hit.sum())
-                for name_, m_ in (("read", vv & (g_ < N)), ("tool", (g_ > N) & (g_ < I_HALT)), ("halt", g_ == I_HALT)):
+                for name_, m_ in (("read", vv & (g_ < N)), ("tool", (g_ > N) & (g_ < I_HALT)), ("halt", g_ == I_HALT),
+                                  ("sub", g_ == I_SUB)):
                     if bool(m_.any()):
                         run.per_pass[name_] = run.per_pass.get(name_, []) + [float((hit & m_).sum() / m_.sum())]
                 if arg_lg is not None:
@@ -2352,7 +2485,7 @@ def main():
                 if look[b] == 1 and proposal[b] is not None and len(proposal[b]) == 5 and proposal[b][3] < t:
                     look[b] = 2
             # ---- apply: read / NEW / tool / halt
-            apply, reads = {}, []
+            apply, reads, subs = {}, [], []
             for b in range(B):
                 c_ = choice[b]
                 if done[b] or c_ < 0:
@@ -2366,6 +2499,15 @@ def main():
                         read_mask[b, c_] = True               # read-once (write rows may address again)
                 elif c_ == I_NEW:
                     acts[b].append(("new", None))
+                elif c_ == I_SUB:
+                    if teacher:
+                        span_ = rows[b]["prog"][t][1]
+                    else:
+                        s_ = int(sp_lg[0][b].argmax()) if sp_lg is not None else 0
+                        e_ = max(s_, int(sp_lg[1][b].argmax()) if sp_lg is not None else 0) + 1
+                        span_ = (s_, e_)
+                    subs.append((b, span_))
+                    acts[b].append(("sub", span_))
                 elif c_ == I_HALT or not regs[b]:
                     done[b] = True
                 else:
@@ -2373,6 +2515,23 @@ def main():
                     acts[b].append(("op", c_ - N - 1))
             for (b, _), rg in zip(reads, regs_from(M, [c_ for _, c_ in reads])):
                 regs[b].append(rg)
+            if subs:                                 # SUB: the child's answer becomes this row's next register
+                if teacher:                          # (training: the demonstrated answer, encoded like a tool output)
+                    enc_ = encode_values([rows[b]["vals"][len(regs[b])] for b, _ in subs],
+                                         [float(tq[b]) + 0.5 for b, _ in subs], False)
+                    for (b, _), (_, rg) in zip(subs, enc_):
+                        regs[b].append(rg)
+                else:                                # free run: actually solve the sub-question (recursion)
+                    kids = [{"qnid": rows[b]["qnid"], "reg0": span_reg(regs[b][0], *sp_), "prog": None, "ans": 0,
+                             "vals": None, "ops": 0, "before": False} for b, sp_ in subs]
+                    keep_ = {k_: getattr(run, k_, None) for k_ in ("acts", "oprec", "said", "diag", "final_regs")}
+                    with torch.no_grad():
+                        run(kids, False, "question", soft=False, depth=depth + 1)
+                    kid_regs = run.final_regs
+                    for k_, v_ in keep_.items():
+                        setattr(run, k_, v_)
+                    for (b, _), rg in zip(subs, kid_regs):
+                        regs[b].append(rg if rg is not None else regs[b][0])
             if lookk:                                # LOOK: "if I write this, what happens?" -> the target as it would
                 fresh = [b for b in range(B) if look[b] == 1 and proposal[b] is not None and len(proposal[b]) == 3]
                 for b, rg in zip(fresh, regs_from(M, [proposal[b][1] for b in fresh])):
@@ -2546,7 +2705,7 @@ def main():
                           for b in range(B)]
             last = [ft if ft is not None else len(regs[b]) - 1 for b, ft in enumerate(first_tool)]
         else:
-            last = [len(r["prog"]) - 1 if teacher else len(regs[b]) - 1 for b, r in enumerate(rows)]
+            last = [len(r["prog"]) - 1 + has0[b] if teacher else len(regs[b]) - 1 for b, r in enumerate(rows)]
         targets = [(b, last[b], rows[b]["ans"]) for b in range(B)] + say
         zero = (torch.zeros(A.dk, device=dev), torch.zeros(1, A.dk, device=dev))
         rv = torch.stack([regs[b][r_][1] if regs[b] and 0 <= r_ < len(regs[b]) else zero[0] for b, r_, _ in targets])
@@ -2569,13 +2728,14 @@ def main():
         act = sum(losses) / max(1, n_act) if losses else torch.zeros((), device=dev)
         run.diag = []
         for b, r in enumerate(rows):
-            gold_reads = [x for kd, x, *_ in r["prog"] if kd in ("read", "write")]
+            gold_reads = [x for kd, x, *_ in (r["prog"] or []) if kd in ("read", "write")]
             mine = {x for kd, x in acts[b] if kd == "read"}
-            gold_seq = [("read" if kd in ("read", "write") else kd, x) for kd, x, *_ in r["prog"]]
+            gold_seq = [("read" if kd in ("read", "write") else kd, x) for kd, x, *_ in (r["prog"] or [])]
             run.diag.append((sum(x in mine for x in gold_reads) / max(1, len(gold_reads)),
                              float(acts[b][:len(gold_seq)] == gold_seq and len(acts[b]) == len(gold_seq))))
         run.acts = acts
         run.oprec = oprec
+        run.final_regs = [regs[b][-1] if regs[b] else None for b in range(B)]
         if kind == "question" and run.self_pairs:           # contrastive (plain cosine collapsed to one direction):
             ws_ = torch.cat([x[0] for x in run.self_pairs])  # Wself(label) must match ITS question's query among the
             qs_ = torch.cat([x[1] for x in run.self_pairs])  # batch's queries, in the centered space reads use
@@ -2669,6 +2829,8 @@ def main():
                 return (lm_[1], lm_[2]) if lm_ and lm_[0] == "fact" else None, nd_["kind"]
 
             for pos, (g, a_) in enumerate(zip(acts_b, gold)):
+                if g != a_ and g[0] == a_[0] == "sub":
+                    return f"wrong sub-question span @{pos}"
                 if g != a_:
                     if g[0] == a_[0] == "read":
                         (fg, kg), (fw, kw) = fact_of(a_[1]), fact_of(g[1])
@@ -3010,6 +3172,55 @@ def main():
                  "mean strongest relation edge": round(float(Rl.max(-1).values.mean()), 3),
                  "w_prop gate": round(float(torch.sigmoid(graph.w_prop)), 3)}
         print("GRAPH SANITY:", json.dumps(stats, indent=1), flush=True)
+        # ---- CONNECTIVITY (user, 2026-10-25): is the graph wired the way the world is?
+        n_ = len(rows)
+        ent_of = [info[i][1] for i in rows]
+        eye = torch.eye(n_, device=Rl.device, dtype=torch.bool)
+        Rm = Rl.masked_fill(eye, -1.0)
+        top1 = Rm.argmax(-1).tolist()
+        has_e = [j for j in range(n_) if ent_of[j]]
+        same_top = sum(1 for j in has_e if ent_of[top1[j]] == ent_of[j]) / max(1, len(has_e))
+        from collections import Counter as _C
+        ec = _C(e for e in ent_of if e)
+        chance = sum(c * (c - 1) for c in ec.values()) / max(1, len(has_e) * (n_ - 1))
+        indeg = _C(top1)
+        top2 = Rm.topk(min(2, n_ - 1), -1).indices.tolist()
+        parent = list(range(n_))
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(a_, b_):
+            parent[find(a_)] = find(b_)
+        for j in range(n_):
+            for k_ in top2[j]:
+                union(j, k_)
+        n_link = n_ver = 0
+        for j, i in enumerate(rows):
+            nd = store.nodes[i]
+            if nd.get("link") in row_of:
+                union(j, row_of[nd["link"]]); n_link += 1
+            if nd.get("ver_of") in row_of:
+                union(j, row_of[nd["ver_of"]]); n_ver += 1
+        comps = _C(find(j) for j in range(n_))
+        dep_top = Dm = D.masked_fill(eye, -1.0)
+        dtop = Dm.argmax(-1).tolist()
+        deps_ = [j for j, i in enumerate(rows) if ident(i)[0] == "fact" and len(ident(i)) > 4 and ident(i)[4]]
+        dep_ok = sum(1 for j in deps_ if value_of(store.prov.get(store.nodes[rows[dtop[j]]]["vsrc"])) ==
+                     value_of(store.prov.get(store.nodes[rows[j]]["vsrc"]))) / max(1, len(deps_))
+        conn = {"nodes": n_,
+                "relation top-1 partner is the SAME entity": f"{same_top:.3f} (chance {chance:.3f})",
+                "hubs: max in-degree of top-1 relation edges": max(indeg.values()) if indeg else 0,
+                "nodes that are someone's top-1 partner": f"{len(indeg)}/{n_}",
+                "components (relation top-2 + attach + version links)": len(comps),
+                "largest component share": round(max(comps.values()) / max(1, n_), 3),
+                "singleton components": sum(1 for c in comps.values() if c == 1),
+                "attach links / version links": f"{n_link} / {n_ver}",
+                "dependents whose top dependence partner holds the same value": f"{dep_ok:.3f} of {len(deps_)}"}
+        print("GRAPH CONNECTIVITY:", json.dumps(conn, indent=1), flush=True)
         # ---- the drawn subgraph: the entities with the most nodes, their versions, rules, and 1-hop edge partners
         per = {}
         for i in rows:
