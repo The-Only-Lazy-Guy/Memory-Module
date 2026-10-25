@@ -493,3 +493,6 @@ EVAL 1000 one_exposure_after0 why wrong (by ops): 2: {'stopped early': 2, 'op in
 EVAL 1000 one_step_after0: exact 0.896 | by {'0': 1.0, '1': 0.905, '2': 0.316} | gold read 0.994 | program 0.872 | exact|program 1.000 | n 288
 EVAL 1000 one_step_after0 why wrong (by ops): 1: {'stopped early': 4} | 2: {'stopped early': 19, 'wrong tool': 3, 'op instead of read @4/4': 2, 'op instead of read @3/4': 1, 'read instead of op @3/4': 1}
 EVAL 1000 one_exposure_after10: stored 0.286 of 21 new / updated facts
+EVAL 1000 one_exposure_after10: exact 0.993 | by {'before': 1.0, '0': 1.0, '1': 1.0, '2': 0.955} | gold read 1.000 | program 0.990 | exact|program 0.996 | n 288
+EVAL 1000 one_exposure_after10 why wrong (by ops): 2: {'wrong operands': 1, 'ran on': 1}
+EVAL 1000 one_exposure_after100: stored 0.182 of 22 new / updated facts

@@ -59,3 +59,5 @@
 {"type": "eval", "step": 1000, "set": "longer_programs", "exact": 0.10416666666666667, "n": 288, "by": {"3": 0.153, "4": 0.056}, "gold_read": 0.6545138888888888, "program_ok": 0.0, "exact_given_program": 0.0}
 {"type": "eval", "step": 1000, "set": "one_exposure_after0", "exact": 0.9791666666666666, "n": 288, "by": {"before": 1.0, "0": 1.0, "1": 1.0, "2": 0.842}, "gold_read": 0.9953703703703705, "program_ok": 0.9791666666666666, "exact_given_program": 0.9964539007092199}
 {"type": "eval", "step": 1000, "set": "one_step_after0", "exact": 0.9826388888888888, "n": 288, "by": {"before": 1.0, "0": 1.0, "1": 1.0, "2": 0.844}, "gold_read": 0.9953703703703705, "program_ok": 0.9756944444444444, "exact_given_program": 1.0}
+{"type": "eval", "step": 1000, "set": "one_exposure_after10", "exact": 1.0, "n": 288, "by": {"0": 1.0, "1": 1.0, "2": 1.0}, "gold_read": 1.0, "program_ok": 1.0, "exact_given_program": 1.0}
+{"type": "eval", "step": 1000, "set": "one_exposure_after100", "exact": 0.9930555555555556, "n": 288, "by": {"0": 1.0, "1": 1.0, "2": 0.938}, "gold_read": 1.0, "program_ok": 1.0, "exact_given_program": 0.9930555555555556}

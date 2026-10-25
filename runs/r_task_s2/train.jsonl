@@ -59,3 +59,4 @@
 {"type": "eval", "step": 1000, "set": "longer_programs", "exact": 0.10069444444444445, "n": 288, "by": {"3": 0.13, "4": 0.07}, "gold_read": 0.6509837962962962, "program_ok": 0.006944444444444444, "exact_given_program": 0.5}
 {"type": "eval", "step": 1000, "set": "one_exposure_after0", "exact": 0.9722222222222222, "n": 288, "by": {"before": 1.0, "0": 1.0, "1": 0.857, "2": 0.833}, "gold_read": 0.9956597222222222, "program_ok": 0.9201388888888888, "exact_given_program": 1.0}
 {"type": "eval", "step": 1000, "set": "one_step_after0", "exact": 0.9444444444444444, "n": 288, "by": {"before": 1.0, "0": 1.0, "1": 1.0, "2": 0.568}, "gold_read": 0.9953703703703705, "program_ok": 0.9444444444444444, "exact_given_program": 0.9926470588235294}
+{"type": "eval", "step": 1000, "set": "one_exposure_after10", "exact": 1.0, "n": 288, "by": {"0": 1.0}, "gold_read": 1.0, "program_ok": 1.0, "exact_given_program": 1.0}

@@ -485,3 +485,8 @@ EVAL 1000 one_exposure_after0 why wrong (by ops): 2: {'wrong read @3/4: same fac
 EVAL 1000 one_step_after0: exact 0.983 | by {'before': 1.0, '0': 1.0, '1': 1.0, '2': 0.844} | gold read 0.995 | program 0.976 | exact|program 1.000 | n 288
 EVAL 1000 one_step_after0 why wrong (by ops): 2: {'wrong read @3/4: same fact, other node': 2, 'op instead of read @3/4': 1, 'stopped early': 1, 'wrong tool': 1}
 EVAL 1000 one_exposure_after10: stored 0.136 of 22 new / updated facts
+EVAL 1000 one_exposure_after10: exact 1.000 | by {'0': 1.0, '1': 1.0, '2': 1.0} | gold read 1.000 | program 1.000 | exact|program 1.000 | n 288
+EVAL 1000 one_exposure_after100: stored 0.250 of 20 new / updated facts
+EVAL 1000 one_exposure_after100: exact 0.993 | by {'0': 1.0, '1': 1.0, '2': 0.938} | gold read 1.000 | program 1.000 | exact|program 0.993 | n 288
+EVAL 1000 one_exposure_after100 why wrong (by ops): 2: {'wrong operands': 2}
+EVAL 1000 one_exposure_heldkeys_after0: stored 0.952 of 21 new / updated facts
