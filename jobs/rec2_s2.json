@@ -1,0 +1,28 @@
+{
+ "name": "rec2_s2",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "1500",
+  "--eval-every",
+  "500",
+  "--eval-q",
+  "288",
+  "--skip-eval0",
+  "--forget-q",
+  "0.2",
+  "--recurse",
+  "1",
+  "--long-ops",
+  "3,6",
+  "--seed",
+  "2"
+ ],
+ "init": "rd4_s1.pt",
+ "init_from": "ckpt",
+ "after": "rd4_s1",
+ "gpu_gb": 6,
+ "keep": false,
+ "cancel": false
+}
