@@ -633,15 +633,17 @@ class Memory(nn.Module):
             slots = slots.index_put((r_, c_), sv + self.slot_e[c_])
         return kraw, v, torch.log(g + 1e-6), slots, g
 
-    def query(self, Hq, mq, Eq):
+    def query(self, Hq, mq, Eq, fixed=False, score_add=None):
         """Question token states (B, T, d) -> raw query (B, dk), in the key space (tied pool + head)."""
         X = Hq[mq]
-        if self.training:
+        if self.training and not fixed:
             mu, var = self._std(X, True)
         else:
             mu, var = self.mu_q, self.var_q
         Hs = torch.cat([self.ln((Hq - mu) / (var + 1e-5).sqrt()), self.lne(Eq)], -1)
         sc = self.pk.s(Hs).squeeze(-1) + Hs @ self.qdir
+        if score_add is not None:                       # an extra pooling score (the reference head's own)
+            sc = sc + score_add(Hs).squeeze(-1)
         w = torch.softmax(sc.masked_fill(~mq, -1e4), -1)
         return self.Wk((w[..., None] * Hs).sum(1))
 
@@ -1043,6 +1045,7 @@ class Store:
         self.merged = {}                        # candidate -> the node it was integrated into
         self.expect = {}                        # (name, key, value) -> node expected to hold it (soft phase only)
         self.pending_ver = {}                   # target -> its version node, made when a replace is decided (soft)
+        self.evicting = {}                      # nid -> keep weight: forward 0 = the model forgets it this step
 
     def add_frame(self, ids, X, enc, metas, kind, tick=True):
         fid = self.next_fid
@@ -1057,7 +1060,9 @@ class Store:
 
     def new_node(self, lsrc, vsrc, kind, time_, nslots):
         self.nodes.append({"lsrc": lsrc, "vsrc": vsrc, "kind": kind, "time": time_, "alive": True, "usage": 0,
-                           "act": 1.0, "d": None, "nslots": nslots, "ver_of": None, "link": None})
+                           "act": 1.0, "d": None, "nslots": nslots, "ver_of": None, "link": None,
+                           "rsrc": vsrc})   # the text its REFERENCE is read from ("same as ..."); a propagation
+        #                                     changes the value (vsrc) but not what the node follows
         return len(self.nodes) - 1
 
     def add_vec(self, vec, meta):
@@ -1090,7 +1095,7 @@ class Store:
                 self.nodes[i]["alive"] = False
         used = set()
         for i in self.alive():
-            for s_ in (self.nodes[i]["lsrc"], self.nodes[i]["vsrc"]):
+            for s_ in (self.nodes[i]["lsrc"], self.nodes[i]["vsrc"], self.nodes[i].get("rsrc")):
                 if s_ is not None:
                     used.add(s_[1] if s_[0] == "tok" else s_)
         for fid in [f for f in self.frames if f not in used]:
@@ -1111,20 +1116,35 @@ class Graph(nn.Module):
         self.mem = mem
         self.pr = Pool(2 * d)
         self.Wr = nn.Linear(2 * d, dk)
-        self.ea = nn.Linear(dk, dk, bias=False)            # relation-similarity edges
-        self.eb = nn.Linear(dk, dk, bias=False)
-        self.rop = nn.Linear(dk, dk, bias=False)           # dependence edges (source = relation-linked neighbours)
-        self.tau_o = nn.Parameter(torch.tensor(math.log(5.0)))
-        self.tau_r = nn.Parameter(torch.tensor(math.log(10.0)))   # relation-edge temperature (cosine scores)
-        self.Wrec = nn.Linear(2 * dk, dk)        # a node's RECORD context in its relation vector: its siblings' mean
-        nn.init.zeros_(self.Wrec.weight); nn.init.zeros_(self.Wrec.bias)   # (label, value); zero at init
+        # R = THE node-to-node relation (user 2026-10-25: dependence, relative definitions, links ... all through r;
+        # the model creates and manages it). A node's r = its own content read like a question (Wrr, identity at init:
+        # "12 (same as the cost of Batha)" -> a query for that label) + its pooled pair state (r_pool, 0 at init)
+        # + the model's own write deltas; an edge i -> j = r_i addressing node j's label, or none.
+        self.Wrr = nn.Linear(dk, dk)
+        with torch.no_grad():
+            self.Wrr.weight.copy_(torch.eye(dk)); self.Wrr.bias.zero_()
+        self.r_pool = nn.Parameter(torch.tensor(0.0))
+        self.Wref = nn.Linear(dk, dk)            # edge query from r (residual, zero at init)
+        nn.init.zeros_(self.Wref.weight); nn.init.zeros_(self.Wref.bias)
+        self.tau_ref = nn.Parameter(torch.tensor(math.log(10.0)))   # edge temperature
+        self.Wnone = nn.Linear(dk, 1)                               # "relates to nothing" (content-based)
+        self.Wrs = nn.Linear(2 * d, 1)           # its own token-pooling score on top of the question's (zero init):
+        nn.init.zeros_(self.Wrs.weight); nn.init.zeros_(self.Wrs.bias)   # the question pool missed the entity
+        self.b_ver = nn.Parameter(torch.tensor(0.0))                # reference to a version node (learned)
+        nn.init.zeros_(self.Wnone.weight); nn.init.constant_(self.Wnone.bias, 1.0)
         self.w_rel = nn.Parameter(torch.tensor(0.0))
         self.age = nn.Parameter(torch.zeros(3))            # node stat: age (smooth)
-        self.keep = nn.Parameter(torch.tensor([4.0, -1.0, 0.5]))     # keep knob: base, version, log usage
+        # FORGET (user 2026-10-25: the model decides what to forget, nothing automatic): keep logit from what the
+        # node is (its label) + observations [version, log usage, log age, log activation, write gate, state, question]
+        self.Wf_lab = nn.Linear(dk, 1)
+        nn.init.zeros_(self.Wf_lab.weight); nn.init.zeros_(self.Wf_lab.bias)
+        self.Wf_feat = nn.Linear(7, 1)
+        with torch.no_grad():                    # init = the old hand rule (act x sigmoid(4 - ver + .5 log use) x gate)
+            self.Wf_feat.weight.copy_(torch.tensor([[-1.0, 0.5, 0.0, 1.0, 1.0, 0.0, 0.0]]))
+            self.Wf_feat.bias.fill_(4.0)
         self.register_buffer("kmu", torch.zeros(dk))         # running mean of written keys (reads must not depend
         self.register_buffer("kmu_n", torch.zeros(()))       # on what else is in memory)
         self.ver_e = nn.Parameter(torch.zeros(dk))         # added to a version node's key: "the value before"
-        self.w_prop = nn.Parameter(torch.tensor(0.0))      # propagation gate: a replaced node's dependents follow
         self.w_id = nn.Parameter(torch.tensor(1.0))        # frame rows: weight of their own label in the address
 
     def nodes(self, X, E, spans, ptr, vpos):
@@ -1132,22 +1152,46 @@ class Graph(nn.Module):
         r = self.Wr(self.pr.flat(*self.mem.last_flat))
         return kraw, v, logg, slots, r
 
-    def rel_scores(self, R):
-        """relation-edge scores: cosine x a learned temperature (bounded; raw dot products of relation vectors
-        that had exploded to |R| ~ 8,600 reached ~1e6 and made the softmax winner-take-all: one global hub)"""
-        return self.tau_r.exp() * F.normalize(self.ea(R), dim=-1) @ F.normalize(self.eb(R), dim=-1).t()
+    def ref_logits(self, K, RQ, kmean, ver=None):
+        """[nodes | none] logits of each node's relation edge: its r (RQ arg: raw, key space) addressing all labels K
+        (centered, normalized); self excluded; zero r -> none.
+        The none logit is a SEPARATE binary decision (sigmoid), not a softmax column: against 3,000 node scores its
+        calibration drifted with memory size (dependents -> none 269 misses at step 100)"""
+        n_ = K.shape[0]
+        q_ = RQ + self.Wref(RQ)
+        qn = F.normalize(q_ - kmean, dim=-1)
+        sc = (self.tau_ref.exp() * qn @ K.t()).masked_fill(torch.eye(n_, dtype=torch.bool, device=K.device), -1e4)
+        has = (RQ.abs().sum(-1, keepdim=True) > 0)
+        if ver is not None:                       # "same as X" means X now: a version ("the value before") is a
+            sc = sc + self.b_ver * ver[None]      # model-visible node flag (ver_e on its key); direct learned bias
+        sc = sc.masked_fill(~has, -1e4)
+        return torch.cat([sc, self.Wnone(qn).masked_fill(~has, 1e4)], -1)
 
-    def rel(self, R):
-        return torch.softmax(self.rel_scores(R), -1)
+    def ref_query(self, X, E, vpos, cap=32, pre=None):
+        """the reference query of value token lists `vpos` (positions into X / E): the question path + Wrs pooling.
+        pre = (X, E, mask) per value given directly (Walker's own re-read of the mention, no record context)"""
+        if pre is not None:
+            Xb, Eb, mq_ = pre
+            return self.mem.query(Xb, mq_, Eb, fixed=True, score_add=self.Wrs) * mq_.any(1, keepdim=True).float()
+        dev_ = X.device
+        Lq = max(1, min(cap, max(len(q) for q in vpos)))
+        ix_ = torch.zeros(len(vpos), Lq, dtype=torch.long, device=dev_)
+        mq_ = torch.zeros(len(vpos), Lq, dtype=torch.bool, device=dev_)
+        for i, q in enumerate(vpos):
+            q = q[:Lq]
+            if q:
+                ix_[i, :len(q)] = torch.tensor(q, device=dev_)
+                mq_[i, :len(q)] = True
+        return self.mem.query(X[ix_], mq_, E[ix_], fixed=True, score_add=self.Wrs) * mq_.any(1, keepdim=True).float()
 
-    def dep(self, V, R, rel=None):
-        """dependence edges: row j = which node j's value follows (predicted from its relation-linked neighbours)"""
-        rel = self.rel(R) if rel is None else rel
-        pred = rel @ V + self.rop(R)
-        return torch.softmax(self.tau_o.exp() * F.normalize(pred, dim=-1) @ F.normalize(V, dim=-1).t(), -1)
+    def dep_ref(self, K, RQ, kmean, ver=None):
+        """dependence edges: row j = the node j's value follows (its reference), none -> no edge"""
+        L = self.ref_logits(K, RQ, kmean, ver)
+        return torch.sigmoid(-L[:, -1:]) * torch.softmax(L[:, :-1], -1)   # P(has a reference) x which node
 
-    def keep_logit(self, ver, usage):
-        return self.keep[0] + self.keep[1] * ver + self.keep[2] * torch.log1p(usage)
+    def forget_logit(self, K, feats):
+        """keep logit per node (higher = keep); the lowest go when memory is over capacity"""
+        return (self.Wf_lab(K) + self.Wf_feat(feats)).squeeze(-1)
 
 
 class ToolBank(nn.Module):
@@ -1275,7 +1319,9 @@ def main():
     P.add_argument("--questions", type=int, default=24)
     P.add_argument("--warm-frames", type=int, default=60)
     P.add_argument("--cap", type=int, default=3000)
-    P.add_argument("--protect", type=int, default=50, help="short-term buffer: frames a new node is safe from eviction")
+    P.add_argument("--protect", type=int, default=0, help="(rule, off by default) frames a new node is safe from "
+                   "eviction; the forget head sees the node's age")
+    P.add_argument("--forget-q", type=float, default=0.1, help="share of questions about facts the model chose to forget")
     P.add_argument("--max-ents", type=int, default=150)
     P.add_argument("--mix", default="lookup:0.25,chain:0.15,arith:0.35,before:0.15,multi:0.1")
     P.add_argument("--train-ops", default="1,2")
@@ -1292,9 +1338,11 @@ def main():
     P.add_argument("--early-version", type=int, default=0, help="a replace decided in training makes its version at once")
     P.add_argument("--q-slots-mode", default="reg", choices=["mem", "reg"],
                    help="mem: question / note nodes keep q-slots in memory; reg: only Walker's register gets them")
-    P.add_argument("--w-relc", type=float, default=0.5, help="relation edges from the input's record structure")
+    P.add_argument("--ref-bank", type=int, default=6000, help="value texts kept in the re-read bank (GPU)")
+    P.add_argument("--ref-alone", type=int, default=1, help="reference query: Walker re-reads the value tokens alone")
     P.add_argument("--rel-lr", type=float, default=1e-3, help="the relation heads' own optimizer")
-    P.add_argument("--w-hub", type=float, default=0.05, help="anti-hub term on relation-edge mass")
+    P.add_argument("--w-ref-demo", type=float, default=1.0, help="r edges: weight of the demonstration (the generator "
+                   "knows a dependent's source); 0 = the task gradient only")
     P.add_argument("--delta-cap", type=float, default=0.3, help="a model delta is at most this x the vector it adjusts")
     P.add_argument("--recurse", type=int, default=0, help="long chains by recursion: SUB hands a span of the question "
                    "to a child row whose answer returns as a register (every row <= one operation)")
@@ -1395,10 +1443,11 @@ def main():
     knobs = [p for n, p in list(graph.named_parameters()) + list(ro.named_parameters()) + list(loop.named_parameters())
              + [("tau", mem.tau)] if n.split(".")[-1] in knob_names]
     knob_ids = {id(p) for p in knobs}
-    rel_ps = list(graph.ea.parameters()) + list(graph.eb.parameters()) + [graph.tau_r] + list(graph.Wrec.parameters())
-    rel_ids = {id(p) for p in rel_ps}
-    knob_ids = knob_ids | rel_ids                # (kept out of the main optimizer groups below)
-    opt_rel = torch.optim.Adam(rel_ps, lr=A.rel_lr)
+    ref_ps = list(graph.Wref.parameters()) + list(graph.Wrs.parameters()) + list(graph.Wrr.parameters()) + [graph.tau_ref]
+    ref_sc = [graph.b_ver, graph.r_pool] + list(graph.Wnone.parameters())   # small heads: at 1e-3 the version bias moved .025 in
+    #   25 steps and the has-reference head never left "none" (0 of 507)
+    knob_ids = knob_ids | {id(p) for p in ref_ps + ref_sc}
+    opt_ref = torch.optim.Adam([{"params": ref_ps}, {"params": ref_sc, "lr": 30 * A.rel_lr}], lr=A.rel_lr)
     look_ps = list(loop.Wlook.parameters())    # the look's correction (own group; main18c's "did not move" was a
     look_ids = {id(p) for p in look_ps}        # zero gradient: notes' soft write came from their HALT pass)
     opt = torch.optim.AdamW([{"params": [p for p in params if id(p) not in knob_ids | look_ids], "lr_mult": 1.0},
@@ -1476,6 +1525,50 @@ def main():
         W = max(x.shape[0] for x in xs)
         return torch.stack([padS(x, W) for x in xs])
 
+    alone = {"row": {}, "X": None, "E": None, "M": None}   # value text -> row of a bank of Walker states
+    ref_t = {"s": 0.0, "calls": 0, "rows": 0, "new": 0}
+
+    def ref_alone(srcs, cap=16):
+        """--ref-alone: each value's tokens re-read by Walker on their own (a mention read like a question; inside the
+        frame its states carry the dependent's own record: references hit the right attribute of the WRONG entity).
+        srcs = [(frame id, pair j)] -> (X, E, mask) per value. Cached by the value's TEXT (Walker is frozen; values
+        repeat; frames are short-lived and their ids are reused after eval restores) in one bank: one gather."""
+        if not A.ref_alone:
+            return None
+        t0_ = time.perf_counter()
+        keys = []
+        for f_, j in srcs:
+            fr = store.frames[f_]
+            keys.append(tuple(fr["ids"][x] for x in fr["enc"]["vpos"][j][:cap]))
+        rows = alone["row"]
+        new = sorted({k for k in keys if k not in rows})
+        if new:
+            if alone["X"] is None:                            # one preallocated bank (growing it by cat copied it
+                d_ = model.emb.weight.shape[1]                # every step: OOM on 6 GB at step 325)
+                alone["X"] = torch.zeros(A.ref_bank, cap, d_, device=dev, dtype=torch.half)
+                alone["E"] = torch.zeros_like(alone["X"])
+                alone["M"] = torch.zeros(A.ref_bank, cap, device=dev, dtype=torch.bool)
+            if len(rows) + len(new) > A.ref_bank:             # full: start over with this call's texts
+                rows.clear()
+                new = sorted(set(keys))
+            tb = torch.tensor([list(k) + [EOS_ID] * (cap - len(k)) for k in new], device=dev)
+            mq = torch.tensor([[1] * len(k) + [0] * (cap - len(k)) for k in new], device=dev, dtype=torch.bool)
+            with torch.no_grad():                             # right padding (causal: no effect on real tokens)
+                Xn, En = walker_states(model, tb).half(), model.emb(tb).half()
+            base = len(rows)
+            for i, k in enumerate(new):
+                rows[k] = base + i
+            alone["X"][base:base + len(new)] = Xn
+            alone["E"][base:base + len(new)] = En
+            alone["M"][base:base + len(new)] = mq
+        ix = torch.tensor([rows[k] for k in keys], device=dev)
+        ref_t["calls"] += 1; ref_t["rows"] += len(srcs); ref_t["new"] += len(new)
+        out = alone["X"][ix].float(), alone["E"][ix].float(), alone["M"][ix]
+        if dev.type == "cuda":
+            torch.cuda.synchronize()
+        ref_t["s"] += time.perf_counter() - t0_
+        return out
+
     def encode_sources(srcs, grad):
         """(kraw, v, logg, slots[:value length], r) per token source; chunked by frames (bounded memory)"""
         out, by_f = {}, {}
@@ -1501,9 +1594,11 @@ def main():
                 sk, sv, sg, ss, sr = graph.nodes(X, E, spans, ptr, vpos)
                 if not grad:
                     sk, sv, sg, ss, sr = (x.detach() for x in (sk, sv, sg, ss, sr))
+                with torch.no_grad():                    # reference query: the value tokens read like a question
+                    rq = graph.ref_query(X, E, vpos, pre=ref_alone([(s_[1], s_[2]) for s_ in order]))
             for i, s_ in enumerate(order):
                 w_ = max(1, min(len(vpos[i]), A.vslots))
-                out[s_] = (sk[i], sv[i], sg[i], ss[i, :w_] if grad else ss[i, :w_].clone(), sr[i])
+                out[s_] = (sk[i], sv[i], sg[i], ss[i, :w_] if grad else ss[i, :w_].clone(), sr[i], rq[i])
         chunk, ntok = [], 0
         for f in sorted(by_f):
             chunk.append(f)
@@ -1524,8 +1619,8 @@ def main():
             return None
         if cache["at"] != cache["ver"]:
             cache["src"], cache["at"] = {}, cache["ver"]
-        tok_of = lambda i: [s_ for s_ in (store.nodes[i]["lsrc"], store.nodes[i]["vsrc"]) if s_ is not None
-                            and s_[0] == "tok"]
+        tok_of = lambda i: [s_ for s_ in (store.nodes[i]["lsrc"], store.nodes[i]["vsrc"], store.nodes[i].get("rsrc"))
+                            if s_ is not None and s_[0] == "tok"]
         srcs = {s_ for i in live for s_ in tok_of(i)}
         gsrc = {s_ for i in live if i in grad for s_ in tok_of(i)} if torch.is_grad_enabled() else set()
         miss = sorted((s_ for s_ in srcs if s_ not in cache["src"] and s_ not in gsrc), key=lambda s_: s_[1:])
@@ -1535,7 +1630,7 @@ def main():
         got = {s_: cache["src"][s_] for s_ in srcs if s_ not in gsrc}
         if gsrc:
             got.update(encode_sources(sorted(gsrc, key=lambda s_: s_[1:]), True))
-        ks, vs, gs_, sls, rs, nsl = [], [], [], [], [], []
+        ks, vs, gs_, sls, rs, nsl, rqs = [], [], [], [], [], [], []
         qfull = {}
         zg = torch.zeros((), device=dev)
         for i in live:
@@ -1550,6 +1645,8 @@ def main():
             else:
                 vec = store.vecs[V_]
                 ks.append(vec[0]); rs.append(vec[2])
+            Rs_ = nd.get("rsrc", V_)                    # the reference: from the node's own stated text
+            rqs.append(got[Rs_][5] if Rs_ is not None and Rs_[0] == "tok" and nd["kind"] in ("item", "state") else None)
             if V_[0] == "tok":
                 vs.append(got[V_][1]); sls.append(got[V_][3][:cap_]); gs_.append(got[V_][2])
                 if q_in and A.q_slots_mode == "reg":      # whole text for Walker's register only (memory stays 16 wide)
@@ -1560,6 +1657,8 @@ def main():
             nsl.append(min(nd["nslots"], cap_))
         kraw, v, logg, r = torch.stack(ks), torch.stack(vs), torch.stack(gs_), torch.stack(rs)
         slots = stackS(sls)
+        RQ = torch.stack([x if x is not None else torch.zeros_like(kraw[0]) for x in rqs])
+        r = graph.Wrr(RQ) * (RQ.abs().sum(-1, keepdim=True) > 0).float() + graph.r_pool * r   # the node's relation
         ver = torch.tensor([float(store.nodes[i]["kind"] == "version") for i in live], device=dev)
         kraw = kraw + ver[:, None] * graph.ver_e                   # "the value before" is part of a version's label
         dsel = [(k_, store.live.get(nid) or store.nodes[nid]["d"]) for k_, nid in enumerate(live)]
@@ -1573,32 +1672,14 @@ def main():
                 return dd_ * (A.delta_cap * nb / nd_).clamp(max=1.0)
             kraw = kraw.index_add(0, ix, capd(kraw[ix], torch.stack([dd[0] for _, dd in dsel])))
             v = v.index_add(0, ix, capd(v[ix], torch.stack([dd[1] for _, dd in dsel])))
-            r = r.index_add(0, ix, capd(r[ix], torch.stack([dd[2] for _, dd in dsel])))
+            r = r.index_add(0, ix, capd(kraw[ix], torch.stack([dd[2] for _, dd in dsel])))   # (scale of the LABEL: a
+            #   node with no stated relation has r = 0 — the model must still be able to create one)
         row_of = {n: k_ for k_, n in enumerate(live)}
         lsel = [(k_, row_of[store.nodes[nid]["link"]]) for k_, nid in enumerate(live)
                 if store.nodes[nid]["link"] in row_of]
-        if lsel:                                                   # attach: linked to its target by r
+        if lsel:                                                   # attach: its r points at its target (the label)
             r = r.index_add(0, torch.tensor([a_ for a_, _ in lsel], device=dev),
-                            r[torch.tensor([b_ for _, b_ in lsel], device=dev)])
-        recs_ = {}                                                 # record context: a pair's own tokens do not say
-        for k_, nid in enumerate(live):                            # which record (entity) it belongs to; its
-            rk_ = store.nodes[nid].get("rec")                      # siblings (incl. the name pair) do
-            if rk_ is not None:
-                recs_.setdefault(rk_, []).append(k_)
-        if recs_:
-            grp = torch.full((len(live),), -1, dtype=torch.long, device=dev)
-            for g_i, ks_ in enumerate(recs_.values()):
-                grp[torch.tensor(ks_, device=dev)] = g_i
-            hasg = grp >= 0
-            feat = torch.cat([F.normalize(kraw - graph.kmu[None], dim=-1), F.normalize(v, dim=-1)], -1)
-            gsum = torch.zeros(len(recs_), feat.shape[1], device=dev).index_add(0, grp[hasg], feat[hasg])
-            gcnt = torch.zeros(len(recs_), device=dev).index_add(0, grp[hasg], torch.ones(int(hasg.sum()), device=dev))
-            ctx = (gsum / gcnt[:, None].clamp(min=1))[grp.clamp(min=0)]
-            rscale = r.norm(dim=-1, keepdim=True).clamp(min=1.0) / 8.0
-            rel_parts = (r.detach(), ctx.detach(), hasg, rscale.detach())
-            r = r + hasg[:, None].float() * graph.Wrec(ctx) * rscale
-        else:
-            rel_parts = None
+                            kraw[torch.tensor([b_ for _, b_ in lsel], device=dev)])
         mix = [(row_of[t_], row_of[c_], m_) for t_, c_, m_ in store.mix if c_ in row_of and t_ in row_of]
         if mix:                                                    # soft writes of this step (training)
             rt = torch.tensor([x[0] for x in mix], device=dev)
@@ -1607,7 +1688,8 @@ def main():
             dV, dS = v[rc] - v[rt], slots[rc] - slots[rt]
             free = torch.tensor([store.nodes[i]["kind"] in ("item", "state") for i in live], device=dev)
             ar = torch.arange(len(mix), device=dev)
-            C = graph.dep(v, r)[:, rt] * m[None] * torch.sigmoid(graph.w_prop) * free[:, None].float()
+            km_ = graph.kmu[None] if float(graph.kmu_n) > 0 else kraw.mean(0, keepdim=True)
+            C = graph.dep_ref(F.normalize(kraw - km_, dim=-1), r, km_, ver)[:, rt] * m[None] * free[:, None].float()
             C = C.index_put((rc, ar), torch.zeros(len(mix), device=dev)).index_put((rt, ar), torch.zeros(len(mix), device=dev))
             v = v + C @ dV                                         # dependents follow (one damped step)
             slots = slots + torch.einsum("nr,rsd->nsd", C, dS)
@@ -1619,6 +1701,12 @@ def main():
             f = torch.stack([w_ for _, w_ in esel])
             v = v.index_copy(0, ix, loop.empty_v + f[:, None] * (v[ix] - loop.empty_v))   # forward: value or empty;
             slots = slots.index_copy(0, ix, loop.empty_s + f[:, None, None] * (slots[ix] - loop.empty_s))  # grad: (v - e)
+        fsel = [(k_, store.evicting[nid]) for k_, nid in enumerate(live) if nid in store.evicting]
+        if fsel:                                                   # the model's forget decision of this step
+            ix = torch.tensor([k_ for k_, _ in fsel], device=dev)
+            f = torch.stack([w_ for _, w_ in fsel])
+            v = v.index_copy(0, ix, loop.empty_v + f[:, None] * (v[ix] - loop.empty_v))
+            slots = slots.index_copy(0, ix, loop.empty_s + f[:, None, None] * (slots[ix] - loop.empty_s))
         ssel =[(k_, store.soft[nid]) for k_, nid in enumerate(live) if nid in store.soft]
         if ssel:                                                   # soft integrate (training, this step)
             logg = logg.index_add(0, torch.tensor([k_ for k_, _ in ssel], device=dev),
@@ -1631,10 +1719,10 @@ def main():
                 graph.kmu.mul_(f).add_((1 - f) * kraw.detach().mean(0))
                 graph.kmu_n.add_(1)
         kmean = graph.kmu[None] if float(graph.kmu_n) > 0 else kraw.mean(0, keepdim=True)
-        return {"rel_parts": rel_parts if recs_ else None, "qfull": qfull, "kraw": kraw, "K": F.normalize(kraw - kmean, dim=-1), "kmean": kmean, "V": v, "S": slots,
-                "logg": logg + F.logsigmoid(graph.keep_logit(ver, use)), "R": r,
+        return {"qfull": qfull, "kraw": kraw, "K": F.normalize(kraw - kmean, dim=-1), "kmean": kmean, "V": v, "S": slots,
+                "logg": logg, "R": r,
                 "time": torch.tensor([float(store.nodes[i]["time"]) for i in live], device=dev),
-                "nsl": torch.tensor(nsl, device=dev), "rows": live, "row_of": row_of}
+                "nsl": torch.tensor(nsl, device=dev), "RQ": RQ, "ver": ver, "rows": live, "row_of": row_of}
 
     # ------------------------------------------------------------------ Walker reads latent tokens
     def ctrl_state(regs):
@@ -1735,7 +1823,7 @@ def main():
         got = encode_sources(sorted({store.nodes[n_]["vsrc"] for n_ in nids}, key=lambda s_: s_[1:]), False)
         out = []
         for n_ in nids:
-            kk, vv, _, ss_, rr = got[store.nodes[n_]["vsrc"]]
+            kk, vv, _, ss_, rr = got[store.nodes[n_]["vsrc"]][:5]
             ss_ = ss_[:A.mem_slots]
             lat = torch.cat([loop.Wfv(vv)[None], loop.Wfs(ss_) + loop.spos[:ss_.shape[0]]], 0)
             out.append((n_, (kk, vv, ss_, ss_.shape[0], lat, n_ if keep else None)))
@@ -1834,6 +1922,7 @@ def main():
         store.nodes[vn]["ver_of"] = tgt
         store.nodes[vn]["d"] = t["d"]
         store.nodes[vn]["rec"] = t.get("rec")
+        store.nodes[vn]["rsrc"] = t.get("rsrc", t["vsrc"])
         return vn
 
     def propagate(D, rows, row_of, tgt, time_):
@@ -1841,8 +1930,7 @@ def main():
         (one gated step; the dependent's old value is versioned)"""
         if D is None or tgt not in row_of:
             return 0
-        gp = float(torch.sigmoid(graph.w_prop))
-        col = D[:, row_of[tgt]] * gp
+        col = D[:, row_of[tgt]]                       # reference edges: a dependent follows what it mentions
         n_ = 0
         for j in (col > 0.5).nonzero().flatten().tolist():
             nid = rows[j]
@@ -1850,6 +1938,7 @@ def main():
             if nid == tgt or not nd["alive"] or nd["kind"] not in ("item", "state"):
                 continue
             version(nid)
+            nd.setdefault("rsrc", nd["vsrc"])             # its reference stays: it still follows the same source
             nd["vsrc"], nd["nslots"], nd["time"] = store.nodes[tgt]["vsrc"], store.nodes[tgt]["nslots"], time_
             n_ += 1
         return n_
@@ -1859,7 +1948,7 @@ def main():
             M0 = materialize()
             if M0 is None:
                 return None, [], {}
-            D = graph.dep(M0["V"], M0["R"])
+            D = graph.dep_ref(M0["K"], M0["R"], M0["kmean"], M0["ver"])
         return D, M0["rows"], M0["row_of"]
 
     # ------------------------------------------------------------------ truth lookups (bookkeeping, from provenance)
@@ -2118,6 +2207,7 @@ def main():
                 if vn_ is None or not store.nodes[vn_]["alive"] or store.nodes[vn_]["ver_of"] != tgt:
                     version(tgt)                      # (a replace decided in training made its version already)
                 t["vsrc"], t["time"], t["nslots"] = nd["vsrc"], nd["time"], nd["nslots"]
+                t["rsrc"] = nd.get("rsrc", nd["vsrc"])        # a new stated value: its own text decides what it follows
                 t["usage"] += 1; t["act"] += 1.0
                 if c in store.live:                   # the value it chose
                     dd = store.live.pop(c)
@@ -2793,6 +2883,7 @@ def main():
     run.commit_items = {}
     run.commit_stats = []
     run.comp_stats = []
+    run.forget_stats = []
     import collections as _co
     run.look_tr = _co.Counter()
     run.note_rec = {}
@@ -2800,18 +2891,60 @@ def main():
     run.logit_pen = 0.0
     run.self_pairs = []
 
-    def keep_score(i):
-        """eviction order: recency-weighted use (act: decays, +1 per read / write) x keep knob x salience (the write
-        gate's confidence; marginal pairs such as state noise go first)"""
-        nd = store.nodes[i]
-        k0, k1, k2 = keep_score.k
-        z = k0 + k1 * float(nd["kind"] == "version") + k2 * math.log1p(nd["usage"])
-        return nd["act"] / (1.0 + math.exp(-z)) * (0.5 + nd.get("g", 1.0))
+    def forget_feats(nids):
+        """observations the forget head weighs (no rule decides with them)"""
+        return torch.tensor([[float(store.nodes[i]["kind"] == "version"), math.log1p(store.nodes[i]["usage"]),
+                              math.log1p(max(0.0, store.time - store.nodes[i]["time"])),
+                              math.log(store.nodes[i]["act"] + 1e-3), store.nodes[i].get("g", 1.0),
+                              float(store.nodes[i]["kind"] == "state"), float(store.nodes[i]["kind"] == "question")]
+                             for i in nids], device=dev)
 
-    def evict():
-        keep_score.k = graph.keep.detach().tolist()
+    def forget_choice(t_before, grad):
+        """the model's forget decision: over capacity, the nodes with the lowest keep logits go. Candidates: nodes
+        older than this step (this step's writes are decided by the store gate). Returns (nids, keep logits, chosen)"""
+        live = store.alive()
+        old_n = sum(1 for i in live if store.nodes[i]["time"] < t_before)
+        kept_new = sum(1 for _, o in pend if o[0] in ("new", "attach"))   # this step's candidates the write keeps
+        over = (old_n + kept_new if pend else len(live)) - A.cap         # (smoke cap 150: counting every candidate
+        #                                                                   forgot 133 of 170 nodes)
+        if over <= 0:
+            return [], None, set()
+        with torch.no_grad():
+            M = materialize()
+        cand = [j for j, i in enumerate(M["rows"]) if store.nodes[i]["time"] < t_before - A.protect]
+        if not cand:
+            return [], None, set()
+        nids = [M["rows"][j] for j in cand]
+        with torch.set_grad_enabled(grad):
+            z = graph.forget_logit(M["K"][torch.tensor(cand, device=dev)].detach(), forget_feats(nids))
+        gone = {nids[j] for j in torch.argsort(z.detach())[:over].tolist()}
+        return nids, z, gone
+
+    def soft_forget(t_before):
+        """training: this step's forget decision acts BEFORE the questions (forgotten = empty value, straight-through
+        keep weight sigmoid(centered logit)), so a question about a forgotten fact blames the decision"""
+        nids, z, gone = forget_choice(t_before, True)
+        store.evicting = {}
+        if not gone:
+            return set()
+        zc = z - z.mean()                                # competition: keeping one means forgetting another
+        sg = torch.sigmoid(zc)
+        hard = torch.tensor([0.0 if i in gone else 1.0 for i in nids], device=dev)
+        fw = hard + sg - sg.detach()
+        store.evicting = {i: fw[j] for j, i in enumerate(nids)}
+        run.forget_stats.append(len(gone))
+        return gone
+
+    def evict(t_before=None, gone=None):
+        """execute the forget decision (the model's head; in training the one the questions were graded on)"""
         store.decay()
-        store.evict(A.cap, keep_score, A.protect)
+        for i in (gone or ()):
+            store.nodes[i]["alive"] = False
+        _, _, more = forget_choice(store.time + 1 if t_before is None else t_before, False)   # still over: the head
+        for i in more:                                                                     # decides again
+            store.nodes[i]["alive"] = False
+        store.evicting = {}
+        store.evict(10 ** 9, lambda i: 0.0)              # (frees the frames / vectors no live node uses)
         for s_ in [s_ for s_ in cache["src"] if s_[1] not in store.frames]:
             del cache["src"][s_]
 
@@ -3168,8 +3301,8 @@ def main():
             evict()
         M = materialize()
         rows, row_of = M["rows"], M["row_of"]
-        D = graph.dep(M["V"], M["R"]) * torch.sigmoid(graph.w_prop)
-        Rl = graph.rel(M["R"])
+        D = graph.dep_ref(M["K"], M["R"], M["kmean"], M["ver"])
+        Rl = D                                                   # relation edges ARE the r edges now
         H, Hv = holders()
 
         def ident(i):
@@ -3213,8 +3346,7 @@ def main():
                  "rules announced / rule nodes alive": f"{len(world.policy)} / {kinds.get('rule', 0)}",
                  "dependence edges above .5 (would propagate)": int((top_dep > 0.5).sum()),
                  "mean strongest dependence edge": round(float(top_dep.mean()), 3),
-                 "mean strongest relation edge": round(float(Rl.max(-1).values.mean()), 3),
-                 "w_prop gate": round(float(torch.sigmoid(graph.w_prop)), 3)}
+}
         print("GRAPH SANITY:", json.dumps(stats, indent=1), flush=True)
         # ---- CONNECTIVITY (user, 2026-10-25): is the graph wired the way the world is?
         n_ = len(rows)
@@ -3270,24 +3402,9 @@ def main():
                 "dependents whose top dependence partner holds the same value": f"{dep_ok:.3f} of {len(deps_)}"}
         print("GRAPH CONNECTIVITY:", json.dumps(conn, indent=1), flush=True)
         # ---- the hubs: who they are and why every node points at them
-        eaR, ebR = graph.ea(M["R"]), graph.eb(M["R"])
-        Rn, ebn = M["R"].norm(dim=-1), ebR.norm(dim=-1)
-        mean_ea = F.normalize(eaR.mean(0), dim=-1)
-        align = F.normalize(ebR, dim=-1) @ mean_ea          # how well a node's "key" side matches the average query
-        rank = lambda x, j: int((x > x[j]).sum()) + 1
         for j, deg in indeg.most_common(3):
             i = rows[j]
-            nd = store.nodes[i]
-            dd = store.live.get(i) or nd.get("d")
-            print(f"HUB node {i}: in-degree {deg} | {info[i][0]} | kind {nd['kind']} | time {nd['time']:.0f} (now "
-                  f"{store.time}) | usage {nd['usage']} | |R| {float(Rn[j]):.2f} (rank {rank(Rn, j)}/{n_}, median "
-                  f"{float(Rn.median()):.2f}) | |eb(R)| {float(ebn[j]):.2f} (rank {rank(ebn, j)}/{n_}, median "
-                  f"{float(ebn.median()):.2f}) | key-side alignment with the mean query {float(align[j]):.3f} (rank "
-                  f"{rank(align, j)}/{n_}) | own relation delta |dr| "
-                  f"{float(dd[2].norm()) if dd is not None else 0.0:.2f}", flush=True)
-        print(f"relation score spread: ea.eb/sqrt(d) for the hub column vs the median column, mean over rows: "
-              f"{float((eaR @ ebR[indeg.most_common(1)[0][0]]).mean() / math.sqrt(M['R'].shape[-1])):.2f} vs "
-              f"{float((eaR @ ebR.t()).median(dim=1).values.mean() / math.sqrt(M['R'].shape[-1])):.2f}", flush=True)
+            print(f"HUB node {i}: in-degree {deg} | {info[i][0]} | kind {store.nodes[i]['kind']}", flush=True)
         # ---- the drawn subgraph: the entities with the most nodes, their versions, rules, and 1-hop edge partners
         per = {}
         for i in rows:
@@ -3364,39 +3481,92 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         n_model = sum(1 for e_ in edges if not e_[2].startswith("truth"))
         print(f"GRAPH: {len(nodes)} nodes, {n_model} model edges + {len(eds) - n_model} truth links -> {path}", flush=True)
 
-    rel_stats = []
+    ref_stats = []
 
-    def rel_contrast(irng, n_anchor=64):
-        """relation edges from the input's OWN structure: a node's relation edge should go to a pair of the same
-        record (multi-positive InfoNCE over all live nodes), plus an anti-hub term (no node may take a large share of
-        everyone's edge mass). Graph heads + relation vectors; the encoder only through the anchors' sources."""
-        with torch.no_grad():                                  # its own graph: only the relation heads train here
+    def ref_loss(irng, n_neg=48):
+        """reference edges by demonstration (the generator knows what a "same as" value mentions): dependents ->
+        their source's node, other fact nodes -> none. Own optimizer step (like the relation heads)."""
+        with torch.no_grad():
             M = materialize()
+            H, _ = holders()
         rows_ = M["rows"]
-        groups = {}
+        pos, neg = [], []
         for j, i in enumerate(rows_):
-            rk = store.nodes[i].get("rec")
-            if rk is not None and store.nodes[i]["kind"] in ("item", "state", "version"):
-                groups.setdefault(rk, []).append(j)
-        cands = [j for g in groups.values() if len(g) > 1 for j in g]
-        if len(cands) < 4:
+            nd = store.nodes[i]
+            if nd["kind"] != "item":
+                continue
+            lm = store.prov.get(nd["lsrc"]) if nd["lsrc"] else None
+            if not lm or lm[0] != "fact":
+                continue
+            src = world.deps.get((lm[1], lm[2])) if len(lm) > 4 and lm[4] else None
+            if src is not None and src[0] in world.ents and src[1] in world.ents[src[0]]:
+                g_ = gold_node(H, src[0], src[1], world.ents[src[0]][src[1]])
+                if g_ is not None and g_ in M["row_of"]:          # any current node holding the source's value
+                    alt = [M["row_of"][x] for x in H.get((src[0], src[1], world.ents[src[0]][src[1]]), [])
+                           if x in M["row_of"] and store.nodes[x]["kind"] != "version"]
+                    pos.append((j, M["row_of"][g_], src, lm[1], alt or [M["row_of"][g_]]))
+            elif not (len(lm) > 4 and lm[4]):
+                neg.append(j)
+        if not pos:
             return torch.zeros((), device=dev)
-        anchors = irng.sample(cands, min(n_anchor, len(cands)))
-        rp = M.get("rel_parts")
-        R_ = (rp[0] + rp[2][:, None].float() * graph.Wrec(rp[1]) * rp[3]) if rp is not None else M["R"].detach()
-        S = graph.rel_scores(R_)
-        n_ = S.shape[0]
-        S = S.masked_fill(torch.eye(n_, dtype=torch.bool, device=dev), -1e4)
-        loss, hit = 0.0, 0
-        for a_ in anchors:
-            rk = store.nodes[rows_[a_]]["rec"]
-            pos = torch.tensor([j for j in groups[rk] if j != a_], device=dev)
-            loss = loss - (torch.logsumexp(S[a_, pos], 0) - torch.logsumexp(S[a_], 0))
-            hit += int(int(S[a_].argmax()) in set(pos.tolist()))
-        col = torch.softmax(S, -1).mean(0)                     # each node's share of everyone's edge mass
-        hub = n_ * (col ** 2).sum() - 1.0                       # 0 when uniform; ~n when one node takes everything
-        rel_stats.append((hit / len(anchors), float(col.max() * n_)))
-        return loss / len(anchors) + A.w_hub * hub
+        neg = irng.sample(neg, min(n_neg, len(neg)))
+        sel = [x[0] for x in pos] + neg
+        ix = torch.tensor(sel, device=dev)
+        by_f = {}                                        # the selected nodes' reference queries WITH gradient
+        for k_, j in enumerate(sel):                     # (pooling + residual), from their frames' stored states
+            vs_ = store.nodes[rows_[j]].get("rsrc", store.nodes[rows_[j]]["vsrc"])
+            if vs_ is not None and vs_[0] == "tok" and vs_[1] in store.frames:
+                by_f.setdefault(vs_[1], []).append((k_, vs_[2]))
+        rq_ = [M["RQ"][j].detach() for j in sel]
+        for f_, lst in by_f.items():
+            fr = store.frames[f_]
+            with torch.no_grad():
+                E_ = model.emb(torch.tensor(fr["ids"], device=dev)).float()
+            q_ = graph.ref_query(fr["X"].float(), E_, [fr["enc"]["vpos"][jj] for _, jj in lst],
+                                 pre=ref_alone([(f_, jj) for _, jj in lst]))
+            for (k_, _), qq in zip(lst, q_):
+                rq_[k_] = qq
+        rq_ = torch.stack(rq_)                           # the selected nodes' r with a gradient path (content part)
+        R_ = M["R"].detach().index_put((ix,), M["R"][ix].detach() + graph.Wrr(rq_) - graph.Wrr(rq_).detach())
+        L = graph.ref_logits(M["K"].detach(), R_, M["kmean"].detach(), M["ver"])
+        n_ = L.shape[0]
+        tg = torch.tensor([x[1] for x in pos] + [n_] * len(neg), device=dev)
+        Ls = L[ix]
+        isref = torch.tensor([1.0] * len(pos) + [0.0] * len(neg), device=dev)
+        bce = F.binary_cross_entropy_with_logits(-Ls[:, -1], isref, reduction="none")
+        bce = bce[:len(pos)].mean() + (bce[len(pos):].mean() if neg else 0.0)   # class-balanced: dependents fell to
+        pm = torch.zeros(len(pos), Ls.shape[1] - 1, dtype=torch.bool, device=dev)  # ~12 / step vs 48 others -> none
+        for r_, x in enumerate(pos):                     # multi-positive: duplicates of the source holding its value
+            pm[r_, x[4]] = True                          # (an "older item node" miss was often such a copy)
+        Ln_ = Ls[:len(pos), :-1]
+        loss_ = bce + (torch.logsumexp(Ln_, -1) - torch.logsumexp(Ln_.masked_fill(~pm, -1e4), -1)).mean()
+        pr = torch.where(Ls[:, -1] > 0, torch.full_like(tg, n_), Ls[:, :-1].argmax(-1))
+        miss = Counter_()
+        hit_ = []
+        for (j, g, src, own, alt), p_ in zip(pos, pr[:len(pos)].tolist()):
+            hit_.append(p_ in alt)
+            if p_ in alt:
+                continue
+            if p_ == n_:
+                miss["none"] += 1
+                continue
+            nd_ = store.nodes[rows_[p_]]
+            m_ = store.prov.get(nd_["lsrc"]) if nd_["lsrc"] else None
+            if not m_ or m_[0] != "fact":
+                miss[f"a {nd_['kind']} / {m_[0] if m_ else '-'} node"] += 1
+            elif (m_[1], m_[2]) == tuple(src):
+                miss["the source's version node" if nd_["kind"] == "version" else "the source's older item node"] += 1
+            elif m_[1] == src[0]:
+                miss["source entity, other attribute"] += 1
+            elif m_[2] == src[1]:
+                miss["source attribute, other entity"] += 1
+            elif m_[1] == own:
+                miss["the dependent's own entity"] += 1
+            else:
+                miss["other fact"] += 1
+        ref_stats.append((sum(hit_) / len(hit_),
+                          float((pr[len(pos):] == n_).float().mean()) if neg else 1.0, len(pos), miss))
+        return loss_
 
     def invariance_loss(irng, n=16):
         """labels = what a pair is about, not where it was seen: each sampled fact is encoded in two random
@@ -3673,13 +3843,18 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             expect_dependents({q["edit"] for q in cq})   # a correction the note did not write into its fact (drop / new /
         #   attach: the edit output has no fact label) is still asked, graded on the fact's node: without it the
         #   question had no gold, the note's gate saw only the storage cost and collapsed (main15: drop -> drop)
+        gone = soft_forget(t_before)
         H, _ = holders()
         recent = {(nm, k) for (nm, k, v), ns in H.items() if max(store.nodes[i]["time"] for i in ns) > recent_times[0]}
+        forgot = {(nm, k) for (nm, k, v), ns in H.items() if any(i in gone for i in ns)
+                  and world.ents.get(nm, {}).get(k) == v}
         n_now, n_rec = int(round(A.now * A.questions)), int(round(A.recent * A.questions))
         n_now = max(n_now, min(len(now), A.questions - n_rec - 2))   # every fact written this step is asked (a fact
         #        never asked in its step got only the storage-cost gradient -> the gate learned to drop new facts)
         n_col = int(round(A.collateral * A.questions)) if coll else 0
-        qs = ask(rng, [(n_now, now), (n_col, coll), (n_rec, recent), (A.questions - n_now - n_col - n_rec, None)],
+        n_fg = min(len(forgot), int(round(A.forget_q * A.questions)))   # "was forgetting that a mistake?"
+        qs = ask(rng, [(n_now, now), (n_col, coll), (n_rec, recent), (n_fg, forgot),
+                       (A.questions - n_now - n_col - n_rec - n_fg, None)],
                  A.mix, tr_ops, "train", soft=True)
         tmark("ask")
         run.self_loss = torch.zeros((), device=dev)
@@ -3693,6 +3868,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         loss = loss + A.w_self * run.self_loss + A.w_inv * invariance_loss(rng) + A.w_rt * rt_loss
         tmark("roundtrip+invariance")
         opt.zero_grad(set_to_none=True)
+        opt_ref.zero_grad(set_to_none=True)
         if loss.requires_grad:                            # (nothing askable this step: no update, decisions still run)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
@@ -3701,15 +3877,14 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         commit_pending()                                  # the hard decisions of this step's integrate
         opt.step()
         heads_changed()
-        if A.w_relc:                                     # relation edges: their OWN step (after the main one)
-            rl_ = rel_contrast(rng)                      # (inside the global clip and with addressing / propagation
-            if rl_.requires_grad:                        # gradients on the same heads they did not learn: main23
-                opt_rel.zero_grad(set_to_none=True)      # same-record .00 vs 1.00 in 50 steps on their own)
-                rl_.backward()
-                opt_rel.step()
+        rf_ = ref_loss(rng)                              # r edges: the TASK gradient (stale dependents asked,
+        if A.w_ref_demo and rf_.requires_grad:           # soft propagation) is already in their grads; the
+            (A.w_ref_demo * rf_).backward()              # demonstration (the generator's source) is optional
+        opt_ref.step()                                   # (own optimizer: inside the main one they did not learn)
+        opt_ref.zero_grad(set_to_none=True)
         tmark("commit+step")
         store.commit()
-        evict()
+        evict(gone=gone if gone else None)
         if step % 10 == 0 and dev.type == "cuda":
             torch.cuda.empty_cache()
         if step % 25 == 0 or A.smoke:
@@ -3734,10 +3909,21 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 print(f"  step time ({tt_ / n_:.1f} s / step): " + " | ".join(
                     f"{k_} {v_ / n_:.2f} ({100 * v_ / tt_:.0f}%)" for k_, v_ in tsum.items()), flush=True)
                 tsum.clear()
-            if rel_stats:
-                print(f"  relation edges: top-1 in the same record {sum(x[0] for x in rel_stats) / len(rel_stats):.2f} | "
-                      f"largest node share of edge mass x n {max(x[1] for x in rel_stats):.1f} (1 = uniform)", flush=True)
-                rel_stats.clear()
+                print(f"  reference re-read (inside the parts above): {ref_t['s'] / n_:.2f} s / step | calls "
+                      f"{ref_t['calls'] / n_:.0f} | rows {ref_t['rows'] / n_:.0f} | new texts {ref_t['new'] / n_:.0f} "
+                      f"/ step | texts cached {len(alone['row'])}", flush=True)
+                ref_t.update(s=0.0, calls=0, rows=0, new=0)
+            if ref_stats:
+                print(f"  reference edges: dependents -> their source {sum(x[0] for x in ref_stats) / len(ref_stats):.2f} | "
+                      f"other facts -> none {sum(x[1] for x in ref_stats) / len(ref_stats):.2f} | dependents / step "
+                      f"{sum(x[2] for x in ref_stats) / len(ref_stats):.1f} | misses hit: "
+                      f"{dict(sum((x[3] for x in ref_stats), Counter_()).most_common())}", flush=True)
+                ref_stats.clear()
+            if run.forget_stats:
+                print(f"  forget (model's choice): {sum(run.forget_stats) / len(run.forget_stats):.1f} nodes / step | keep "
+                      f"head weights [ver, log use, log age, log act, gate, state, question] "
+                      f"{[round(x, 2) for x in graph.Wf_feat.weight[0].tolist()]}", flush=True)
+                run.forget_stats = []
             if run.comp_stats:
                 cs_ = run.comp_stats
                 print(f"  compose (refine on write): P(compose) {sum(x[0] for x in cs_) / len(cs_):.2f} | used "
