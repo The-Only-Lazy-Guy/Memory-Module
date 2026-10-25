@@ -1,15 +1,9 @@
 {
- "alive": "2026-10-21 21:30:35",
+ "alive": "2026-10-25 14:56:04",
  "running": [
-  "before30_s2",
-  "before30_s3",
-  "before45_s1",
-  "eos_b30_s1",
-  "eos_b30_s2",
-  "eos_s1",
-  "tokbase_s4",
-  "c1k_ver_s2"
+  "base2_s1",
+  "base2_s2"
  ],
- "gpu_free_gb": 65.1,
- "code": "00b6c65"
+ "gpu_free_gb": 95.0,
+ "code": "0ae9f7a"
 }
