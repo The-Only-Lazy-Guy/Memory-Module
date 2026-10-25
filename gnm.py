@@ -1293,6 +1293,7 @@ def main():
     P.add_argument("--q-slots-mode", default="reg", choices=["mem", "reg"],
                    help="mem: question / note nodes keep q-slots in memory; reg: only Walker's register gets them")
     P.add_argument("--w-relc", type=float, default=0.5, help="relation edges from the input's record structure")
+    P.add_argument("--rel-lr", type=float, default=1e-3, help="the relation heads' own optimizer")
     P.add_argument("--w-hub", type=float, default=0.05, help="anti-hub term on relation-edge mass")
     P.add_argument("--delta-cap", type=float, default=0.3, help="a model delta is at most this x the vector it adjusts")
     P.add_argument("--recurse", type=int, default=0, help="long chains by recursion: SUB hands a span of the question "
@@ -1394,6 +1395,10 @@ def main():
     knobs = [p for n, p in list(graph.named_parameters()) + list(ro.named_parameters()) + list(loop.named_parameters())
              + [("tau", mem.tau)] if n.split(".")[-1] in knob_names]
     knob_ids = {id(p) for p in knobs}
+    rel_ps = list(graph.ea.parameters()) + list(graph.eb.parameters()) + [graph.tau_r] + list(graph.Wrec.parameters())
+    rel_ids = {id(p) for p in rel_ps}
+    knob_ids = knob_ids | rel_ids                # (kept out of the main optimizer groups below)
+    opt_rel = torch.optim.Adam(rel_ps, lr=A.rel_lr)
     look_ps = list(loop.Wlook.parameters())    # the look's correction (own group; main18c's "did not move" was a
     look_ids = {id(p) for p in look_ps}        # zero gradient: notes' soft write came from their HALT pass)
     opt = torch.optim.AdamW([{"params": [p for p in params if id(p) not in knob_ids | look_ids], "lr_mult": 1.0},
@@ -1589,7 +1594,11 @@ def main():
             gsum = torch.zeros(len(recs_), feat.shape[1], device=dev).index_add(0, grp[hasg], feat[hasg])
             gcnt = torch.zeros(len(recs_), device=dev).index_add(0, grp[hasg], torch.ones(int(hasg.sum()), device=dev))
             ctx = (gsum / gcnt[:, None].clamp(min=1))[grp.clamp(min=0)]
-            r = r + hasg[:, None].float() * graph.Wrec(ctx) * r.norm(dim=-1, keepdim=True).clamp(min=1.0) / 8.0
+            rscale = r.norm(dim=-1, keepdim=True).clamp(min=1.0) / 8.0
+            rel_parts = (r.detach(), ctx.detach(), hasg, rscale.detach())
+            r = r + hasg[:, None].float() * graph.Wrec(ctx) * rscale
+        else:
+            rel_parts = None
         mix = [(row_of[t_], row_of[c_], m_) for t_, c_, m_ in store.mix if c_ in row_of and t_ in row_of]
         if mix:                                                    # soft writes of this step (training)
             rt = torch.tensor([x[0] for x in mix], device=dev)
@@ -1622,7 +1631,7 @@ def main():
                 graph.kmu.mul_(f).add_((1 - f) * kraw.detach().mean(0))
                 graph.kmu_n.add_(1)
         kmean = graph.kmu[None] if float(graph.kmu_n) > 0 else kraw.mean(0, keepdim=True)
-        return {"qfull": qfull, "kraw": kraw, "K": F.normalize(kraw - kmean, dim=-1), "kmean": kmean, "V": v, "S": slots,
+        return {"rel_parts": rel_parts if recs_ else None, "qfull": qfull, "kraw": kraw, "K": F.normalize(kraw - kmean, dim=-1), "kmean": kmean, "V": v, "S": slots,
                 "logg": logg + F.logsigmoid(graph.keep_logit(ver, use)), "R": r,
                 "time": torch.tensor([float(store.nodes[i]["time"]) for i in live], device=dev),
                 "nsl": torch.tensor(nsl, device=dev), "rows": live, "row_of": row_of}
@@ -3361,7 +3370,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         """relation edges from the input's OWN structure: a node's relation edge should go to a pair of the same
         record (multi-positive InfoNCE over all live nodes), plus an anti-hub term (no node may take a large share of
         everyone's edge mass). Graph heads + relation vectors; the encoder only through the anchors' sources."""
-        M = materialize()
+        with torch.no_grad():                                  # its own graph: only the relation heads train here
+            M = materialize()
         rows_ = M["rows"]
         groups = {}
         for j, i in enumerate(rows_):
@@ -3372,7 +3382,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         if len(cands) < 4:
             return torch.zeros((), device=dev)
         anchors = irng.sample(cands, min(n_anchor, len(cands)))
-        S = graph.rel_scores(M["R"])
+        rp = M.get("rel_parts")
+        R_ = (rp[0] + rp[2][:, None].float() * graph.Wrec(rp[1]) * rp[3]) if rp is not None else M["R"].detach()
+        S = graph.rel_scores(R_)
         n_ = S.shape[0]
         S = S.masked_fill(torch.eye(n_, dtype=torch.bool, device=dev), -1e4)
         loss, hit = 0.0, 0
@@ -3679,8 +3691,6 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         #                                                        misread operands were the arithmetic bottleneck)
         rt_stats.append(rt_ok)
         loss = loss + A.w_self * run.self_loss + A.w_inv * invariance_loss(rng) + A.w_rt * rt_loss
-        if A.w_relc:
-            loss = loss + A.w_relc * rel_contrast(rng)
         tmark("roundtrip+invariance")
         opt.zero_grad(set_to_none=True)
         if loss.requires_grad:                            # (nothing askable this step: no update, decisions still run)
@@ -3691,6 +3701,12 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         commit_pending()                                  # the hard decisions of this step's integrate
         opt.step()
         heads_changed()
+        if A.w_relc:                                     # relation edges: their OWN step (after the main one)
+            rl_ = rel_contrast(rng)                      # (inside the global clip and with addressing / propagation
+            if rl_.requires_grad:                        # gradients on the same heads they did not learn: main23
+                opt_rel.zero_grad(set_to_none=True)      # same-record .00 vs 1.00 in 50 steps on their own)
+                rl_.backward()
+                opt_rel.step()
         tmark("commit+step")
         store.commit()
         evict()
