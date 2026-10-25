@@ -76,6 +76,26 @@ def setup():
             sh("git", "push", "-q", "-u", "origin", "runs", cwd=RUNS)
 
 
+def alive(pid):
+    """a process that still runs (a zombie - exited, never reaped after its poller died - counts as ended)"""
+    try:
+        with open(f"/proc/{pid}/status") as f:
+            for line in f:
+                if line.startswith("State:"):
+                    return "Z" not in line.split()[1]
+        return True
+    except OSError:
+        return False
+
+
+def file_hash(path):
+    import hashlib
+    try:
+        return hashlib.sha256(open(path, "rb").read()).hexdigest()
+    except OSError:
+        return ""
+
+
 def max_jobs():
     """lab/config.json {"max_jobs": n} (read every poll: no restart needed to change it)"""
     try:
@@ -163,15 +183,22 @@ def main():
                  if os.path.isdir(os.path.join(RUNS, "runs", n_))):
         try:
             st = json.load(open(st_p))
-            if st.get("state") == "running" and st.get("pid") and os.path.exists(f"/proc/{st['pid']}"):
+            if st.get("state") == "running" and st.get("pid") and alive(st["pid"]):
                 orphans[os.path.basename(os.path.dirname(st_p))] = st["pid"]
         except Exception:
             pass
+    me = os.path.abspath(__file__)
+    my_hash = file_hash(me)
     log(f"poller up: code {CODE}, runs {RUNS}, ckpt {CKPT}")
     while True:
         try:
             sh("git", "fetch", "-q", "origin", "main", cwd=CODE)
             sh("git", "reset", "-q", "--hard", "origin/main", cwd=CODE)
+            if file_hash(me) != my_hash:             # new poller code on main: restart in place (jobs keep running
+                log("poller code changed on main: re-executing")   # in their own sessions; the new image adopts them)
+                push_runs("runs: poller reload")
+                lock.close()
+                os.execv(sys.executable, [sys.executable, "-u", me])
             jdir = os.path.join(CODE, "jobs")
             jobs = []
             for f in sorted(os.listdir(jdir)) if os.path.isdir(jdir) else []:
@@ -200,7 +227,7 @@ def main():
                     log(f"{name} failed to start: {e}")
                 changed = True
             for name, pid in list(orphans.items()):
-                if not os.path.exists(f"/proc/{pid}"):
+                if not alive(pid):
                     write_status(name, state="ended (adopted)", ended=time.strftime("%Y-%m-%d %H:%M:%S"))
                     del orphans[name]
                     changed = True

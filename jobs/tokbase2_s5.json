@@ -1,0 +1,20 @@
+{
+ "name": "tokbase2_s5",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "1000",
+  "--eval-every",
+  "500",
+  "--eval-q",
+  "288",
+  "--skip-eval0",
+  "--seed",
+  "5",
+  "--ans-eos",
+  "0"
+ ],
+ "init": "tok_s1.pt",
+ "gpu_gb": 6
+}
