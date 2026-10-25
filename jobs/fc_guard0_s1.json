@@ -18,6 +18,6 @@
  "init": "gnm_main22.pt",
  "init_from": "ckpt",
  "gpu_gb": 6,
- "keep": true,
+ "keep": false,
  "cancel": false
 }
