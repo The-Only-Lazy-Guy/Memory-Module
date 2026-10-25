@@ -1,8 +1,9 @@
 {
- "state": "running",
+ "state": "ended (adopted)",
  "pid": 6576,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/gnm_main22.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --seed 1 --save /marimo/gnm-lab/ckpt/r_demo_s1.pt --log /marimo/gnm-lab/runs/runs/r_demo_s1/train.jsonl",
  "code": "e5bb87d",
  "started": "2026-10-25 15:39:32",
- "updated": "2026-10-25 15:39:32"
+ "updated": "2026-10-25 17:31:36",
+ "ended": "2026-10-25 17:31:36"
 }
