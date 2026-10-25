@@ -1489,6 +1489,12 @@ def main():
             for k_, v_ in st.get(key, {}).items():
                 if k_ in own and own[k_].shape == v_.shape and not (only_core and is_interface(own[k_])):
                     new[k_] = v_; n_ok += 1
+                elif (k_ in own and k_.split(".")[-1] in ("slot_e", "spos") and own[k_].shape[1:] == v_.shape[1:]
+                      and not (only_core and is_interface(own[k_]))):   # per-position tables (--vslots changed):
+                    pad_ = own[k_].clone()                               # keep the learned rows, new rows start 0
+                    n_r = min(pad_.shape[0], v_.shape[0])
+                    pad_[:n_r] = v_[:n_r]
+                    new[k_] = pad_; n_ok += 1
                 else:
                     n_skip += 1
             mod.load_state_dict(new, strict=False)
