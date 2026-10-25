@@ -1,5 +1,5 @@
 {
- "alive": "2026-10-25 21:27:16",
+ "alive": "2026-10-25 21:29:18",
  "running": [
   "rd6_lazy_s1",
   "rd6_lazy_s2",
@@ -7,9 +7,8 @@
   "rec3_s2",
   "rec4_s1",
   "rec4_s2",
-  "w1b_full",
-  "w1b_stage1i"
+  "w1b_full"
  ],
- "gpu_free_gb": 46.0,
- "code": "8137100"
+ "gpu_free_gb": 56.1,
+ "code": "752066c"
 }
