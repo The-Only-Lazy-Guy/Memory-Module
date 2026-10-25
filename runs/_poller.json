@@ -1,11 +1,10 @@
 {
- "alive": "2026-10-25 19:39:56",
+ "alive": "2026-10-25 19:42:11",
  "running": [
   "w1b_stage1c",
-  "rd5_lazy_s1",
   "rec2_s1",
   "rec2_s2"
  ],
- "gpu_free_gb": 67.9,
+ "gpu_free_gb": 74.6,
  "code": "a73277a"
 }
