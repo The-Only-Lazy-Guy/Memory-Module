@@ -1352,6 +1352,10 @@ def main():
     P.add_argument("--ref-bank", type=int, default=6000, help="value texts kept in the re-read bank (GPU)")
     P.add_argument("--ref-alone", type=int, default=1, help="reference query: Walker re-reads the value tokens alone")
     P.add_argument("--rel-lr", type=float, default=1e-3, help="the relation heads' own optimizer")
+    P.add_argument("--dep-follow", default="lazy", choices=["lazy", "eager"],
+                   help="dependents: lazy = a question reads the dependent, then what it mentions (a 2-read chain; "
+                   "the dependent keeps its own 'same as ...' text); eager = the dependent's value is overwritten "
+                   "when its source changes (propagation)")
     P.add_argument("--w-ref-demo", type=float, default=1.0, help="r edges: weight of the demonstration (the generator "
                    "knows a dependent's source); 0 = the task gradient only")
     P.add_argument("--delta-cap", type=float, default=0.3, help="a model delta is at most this x the vector it adjusts")
@@ -1717,6 +1721,8 @@ def main():
             ar = torch.arange(len(mix), device=dev)
             km_ = graph.kmu[None] if float(graph.kmu_n) > 0 else kraw.mean(0, keepdim=True)
             C = graph.dep_ref(F.normalize(kraw - km_, dim=-1), r, km_, ver, HM)[:, rt] * m[None] * free[:, None].float()
+            if A.dep_follow != "eager":                 # lazy: dependents are followed by reads, never overwritten
+                C = C * 0.0
             C = C.index_put((rc, ar), torch.zeros(len(mix), device=dev)).index_put((rt, ar), torch.zeros(len(mix), device=dev))
             v = v + C @ dV                                         # dependents follow (one damped step)
             slots = slots + torch.einsum("nr,rsd->nsd", C, dS)
@@ -1957,7 +1963,7 @@ def main():
         dependent's old value is versioned). D = (P(has a relation), top node) — the model's two decisions, as every
         other hard choice (argmax): the edge PROBABILITY was split over the source's copies (argmax right .97,
         probability < .5 -> 0 propagated at the step-500 eval)"""
-        if D is None or tgt not in row_of:
+        if D is None or tgt not in row_of or A.dep_follow != "eager":
             return 0
         has_, top_ = D
         n_ = 0
@@ -2014,7 +2020,25 @@ def main():
         if pool is not None:
             facts = [f for f in facts if f in pool]
         nums = [f for f in facts if f[1] not in world.ent_keys]
-        if kind == "lookup" and facts:
+        lazy_deps = []
+        if A.dep_follow != "eager":                  # dependents held by ANY node (its value may be stale: it is
+            have = {}                                #   followed through what it mentions, not by its stored value)
+            for (nm_, k_, v_), ns_ in H.items():
+                if (nm_, k_) in world.deps:
+                    have.setdefault((nm_, k_), []).extend(ns_)
+            for f_, ns_ in have.items():
+                src_ = world.deps[f_]
+                sv_ = world.ents.get(src_[0], {}).get(src_[1])
+                if sv_ is not None and gold_node(H, src_[0], src_[1], sv_) is not None and (pool is None or f_ in pool):
+                    lazy_deps.append((f_, max(ns_, key=lambda i: store.nodes[i]["time"])))
+            facts = [f for f in facts if f not in world.deps]
+        if kind == "lookup" and (facts or lazy_deps):
+            if lazy_deps and (not facts or qrng.random() < len(lazy_deps) / (len(lazy_deps) + len(facts))):
+                (nm, k), dn = qrng.choice(sorted(lazy_deps))
+                s_nm, s_k = world.deps[(nm, k)]
+                v = world.ents[s_nm][s_k]
+                dv = value_of(store.prov.get(store.nodes[dn]["vsrc"]))
+                return (f"What is {leaf(nm, k)}?", [("read", dn), ("read", gold_node(H, s_nm, s_k, v))], [dv, v], v)
             nm, k = qrng.choice(facts)
             v = world.ents[nm][k]
             return f"What is {leaf(nm, k)}?", [("read", gold_node(H, nm, k, v))], [v], v
@@ -3015,6 +3039,8 @@ def main():
         H, _ = holders()
         for f in changed:
             if f not in world.ents.get(f[0], {}):
+                continue
+            if A.dep_follow != "eager" and f in world.deps:   # lazy: a dependent is asked by its 2-read chain
                 continue
             nm, k = f
             v, hs = world.ents[nm][k], world.hist[f]
