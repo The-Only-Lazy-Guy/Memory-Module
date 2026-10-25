@@ -1,6 +1,11 @@
 {
- "alive": "2026-10-25 15:37:25",
- "running": [],
+ "alive": "2026-10-25 15:39:32",
+ "running": [
+  "r_demo_s1",
+  "r_demo_s2",
+  "r_task_s1",
+  "r_task_s2"
+ ],
  "gpu_free_gb": 95.0,
- "code": "978bb7a"
+ "code": "e5bb87d"
 }
