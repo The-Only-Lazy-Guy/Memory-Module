@@ -1,0 +1,8 @@
+{
+ "state": "running",
+ "pid": 61187,
+ "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/rd4_s1.pt --corrections 2 --steps 1500 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --recurse 1 --long-ops 3,6 --seed 1 --save /marimo/gnm-lab/ckpt/rec3_s1.pt --log /marimo/gnm-lab/runs/runs/rec3_s1/train.jsonl",
+ "code": "16c26e2",
+ "started": "2026-10-25 20:06:29",
+ "updated": "2026-10-25 20:06:29"
+}

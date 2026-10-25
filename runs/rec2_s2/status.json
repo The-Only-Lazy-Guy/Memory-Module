@@ -1,8 +1,9 @@
 {
- "state": "running",
+ "state": "cancelled",
  "pid": 25618,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/rd4_s1.pt --corrections 2 --steps 1500 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --recurse 1 --long-ops 3,6 --seed 2 --save /marimo/gnm-lab/ckpt/rec2_s2.pt --log /marimo/gnm-lab/runs/runs/rec2_s2/train.jsonl",
  "code": "631539a",
  "started": "2026-10-25 19:15:32",
- "updated": "2026-10-25 19:15:32"
+ "updated": "2026-10-25 20:06:28",
+ "ended": "2026-10-25 20:06:28"
 }
