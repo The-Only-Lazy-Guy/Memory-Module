@@ -4000,7 +4000,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             wstats.clear()
             pp = {t: round(sum(v) / len(v), 2) for t, v in sorted(run.per_pass.items())}
             run.per_pass = {}
-            print(f"step {step} loss {float(loss):.3f} action acc {act:.2f} answer said {float(em.mean()):.2f} "
+            said_ = "- (no question this step: no fact held)" if em is None else f"{float(em.mean()):.2f}"
+            print(f"step {step} loss {float(loss):.3f} action acc {act:.2f} answer said {said_} "
                   f"tool outputs said {tool_said if tool_said is None else round(tool_said, 2)} | world "
                   f"{len(world.ents)} entities, {n_live} live nodes | peak VRAM {peak_gb():.2f} GB [{time.time() - t0:.0f}s]",
                   flush=True)
@@ -4061,7 +4062,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 print(f"  roundtrip in training (said exactly): {sum(rt_stats) / len(rt_stats):.2f}", flush=True)
                 rt_stats.clear()
             logf.write(json.dumps({"type": "train", "step": step, "loss": float(loss), "action": act, "per_pass": pp,
-                                   "integrate": ws, "said": float(em.mean()), "nodes": n_live}) + "\n")
+                                   "integrate": ws, "said": None if em is None else float(em.mean()), "nodes": n_live}) + "\n")
         if not A.smoke and (step % A.eval_every == 0 or step == A.steps):
             out = evaluate(step)
             sc = sum(v["exact"] for v in out.values())
