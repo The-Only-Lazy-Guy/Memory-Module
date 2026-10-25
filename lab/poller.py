@@ -265,6 +265,16 @@ def main():
                     os.killpg(procs[name][0].pid, signal.SIGTERM)
                     log(f"cancelled {name}")
                     continue
+                if job.get("cancel") and name in orphans:   # adopted after a reload: cancel by its process group
+                    try:
+                        os.killpg(os.getpgid(orphans[name]), signal.SIGTERM)
+                    except Exception as e:
+                        log(f"cancel {name} (adopted) failed: {e}")
+                    write_status(name, state="cancelled", ended=time.strftime("%Y-%m-%d %H:%M:%S"))
+                    del orphans[name]
+                    changed = True
+                    log(f"cancelled {name} (adopted)")
+                    continue
                 if name in procs or os.path.exists(status_path(name)) or job.get("cancel"):
                     continue
                 dep = job.get("after")                # wait for another job to finish (e.g. the checkpoint it starts from)
