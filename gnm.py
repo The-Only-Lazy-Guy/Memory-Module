@@ -1364,7 +1364,7 @@ def main():
     P.add_argument("--note-expect", type=int, default=1, help="a correction the note did not write is still asked")
     P.add_argument("--w-commit", type=float, default=1.0, help="commit target from the model's own answers (notes)")
     P.add_argument("--commit-margin", type=float, default=0.1)
-    P.add_argument("--w-commit-frames", type=float, default=1.0, help="frame rows: writing into a node is trained by "
+    P.add_argument("--w-commit-frames", type=float, default=0.0, help="frame rows: writing into a node is trained by "
                    "whether that node's fact is still answered right (the model's own answers)")
     P.add_argument("--id-guard", type=int, default=1, help="(rule) a replace into a node whose label is not ~identical "
                    "becomes NEW; 0 = the model's write decision alone")
