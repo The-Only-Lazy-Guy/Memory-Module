@@ -23,5 +23,5 @@
  "init_from": "ckpt",
  "gpu_gb": 6,
  "keep": false,
- "cancel": false
+ "cancel": true
 }
