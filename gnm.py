@@ -2140,9 +2140,14 @@ def main():
 
         def row_prog(n, tok0):
             steps, vals, regs_ = [], [], []
-            for c in n[2]:
+            held_r = {}                                  # a fact already read in this row is pointed at, not re-read
+            for c in n[2]:                               # (read-once masked the re-read: CE ~1e4 -> loss spikes)
+                if c[0] == "leaf" and (c[1], c[2]) in held_r:
+                    regs_.append(held_r[(c[1], c[2])])
+                    continue
                 if c[0] == "leaf":
                     steps.append(("read", gold_node(H, c[1], c[2], world.ents[c[1]][c[2]])))
+                    held_r[(c[1], c[2])] = len(steps)
                 else:
                     a_, b_ = spans[id(c)]
                     ts, te = char_to_tok(ends, base + a_, base + b_)
@@ -2489,6 +2494,9 @@ def main():
                         gargs.append(list(ra))
                         if kd == "sub" and sp_lg is not None:            # the span: start / end-1 token
                             for W_i, tgt_i in ((0, x[0]), (1, x[1] - 1)):
+                                if not (0 <= tgt_i < sp_lg[W_i].shape[1]) or float(sp_lg[W_i][b, tgt_i]) < -1e3:
+                                    run.masked_gold["span"] = run.masked_gold.get("span", 0) + 1   # outside the
+                                    continue                                                      # register: skip
                                 losses.append(F.cross_entropy(sp_lg[W_i][b:b + 1], torch.tensor([tgt_i], device=dev),
                                                               reduction="sum"))
                                 n_act += 1; ok_act += int(int(sp_lg[W_i][b].argmax()) == tgt_i)
@@ -2497,8 +2505,19 @@ def main():
                         gargs.append([])
                 g_ = torch.tensor(gold, device=dev)
                 vv = g_ != -100
-                if bool(vv.any()):
-                    losses.append(F.cross_entropy(logits, g_, ignore_index=-100, reduction="sum"))
+                g_l = g_.clone()                     # a demonstrated target on a MASKED choice (logit -1e4: read-once,
+                masked_ = vv & (logits.gather(1, g_.clamp(min=0)[:, None]).squeeze(1) < -1e3)   # not visible ...)
+                if bool(masked_.any()):              # gave CE ~1e4 for one row -> loss spikes (100-3000) and the
+                    g_l[masked_] = -100              # global clip shrank the whole step: skipped and counted
+                    for b_ in masked_.nonzero().flatten().tolist():
+                        gb = int(g_[b_])
+                        why = ("read: already read" if gb < N and bool(read_mask[b_, gb]) else
+                               "read: not visible" if gb < N else "NEW" if gb == I_NEW else "HALT" if gb == I_HALT
+                               else "SUB" if gb == I_SUB else "tool")
+                        key_ = f"{kind}{' child' if rows[b_].get('span') is not None else ''} @pass {t}: {why}"
+                        run.masked_gold[key_] = run.masked_gold.get(key_, 0) + 1
+                if bool((g_l != -100).any()):
+                    losses.append(F.cross_entropy(logits, g_l, ignore_index=-100, reduction="sum"))
                 rd = [(b, g_[b].item()) for b in range(B) if t > 0 and 0 <= gold[b] < N]
                 if rd and kind == "question":        # Wself(label of X) -> the query that read X (no new supervision)
                     xi = torch.tensor([g for _, g in rd], device=dev)
@@ -2960,6 +2979,7 @@ def main():
         return act + say_loss + cost, em[:B], ok_act / max(1, n_act), (em[B:].mean().item() if len(em) > B else None)
 
     run.per_pass = {}
+    run.masked_gold = {}
     run.commit_items = {}
     run.commit_stats = []
     run.comp_stats = []
@@ -4004,7 +4024,11 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             wstats.clear()
             pp = {t: round(sum(v) / len(v), 2) for t, v in sorted(run.per_pass.items())}
             run.per_pass = {}
-            said_ = "- (no question this step: no fact held)" if em is None else f"{float(em.mean()):.2f}"
+            if run.masked_gold:
+                print(f"  demonstrated targets on masked choices (skipped, since the last report): {run.masked_gold}",
+                      flush=True)
+                run.masked_gold = {}
+            said_ ="- (no question this step: no fact held)" if em is None else f"{float(em.mean()):.2f}"
             print(f"step {step} loss {float(loss):.3f} action acc {act:.2f} answer said {said_} "
                   f"tool outputs said {tool_said if tool_said is None else round(tool_said, 2)} | world "
                   f"{len(world.ents)} entities, {n_live} live nodes | peak VRAM {peak_gb():.2f} GB [{time.time() - t0:.0f}s]",

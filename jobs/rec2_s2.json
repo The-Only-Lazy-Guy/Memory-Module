@@ -24,5 +24,5 @@
  "after": "rd4_s1",
  "gpu_gb": 6,
  "keep": false,
- "cancel": false
+ "cancel": true
 }
