@@ -101,3 +101,14 @@ step 175 loss 3.711 action acc 0.60 answer said 1.00 tool outputs said 1.0 | wor
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.15, 0.02, 0.07, 0.33, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.07, 0.74, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 0.99
   roundtrip in training (said exactly): 1.00
+step 200 loss 3.414 action acc 0.66 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 12.67 GB [3628s]
+  read actions: {'halt': 0.98, 'read': 0.29, 'tool': 0.34} | integrate by kind (n, store, NEW, replace): {'state': (777, 0.13, 0.19, 0.0), 'decided drop': (3937, 0.0, 0.0, 0.0), 'name': (142, 0.32, 0.0, 0.0), 'fact': (191, 0.81, 0.0, 0.01), 'how fact (n, rule read, copy)': (191, 0.0, 0.77, 0.0), 'noise': (44, 0.13, 0.0, 0.0), 'multi': (17, 0.97, 0.0, 0.01), 'delta': (46, 0.94, 0.0, 0.01), 'how delta (n, rule read, copy)': (46, 0.0, 0.77, 0.0), 'decided attach': (186, 0.0, 0.0, 0.0), 'decided new': (67, 0.0, 0.0, 0.0), 'rule': (3, 0.41, 0.03, 0.0), 'dependent': (6, 0.74, 0.0, 0.01)}
+  look (proposed -> after looking): {'note: drop -> new': 45, 'note: new -> new': 5}
+  step time (20.7 s / step): other (log / evict / eval) 0.21 (1%) | frames 5.25 (25%) | notes 2.14 (10%) | ask 0.27 (1%) | questions 8.63 (42%) | roundtrip+invariance 0.38 (2%) | backward 2.69 (13%) | commit+step 1.13 (5%)
+  reference re-read (inside the parts above): 0.54 s / step | calls 79 | rows 3745 | new texts 133 / step | texts cached 3322
+  reference edges: dependents -> their source 0.00 | other facts -> none 0.99 | dependents / step 1.0 | misses hit: {'a item / name node': 9, 'source entity, other attribute': 6, 'a item / delta node': 4, 'other fact': 3}
+  forget (model's choice): 11.1 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-0.71, -0.25, -0.13, 0.26, 0.72, -0.75, -0.65]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 5.24
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.15, 0.02, 0.04, 0.32, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.04, 0.76, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.98
+  roundtrip in training (said exactly): 1.00
