@@ -12,6 +12,11 @@ job ends, commit + push the runs branch. A job file:
    "init_from": "ckpt",                                              #   ckpt branch, fetched once)
    "gpu_gb": 6, "cancel": false}
 Start (MoLab shell cell):  nohup python -u lab/poller.py > /marimo/poller.log 2>&1 &
+
+BOUNDED (molab rule: notebooks may be terminated for "non-interactive jobs" — the poller never runs on its own
+indefinitely): it exits when idle for `idle_exit_min` (nothing running, nothing startable), and after `max_hours`
+from its start (self-reloads keep the clock) it starts nothing new; running jobs get `grace_hours`, then are
+stopped. It is only ever started by hand from the open notebook.
 """
 import json
 import os
@@ -94,6 +99,14 @@ def file_hash(path):
         return hashlib.sha256(open(path, "rb").read()).hexdigest()
     except OSError:
         return ""
+
+
+def cfg(key, default):
+    """lab/config.json (read every poll: no restart needed to change it)"""
+    try:
+        return json.load(open(os.path.join(CODE, "lab", "config.json"))).get(key, default)
+    except Exception:
+        return default
 
 
 def max_jobs():
@@ -220,8 +233,13 @@ def main():
             pass
     me = os.path.abspath(__file__)
     my_hash = file_hash(me)
-    log(f"poller up: code {CODE}, runs {RUNS}, ckpt {CKPT}")
+    started = float(os.environ.get("LAB_STARTED", time.time()))
+    os.environ["LAB_STARTED"] = str(started)       # survives os.execv reloads: the lifetime is per hand start
+    idle_since = None
+    log(f"poller up: code {CODE}, runs {RUNS}, ckpt {CKPT}; started {time.strftime('%H:%M', time.localtime(started))}")
     while True:
+        age_h = (time.time() - started) / 3600
+        expired = age_h >= float(cfg("max_hours", 8))
         try:
             sh("git", "fetch", "-q", "origin", "main", cwd=CODE)
             sh("git", "reset", "-q", "--hard", "origin/main", cwd=CODE)
@@ -252,6 +270,8 @@ def main():
                 dep = job.get("after")                # wait for another job to finish (e.g. the checkpoint it starts from)
                 if dep and not (os.path.exists(status_path(dep)) and
                                 json.load(open(status_path(dep))).get("state") == "done"):
+                    continue
+                if expired:                           # past the lifetime: nothing new starts
                     continue
                 if len(procs) + len(orphans) >= max_jobs() or gpu_free_gb() < float(job.get("gpu_gb", 6)) + 2:
                     continue
@@ -286,6 +306,24 @@ def main():
             if changed or time.time() - last_push > PUSH:
                 push_runs("runs: " + ", ".join(sorted(procs)) if procs else "runs: idle")
                 last_push = time.time()
+            if expired and age_h >= float(cfg("max_hours", 8)) + float(cfg("grace_hours", 1.5)):
+                for name, (p, lf) in list(procs.items()):     # lifetime + grace over: stop what still runs
+                    os.killpg(p.pid, signal.SIGTERM)
+                    write_status(name, state="stopped (poller lifetime)", ended=time.strftime("%Y-%m-%d %H:%M:%S"))
+                for name, pid in orphans.items():
+                    try:
+                        os.killpg(os.getpgid(pid), signal.SIGTERM)
+                    except Exception:
+                        pass
+                push_runs("runs: poller stopped (lifetime)")
+                log("lifetime + grace over: stopped all jobs, exiting")
+                return
+            busy = bool(procs) or bool(orphans)
+            idle_since = None if busy else (idle_since or time.time())
+            if idle_since and time.time() - idle_since > 60 * float(cfg("idle_exit_min", 20)):
+                push_runs("runs: poller stopped (idle)")
+                log("idle: nothing running or startable, exiting")
+                return
         except Exception as e:
             log(f"poll error: {e}")
         time.sleep(POLL)

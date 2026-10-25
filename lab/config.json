@@ -1,1 +1,1 @@
-{"max_jobs": 8}
+{"max_jobs": 8, "max_hours": 8, "grace_hours": 1.5, "idle_exit_min": 20}
