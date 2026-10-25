@@ -1332,6 +1332,7 @@ def main():
     P.add_argument("--cap", type=int, default=3000)
     P.add_argument("--protect", type=int, default=0, help="(rule, off by default) frames a new node is safe from "
                    "eviction; the forget head sees the node's age")
+    P.add_argument("--dep-q", type=float, default=0.1, help="share of questions about dependents (lazy: the 2-read chain)")
     P.add_argument("--forget-q", type=float, default=0.1, help="share of questions about facts the model chose to forget")
     P.add_argument("--max-ents", type=int, default=150)
     P.add_argument("--mix", default="lookup:0.25,chain:0.15,arith:0.35,before:0.15,multi:0.1")
@@ -3995,8 +3996,11 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         #        never asked in its step got only the storage-cost gradient -> the gate learned to drop new facts)
         n_col = int(round(A.collateral * A.questions)) if coll else 0
         n_fg = min(len(forgot), int(round(A.forget_q * A.questions)))   # "was forgetting that a mistake?"
-        qs = ask(rng, [(n_now, now), (n_col, coll), (n_rec, recent), (n_fg, forgot),
-                       (A.questions - n_now - n_col - n_rec - n_fg, None)],
+        deps_now = set(world.deps) if A.dep_follow != "eager" else set()   # lazy dependents get their own share: drawn
+        n_dp = min(len(deps_now), int(round(A.dep_q * A.questions)))    # by count they were ~1 in 50 lookups and the
+        #                                                                  2-read chain faded (rd6: .37 / 1.00 -> .37 / .00)
+        qs = ask(rng, [(n_now, now), (n_col, coll), (n_rec, recent), (n_fg, forgot), (n_dp, deps_now),
+                       (A.questions - n_now - n_col - n_rec - n_fg - n_dp, None)],
                  A.mix, tr_ops, "train", soft=True)
         tmark("ask")
         run.self_loss = torch.zeros((), device=dev)
