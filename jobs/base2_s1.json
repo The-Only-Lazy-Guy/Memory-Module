@@ -1,5 +1,5 @@
 {
- "name": "tokbase2_s5",
+ "name": "base2_s1",
  "args": [
   "--corrections",
   "2",
@@ -11,10 +11,10 @@
   "288",
   "--skip-eval0",
   "--seed",
-  "5",
-  "--ans-eos",
-  "0"
+  "1"
  ],
- "init": "tok_s1.pt",
- "gpu_gb": 6
+ "init": "gnm_main20_step500.pt",
+ "init_from": "ckpt",
+ "gpu_gb": 6,
+ "keep": true
 }

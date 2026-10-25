@@ -116,13 +116,38 @@ def fetch_ckpt(name, src):
     dst = os.path.join(CKPT, name)
     if os.path.exists(dst):
         return dst
+    if src.startswith("hf:"):
+        dst = os.path.join(CKPT, "hf", name)
+        if os.path.exists(dst):
+            return dst
     if src == "ckpt":                        # one-off transfer branch
         sh("git", "fetch", "-q", "origin", "ckpt", cwd=CODE)
         with open(dst + ".part", "wb") as f:
             subprocess.run(["git", "show", f"origin/ckpt:{name}"], cwd=CODE, stdout=f, check=True)
         os.replace(dst + ".part", dst)
         return dst
+    if src.startswith("hf:"):                # a Walker checkpoint on the Hub: "hf:<repo>" + name = path in the repo
+        from huggingface_hub import hf_hub_download
+        p_ = hf_hub_download(src[3:], name, local_dir=os.path.join(CKPT, "hf"))
+        return p_
     raise FileNotFoundError(f"checkpoint {name} not in {CKPT}")
+
+
+def keep_ckpt(name):
+    """push CKPT/<name>.pt (the run's best) to the ckpt branch, so later jobs and resets keep it"""
+    src = os.path.join(CKPT, name + ".pt")
+    if not os.path.exists(src):
+        return
+    repo = os.path.join(BASE, "ckptrepo")
+    if not os.path.isdir(os.path.join(repo, ".git")):
+        sh("git", "clone", "-q", "--single-branch", "-b", "ckpt", REPO_URL, repo)
+        ident(repo)
+    sh("git", "pull", "-q", "origin", "ckpt", cwd=repo)
+    shutil.copy2(src, os.path.join(repo, name + ".pt"))
+    sh("git", "add", name + ".pt", cwd=repo)
+    sh("git", "commit", "-qm", f"ckpt: {name}", cwd=repo)
+    sh("git", "push", "-q", "origin", "ckpt", cwd=repo)
+    log(f"kept {name}.pt on the ckpt branch")
 
 
 def status_path(name):
@@ -137,6 +162,9 @@ def write_status(name, **kw):
     json.dump(st, open(p, "w"), indent=1)
 
 
+keep = {}
+
+
 def start_job(job, procs):
     name = job["name"]
     d = os.path.join(JOBS, name)
@@ -147,12 +175,15 @@ def start_job(job, procs):
     os.makedirs(out, exist_ok=True)
     args = [str(a) for a in job.get("args", [])]
     if job.get("init"):
-        args = ["--init-full", fetch_ckpt(job["init"], job.get("init_from", "ckpt"))] + args
+        args = [job.get("init_flag", "--init-full"), fetch_ckpt(job["init"], job.get("init_from", "ckpt"))] + args
+    if job.get("walker"):                    # the 1B Walker: {"repo": ..., "path": ...} on the Hub
+        args = ["--ckpt", fetch_ckpt(job["walker"]["path"], "hf:" + job["walker"]["repo"])] + args
     cmd = [sys.executable, "-u", "gnm.py"] + args + ["--save", os.path.join(CKPT, name + ".pt"),
                                                       "--log", os.path.join(out, "train.jsonl")]
     lf = open(os.path.join(out, "train.log"), "w")
     p = subprocess.Popen(cmd, cwd=d, stdout=lf, stderr=subprocess.STDOUT, start_new_session=True)
     procs[name] = (p, lf)
+    keep[name] = bool(job.get("keep"))
     write_status(name, state="running", pid=p.pid, cmd=" ".join(cmd[2:]), code=sh("git", "rev-parse", "--short", "HEAD", cwd=CODE),
                  started=time.strftime("%Y-%m-%d %H:%M:%S"))
     log(f"started {name}: {' '.join(cmd[2:])}")
@@ -218,6 +249,10 @@ def main():
                     continue
                 if name in procs or os.path.exists(status_path(name)) or job.get("cancel"):
                     continue
+                dep = job.get("after")                # wait for another job to finish (e.g. the checkpoint it starts from)
+                if dep and not (os.path.exists(status_path(dep)) and
+                                json.load(open(status_path(dep))).get("state") == "done"):
+                    continue
                 if len(procs) + len(orphans) >= max_jobs() or gpu_free_gb() < float(job.get("gpu_gb", 6)) + 2:
                     continue
                 try:
@@ -237,6 +272,11 @@ def main():
                     lf.close()
                     write_status(name, state="done" if rc == 0 else "failed", exit_code=rc,
                                  ended=time.strftime("%Y-%m-%d %H:%M:%S"))
+                    if rc == 0 and keep.get(name):
+                        try:
+                            keep_ckpt(name)
+                        except Exception as e:
+                            log(f"keep {name} failed: {e}")
                     del procs[name]
                     changed = True
                     log(f"{name} ended ({rc})")
