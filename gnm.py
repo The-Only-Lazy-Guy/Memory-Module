@@ -1115,6 +1115,7 @@ class Graph(nn.Module):
         self.eb = nn.Linear(dk, dk, bias=False)
         self.rop = nn.Linear(dk, dk, bias=False)           # dependence edges (source = relation-linked neighbours)
         self.tau_o = nn.Parameter(torch.tensor(math.log(5.0)))
+        self.tau_r = nn.Parameter(torch.tensor(math.log(10.0)))   # relation-edge temperature (cosine scores)
         self.w_rel = nn.Parameter(torch.tensor(0.0))
         self.age = nn.Parameter(torch.zeros(3))            # node stat: age (smooth)
         self.keep = nn.Parameter(torch.tensor([4.0, -1.0, 0.5]))     # keep knob: base, version, log usage
@@ -1129,8 +1130,13 @@ class Graph(nn.Module):
         r = self.Wr(self.pr.flat(*self.mem.last_flat))
         return kraw, v, logg, slots, r
 
+    def rel_scores(self, R):
+        """relation-edge scores: cosine x a learned temperature (bounded; raw dot products of relation vectors
+        that had exploded to |R| ~ 8,600 reached ~1e6 and made the softmax winner-take-all: one global hub)"""
+        return self.tau_r.exp() * F.normalize(self.ea(R), dim=-1) @ F.normalize(self.eb(R), dim=-1).t()
+
     def rel(self, R):
-        return torch.softmax(self.ea(R) @ self.eb(R).t() / math.sqrt(R.shape[-1]), -1)
+        return torch.softmax(self.rel_scores(R), -1)
 
     def dep(self, V, R, rel=None):
         """dependence edges: row j = which node j's value follows (predicted from its relation-linked neighbours)"""
@@ -1284,6 +1290,9 @@ def main():
     P.add_argument("--early-version", type=int, default=0, help="a replace decided in training makes its version at once")
     P.add_argument("--q-slots-mode", default="reg", choices=["mem", "reg"],
                    help="mem: question / note nodes keep q-slots in memory; reg: only Walker's register gets them")
+    P.add_argument("--w-relc", type=float, default=0.5, help="relation edges from the input's record structure")
+    P.add_argument("--w-hub", type=float, default=0.05, help="anti-hub term on relation-edge mass")
+    P.add_argument("--delta-cap", type=float, default=0.3, help="a model delta is at most this x the vector it adjusts")
     P.add_argument("--recurse", type=int, default=0, help="long chains by recursion: SUB hands a span of the question "
                    "to a child row whose answer returns as a register (every row <= one operation)")
     P.add_argument("--max-depth", type=int, default=6)
@@ -1550,9 +1559,14 @@ def main():
         dsel = [(k_, dd) for k_, dd in dsel if dd is not None]
         if dsel:
             ix = torch.tensor([k_ for k_, _ in dsel], device=dev)
-            kraw = kraw.index_add(0, ix, torch.stack([dd[0] for _, dd in dsel]))
-            v = v.index_add(0, ix, torch.stack([dd[1] for _, dd in dsel]))
-            r = r.index_add(0, ix, torch.stack([dd[2] for _, dd in dsel]))
+
+            def capd(base, dd_):                               # deltas accumulate over writes (replace moves them:
+                nb = base.norm(dim=-1, keepdim=True)          # od + dd): unbounded relation deltas reached 12,500
+                nd_ = dd_.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+                return dd_ * (A.delta_cap * nb / nd_).clamp(max=1.0)
+            kraw = kraw.index_add(0, ix, capd(kraw[ix], torch.stack([dd[0] for _, dd in dsel])))
+            v = v.index_add(0, ix, capd(v[ix], torch.stack([dd[1] for _, dd in dsel])))
+            r = r.index_add(0, ix, capd(r[ix], torch.stack([dd[2] for _, dd in dsel])))
         row_of = {n: k_ for k_, n in enumerate(live)}
         lsel = [(k_, row_of[store.nodes[nid]["link"]]) for k_, nid in enumerate(live)
                 if store.nodes[nid]["link"] in row_of]
@@ -1779,6 +1793,9 @@ def main():
         X = walker_states(model, ids).to(torch.bfloat16)
         nid_lists = [store.add_frame(enc["ids"], X[j, :len(enc["ids"])].clone(), enc, leaf_meta(o, kind), kind)
                      for j, ((enc, _), o) in enumerate(zip(encs, objs))]
+        for o, nl in zip(objs, nid_lists):                    # which pairs share a record (observable structure)
+            for n_, lf in zip(nl, serialize(o, "state")[1]):
+                store.nodes[n_]["rec"] = (nl[0], tuple(lf[0][:-1]))
         if kind in ("question", "note"):                    # the current input: read now, kept like any node
             return nid_lists, torch.zeros((), device=dev)
         rows = [{"qnid": n} for nl in nid_lists for n in nl]   # every pair = a frame row (address -> read -> write)
@@ -1790,6 +1807,7 @@ def main():
         vn = store.new_node(t["lsrc"] if t["lsrc"] else t["vsrc"], t["vsrc"], "version", t["time"], t["nslots"])
         store.nodes[vn]["ver_of"] = tgt
         store.nodes[vn]["d"] = t["d"]
+        store.nodes[vn]["rec"] = t.get("rec")
         return vn
 
     def propagate(D, rows, row_of, tgt, time_):
@@ -3180,6 +3198,9 @@ def main():
         top1 = Rm.argmax(-1).tolist()
         has_e = [j for j in range(n_) if ent_of[j]]
         same_top = sum(1 for j in has_e if ent_of[top1[j]] == ent_of[j]) / max(1, len(has_e))
+        rec_of = [store.nodes[i].get("rec") for i in rows]
+        has_r = [j for j in range(n_) if rec_of[j] is not None and sum(1 for x in rec_of if x == rec_of[j]) > 1]
+        same_rec = sum(1 for j in has_r if rec_of[top1[j]] == rec_of[j]) / max(1, len(has_r))
         from collections import Counter as _C
         ec = _C(e for e in ent_of if e)
         chance = sum(c * (c - 1) for c in ec.values()) / max(1, len(has_e) * (n_ - 1))
@@ -3212,6 +3233,7 @@ def main():
         dep_ok = sum(1 for j in deps_ if value_of(store.prov.get(store.nodes[rows[dtop[j]]]["vsrc"])) ==
                      value_of(store.prov.get(store.nodes[rows[j]]["vsrc"]))) / max(1, len(deps_))
         conn = {"nodes": n_,
+                "relation top-1 partner is in the SAME record": f"{same_rec:.3f} of {len(has_r)} nodes with partners",
                 "relation top-1 partner is the SAME entity": f"{same_top:.3f} (chance {chance:.3f})",
                 "hubs: max in-degree of top-1 relation edges": max(indeg.values()) if indeg else 0,
                 "nodes that are someone's top-1 partner": f"{len(indeg)}/{n_}",
@@ -3221,6 +3243,25 @@ def main():
                 "attach links / version links": f"{n_link} / {n_ver}",
                 "dependents whose top dependence partner holds the same value": f"{dep_ok:.3f} of {len(deps_)}"}
         print("GRAPH CONNECTIVITY:", json.dumps(conn, indent=1), flush=True)
+        # ---- the hubs: who they are and why every node points at them
+        eaR, ebR = graph.ea(M["R"]), graph.eb(M["R"])
+        Rn, ebn = M["R"].norm(dim=-1), ebR.norm(dim=-1)
+        mean_ea = F.normalize(eaR.mean(0), dim=-1)
+        align = F.normalize(ebR, dim=-1) @ mean_ea          # how well a node's "key" side matches the average query
+        rank = lambda x, j: int((x > x[j]).sum()) + 1
+        for j, deg in indeg.most_common(3):
+            i = rows[j]
+            nd = store.nodes[i]
+            dd = store.live.get(i) or nd.get("d")
+            print(f"HUB node {i}: in-degree {deg} | {info[i][0]} | kind {nd['kind']} | time {nd['time']:.0f} (now "
+                  f"{store.time}) | usage {nd['usage']} | |R| {float(Rn[j]):.2f} (rank {rank(Rn, j)}/{n_}, median "
+                  f"{float(Rn.median()):.2f}) | |eb(R)| {float(ebn[j]):.2f} (rank {rank(ebn, j)}/{n_}, median "
+                  f"{float(ebn.median()):.2f}) | key-side alignment with the mean query {float(align[j]):.3f} (rank "
+                  f"{rank(align, j)}/{n_}) | own relation delta |dr| "
+                  f"{float(dd[2].norm()) if dd is not None else 0.0:.2f}", flush=True)
+        print(f"relation score spread: ea.eb/sqrt(d) for the hub column vs the median column, mean over rows: "
+              f"{float((eaR @ ebR[indeg.most_common(1)[0][0]]).mean() / math.sqrt(M['R'].shape[-1])):.2f} vs "
+              f"{float((eaR @ ebR.t()).median(dim=1).values.mean() / math.sqrt(M['R'].shape[-1])):.2f}", flush=True)
         # ---- the drawn subgraph: the entities with the most nodes, their versions, rules, and 1-hop edge partners
         per = {}
         for i in rows:
@@ -3296,6 +3337,37 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             f.write(html)
         n_model = sum(1 for e_ in edges if not e_[2].startswith("truth"))
         print(f"GRAPH: {len(nodes)} nodes, {n_model} model edges + {len(eds) - n_model} truth links -> {path}", flush=True)
+
+    rel_stats = []
+
+    def rel_contrast(irng, n_anchor=64):
+        """relation edges from the input's OWN structure: a node's relation edge should go to a pair of the same
+        record (multi-positive InfoNCE over all live nodes), plus an anti-hub term (no node may take a large share of
+        everyone's edge mass). Graph heads + relation vectors; the encoder only through the anchors' sources."""
+        M = materialize()
+        rows_ = M["rows"]
+        groups = {}
+        for j, i in enumerate(rows_):
+            rk = store.nodes[i].get("rec")
+            if rk is not None and store.nodes[i]["kind"] in ("item", "state", "version"):
+                groups.setdefault(rk, []).append(j)
+        cands = [j for g in groups.values() if len(g) > 1 for j in g]
+        if len(cands) < 4:
+            return torch.zeros((), device=dev)
+        anchors = irng.sample(cands, min(n_anchor, len(cands)))
+        S = graph.rel_scores(M["R"])
+        n_ = S.shape[0]
+        S = S.masked_fill(torch.eye(n_, dtype=torch.bool, device=dev), -1e4)
+        loss, hit = 0.0, 0
+        for a_ in anchors:
+            rk = store.nodes[rows_[a_]]["rec"]
+            pos = torch.tensor([j for j in groups[rk] if j != a_], device=dev)
+            loss = loss - (torch.logsumexp(S[a_, pos], 0) - torch.logsumexp(S[a_], 0))
+            hit += int(int(S[a_].argmax()) in set(pos.tolist()))
+        col = torch.softmax(S, -1).mean(0)                     # each node's share of everyone's edge mass
+        hub = n_ * (col ** 2).sum() - 1.0                       # 0 when uniform; ~n when one node takes everything
+        rel_stats.append((hit / len(anchors), float(col.max() * n_)))
+        return loss / len(anchors) + A.w_hub * hub
 
     def invariance_loss(irng, n=16):
         """labels = what a pair is about, not where it was seen: each sampled fact is encoded in two random
@@ -3590,6 +3662,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         #                                                        misread operands were the arithmetic bottleneck)
         rt_stats.append(rt_ok)
         loss = loss + A.w_self * run.self_loss + A.w_inv * invariance_loss(rng) + A.w_rt * rt_loss
+        if A.w_relc:
+            loss = loss + A.w_relc * rel_contrast(rng)
         tmark("roundtrip+invariance")
         opt.zero_grad(set_to_none=True)
         if loss.requires_grad:                            # (nothing askable this step: no update, decisions still run)
@@ -3627,6 +3701,10 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 print(f"  step time ({tt_ / n_:.1f} s / step): " + " | ".join(
                     f"{k_} {v_ / n_:.2f} ({100 * v_ / tt_:.0f}%)" for k_, v_ in tsum.items()), flush=True)
                 tsum.clear()
+            if rel_stats:
+                print(f"  relation edges: top-1 in the same record {sum(x[0] for x in rel_stats) / len(rel_stats):.2f} | "
+                      f"largest node share of edge mass x n {max(x[1] for x in rel_stats):.1f} (1 = uniform)", flush=True)
+                rel_stats.clear()
             if run.comp_stats:
                 cs_ = run.comp_stats
                 print(f"  compose (refine on write): P(compose) {sum(x[0] for x in cs_) / len(cs_):.2f} | used "
