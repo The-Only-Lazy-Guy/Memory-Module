@@ -1,0 +1,34 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3575.69it/s]
+INIT from /marimo/gnm-lab/ckpt/gnm_main20_step500.pt: 109 tensors loaded, 0 skipped (new heads / interface / shape changes)
+WORLD: 36 entities, 120 nodes after 60 warm frames
+/marimo/gnm-lab/jobs/base2_s2/gnm.py:2382: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if choice[b] >= N and float(mcl[b]) > float(Pn[b, choice[b]]):
+step 25 loss 7.240 action acc 0.75 answer said 0.96 tool outputs said 1.0 | world 118 entities, 1024 live nodes | peak VRAM 2.74 GB [63s]
+  read actions: {'halt': 0.84, 'read': 0.62, 'tool': 0.65} | integrate by kind (n, store, NEW, replace): {'replace into own fact': (54, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into OTHER fact': (26, 0.0, 0.0, 0.0), 'rule': (10, 0.66, 0.82, 0.0), 'name': (238, 0.14, 0.81, 0.01), 'fact': (330, 0.75, 0.74, 0.19), 'how fact (n, rule read, copy)': (330, 0.0, 0.77, 0.0), 'noise': (75, 0.05, 0.68, 0.01), 'multi': (39, 0.96, 0.79, 0.18), 'dependent': (34, 0.93, 0.91, 0.07), 'delta': (9, 0.96, 0.44, 0.44), 'how delta (n, rule read, copy)': (9, 0.0, 0.77, 0.0), 'decided new': (248, 0.0, 0.0, 0.0), 'decided drop': (6047, 0.0, 0.0, 0.0), 'decided replace': (88, 0.0, 0.0, 0.0), 'state': (784, 0.07, 0.8, 0.01), 'absorbed copies': (3, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: replace -> replace': 13, 'note: new -> new': 18, 'note: drop -> replace': 4, 'note: new -> replace': 14, 'note: drop -> new': 1}
+  step time (2.5 s / step): frames 0.67 (27%) | notes 0.31 (12%) | ask 0.01 (0%) | questions 0.71 (28%) | roundtrip+invariance 0.05 (2%) | backward 0.33 (13%) | commit+step 0.42 (17%) | other (log / evict / eval) 0.00 (0%)
+  relation edges: top-1 in the same record 0.02 | largest node share of edge mass x n 4.0 (1 = uniform)
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.57
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.42, 0.98, 0.58, 0.7, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.58, 0.41, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.98
+  roundtrip in training (said exactly): 0.32
+step 50 loss 1.977 action acc 0.85 answer said 0.96 tool outputs said 0.88 | world 150 entities, 1942 live nodes | peak VRAM 2.79 GB [152s]
+  read actions: {'halt': 0.9, 'read': 0.61, 'tool': 0.73} | integrate by kind (n, store, NEW, replace): {'state': (928, 0.07, 0.83, 0.0), 'decided drop': (6278, 0.0, 0.0, 0.0), 'name': (153, 0.19, 0.97, 0.0), 'fact': (207, 0.76, 0.63, 0.26), 'how fact (n, rule read, copy)': (207, 0.0, 0.77, 0.0), 'multi': (27, 0.96, 0.7, 0.23), 'noise': (44, 0.05, 0.76, 0.01), 'decided new': (134, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'dependent': (20, 0.84, 0.9, 0.07), 'rule': (7, 0.73, 0.58, 0.0), 'decided replace': (81, 0.0, 0.0, 0.0), 'replace into OTHER fact': (26, 0.0, 0.0, 0.0), 'replace into own fact': (55, 0.0, 0.0, 0.0), 'delta': (11, 0.98, 0.18, 0.67), 'how delta (n, rule read, copy)': (11, 0.0, 0.76, 0.0), 'absorbed copies': (3, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> replace': 14, 'note: replace -> replace': 11, 'note: new -> new': 20, 'note: drop -> replace': 3, 'note: drop -> new': 2}
+  step time (3.6 s / step): other (log / evict / eval) 0.01 (0%) | frames 0.91 (25%) | notes 0.46 (13%) | ask 0.01 (0%) | questions 0.93 (26%) | roundtrip+invariance 0.04 (1%) | backward 0.34 (9%) | commit+step 0.87 (24%)
+  relation edges: top-1 in the same record 0.02 | largest node share of edge mass x n 7.5 (1 = uniform)
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 3.18
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.47, 0.97, 0.51, 0.73, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.51, 0.32, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.98
+  roundtrip in training (said exactly): 0.42
+step 75 loss 1.217 action acc 0.81 answer said 1.00 tool outputs said 1.0 | world 150 entities, 2864 live nodes | peak VRAM 3.20 GB [268s]
+  read actions: {'halt': 0.87, 'read': 0.61, 'tool': 0.79} | integrate by kind (n, store, NEW, replace): {'state': (700, 0.1, 0.62, 0.01), 'decided drop': (4116, 0.0, 0.0, 0.0), 'name': (143, 0.26, 0.91, 0.01), 'dependent': (9, 0.71, 0.99, 0.0), 'noise': (45, 0.07, 0.34, 0.02), 'fact': (193, 0.8, 0.39, 0.41), 'how fact (n, rule read, copy)': (193, 0.0, 0.75, 0.0), 'multi': (26, 0.95, 0.38, 0.48), 'decided new': (111, 0.0, 0.0, 0.0), 'decided replace': (119, 0.0, 0.0, 0.0), 'replace into OTHER fact': (36, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'absorbed copies': (11, 0.0, 0.0, 0.0), 'delta': (20, 0.96, 0.15, 0.67), 'how delta (n, rule read, copy)': (20, 0.0, 0.75, 0.0), 'replace into own fact': (83, 0.0, 0.0, 0.0), 'rule': (6, 0.7, 0.52, 0.01)}
+  look (proposed -> after looking): {'note: new -> replace': 19, 'note: new -> new': 16, 'note: drop -> new': 4, 'note: replace -> replace': 7, 'note: drop -> replace': 4}
+  step time (4.6 s / step): other (log / evict / eval) 0.01 (0%) | frames 1.12 (24%) | notes 0.68 (15%) | ask 0.02 (0%) | questions 1.07 (23%) | roundtrip+invariance 0.04 (1%) | backward 0.33 (7%) | commit+step 1.35 (29%)
+  relation edges: top-1 in the same record 0.16 | largest node share of edge mass x n 4.4 (1 = uniform)
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 4.72
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.44, 0.91, 0.56, 0.71, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.56, 0.29, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 0.88
