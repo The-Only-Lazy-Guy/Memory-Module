@@ -510,3 +510,5 @@ EVAL 1000 duplicates: 116 of 1035 facts held by >1 current node | nodes per fact
 EVAL 1000 roundtrip (encode -> say): numbers 1.000 | names 1.000 | unseen strings 1.000
 EVAL 1000 frame-pair roundtrip (a value encoded inside a record, said from its node, no memory ops): 1.000
 EVAL 1000 identity_lookup: update -> its identity node is the best match: raw label 1.000 | Wself query 0.917 | n 24
+FIRST FRAME: stored 19/19 facts | answered 17/19 = 0.895 | read the right node 0.895
+EVAL 1000 first_frame: exact 0.895 | read the right node 0.895
