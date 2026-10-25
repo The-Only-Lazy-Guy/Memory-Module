@@ -1,0 +1,23 @@
+{
+ "name": "w1_stage2",
+ "walker": {
+  "repo": "Papatpong/Walker",
+  "path": "checkpoints/branch47750_ckpt_best.pt"
+ },
+ "init": "w1_stage1.pt",
+ "init_from": "ckpt",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "1500",
+  "--eval-every",
+  "500",
+  "--eval-q",
+  "288",
+  "--skip-eval0"
+ ],
+ "after": "w1_stage1",
+ "gpu_gb": 24,
+ "keep": true
+}
