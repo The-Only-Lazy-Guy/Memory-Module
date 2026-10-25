@@ -146,6 +146,24 @@ def fetch_ckpt(name, src):
     raise FileNotFoundError(f"checkpoint {name} not in {CKPT}")
 
 
+def adopted_end(name):
+    """an adopted job (started before a self-reload) ended: no exit code is known -> success = a checkpoint exists and
+    its log has no traceback; then keep its checkpoint if the job asks for it (adopted jobs were never kept before)"""
+    log_p = os.path.join(RUNS, "runs", name, "train.log")
+    tb = os.path.exists(log_p) and "Traceback" in open(log_p, errors="ignore").read()
+    ok = os.path.exists(os.path.join(CKPT, name + ".pt")) and not tb
+    write_status(name, state="done (adopted)" if ok else "failed (adopted)", ended=time.strftime("%Y-%m-%d %H:%M:%S"))
+    try:
+        job = json.load(open(os.path.join(CODE, "jobs", name + ".json")))
+    except Exception:
+        job = {}
+    if ok and job.get("keep"):
+        try:
+            keep_ckpt(name)
+        except Exception as e:
+            log(f"keep {name} (adopted) failed: {e}")
+
+
 def keep_ckpt(name):
     """push CKPT/<name>.pt (the run's best) to the ckpt branch, so later jobs and resets keep it"""
     src = os.path.join(CKPT, name + ".pt")
@@ -231,6 +249,12 @@ def main():
                 orphans[os.path.basename(os.path.dirname(st_p))] = st["pid"]
         except Exception:
             pass
+    for n_ in os.listdir(os.path.join(RUNS, "runs")):
+        try:
+            if json.load(open(status_path(n_))).get("state") == "ended (adopted)":
+                adopted_end(n_)
+        except Exception:
+            pass
     me = os.path.abspath(__file__)
     my_hash = file_hash(me)
     started = float(os.environ.get("LAB_STARTED", time.time()))
@@ -279,7 +303,7 @@ def main():
                     continue
                 dep = job.get("after")                # wait for another job to finish (e.g. the checkpoint it starts from)
                 if dep and not (os.path.exists(status_path(dep)) and
-                                json.load(open(status_path(dep))).get("state") == "done"):
+                                json.load(open(status_path(dep))).get("state", "").startswith("done")):
                     continue
                 if expired:                           # past the lifetime: nothing new starts
                     continue
@@ -293,7 +317,7 @@ def main():
                 changed = True
             for name, pid in list(orphans.items()):
                 if not alive(pid):
-                    write_status(name, state="ended (adopted)", ended=time.strftime("%Y-%m-%d %H:%M:%S"))
+                    adopted_end(name)
                     del orphans[name]
                     changed = True
             for name, (p, lf) in list(procs.items()):
