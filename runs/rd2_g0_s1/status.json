@@ -1,8 +1,9 @@
 {
- "state": "running",
+ "state": "done (adopted)",
  "pid": 19577,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/gnm_main22.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --seed 1 --id-guard 0 --save /marimo/gnm-lab/ckpt/rd2_g0_s1.pt --log /marimo/gnm-lab/runs/runs/rd2_g0_s1/train.jsonl",
  "code": "47abf9a",
  "started": "2026-10-25 16:32:02",
- "updated": "2026-10-25 16:32:02"
+ "updated": "2026-10-25 18:32:12",
+ "ended": "2026-10-25 18:32:12"
 }
