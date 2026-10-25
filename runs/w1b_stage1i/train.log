@@ -16,3 +16,15 @@ roundtrip before warm-up: {'numbers': 0.0, 'names': 0.0, 'unseen strings': 0.0}
 Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
   print(f"warm roundtrip {st_}: loss {float(loss_):.3f} said exactly {ok_:.2f}{inv_}", flush=True)
 warm roundtrip 50: loss 2.115 said exactly 0.08 | label invariance 0.99
+warm roundtrip 100: loss 0.488 said exactly 0.75 | label invariance 1.00
+warm roundtrip 150: loss 0.257 said exactly 0.83 | label invariance 1.00
+warm roundtrip 200: loss 0.265 said exactly 0.85 | label invariance 1.00
+warm roundtrip 250: loss 0.167 said exactly 0.88 | label invariance 1.00
+warm roundtrip 300: loss 0.123 said exactly 0.90 | label invariance 1.00
+warm roundtrip 350: loss 0.135 said exactly 0.92 | label invariance 1.00
+warm roundtrip 400: loss 0.087 said exactly 0.94 | label invariance 1.00
+warm roundtrip 450: loss 0.181 said exactly 0.83 | label invariance 1.00
+warm roundtrip 500: loss 0.151 said exactly 0.90 | label invariance 1.00
+warm roundtrip 550: loss 0.105 said exactly 0.96 | label invariance 1.00
+warm roundtrip 600: loss 0.155 said exactly 0.90 | label invariance 1.00
+roundtrip after warm-up: {'numbers': 1.0, 'names': 0.7708333333333334, 'unseen strings': 1.0}
