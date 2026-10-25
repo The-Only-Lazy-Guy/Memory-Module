@@ -1,8 +1,9 @@
 {
- "state": "running",
+ "state": "done (adopted)",
  "pid": 41082,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/gnm_main22.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --seed 2 --save /marimo/gnm-lab/ckpt/rd2_s2.pt --log /marimo/gnm-lab/runs/runs/rd2_s2/train.jsonl",
  "code": "2881f14",
  "started": "2026-10-25 17:32:37",
- "updated": "2026-10-25 17:32:37"
+ "updated": "2026-10-25 19:13:35",
+ "ended": "2026-10-25 19:13:35"
 }
