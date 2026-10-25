@@ -9,5 +9,6 @@
   "288"
  ],
  "init": "tok_s1.pt",
- "gpu_gb": 6
+ "gpu_gb": 6,
+ "cancel": true
 }

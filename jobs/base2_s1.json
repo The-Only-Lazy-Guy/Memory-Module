@@ -16,5 +16,6 @@
  "init": "gnm_main20_step500.pt",
  "init_from": "ckpt",
  "gpu_gb": 6,
- "keep": true
+ "keep": true,
+ "cancel": true
 }

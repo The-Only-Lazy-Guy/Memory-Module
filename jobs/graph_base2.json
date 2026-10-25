@@ -11,5 +11,6 @@
  "init_from": "ckpt",
  "after": "base2_s1",
  "gpu_gb": 6,
- "init_flag": "--load"
+ "init_flag": "--load",
+ "cancel": true
 }

@@ -19,5 +19,6 @@
  ],
  "after": "w1_stage1",
  "gpu_gb": 24,
- "keep": true
+ "keep": true,
+ "cancel": true
 }

@@ -11,5 +11,6 @@
   "1"
  ],
  "init": "c1k_ver_s1.pt",
- "gpu_gb": 6
+ "gpu_gb": 6,
+ "cancel": true
 }

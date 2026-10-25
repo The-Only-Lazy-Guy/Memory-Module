@@ -9,5 +9,6 @@
   "288"
  ],
  "init": "c1k_nover_s2.pt",
- "gpu_gb": 6
+ "gpu_gb": 6,
+ "cancel": true
 }
