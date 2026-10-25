@@ -1,8 +1,10 @@
 {
- "state": "running",
+ "state": "failed",
  "pid": 25705,
  "cmd": "gnm.py --ckpt /marimo/gnm-lab/ckpt/hf/checkpoints/branch47750_ckpt_best.pt --swap-from /marimo/gnm-lab/ckpt/rd4_s1.pt --freeze-core --corrections 2 --steps 1000 --eval-every 500 --eval-q 96 --skip-eval0 --forget-q 0.2 --save /marimo/gnm-lab/ckpt/w1b_stage1.pt --log /marimo/gnm-lab/runs/runs/w1b_stage1/train.jsonl",
  "code": "631539a",
  "started": "2026-10-25 19:15:37",
- "updated": "2026-10-25 19:15:37"
+ "updated": "2026-10-25 19:22:42",
+ "exit_code": 1,
+ "ended": "2026-10-25 19:22:42"
 }
