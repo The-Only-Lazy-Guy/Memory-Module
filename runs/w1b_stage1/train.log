@@ -1,0 +1,24 @@
+inference: TB_WALK_FORWARD_SCALE=1.0 (as trained)
+inference: TB_PHASE_WALK_FORWARD_SCALE=0.0 (as trained)
+RoPE: ON — global base=10000, windowed base=W_max (constant), null_key=ON, pos_emb unused
+trajectory gradient interface: phaseA rho=1 alpha=1; phaseB rho=1 alpha=0 (rho changes backward only)
+quantization: ACTUAL=['fp8'] on 64 linears | fast_linears=0 | fp4_usable=False | fp8_act_scale=rowwise-causal (fast path verified after first forward; STE routed per-quant type — fp4 uses /6 e2m1 scales, fp8 uses /448 e4m3)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+inference ready: weights=/marimo/gnm-lab/ckpt/hf/checkpoints/branch47750_ckpt_best.pt | D=2048 L=16 n_head=16 vocab=50257 max_t=16384 | device=cuda
+Walker 1B from /marimo/gnm-lab/ckpt/hf/checkpoints/branch47750_ckpt_best.pt: 16 blocks, d=2048, encoder states at block 10
+SWAP (core only) from /marimo/gnm-lab/ckpt/rd4_s1.pt: 86 tensors loaded, 51 skipped (new heads / interface / shape changes)
+FREEZE core: 87 tensors frozen, training the interface only
+  QLinear fast path OK (fp8, rel err 0.00397)
+WORLD: 48 entities, 285 nodes after 60 warm frames
+/marimo/gnm-lab/jobs/w1b_stage1/gnm.py:2638: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  stat_rows.append((b, float(w_keep[b] + w_rep[b].sum()), float(P[b, I_NEW]),
+step 25 loss 12.696 action acc 0.56 answer said 0.00 tool outputs said 0.0 | world 120 entities, 1810 live nodes | peak VRAM 11.89 GB [215s]
+  read actions: {'halt': 0.44, 'read': 0.29, 'tool': 0.0} | integrate by kind (n, store, NEW, replace): {'propagated': (0, 0.0, 0.0, 0.0), 'fact': (346, 0.9, 0.0, 0.36), 'how fact (n, rule read, copy)': (346, 1.0, 0.76, 0.0), 'rule': (12, 0.93, 0.0, 0.38), 'name': (244, 0.9, 0.0, 0.38), 'dependent': (39, 0.9, 0.0, 0.38), 'multi': (41, 0.9, 0.0, 0.36), 'noise': (71, 0.85, 0.0, 0.36), 'decided new': (174, 0.0, 0.0, 0.0), 'decided replace': (1083, 0.0, 0.0, 0.0), 'state': (714, 0.82, 0.02, 0.34), 'decided drop': (2006, 0.0, 0.0, 0.0), 'absorbed copies': (12, 0.0, 0.0, 0.0), 'replace into OTHER fact': (14, 0.0, 0.0, 0.0), 'delta': (3, 0.85, 0.0, 0.3), 'how delta (n, rule read, copy)': (3, 1.0, 0.72, 0.0), 'decided attach': (3, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: replace -> replace': 27, 'note: replace -> new': 3, 'note: new -> new': 2, 'note: new -> drop': 6, 'note: drop -> drop': 8}
+  step time (8.6 s / step): frames 2.77 (32%) | notes 1.35 (16%) | ask 0.03 (0%) | questions 2.41 (28%) | roundtrip+invariance 0.23 (3%) | backward 1.59 (18%) | commit+step 0.20 (2%) | other (log / evict / eval) 0.01 (0%)
+  reference re-read (inside the parts above): 0.17 s / step | calls 15 | rows 1538 | new texts 45 / step | texts cached 1118
+  commit target (writing helps) 0.23 | gate 0.48 | NLL old - new -0.53
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [46, 0.53, 0.72, 0.97, 0.75, 1.0, 1.0], 'look': [46, 0.48, 0.84, 0.97, 0.64, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.50
+  roundtrip in training (said exactly): 0.00

@@ -1,5 +1,5 @@
 {
- "alive": "2026-10-25 19:15:37",
+ "alive": "2026-10-25 19:20:40",
  "running": [
   "rec2_s1",
   "rec2_s2",
@@ -7,6 +7,6 @@
   "rd5_lazy_s1",
   "rd5_lazy_s2"
  ],
- "gpu_free_gb": 84.1,
+ "gpu_free_gb": 59.6,
  "code": "631539a"
 }
