@@ -1127,7 +1127,10 @@ class Graph(nn.Module):
         self.Wref = nn.Linear(dk, dk)            # edge query from r (residual, zero at init)
         nn.init.zeros_(self.Wref.weight); nn.init.zeros_(self.Wref.bias)
         self.tau_ref = nn.Parameter(torch.tensor(math.log(10.0)))   # edge temperature
-        self.Wnone = nn.Linear(dk, 1)                               # "relates to nothing" (content-based)
+        self.Wnone = nn.Linear(dk, 1)                               # (old: none logit from the query; unused)
+        self.Whas = nn.Linear(2 * d, 1)          # "relates to nothing" logit from the whole value text (mean of its
+        nn.init.zeros_(self.Whas.weight); nn.init.constant_(self.Whas.bias, 1.0)   # standalone states): the wording
+        #   ("same as ...") decides, not the names (eval dependents with unseen attribute names: has ~0)
         self.Wrs = nn.Linear(2 * d, 1)           # its own token-pooling score on top of the question's (zero init):
         nn.init.zeros_(self.Wrs.weight); nn.init.zeros_(self.Wrs.bias)   # the question pool missed the entity
         self.b_ver = nn.Parameter(torch.tensor(0.0))                # reference to a version node (learned)
@@ -1152,7 +1155,7 @@ class Graph(nn.Module):
         r = self.Wr(self.pr.flat(*self.mem.last_flat))
         return kraw, v, logg, slots, r
 
-    def ref_logits(self, K, RQ, kmean, ver=None):
+    def ref_logits(self, K, RQ, kmean, ver=None, HM=None):
         """[nodes | none] logits of each node's relation edge: its r (RQ arg: raw, key space) addressing all labels K
         (centered, normalized); self excluded; zero r -> none.
         The none logit is a SEPARATE binary decision (sigmoid), not a softmax column: against 3,000 node scores its
@@ -1165,7 +1168,15 @@ class Graph(nn.Module):
         if ver is not None:                       # "same as X" means X now: a version ("the value before") is a
             sc = sc + self.b_ver * ver[None]      # model-visible node flag (ver_e on its key); direct learned bias
         sc = sc.masked_fill(~has, -1e4)
-        return torch.cat([sc, self.Wnone(qn).masked_fill(~has, 1e4)], -1)
+        nl = self.Whas(HM) if HM is not None else self.Wnone(qn)
+        return torch.cat([sc, nl.masked_fill(~has, 1e4)], -1)
+
+    def ref_feat(self, pre):
+        """mean of a value's standalone token features (standardized like a question): what the text SAYS"""
+        Xb, Eb, mq = pre
+        Hs = torch.cat([self.mem.ln((Xb - self.mem.mu_q) / (self.mem.var_q + 1e-5).sqrt()), self.mem.lne(Eb)], -1)
+        m = mq.float()[..., None]
+        return (Hs * m).sum(1) / m.sum(1).clamp(min=1)
 
     def ref_query(self, X, E, vpos, cap=32, pre=None):
         """the reference query of value token lists `vpos` (positions into X / E): the question path + Wrs pooling.
@@ -1184,9 +1195,9 @@ class Graph(nn.Module):
                 mq_[i, :len(q)] = True
         return self.mem.query(X[ix_], mq_, E[ix_], fixed=True, score_add=self.Wrs) * mq_.any(1, keepdim=True).float()
 
-    def dep_ref(self, K, RQ, kmean, ver=None):
+    def dep_ref(self, K, RQ, kmean, ver=None, HM=None):
         """dependence edges: row j = the node j's value follows (its reference), none -> no edge"""
-        L = self.ref_logits(K, RQ, kmean, ver)
+        L = self.ref_logits(K, RQ, kmean, ver, HM)
         return torch.sigmoid(-L[:, -1:]) * torch.softmax(L[:, :-1], -1)   # P(has a reference) x which node
 
     def forget_logit(self, K, feats):
@@ -1450,7 +1461,7 @@ def main():
     #                                              after 100 steps (MoLab r_* runs: exactly the init)
     knob_ids = {id(p) for p in knobs}
     ref_ps = list(graph.Wref.parameters()) + list(graph.Wrs.parameters()) + list(graph.Wrr.parameters()) + [graph.tau_ref]
-    ref_sc = [graph.b_ver, graph.r_pool] + list(graph.Wnone.parameters())   # small heads: at 1e-3 the version bias moved .025 in
+    ref_sc = [graph.b_ver, graph.r_pool] + list(graph.Wnone.parameters()) + list(graph.Whas.parameters())   # small heads: at 1e-3 the version bias moved .025 in
     #   25 steps and the has-reference head never left "none" (0 of 507)
     knob_ids = knob_ids | {id(p) for p in ref_ps + ref_sc}
     opt_ref = torch.optim.Adam([{"params": ref_ps}, {"params": ref_sc, "lr": 30 * A.rel_lr}], lr=A.rel_lr)
@@ -1606,10 +1617,12 @@ def main():
                 if not grad:
                     sk, sv, sg, ss, sr = (x.detach() for x in (sk, sv, sg, ss, sr))
                 with torch.no_grad():                    # reference query: the value tokens read like a question
-                    rq = graph.ref_query(X, E, vpos, pre=ref_alone([(s_[1], s_[2]) for s_ in order]))
+                    pre_ = ref_alone([(s_[1], s_[2]) for s_ in order])
+                    rq = graph.ref_query(X, E, vpos, pre=pre_)
+                    hm = graph.ref_feat(pre_) if pre_ is not None else torch.zeros(len(order), 2 * d, device=dev)
             for i, s_ in enumerate(order):
                 w_ = max(1, min(len(vpos[i]), A.vslots))
-                out[s_] = (sk[i], sv[i], sg[i], ss[i, :w_] if grad else ss[i, :w_].clone(), sr[i], rq[i])
+                out[s_] = (sk[i], sv[i], sg[i], ss[i, :w_] if grad else ss[i, :w_].clone(), sr[i], rq[i], hm[i])
         chunk, ntok = [], 0
         for f in sorted(by_f):
             chunk.append(f)
@@ -1641,7 +1654,7 @@ def main():
         got = {s_: cache["src"][s_] for s_ in srcs if s_ not in gsrc}
         if gsrc:
             got.update(encode_sources(sorted(gsrc, key=lambda s_: s_[1:]), True))
-        ks, vs, gs_, sls, rs, nsl, rqs = [], [], [], [], [], [], []
+        ks, vs, gs_, sls, rs, nsl, rqs, hms = [], [], [], [], [], [], [], []
         qfull = {}
         zg = torch.zeros((), device=dev)
         for i in live:
@@ -1657,7 +1670,9 @@ def main():
                 vec = store.vecs[V_]
                 ks.append(vec[0]); rs.append(vec[2])
             Rs_ = nd.get("rsrc", V_)                    # the reference: from the node's own stated text
-            rqs.append(got[Rs_][5] if Rs_ is not None and Rs_[0] == "tok" and nd["kind"] in ("item", "state") else None)
+            okr_ = Rs_ is not None and Rs_[0] == "tok" and nd["kind"] in ("item", "state")
+            rqs.append(got[Rs_][5] if okr_ else None)
+            hms.append(got[Rs_][6] if okr_ else None)
             if V_[0] == "tok":
                 vs.append(got[V_][1]); sls.append(got[V_][3][:cap_]); gs_.append(got[V_][2])
                 if q_in and A.q_slots_mode == "reg":      # whole text for Walker's register only (memory stays 16 wide)
@@ -1669,6 +1684,7 @@ def main():
         kraw, v, logg, r = torch.stack(ks), torch.stack(vs), torch.stack(gs_), torch.stack(rs)
         slots = stackS(sls)
         RQ = torch.stack([x if x is not None else torch.zeros_like(kraw[0]) for x in rqs])
+        HM = torch.stack([x if x is not None else torch.zeros(2 * d, device=dev) for x in hms])
         r = graph.Wrr(RQ) * (RQ.abs().sum(-1, keepdim=True) > 0).float() + graph.r_pool * r   # the node's relation
         ver = torch.tensor([float(store.nodes[i]["kind"] == "version") for i in live], device=dev)
         kraw = kraw + ver[:, None] * graph.ver_e                   # "the value before" is part of a version's label
@@ -1700,7 +1716,7 @@ def main():
             free = torch.tensor([store.nodes[i]["kind"] in ("item", "state") for i in live], device=dev)
             ar = torch.arange(len(mix), device=dev)
             km_ = graph.kmu[None] if float(graph.kmu_n) > 0 else kraw.mean(0, keepdim=True)
-            C = graph.dep_ref(F.normalize(kraw - km_, dim=-1), r, km_, ver)[:, rt] * m[None] * free[:, None].float()
+            C = graph.dep_ref(F.normalize(kraw - km_, dim=-1), r, km_, ver, HM)[:, rt] * m[None] * free[:, None].float()
             C = C.index_put((rc, ar), torch.zeros(len(mix), device=dev)).index_put((rt, ar), torch.zeros(len(mix), device=dev))
             v = v + C @ dV                                         # dependents follow (one damped step)
             slots = slots + torch.einsum("nr,rsd->nsd", C, dS)
@@ -1733,7 +1749,7 @@ def main():
         return {"qfull": qfull, "kraw": kraw, "K": F.normalize(kraw - kmean, dim=-1), "kmean": kmean, "V": v, "S": slots,
                 "logg": logg, "R": r,
                 "time": torch.tensor([float(store.nodes[i]["time"]) for i in live], device=dev),
-                "nsl": torch.tensor(nsl, device=dev), "RQ": RQ, "ver": ver, "rows": live, "row_of": row_of}
+                "nsl": torch.tensor(nsl, device=dev), "RQ": RQ, "HM": HM, "ver": ver, "rows": live, "row_of": row_of}
 
     # ------------------------------------------------------------------ Walker reads latent tokens
     def ctrl_state(regs):
@@ -1961,7 +1977,7 @@ def main():
             M0 = materialize()
             if M0 is None:
                 return None, [], {}
-            L_ = graph.ref_logits(M0["K"], M0["R"], M0["kmean"], M0["ver"])
+            L_ = graph.ref_logits(M0["K"], M0["R"], M0["kmean"], M0["ver"], M0["HM"])
             D = (torch.sigmoid(-L_[:, -1]), L_[:, :-1].argmax(-1))
         return D, M0["rows"], M0["row_of"]
 
@@ -3202,9 +3218,36 @@ def main():
         deps_ = [x for x in (world.dependent(er) for _ in range(8)) if x]
         if deps_:
             write([x[0] for x in deps_], False)
-            srcs = sorted({world.deps[f] for _, f in deps_ if f in world.deps})
-            write([world.restate_new(er, *s_) for s_ in srcs], False)
             fd = {f for _, f in deps_}
+            srcs = sorted({world.deps[f] for _, f in deps_ if f in world.deps})
+            # diagnosis (bookkeeping): stored? edge -> the source's node? the update a replace? propagated?
+            H0, _ = holders()
+            D0, rows0, row_of0 = dep_matrix()
+            n_st = n_edge = 0
+            for nm_, k_ in fd:
+                dn = gold_node(H0, nm_, k_, world.ents[nm_][k_])
+                if dn is None or dn not in row_of0:
+                    continue
+                n_st += 1
+                s_nm, s_k = world.deps[(nm_, k_)]
+                src_n = gold_node(H0, s_nm, s_k, world.ents[s_nm][s_k])
+                j_ = row_of0[dn]
+                n_edge += int(src_n is not None and src_n in row_of0 and float(D0[0][j_]) > 0.5
+                              and int(D0[1][j_]) == row_of0[src_n])
+                tn_ = rows0[int(D0[1][j_])]
+                tm_ = store.prov.get(store.nodes[tn_]["lsrc"]) if store.nodes[tn_]["lsrc"] else None
+                dtxt = store.prov.get(store.nodes[dn].get("rsrc") or store.nodes[dn]["vsrc"], ("?",))
+                print(f"  dependent {nm_}.{k_} (value {dtxt[3] if len(dtxt) > 3 else dtxt}, dep flag "
+                      f"{dtxt[4] if len(dtxt) > 4 else '?'}) -> source {s_nm}.{s_k} | has {float(D0[0][j_]):.2f} | "
+                      f"top: {tm_[:3] if tm_ else store.nodes[tn_]['kind']} ({store.nodes[tn_]['kind']}) | source node "
+                      f"{'in memory' if src_n in row_of0 else 'MISSING'}", flush=True)
+            wstats.pop("propagated", None)
+            wstats.pop("decided replace", None)
+            write([world.restate_new(er, *s_) for s_ in srcs], False)
+            print(f"EVAL {step} dependents diagnosis: stored {n_st}/{len(fd)} | edge -> the source's node (has > .5, "
+                  f"top = source) {n_edge}/{n_st} | source updates decided replace "
+                  f"{wstats.get('decided replace', [0])[0]}/{len(srcs)} | propagated "
+                  f"{wstats.get('propagated', [0])[0]}", flush=True)
             print(f"EVAL {step} one_exposure_dependents: follow {coverage(fd):.3f} of {len(fd)} dependents", flush=True)
             score("one_exposure_dependents", [(1, fd)], "lookup:1.0")
         # a RULE shown once (wording never trained, on a key without a rule): later values of that key are increments
@@ -3338,7 +3381,7 @@ def main():
             evict()
         M = materialize()
         rows, row_of = M["rows"], M["row_of"]
-        D = graph.dep_ref(M["K"], M["R"], M["kmean"], M["ver"])
+        D = graph.dep_ref(M["K"], M["R"], M["kmean"], M["ver"], M["HM"])
         Rl = D                                                   # relation edges ARE the r edges now
         H, Hv = holders()
 
@@ -3565,7 +3608,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 rq_[k_] = qq
         rq_ = torch.stack(rq_)                           # the selected nodes' r with a gradient path (content part)
         R_ = M["R"].detach().index_put((ix,), M["R"][ix].detach() + graph.Wrr(rq_) - graph.Wrr(rq_).detach())
-        L = graph.ref_logits(M["K"].detach(), R_, M["kmean"].detach(), M["ver"])
+        L = graph.ref_logits(M["K"].detach(), R_, M["kmean"].detach(), M["ver"], M["HM"].detach())
         n_ = L.shape[0]
         tg = torch.tensor([x[1] for x in pos] + [n_] * len(neg), device=dev)
         Ls = L[ix]
