@@ -215,3 +215,33 @@ step 450 loss 1.296 action acc 0.96 answer said 1.00 tool outputs said 1.0 | wor
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.23, 0.79, 0.96, 0.44, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.96, 0.69, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+step 475 loss 2.109 action acc 0.93 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 4.06 GB [2534s]
+  read actions: {'halt': 0.97, 'read': 0.89, 'tool': 0.95} | integrate by kind (n, store, NEW, replace): {'state': (690, 0.3, 0.25, 0.11), 'decided drop': (4627, 0.0, 0.0, 0.0), 'decided new': (288, 0.0, 0.0, 0.0), 'name': (151, 0.44, 0.49, 0.15), 'fact': (176, 0.95, 0.19, 0.66), 'how fact (n, rule read, copy)': (176, 0.0, 0.38, 0.0), 'noise': (31, 0.12, 0.15, 0.04), 'delta': (80, 0.84, 0.28, 0.38), 'how delta (n, rule read, copy)': (80, 0.0, 0.38, 0.0), 'multi': (17, 0.87, 0.88, 0.09), 'decided replace': (183, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (60, 0.0, 0.0, 0.0), 'absorbed copies': (3, 0.0, 0.0, 0.0), 'rule': (4, 0.3, 0.0, 0.02), 'dependent': (1, 0.49, 0.82, 0.04)}
+  look (proposed -> after looking): {'note: new -> replace': 12, 'note: drop -> replace': 33, 'note: replace -> replace': 3, 'note: drop -> new': 2}
+  step time (6.8 s / step): other (log / evict / eval) 0.23 (3%) | frames 1.90 (28%) | notes 0.67 (10%) | ask 0.30 (4%) | questions 1.96 (29%) | roundtrip+invariance 0.13 (2%) | backward 0.45 (7%) | commit+step 1.12 (17%)
+  reference re-read (inside the parts above): 0.18 s / step | calls 52 | rows 4606 | new texts 146 / step | texts cached 3548
+  reference edges: dependents -> their source 0.00 | other facts -> none 1.00 | dependents / step 1.0 | misses hit: {'other fact': 1}
+  frame commit target (writing here keeps that fact right) 0.40 | gate there 0.41 | writes into nodes / step 12.5
+  forget (model's choice): 11.6 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.44, 0.2, 0.14, 0.75, 0.61, -0.5, -0.47]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 5.62
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.21, 0.86, 0.93, 0.4, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.93, 0.59, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+step 500 loss 1.625 action acc 0.98 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 4.06 GB [2713s]
+  read actions: {'halt': 0.97, 'read': 0.92, 'tool': 0.96} | integrate by kind (n, store, NEW, replace): {'state': (795, 0.26, 0.19, 0.09), 'decided drop': (5531, 0.0, 0.0, 0.0), 'decided new': (233, 0.0, 0.0, 0.0), 'name': (148, 0.4, 0.52, 0.12), 'fact': (168, 0.95, 0.18, 0.67), 'how fact (n, rule read, copy)': (168, 0.0, 0.36, 0.0), 'multi': (19, 0.91, 0.76, 0.21), 'noise': (48, 0.09, 0.15, 0.03), 'delta': (83, 0.93, 0.27, 0.54), 'how delta (n, rule read, copy)': (83, 0.0, 0.36, 0.0), 'decided replace': (195, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (48, 0.0, 0.0, 0.0), 'absorbed copies': (1, 0.0, 0.0, 0.0), 'rule': (4, 0.13, 0.04, 0.01), 'replace into OTHER fact': (2, 0.0, 0.0, 0.0), 'dependent': (2, 0.32, 1.0, 0.0)}
+  look (proposed -> after looking): {'note: drop -> replace': 24, 'note: new -> replace': 20, 'note: replace -> replace': 4, 'note: new -> new': 1, 'note: drop -> new': 1}
+  step time (7.1 s / step): other (log / evict / eval) 0.22 (3%) | frames 2.01 (28%) | notes 0.69 (10%) | ask 0.27 (4%) | questions 2.21 (31%) | roundtrip+invariance 0.12 (2%) | backward 0.46 (6%) | commit+step 1.16 (16%)
+  reference re-read (inside the parts above): 0.17 s / step | calls 55 | rows 4725 | new texts 77 / step | texts cached 5481
+  reference edges: dependents -> their source 0.00 | other facts -> none 1.00 | dependents / step 1.0 | misses hit: {'other fact': 2}
+  frame commit target (writing here keeps that fact right) 0.38 | gate there 0.40 | writes into nodes / step 14.6
+  forget (model's choice): 9.3 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.48, 0.13, 0.08, 0.71, 0.67, -0.55, -0.51]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 5.34
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.28, 0.95, 0.93, 0.5, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.93, 0.68, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+EVAL 500 old_facts: exact 0.899 | by {'0': 0.955, '1': 0.964, '2': 0.661} | gold read 0.957 | program 0.858 | exact|program 0.996 | n 288
+EVAL 500 old_facts why wrong (by ops): 0: {'wrong read @1/2: same fact, other node': 2, 'wrong read @2/3: unrelated': 2, 'wrong read @1/2: same entity': 1, 'wrong read @1/3: same attribute': 1, 'wrong read @2/3: same entity': 1, 'wrong read @1/3: same entity': 1} | 1: {'wrong read @2/3: same fact, other node': 1, 'wrong read @2/3: same attribute': 1} | 2: {'op instead of read @4/4': 7, 'wrong read @4/4: unrelated': 2, 'wrong read @1/4: same fact, other node': 2, 'op instead of read @3/4': 1, 'wrong read @2/4: same entity': 1, 'wrong operands': 1, 'wrong read @2/4: same fact, other node': 1, 'stopped early': 1, 'wrong read @1/4: same attribute': 1, 'wrong read @3/4: same entity': 1, 'wrong read @2/3: same fact, other node': 1}
+EVAL 500 versions_before: exact 0.774 | by {'before': 0.774} | gold read 0.887 | program 0.774 | exact|program 1.000 | n 288
+EVAL 500 versions_before why wrong (by ops): before: {'wrong read @1/2: same fact, other node': 65}
+EVAL 500 held_compositions: exact 0.781 | by {'2': 0.781} | gold read 0.920 | program 0.660 | exact|program 0.968 | n 288
+EVAL 500 held_compositions why wrong (by ops): 2: {'op instead of read @4/4': 11, 'wrong read @4/4: same entity': 9, 'wrong operands': 6, 'wrong read @1/4: same fact, other node': 5, 'wrong read @2/4: same fact, other node': 5, 'wrong read @4/4: unrelated': 5, 'wrong read @2/4: same entity': 4, 'wrong read @1/4: same entity': 4, 'stopped early': 3, 'wrong read @4/4: same fact, other node': 2, 'wrong tool': 2, 'read instead of op @3/4': 2, 'wrong read @2/4: same attribute': 1, 'wrong read @3/4: unrelated': 1, 'read instead of op @4/4': 1, 'wrong read @3/4: same attribute': 1, 'wrong read @3/4: same fact, other node': 1}
