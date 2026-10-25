@@ -224,3 +224,32 @@ step 475 loss 5.040 action acc 0.68 answer said 0.76 tool outputs said None | wo
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [15, 0.27, 0.98, 0.09, 0.45, 1.0, 1.0], 'look': [15, 0.98, 0.98, 0.09, 0.24, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 0.97
   roundtrip in training (said exactly): 0.99
+step 500 loss 3.746 action acc 0.72 answer said 0.80 tool outputs said None | world 150 entities, 3000 live nodes | peak VRAM 14.17 GB [5941s]
+  read actions: {'halt': 0.98, 'read': 0.39, 'tool': 0.92} | integrate by kind (n, store, NEW, replace): {'state': (720, 0.83, 0.0, 0.63), 'decided drop': (421, 0.0, 0.0, 0.0), 'decided new': (522, 0.0, 0.0, 0.0), 'decided replace': (438, 0.0, 0.0, 0.0), 'name': (156, 0.61, 0.0, 0.38), 'fact': (180, 0.91, 0.0, 0.74), 'how fact (n, rule read, copy)': (180, 1.0, 0.0, 0.0), 'noise': (47, 0.47, 0.0, 0.23), 'delta': (85, 0.98, 0.0, 0.85), 'how delta (n, rule read, copy)': (85, 1.0, 0.01, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into OTHER fact': (130, 0.0, 0.0, 0.0), 'absorbed copies': (54, 0.0, 0.0, 0.0), 'replace into own fact': (22, 0.0, 0.0, 0.0), 'multi': (25, 0.99, 0.0, 0.86), 'rule': (3, 0.95, 0.0, 0.64), 'dependent': (1, 0.98, 0.0, 0.75)}
+  look (proposed -> after looking): {'note: new -> new': 11, 'note: drop -> new': 4}
+  step time (9.6 s / step): other (log / evict / eval) 0.18 (2%) | frames 4.34 (45%) | notes 1.12 (12%) | ask 0.27 (3%) | questions 0.88 (9%) | roundtrip+invariance 0.37 (4%) | backward 1.41 (15%) | commit+step 1.05 (11%)
+  reference re-read (inside the parts above): 0.22 s / step | calls 31 | rows 3554 | new texts 26 / step | texts cached 4231
+  forget (model's choice): 21.5 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-0.68, -0.27, 0.04, 0.23, 0.44, -0.69, -0.65]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.24
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [15, 0.4, 0.98, 0.04, 0.65, 1.0, 1.0], 'look': [15, 0.98, 0.98, 0.04, 0.7, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.96
+  roundtrip in training (said exactly): 0.94
+EVAL 500 old_facts: exact 0.031 | by {'0': 0.031} | gold read 0.477 | program 0.031 | exact|program 1.000 | n 96
+EVAL 500 old_facts why wrong (by ops): 0: {'wrong read @1/2: unrelated': 38, 'wrong read @1/3: unrelated': 14, 'wrong read @1/2: a version': 14, 'wrong read @1/2: same entity': 10, 'wrong read @1/3: same entity': 6, 'wrong read @1/3: a version': 5, 'wrong read @1/2: same attribute': 2, 'wrong read @1/2: same fact, other node': 1, 'wrong read @2/3: a version': 1, 'wrong read @2/3: same entity': 1, 'stopped early': 1}
+EVAL 500 versions_before: exact 0.000 | by {} | gold read 0.000 | program 0.000 | exact|program 0.000 | n 0
+EVAL 500 held_compositions: exact 0.000 | by {} | gold read 0.000 | program 0.000 | exact|program 0.000 | n 0
+EVAL 500 longer_programs: exact 0.000 | by {} | gold read 0.000 | program 0.000 | exact|program 0.000 | n 0
+EVAL 500 one_exposure_after0: stored 0.280 of 25 new / updated facts
+EVAL 500 one_exposure_after0: exact 0.167 | by {'before': 0.0, '0': 0.242, '1': 0.0, '2': 0.0} | gold read 0.620 | program 0.281 | exact|program 0.593 | n 96
+EVAL 500 one_exposure_after0 why wrong (by ops): 0: {'wrong read @1/2: unrelated': 18, 'mis-said: no number': 11, 'wrong read @1/2: same attribute': 11, 'wrong read @1/2: same entity': 10} | 1: {'wrong read @1/3: unrelated': 3, 'wrong read @1/2: unrelated': 3, 'wrong read @1/3: same entity': 3, 'wrong read @1/2: same entity': 1} | 2: {'wrong read @1/3: unrelated': 3, 'wrong read @1/4: same entity': 1, 'wrong read @1/4: unrelated': 1} | before: {'wrong read @1/2: same attribute': 15}
+EVAL 500 one_step_after0: exact 0.156 | by {'before': 0.0, '0': 0.273, '1': 0.0, '2': 0.0} | gold read 0.623 | program 0.271 | exact|program 0.577 | n 96
+EVAL 500 one_step_after0 why wrong (by ops): 0: {'wrong read @1/2: unrelated': 13, 'mis-said: no number': 11, 'wrong read @1/2: same attribute': 9, 'wrong read @1/2: same entity': 7} | 1: {'wrong read @1/3: unrelated': 5, 'wrong read @2/3: unrelated': 3, 'wrong read @1/3: same entity': 2, 'read instead of op @2/2': 1} | 2: {'wrong read @1/4: unrelated': 3, 'read instead of op @2/3': 1, 'wrong read @2/4: unrelated': 1, 'wrong read @2/3: a version': 1, 'wrong read @1/4: same entity': 1, 'wrong read @1/3: same entity': 1, 'wrong read @1/3: unrelated': 1} | before: {'wrong read @1/2: same attribute': 21}
+EVAL 500 one_exposure_after10: stored 0.238 of 21 new / updated facts
+EVAL 500 one_exposure_after10: exact 0.490 | by {'0': 0.58, '1': 0.0, '2': 0.0} | gold read 0.763 | program 0.490 | exact|program 1.000 | n 96
+EVAL 500 one_exposure_after10 why wrong (by ops): 0: {'wrong read @1/2: unrelated': 18, 'wrong read @1/2: a version': 16} | 1: {'wrong read @2/3: unrelated': 3, 'read instead of op @2/2': 2, 'stopped early': 2, 'wrong read @1/3: another operand (order)': 2, 'wrong read @1/3: unrelated': 2} | 2: {'wrong read @2/4: unrelated': 2, 'wrong read @1/3: unrelated': 1, 'wrong read @1/4: unrelated': 1}
+EVAL 500 one_exposure_after100: stored 0.136 of 22 new / updated facts
+EVAL 500 one_exposure_after100: exact 0.000 | by {'0': 0.0, '1': 0.0, '2': 0.0} | gold read 0.464 | program 0.000 | exact|program 0.000 | n 96
+EVAL 500 one_exposure_after100 why wrong (by ops): 0: {'wrong read @1/2: unrelated': 74} | 1: {'wrong read @1/3: unrelated': 13, 'wrong read @1/2: unrelated': 3} | 2: {'wrong read @1/4: unrelated': 3, 'wrong read @1/3: unrelated': 3}
+EVAL 500 one_exposure_heldkeys_after0: stored 0.261 of 23 new / updated facts
+EVAL 500 one_exposure_heldkeys_after0: exact 0.000 | by {'before': 0.0, '0': 0.0, '1': 0.0, '2': 0.0} | gold read 0.475 | program 0.000 | exact|program 0.000 | n 96
+EVAL 500 one_exposure_heldkeys_after0 why wrong (by ops): 0: {'wrong read @1/2: unrelated': 52, 'wrong read @1/2: same attribute': 10} | 1: {'wrong read @1/3: unrelated': 5, 'wrong read @1/2: unrelated': 1} | 2: {'wrong read @1/3: unrelated': 7, 'wrong read @1/4: unrelated': 4, 'wrong read @1/3: same entity': 2, 'wrong read @1/2: unrelated': 1} | before: {'wrong read @1/2: unrelated': 14}
