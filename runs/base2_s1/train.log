@@ -50,3 +50,12 @@ step 125 loss 1.831 action acc 0.80 answer said 1.00 tool outputs said 1.0 | wor
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.56, 0.88, 0.63, 0.79, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.63, 0.42, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 0.99
   roundtrip in training (said exactly): 0.99
+step 150 loss 1.771 action acc 0.86 answer said 0.92 tool outputs said 0.9 | world 150 entities, 3000 live nodes | peak VRAM 3.65 GB [752s]
+  read actions: {'halt': 0.92, 'read': 0.73, 'tool': 0.76} | integrate by kind (n, store, NEW, replace): {'state': (606, 0.08, 0.65, 0.01), 'decided drop': (4072, 0.0, 0.0, 0.0), 'name': (145, 0.33, 0.88, 0.03), 'fact': (187, 0.83, 0.28, 0.36), 'how fact (n, rule read, copy)': (187, 0.75, 0.17, 0.0), 'noise': (48, 0.07, 0.26, 0.02), 'dependent': (12, 0.94, 0.58, 0.21), 'decided new': (135, 0.0, 0.0, 0.0), 'decided replace': (115, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'rule': (8, 0.76, 0.11, 0.28), 'delta': (47, 0.97, 0.1, 0.61), 'how delta (n, rule read, copy)': (47, 0.66, 0.21, 0.0), 'multi': (18, 0.92, 0.2, 0.35), 'replace into own fact': (15, 0.0, 0.0, 0.0), 'replace into OTHER fact': (17, 0.0, 0.0, 0.0), 'absorbed copies': (18, 0.0, 0.0, 0.0), 'decided attach': (37, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> new': 9, 'note: drop -> replace': 9, 'note: new -> replace': 24, 'note: replace -> replace': 6, 'note: drop -> new': 2}
+  step time (6.6 s / step): other (log / evict / eval) 0.01 (0%) | frames 2.01 (30%) | notes 1.02 (15%) | ask 0.02 (0%) | questions 1.16 (18%) | roundtrip+invariance 0.05 (1%) | backward 0.32 (5%) | commit+step 2.02 (31%)
+  relation edges: top-1 in the same record 0.96 | largest node share of edge mass x n 3.4 (1 = uniform)
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 5.09
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.37, 0.9, 0.69, 0.66, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.69, 0.27, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.99
+  roundtrip in training (said exactly): 0.99
