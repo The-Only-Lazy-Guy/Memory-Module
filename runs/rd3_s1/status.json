@@ -1,8 +1,10 @@
 {
- "state": "running",
+ "state": "failed",
  "pid": 41296,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/gnm_main22.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --seed 1 --save /marimo/gnm-lab/ckpt/rd3_s1.pt --log /marimo/gnm-lab/runs/runs/rd3_s1/train.jsonl",
  "code": "24380eb",
  "started": "2026-10-25 17:33:42",
- "updated": "2026-10-25 17:33:42"
+ "updated": "2026-10-25 17:39:47",
+ "exit_code": -15,
+ "ended": "2026-10-25 17:39:47"
 }
