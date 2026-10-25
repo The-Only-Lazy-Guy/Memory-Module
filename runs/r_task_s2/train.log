@@ -409,3 +409,24 @@ step 850 loss 0.493 action acc 0.99 answer said 1.00 tool outputs said 1.0 | wor
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.11, 0.66, 0.98, 0.24, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.98, 0.42, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+step 875 loss 0.637 action acc 0.94 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 4.13 GB [5616s]
+  read actions: {'halt': 0.99, 'read': 0.96, 'tool': 0.98} | integrate by kind (n, store, NEW, replace): {'state': (709, 0.06, 0.38, 0.02), 'decided drop': (4414, 0.0, 0.0, 0.0), 'name': (152, 0.07, 0.18, 0.03), 'fact': (140, 0.98, 0.11, 0.77), 'how fact (n, rule read, copy)': (140, 1.0, 0.0, 0.0), 'multi': (21, 0.97, 0.62, 0.34), 'delta': (106, 0.99, 0.09, 0.82), 'how delta (n, rule read, copy)': (106, 1.0, 0.0, 0.0), 'decided replace': (230, 0.0, 0.0, 0.0), 'decided new': (41, 0.0, 0.0, 0.0), 'replace into own fact': (78, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'absorbed copies': (2, 0.0, 0.0, 0.0), 'noise': (49, 0.08, 0.0, 0.03), 'rule': (4, 0.79, 0.06, 0.37)}
+  look (proposed -> after looking): {'note: drop -> replace': 47, 'note: drop -> new': 2, 'note: new -> replace': 1}
+  step time (7.2 s / step): other (log / evict / eval) 0.24 (3%) | frames 1.90 (27%) | notes 0.78 (11%) | ask 0.23 (3%) | questions 2.26 (32%) | roundtrip+invariance 0.14 (2%) | backward 0.42 (6%) | commit+step 1.18 (16%)
+  reference re-read (inside the parts above): 0.19 s / step | calls 50 | rows 4795 | new texts 137 / step | texts cached 3107
+  forget (model's choice): 1.6 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.01, 0.49, 0.0, 0.99, 0.99, -0.01, -0.01]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 7.17
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.12, 0.71, 0.97, 0.26, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.97, 0.45, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+step 900 loss 0.724 action acc 1.00 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 4.13 GB [5802s]
+  read actions: {'halt': 1.0, 'read': 0.97, 'tool': 0.97} | integrate by kind (n, store, NEW, replace): {'state': (757, 0.07, 0.33, 0.02), 'decided drop': (5017, 0.0, 0.0, 0.0), 'name': (152, 0.08, 0.16, 0.03), 'fact': (149, 0.98, 0.12, 0.77), 'how fact (n, rule read, copy)': (149, 1.0, 0.0, 0.0), 'delta': (112, 0.99, 0.14, 0.77), 'how delta (n, rule read, copy)': (112, 1.0, 0.0, 0.0), 'noise': (46, 0.08, 0.0, 0.03), 'multi': (20, 0.96, 0.8, 0.18), 'decided new': (58, 0.0, 0.0, 0.0), 'decided replace': (230, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (60, 0.0, 0.0, 0.0), 'absorbed copies': (2, 0.0, 0.0, 0.0), 'rule': (4, 0.7, 0.67, 0.11), 'dependent': (1, 0.93, 1.0, 0.0)}
+  look (proposed -> after looking): {'note: drop -> replace': 50}
+  step time (7.4 s / step): other (log / evict / eval) 0.24 (3%) | frames 2.00 (27%) | notes 0.80 (11%) | ask 0.23 (3%) | questions 2.32 (31%) | roundtrip+invariance 0.16 (2%) | backward 0.42 (6%) | commit+step 1.24 (17%)
+  reference re-read (inside the parts above): 0.23 s / step | calls 62 | rows 4865 | new texts 68 / step | texts cached 4796
+  reference edges: dependents -> their source 0.00 | other facts -> none 1.00 | dependents / step 1.0 | misses hit: {'none': 6}
+  forget (model's choice): 2.4 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.01, 0.49, 0.0, 0.99, 0.99, -0.01, -0.01]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 7.03
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.11, 0.58, 0.98, 0.24, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.98, 0.41, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
