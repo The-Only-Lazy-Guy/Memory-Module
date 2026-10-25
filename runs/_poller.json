@@ -1,6 +1,8 @@
 {
- "alive": "2026-10-25 21:54:47",
+ "alive": "2026-10-25 21:56:49",
  "running": [
+  "rd7_s1",
+  "rd7_s2",
   "rec4_s1",
   "rec4_s2",
   "rec5_s1",
@@ -8,6 +10,6 @@
   "w1b_full",
   "w1b_full_cc"
  ],
- "gpu_free_gb": 54.3,
- "code": "495d2ef"
+ "gpu_free_gb": 49.5,
+ "code": "4bff9e1"
 }
