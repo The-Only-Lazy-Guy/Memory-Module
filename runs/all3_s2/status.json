@@ -1,8 +1,10 @@
 {
- "state": "running",
+ "state": "failed",
  "pid": 15864,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/rec6_s1.pt --corrections 2 --steps 1500 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --recurse 1 --long-ops 4,6 --vslots 128 --train-ops 1,3 --tool-nodes 1 --proc-read 1 --confusion 1.0 --proc-demo 1.0 --seed 2 --save /marimo/gnm-lab/ckpt/all3_s2.pt --log /marimo/gnm-lab/runs/runs/all3_s2/train.jsonl",
  "code": "a30c963",
  "started": "2026-10-26 17:19:09",
- "updated": "2026-10-26 17:19:09"
+ "updated": "2026-10-26 18:03:22",
+ "exit_code": -15,
+ "ended": "2026-10-26 18:03:22"
 }
