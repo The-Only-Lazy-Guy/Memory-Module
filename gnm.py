@@ -734,6 +734,12 @@ TOOLS = [("add", lambda a, b: a + b, "the sum of {0} and {1}"),
          ("edit", None, None)]
 EDIT = 4
 N_ARITH = 4
+# TN3 (user 2026-10-26): digit FACTS, memorized like a person's addition table; procedures (column addition, ...) are
+# nodes the loop runs over them. Each is a tool node made from its text; the network on the node CHOOSES the digit.
+DIGIT_TOOLS = [("units", lambda a, b: (a + b) % 10, "the last digit of {0} plus {1}"),
+               ("tens", lambda a, b: (a + b) // 10, "the carry of {0} plus {1}"),
+               ("bunits", lambda a, b: (a - b) % 10, "the last digit of {0} minus {1}"),
+               ("less", lambda a, b: int(a < b), "whether {0} is less than {1} (the borrow)")]
 HALT = len(TOOLS)
 HELD_PAIRS = {("max", "sub"), ("min", "add")}
 NOISE_KEYS = ("checksum", "trace id", "log ref", "sync token")
@@ -1219,12 +1225,19 @@ class ToolBank(nn.Module):
         self.film = nn.Linear(dk, 8 * dk)
         self.mid = nn.Linear(2 * dk, 2 * dk)
         self.out = nn.Linear(2 * dk, (3 + ns) * dk)
+        self.Wc = nn.Linear(dk, dk)                     # a tool NODE's value (its definition text) -> procedure vector
+        self.Wd = nn.Linear(2 * dk, 10)                 # TN3: a digit fact = a choice over the ten digits
+        for nm_ in ("mu_k", "mu_v", "mu_s"):            # running means of the operands' label / value / slots: one
+            self.register_buffer(nm_, torch.zeros(dk))  # shared direction dominates them (different digits: cosine
+        self.register_buffer("mu_n", torch.zeros(()))   # .998 label, 1.000 value; centred slots -.11)
 
     def forward(self, ti, a, b):
         return self.run(self.labels[ti], a, b)
 
     def run(self, lab, a, b):
         """the shared network conditioned on a label vector (a tool's label, or a procedure read from memory)"""
+        if getattr(self, "norm_io", False):              # TN1: inputs at unit RMS (stored values are ~3,000 in norm:
+            return self._run_norm(lab, a, b)             # the raw network's output exploded to 1e12)
         xa = torch.cat([a[1], a[2][:, :self.ns].flatten(1)], -1)
         xb = torch.cat([b[1], b[2][:, :self.ns].flatten(1)], -1)
         cos = F.cosine_similarity(xa, xb, dim=-1)[:, None]
@@ -1234,6 +1247,47 @@ class ToolBank(nn.Module):
         h = F.gelu(self.mid(h) * (1 + g2) + b2)
         o = self.out(h).view(x.shape[0], 3 + self.ns, -1)
         return o[:, 0], o[:, 1], o[:, 2], o[:, 3:]
+
+    def _trunk(self, lab, a, b):
+        """scale-free hidden state: every input piece centred (running mean) and at unit RMS, conditioned (FiLM) on
+        the tool / procedure vector"""
+        rms = lambda t: t.float().pow(2).mean(-1, keepdim=True).add(1e-6).sqrt()
+        un = lambda t: t.float() / rms(t)
+        sa_, sb_ = a[2][:, :self.ns].float(), b[2][:, :self.ns].float()
+        if self.training and torch.is_grad_enabled():   # running means (slow), from the operands this network sees
+            with torch.no_grad():
+                fill = lambda s_: s_[s_.abs().sum(-1) > 0]
+                f_ = 0.0 if float(self.mu_n) == 0 else 0.99
+                self.mu_k.mul_(f_).add_((1 - f_) * torch.cat([a[0], b[0]]).float().mean(0))
+                self.mu_v.mul_(f_).add_((1 - f_) * torch.cat([a[1], b[1]]).float().mean(0))
+                fs_ = torch.cat([fill(sa_), fill(sb_)])
+                if len(fs_):
+                    self.mu_s.mul_(f_).add_((1 - f_) * fs_.mean(0))
+                self.mu_n.add_(1)
+        cs = lambda s_: (s_ - self.mu_s) * (s_.abs().sum(-1, keepdim=True) > 0).float()   # (empty slots stay 0)
+        xa = torch.cat([un(a[1].float() - self.mu_v), un(cs(sa_)).flatten(1)], -1)
+        xb = torch.cat([un(b[1].float() - self.mu_v), un(cs(sb_)).flatten(1)], -1)
+        cos = F.cosine_similarity(xa, xb, dim=-1)[:, None]
+        x = torch.cat([un(a[0].float() - self.mu_k), un(b[0].float() - self.mu_k), xa, xb, xa * xb, xa - xb, cos], -1)
+        g1, b1, g2, b2 = self.film(un(lab)).chunk(4, -1)
+        h = F.gelu(self.inp(x) * (1 + g1) + b1)
+        return F.gelu(self.mid(h) * (1 + g2) + b2)
+
+    def digit_logits(self, lab, a, b):
+        """TN3: a digit fact = the network's CHOICE over the ten digits (a memorized table, like a person's)"""
+        return self.Wd(self._trunk(lab, a, b))
+
+    def _run_norm(self, lab, a, b):
+        """scale-free: every input piece at unit RMS; the outputs go back to the operands' own scales"""
+        rms = lambda t: t.float().pow(2).mean(-1, keepdim=True).add(1e-6).sqrt()
+        un = lambda t: t.float() / rms(t)
+        sa_, sb_ = a[2][:, :self.ns], b[2][:, :self.ns]
+        h = self._trunk(lab, a, b)
+        o = self.out(h).view(h.shape[0], 3 + self.ns, -1)
+        sk = (rms(a[0]) + rms(b[0])) / 2                 # (B, 1) label scale
+        sv = (rms(a[1]) + rms(b[1])) / 2                 # value scale
+        ss = ((rms(sa_) + rms(sb_)) / 2).amax(1, keepdim=True)   # slot scale (the filled slots')
+        return un(o[:, 0]) * sk, un(o[:, 1]) * sv, un(o[:, 2]) * sk, un(o[:, 3:]) * ss
 
 
 class Loop(nn.Module):
@@ -1347,6 +1401,20 @@ def main():
     P.add_argument("--vslots", type=int, default=64)
     P.add_argument("--tool-slots", type=int, default=2)
     P.add_argument("--object-tools", type=int, default=1, help="arithmetic on decoded values (decode -> exact -> encode)")
+    P.add_argument("--tool-nodes", type=int, default=0, help="TN1: every tool is a NODE in memory (label + procedure "
+                   "vector from its definition text, addressed like any node); the shared network runs conditioned "
+                   "on the node")
+    P.add_argument("--neural-tools", type=int, default=0, help="TN1: arithmetic tool outputs come from the network "
+                   "(the exact operation is only the teacher: target = the exact result's encoding)")
+    P.add_argument("--w-tool", type=float, default=1.0, help="weight of the tool network's teacher loss")
+    P.add_argument("--decode-say", type=int, default=1, help="every tool operand's DECODE is graded where it happens "
+                   "(the register must be said as its true value): a misread operand is punished (user 2026-10-26)")
+    P.add_argument("--digit-tools", type=int, default=0, help="TN3 M1: digit-fact tool nodes (units / tens / bunits / "
+                   "less), neural, memorized; --warm-digit N practises them")
+    P.add_argument("--warm-digit", type=int, default=0)
+    P.add_argument("--warm-tool-net", type=int, default=0, help="TN1: steps of tool practice before the run (random "
+                   "operand pairs -> the network on the tool node -> the speaker says the exact result; only the "
+                   "tool network learns)")
     P.add_argument("--early-version", type=int, default=0, help="a replace decided in training makes its version at once")
     P.add_argument("--q-slots-mode", default="reg", choices=["mem", "reg"],
                    help="mem: question / note nodes keep q-slots in memory; reg: only Walker's register gets them")
@@ -1467,6 +1535,7 @@ def main():
     graph = Graph(mem, d, A.dk).to(dev)
     loop = Loop(d, A.dk, A.vslots, max_regs).to(dev)
     tools = ToolBank(len(TOOLS), A.dk, A.tool_slots).to(dev)
+    tools.norm_io = bool(A.tool_nodes)
     params = list({id(p): p for p in list(graph.parameters()) + list(ro.parameters()) + list(loop.parameters())
                    + list(tools.parameters())}.values())
     knob_names = ("age", "keep", "w_prop", "w_rel", "tau_o", "tau", "beta", "gate", "gs", "w_id")   # write heads: normal lr
@@ -1663,6 +1732,8 @@ def main():
     wstats = {}                                             # integrate diagnostics
 
     # ------------------------------------------------------------------ materialize: every node with current heads
+    tool_nid = {}                                     # TN1: tool index -> its node in memory (--tool-nodes)
+    digit_nid = {}                                    # TN3: digit-fact tool index -> its node (--digit-tools)
     cache = {"ver": 0, "at": -1, "src": {}}       # per-source vectors (no grad) with the CURRENT heads (2.2)
 
     def heads_changed():
@@ -2025,6 +2096,8 @@ def main():
         """per serialized pair: what it is in the truth (bookkeeping / evaluation only, never a write target)"""
         if kind == "state":
             return [("state",)] * len(serialize(obj, "state")[1])
+        if kind == "tool":                                   # {"tools": {name: definition}}: one node per tool
+            return [("tool", lf[0][-1]) for lf in serialize(obj, "state")[1]]
         out = []
         grp = next(iter(obj))
         side = world.side.pop(id(obj), {})
@@ -2075,7 +2148,7 @@ def main():
         for o, nl in zip(objs, nid_lists):                    # which pairs share a record (observable structure)
             for n_, lf in zip(nl, serialize(o, "state")[1]):
                 store.nodes[n_]["rec"] = (nl[0], tuple(lf[0][:-1]))
-        if kind in ("question", "note"):                    # the current input: read now, kept like any node
+        if kind in ("question", "note", "tool"):            # the current input: read now, kept like any node
             return nid_lists, torch.zeros((), device=dev)
         rows = [{"qnid": n} for nl in nid_lists for n in nl]   # every pair = a frame row (address -> read -> write)
         return nid_lists, run(rows, False, "frame", soft=soft)[0]
@@ -2121,7 +2194,8 @@ def main():
 
     # ------------------------------------------------------------------ truth lookups (bookkeeping, from provenance)
     def value_of(m):
-        return None if not m else m[3] if m[0] == "fact" else m[1] if m[0] == "val" else None
+        return (None if not m else m[3] if m[0] in ("fact", "delta") else m[1] if m[0] == "val" else None)
+        #       (a node whose value source is an increment says that increment: a total replaced by it is wrong)
 
     def holders():
         """(name, key, value) -> live nodes holding that value (identity from the node's LABEL source, value from
@@ -2468,11 +2542,12 @@ def main():
         if not B:
             return torch.zeros((), device=dev), None, 0.0, None
         writer = kind in ("frame", "note")
-        G = ({r["qnid"] for r in rows} | set(store.live)
+        G = ({r["qnid"] for r in rows} | set(store.live) | set(tool_nid.values())
              | {x for r in rows for kd, x, *_ in (r.get("prog") or []) if kd in ("read", "write")})
         M = materialize(grad=G)
         K, V, R, logg, kmean = M["K"], M["V"], M["R"], M["logg"], M["kmean"]
         N, nT = K.shape[0], len(TOOLS)
+        t_ix = [M["row_of"].get(tool_nid.get(ti)) for ti in range(nT)] if A.tool_nodes else []   # tool node rows
         I_NEW, I_HALT = N, N + 1 + nT
         I_SUB = I_HALT + 1                           # (only with --recurse; masked otherwise)
         tq = torch.tensor([float(store.nodes[r["qnid"]]["time"]) for r in rows], device=dev)
@@ -2482,6 +2557,9 @@ def main():
             visible = (M["time"][None] < tq[:, None]) & okk[None]
         else:
             visible = M["time"][None] <= tq[:, None]
+            if A.tool_nodes:                         # a tool node is APPLIED (tool segment), not read
+                isT = torch.tensor([store.nodes[i]["kind"] == "tool" for i in M["rows"]], device=dev)
+                visible = visible & ~isT[None]
         la = torch.log1p(age.float()) / 5.0
         age_f = torch.stack([(age < 0.75).float(), la, la * la], -1)            # (B, N, 3)
         regs = [[] for _ in range(B)]
@@ -2501,6 +2579,7 @@ def main():
         done = [False] * B
         read_mask = torch.zeros(B, N, dtype=torch.bool, device=dev)
         losses, n_act, ok_act, say = [], 0, 0, []
+        said_ops = set()                             # (row, register) operands already graded on their decode
         recs = [[] for _ in range(B)]                # hard write records per row
         oprec = [[] for _ in range(B)]               # per tool use: (tool, arg register a, arg register b, decoded a, b)
         proposal = [None] * B                        # (record, address, register written, pass, proposed outcome)
@@ -2520,7 +2599,11 @@ def main():
         else:
             T = max(len(r["prog"]) for r in rows) + 1 if teacher else max_regs
         tau = mem.tau.exp()
-        lab = F.normalize(torch.cat([loop.new_lab[None], tools.labels, loop.halt[None], loop.sub_lab[None]]), dim=-1)
+        if A.tool_nodes:                             # the tool segment = the tool NODES' labels (keys from their text)
+            tlab = torch.stack([K[j] if j is not None else torch.zeros(A.dk, device=dev) for j in t_ix])
+        else:
+            tlab = tools.labels
+        lab = F.normalize(torch.cat([loop.new_lab[None], tlab, loop.halt[None], loop.sub_lab[None]]), dim=-1)
         stat_rows = []
         for t in range(T):
             if kind == "frame" and lookk and t >= w0 + A.write_passes:
@@ -2579,6 +2662,9 @@ def main():
             e = e.masked_fill(~visible | read_mask, -1e4)
             le = tau * qn @ lab.t()
             le = torch.cat([le[:, :1] + tau * loop.b_new, le[:, 1:]], -1)
+            if A.tool_nodes and any(j is None for j in t_ix):   # a tool whose node is gone cannot be applied
+                gone_t = torch.tensor([j is None for j in t_ix], device=dev)
+                le = torch.cat([le[:, :1], le[:, 1:1 + nT].masked_fill(gone_t[None], -1e4), le[:, 1 + nT:]], -1)
             if kind == "question":
                 le = torch.cat([torch.full_like(le[:, :1], -1e4), le[:, 1:]], -1)   # questions do not write
             if kind == "note":                       # NEW only once there is something to write (a tool's output):
@@ -2788,6 +2874,8 @@ def main():
                     if t == w0 and kind == "frame":
                         stat_rows.append((b, float(w_keep[b] + w_rep[b].sum()), float(P[b, I_NEW]),
                                           float(w_rep[b].sum()), int(pj[b]) < N, float(kap[b]) if kap is not None else 1.0))
+                        run.how_log.append((rows[b]["qnid"], M["rows"][int(pj[b])] if int(pj[b]) < N else None,
+                                            oph[b] if A.object_tools else None))   # HOW: which procedure, which op
                     if c_ > I_NEW:                   # a tool / HALT pass writes nothing: it must not replace the soft
                         continue                     # write of the pass that did (notes' soft write came from their
                     #                                  HALT pass: write / look heads got no gradient at their own state)
@@ -2895,7 +2983,20 @@ def main():
                 b_ = tuple((stackS if k == 2 else torch.stack)([pick(1, b)[k] for b in rws]) for k in range(3))
                 a_ = (a_[0], a_[1], padS(a_[2], A.tool_slots))
                 b_ = (b_[0], b_[1], padS(b_[2], A.tool_slots))
-                ol, ov, orr, osl = tools(torch.full((len(rws),), ti, device=dev, dtype=torch.long), a_, b_)
+                if A.tool_nodes and t_ix[ti] is not None:   # the network runs conditioned on the tool NODE
+                    pv_ = tools.Wc(V[t_ix[ti]])[None].expand(len(rws), -1)
+                    ol, ov, orr, osl = tools.run(pv_, a_, b_)
+                else:
+                    ol, ov, orr, osl = tools(torch.full((len(rws),), ti, device=dev, dtype=torch.long), a_, b_)
+                if A.neural_tools and teacher and kind == "question" and ti < N_ARITH:   # the exact op = TEACHER only:
+                    tv_ = [rows[b]["vals"][len(regs[b])] if len(regs[b]) < len(rows[b]["vals"]) else None for b in rws]
+                    okt = [j for j, v_ in enumerate(tv_) if v_ is not None]
+                    if okt:                          # target = the exact result encoded like any value
+                        tg_ = [rg for _, rg in encode_values([tv_[j] for j in okt], [0.0] * len(okt), False)]
+                        cd_ = lambda x, y: (1 - F.cosine_similarity(x, y.detach(), dim=-1)).mean()   # cosine distance
+                        run.tool_loss.append(cd_(ov[okt], torch.stack([g[1] for g in tg_]))
+                                             + cd_(ol[okt], torch.stack([g[0] for g in tg_]))
+                                             + cd_(osl[okt], padS(stackS([g[2] for g in tg_]), A.tool_slots)))
                 fv, fs = loop.Wfv(ov), loop.Wfs(osl) + loop.spos[:A.tool_slots]
                 obj = {}
                 if A.object_tools and ti == EDIT:               # object edit: the value the note states (its tail)
@@ -2903,7 +3004,7 @@ def main():
                     okr = [(j, b) for j, b in enumerate(rws) if nv[j] is not None]
                     enc_ = encode_values([nv[j] for j, _ in okr], [float(tq[b]) + 0.5 for _, b in okr], writer)
                     obj = {b: rg for (_, b), (_, rg) in zip(okr, enc_)}
-                if A.object_tools and ti < N_ARITH:              # object tool: decode both, exact, encode the result
+                if A.object_tools and ti < N_ARITH and not A.neural_tools:   # object tool: decode, exact, encode
                     xs = decode(torch.cat([a_[1], b_[1]]), stackS([pick(0, b)[2] for b in rws]
                                                                   + [pick(1, b)[2] for b in rws]))
                     dec_ = {b: (xs[j], xs[len(rws) + j]) for j, b in enumerate(rws)}
@@ -2913,6 +3014,12 @@ def main():
                     obj = {b: rg for (_, b), (_, rg) in zip(okr, enc_)}
                 for b in rws:
                     oprec[b].append((ti,) + arg_ix[b] + dec_.get(b, (None, None)))
+                    if A.decode_say and teacher and kind == "question" and ti < N_ARITH and rows[b].get("vals"):
+                        for j_ in sorted(set(arg_ix[b])):   # the DECODE of each operand is graded where it happens:
+                            v_ = rows[b]["vals"][j_] if j_ < len(rows[b]["vals"]) else None   # said = its true
+                            if v_ is not None and (b, j_) not in said_ops:                    # value (a misread
+                                said_ops.add((b, j_))                                          # operand is punished)
+                                say.append((b, j_, v_))
                 for j, b in enumerate(rws):
                     if b in obj:
                         regs[b].append(obj[b])
@@ -3114,6 +3221,8 @@ def main():
     run.commit_items = {}
     run.commit_stats = []
     run.comp_stats = []
+    run.how_log = []
+    run.tool_loss = []
     run.forget_stats = []
     run.fcommit, run.fcommit_stats = [], []
     import collections as _co
@@ -3143,7 +3252,8 @@ def main():
             return [], None, set()
         with torch.no_grad():
             M = materialize()
-        cand = [j for j, i in enumerate(M["rows"]) if store.nodes[i]["time"] < t_before - A.protect]
+        cand = [j for j, i in enumerate(M["rows"]) if store.nodes[i]["time"] < t_before - A.protect
+                and store.nodes[i]["kind"] != "tool"]   # (TN1: tool nodes are not forgotten yet — a rule)
         if not cand:
             return [], None, set()
         nids = [M["rows"][j] for j in cand]
@@ -3193,8 +3303,8 @@ def main():
         gradient to the write alternatives (replace / compute / propagate) instead of never being asked"""
         H, _ = holders()
         for f in changed:
-            if f not in world.ents.get(f[0], {}):
-                continue
+            if f[1] not in world.ents.get(f[0], {}):    # (was `f not in`: a (name, key) pair is never a key of the
+                continue                                 #  entity's dict -> nothing was EVER expected; fixed 2026-10-26)
             if A.dep_follow != "eager" and f in world.deps:   # lazy: a dependent is asked by its 2-read chain
                 continue
             nm, k = f
@@ -3202,6 +3312,9 @@ def main():
             if (nm, k, v) in H or len(hs) < 2:
                 continue
             node = gold_node(H, nm, k, hs[-2])
+            if node is None:                             # its node was overwritten with a wrong value (a total
+                held_ = [i for (nm_, k_, _), ns_ in H.items() if (nm_, k_) == (nm, k) for i in ns_]   # replaced by
+                node = max(held_, key=lambda i: store.nodes[i]["time"]) if held_ else None          # its increment)
             if node is not None:
                 store.expect[(nm, k, v)] = node
 
@@ -3452,10 +3565,35 @@ def main():
             for _ in range(5):                               # some distance between the rule and its use
                 write([state_frame(er) for _ in range(2)], False, "state")
             fr = sorted(set(free[k]))[:8]
+            run.how_log = []
             write([world.update_one(er, nm, k) for nm in fr], False)
             fk = {(nm, k) for nm in fr}
+            hw_ = Counter_()                                 # TN0: which procedure each increment used, which op
+            for qn_, pn_, op_ in run.how_log:
+                m_ = store.prov.get(store.nodes[qn_]["vsrc"], ("?",))
+                if m_[0] != "delta":
+                    continue
+                pm_ = store.prov.get(store.nodes[pn_]["vsrc"], ("?",)) if pn_ is not None else ("default",)
+                pk_ = ("its rule" if pm_[0] == "rule" and len(pm_) > 1 and pm_[1] == k else
+                       "another rule" if pm_[0] == "rule" else pm_[0])
+                hw_[(pk_, "copy add sub max min".split()[op_] if op_ is not None else "-")] += 1
+            print(f"EVAL {step} one_exposure_rule HOW (procedure read, operation) for the increments: {dict(hw_)}",
+                  flush=True)
             print(f"EVAL {step} one_exposure_rule: totals held {coverage(fk):.3f} of {len(fk)} (rule: add)", flush=True)
-            score("one_exposure_rule", [(1, fk)], "lookup:1.0")
+            H_, _ = holders()
+            why_ = Counter_()
+            for nm_, k_ in sorted(fk):
+                v_, hs_ = world.ents[nm_][k_], world.hist.get((nm_, k_), [])
+                held_v = sorted({v2 for (n2, k2, v2) in H_ if (n2, k2) == (nm_, k_)})
+                why_[f"hist {len(hs_)} | total held {(nm_, k_, v_) in H_} | old held {len(hs_) > 1 and (nm_, k_, hs_[-2]) in H_}"
+                     f" | values held {len(held_v)}"] += 1
+            print(f"EVAL {step} one_exposure_rule nodes after the increments: {dict(why_)}", flush=True)
+            expect_dependents(fk)                            # a total no node holds is asked anyway (graded on the
+            Hx_, _ = holders()
+            print(f"EVAL {step} one_exposure_rule: {len(store.expect)} totals graded on their node; askable "
+                  f"{sum(1 for (n2, k2, v2) in Hx_ if (n2, k2) in fk and world.ents[n2][k2] == v2)}", flush=True)
+            score("one_exposure_rule", [(1, fk)], "lookup:1.0")   # fact's own node: where the sum should be)
+            store.expect = {}
         # coexisting values: a second value of a multi key (must be attached, not replaced)
         co = [x for x in (world.coexist(er) for _ in range(8)) if x]
         if co:
@@ -3988,6 +4126,131 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 print(f"warm roundtrip {st_}: loss {float(loss_):.3f} said exactly {ok_:.2f}{inv_}", flush=True)
         heads_changed()
 
+    def enc_vals(vals):
+        """values as registers (label, value, slots) through the same encoder as every pair, with gradient"""
+        encs = [doc_encoding(tok.ids, tok.decode, {"result": v}, "state")[0] for v in vals]
+        L = max(len(e["ids"]) for e in encs)
+        X = walker_states(model, torch.tensor([e["ids"] + [0] * (L - len(e["ids"])) for e in encs], device=dev))
+        Xs, ids, spans, ptr, vpos, off = [], [], [], [], [], 0
+        for e, x_ in zip(encs, X):
+            Xs.append(x_[:len(e["ids"])]); ids += e["ids"]
+            spans.append([off + q for q in e["spans"][0]]); ptr.append([off + q for q in e["ptr"][0]])
+            vpos.append([off + q for q in e["vpos"][0]])
+            off += len(e["ids"])
+        with torch.no_grad():
+            E = model.emb(torch.tensor(ids, device=dev)).float()
+        k_, v_, _, s_, _ = graph.nodes(torch.cat(Xs).float(), E, spans, ptr, vpos)
+        return k_, v_, s_
+
+    def tool_practice_loss(wr, n=64):
+        """TN1 practice: the tool network, conditioned on a tool NODE, computes (a op b); the speaker must say the
+        exact result (the exact op is the teacher). Returns (loss, said exactly)."""
+        M = materialize(only=set(tool_nid.values()))
+        tis = [wr.randrange(N_ARITH) for _ in range(n)]
+        a_v = [wr.randint(1, 30) for _ in range(n)]
+        b_v = [wr.randint(1, 30) for _ in range(n)]
+        res = [TOOLS[ti][1](x, y) for ti, x, y in zip(tis, a_v, b_v)]
+        with torch.no_grad():
+            ka, va, sa = enc_vals(a_v)
+            kb, vb, sb_ = enc_vals(b_v)
+            kt, vt, st = enc_vals(res)
+        pv = tools.Wc(torch.stack([M["V"][M["row_of"][tool_nid[ti]]] for ti in tis]))
+        ol, ov, _, osl = tools.run(pv, (ka, va, padS(sa, A.tool_slots)), (kb, vb, padS(sb_, A.tool_slots)))
+        cd_ = lambda x, y: (1 - F.cosine_similarity(x, y, dim=-1)).mean()
+        teach = cd_(ov, vt) + cd_(ol, kt) + cd_(osl, padS(st, A.tool_slots))
+        ys = [ans_tok(v)[:A.max_ans] for v in res]
+        Lm = max(map(len, ys))
+        inp = torch.tensor([ans_ids + y[:-1] + [0] * (Lm - len(y)) for y in ys], device=dev)
+        tgt_ = torch.full((len(ys), len(ans_ids) + Lm - 1), -100, dtype=torch.long, device=dev)
+        for i, y in enumerate(ys):
+            tgt_[i, a0:a0 + len(y)] = torch.tensor(y, device=dev)
+        inject.set(mem.Wo(ov), ro.Us(padS(osl, Lm)), a0)
+        lo, _ = model(inp, r_active=False)
+        inject.clear()
+        said = F.cross_entropy(lo.float().reshape(-1, lo.shape[-1]), tgt_.reshape(-1), ignore_index=-100)
+        ok = ((lo.argmax(-1) == tgt_) | (tgt_ == -100) | (tgt_ == EOS_ID)).all(-1).float()
+        tool_practice_loss.parts = (float(said), float(teach))
+        if not getattr(tool_practice_loss, "shown", 0) or tool_practice_loss.shown % 500 == 0:
+            sd_ = lambda x: float(x.float().std(0).mean())           # spread ACROSS the batch (0 = one output)
+            print(f"  tool net scales: |va| {float(va.norm(dim=-1).mean()):.1f} |sa| {float(sa.norm(dim=-1).mean()):.1f} "
+                  f"|ov| {float(ov.norm(dim=-1).mean()):.1f} |vt| {float(vt.norm(dim=-1).mean()):.1f} | spread va "
+                  f"{sd_(va):.3f} ov {sd_(ov):.3f} vt {sd_(vt):.3f}", flush=True)
+        tool_practice_loss.shown = getattr(tool_practice_loss, "shown", 0) + 1
+        return said + teach, ok, tis
+
+    def warm_tool_net(n_steps):
+        """TN1: tool practice before the run; only the tool network (and its compile head) learns"""
+        wr = random.Random(A.seed + 5)
+        topt = torch.optim.AdamW(tools.parameters(), lr=A.lr, weight_decay=0.0)
+        for st_ in range(1, n_steps + 1):
+            loss_, ok_, tis = tool_practice_loss(wr)
+            topt.zero_grad(set_to_none=True)
+            opt.zero_grad(set_to_none=True)
+            loss_.backward()
+            gn_ = torch.nn.utils.clip_grad_norm_(tools.parameters(), 1.0)
+            if st_ == 1:
+                print(f"tool practice: grad norm {float(gn_):.4f} | lr {A.lr} | trainable "
+                      f"{sum(p_.numel() for p_ in tools.parameters() if p_.requires_grad):,}", flush=True)
+            topt.step()
+            if st_ % 100 == 0 or st_ == n_steps or st_ in (1, 10, 30):
+                by_ = {TOOLS[t][0]: round(float(ok_[[i for i, x in enumerate(tis) if x == t]].mean()), 2)
+                       for t in range(N_ARITH) if t in tis}
+                print(f"tool practice {st_}: loss {float(loss_):.3f} (said CE {tool_practice_loss.parts[0]:.3f}, "
+                      f"teacher {tool_practice_loss.parts[1]:.3f}) said exactly {float(ok_.mean()):.2f} {by_}",
+                      flush=True)
+        opt.zero_grad(set_to_none=True)
+        heads_changed()
+
+    def digit_regs():
+        """the ten digits as registers (label, value, slots), encoded like any value (cached per head change)"""
+        if cache.get("digits_at") != cache["ver"]:
+            with torch.no_grad():
+                cache["digits"] = enc_vals(list(range(10)))
+            cache["digits_at"] = cache["ver"]
+        return cache["digits"]
+
+    def digit_apply(dis, a_reg, b_reg):
+        """TN3: digit-fact tool nodes `dis` on digit registers -> (logits over 0-9, the chosen digit's register with a
+        straight-through soft mixture of the ten digit encodings for the gradient)"""
+        M = materialize(only=set(digit_nid.values()))
+        pv = tools.Wc(torch.stack([M["V"][M["row_of"][digit_nid[di]]] for di in dis]))
+        lg = tools.digit_logits(pv, a_reg, b_reg)
+        dk_, dv_, ds_ = digit_regs()
+        p_ = torch.softmax(lg, -1)
+        hard = F.one_hot(lg.argmax(-1), 10).float() + p_ - p_.detach()
+        mix = lambda t: torch.einsum("bj,j...->b...", hard, t)
+        return lg, (mix(dk_), mix(dv_), mix(ds_))
+
+    def warm_digit(n_steps, n=128):
+        """TN3 M1: practise the digit facts (a memorized table) until exact; only the tool network learns"""
+        wr = random.Random(A.seed + 7)
+        dk_, dv_, ds_ = digit_regs()
+        cs_ = lambda t: F.cosine_similarity(t.flatten(1)[:, None].float(), t.flatten(1)[None].float(), dim=-1)
+        off_ = ~torch.eye(10, dtype=torch.bool, device=dev)
+        print(f"digit encodings, mean cosine between DIFFERENT digits: label {float(cs_(dk_)[off_].mean()):.4f} | value "
+              f"{float(cs_(dv_)[off_].mean()):.4f} | first slot {float(cs_(ds_[:, :1])[off_].mean()):.4f} | centred "
+              f"first slot {float(cs_(ds_[:, :1] - ds_[:, :1].mean(0))[off_].mean()):.4f}", flush=True)
+        reg = lambda ix: (dk_[ix], dv_[ix], padS(ds_[ix], A.tool_slots))
+        topt = torch.optim.AdamW(tools.parameters(), lr=A.lr, weight_decay=0.0)
+        for st_ in range(1, n_steps + 1):
+            dis = [wr.randrange(len(DIGIT_TOOLS)) for _ in range(n)]
+            av = torch.tensor([wr.randrange(10) for _ in range(n)], device=dev)
+            bv = torch.tensor([wr.randrange(10) for _ in range(n)], device=dev)
+            y = torch.tensor([DIGIT_TOOLS[di][1](int(a_), int(b_)) for di, a_, b_ in zip(dis, av, bv)], device=dev)
+            lg, _ = digit_apply(dis, reg(av), reg(bv))
+            loss_ = F.cross_entropy(lg, y)
+            topt.zero_grad(set_to_none=True)
+            loss_.backward()
+            torch.nn.utils.clip_grad_norm_(tools.parameters(), 1.0)
+            topt.step()
+            if st_ % 100 == 0 or st_ == n_steps:
+                ok_ = (lg.argmax(-1) == y).float()
+                by_ = {DIGIT_TOOLS[d][0]: round(float(ok_[[i for i, x in enumerate(dis) if x == d]].mean()), 2)
+                       for d in range(len(DIGIT_TOOLS)) if d in dis}
+                print(f"digit practice {st_}: loss {float(loss_):.4f} exact {float(ok_.mean()):.3f} {by_}", flush=True)
+        opt.zero_grad(set_to_none=True)
+        heads_changed()
+
     @torch.no_grad()
     def identity_lookup(irng, n=24):
         """eval: an update of a known fact -> is its identity node the best match (raw label / Wself query)?"""
@@ -4032,6 +4295,21 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             if ask_A is not None and "ask" in st["say"]:   # a trained ask adapter (no ridge refit)
                 ask_A.load_state_dict(st["say"]["ask"]); ask_map.update(fit=True)
     # ------------------------------------------------------------------ the ONE world
+    if A.tool_nodes:                                      # TN1: the tools are nodes, made from their definitions
+        with torch.no_grad():
+            tl_ = see([{"tools": {TOOLS[ti][0]: (TOOLS[ti][2] or "the value a note states, written into its "
+                                                 "target").format("a", "b") for ti in range(len(TOOLS))}}], "tool", False)[0][0]
+        for ti, n_ in enumerate(tl_):
+            tool_nid[ti] = n_
+        print(f"TOOL NODES: {len(tool_nid)} ({', '.join(TOOLS[ti][0] for ti in tool_nid)})", flush=True)
+    if A.digit_tools:                                     # TN3 M1: digit facts are tool nodes made from their text
+        with torch.no_grad():
+            dl_ = see([{"digit facts": {DIGIT_TOOLS[di][0]: DIGIT_TOOLS[di][2].format("a", "b")
+                                        for di in range(len(DIGIT_TOOLS))}}], "tool", False)[0][0]
+        for di, n_ in enumerate(dl_):
+            digit_nid[di] = n_
+        tools.norm_io = True
+        print(f"DIGIT TOOL NODES: {', '.join(d[0] for d in DIGIT_TOOLS)}", flush=True)
     with torch.no_grad():
         write([world.rule(rng) for _ in range(min(6, A.warm_frames // 10))]       # a few rules, shown once
               + [world.component(rng) for _ in range(A.warm_frames)], False)
@@ -4049,6 +4327,10 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             return
         evaluate(-1)
         return
+    if A.warm_tool_net and A.tool_nodes:
+        warm_tool_net(A.warm_tool_net)
+    if A.warm_digit and A.digit_tools:
+        warm_digit(A.warm_digit)
     if A.warm_tools:
         with torch.no_grad():
             print("roundtrip before warm-up:", roundtrip(random.Random(1)), flush=True)
@@ -4079,6 +4361,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         for gp in opt.param_groups:
             gp["lr"] = lr * gp.get("lr_mult", 1.0)
         ask_losses.clear()                                # (questions are encoded in ask(), before run())
+        run.tool_loss = []
+        run.how_log = []
         mem.update_stats = not A.say_only                 # running statistics follow real training data only (a
         #                                                   frozen GNM keeps its stats: say2 drifted them, program .79->.6)
         t_before = store.time
@@ -4151,6 +4435,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         #                                                        misread operands were the arithmetic bottleneck)
         rt_stats.append(rt_ok)
         loss = loss + A.w_self * run.self_loss + A.w_inv * invariance_loss(rng) + A.w_rt * rt_loss
+        if run.tool_loss:                                 # TN1: the tool network learns the exact results (teacher)
+            run.tool_l = torch.stack(run.tool_loss).mean()
+            loss = loss + A.w_tool * run.tool_l
         if ask_losses:                                    # the 1B asks: its mapped questions encode like GPT-2's
             run.ask_loss = torch.stack(ask_losses).mean()
             loss = loss + A.ask_train * run.ask_loss
@@ -4189,7 +4476,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             said_ ="- (no question this step: no fact held)" if em is None else f"{float(em.mean()):.2f}"
             print(f"step {step} loss {float(loss):.3f} action acc {act:.2f} answer said {said_} "
                   f"tool outputs said {tool_said if tool_said is None else round(tool_said, 2)} | "
-                  f"{'ask distill %.3f | ' % float(run.ask_loss) if ask_losses else ''}world "
+                  f"{'ask distill %.3f | ' % float(run.ask_loss) if ask_losses else ''}"
+                  f"{'tool net %.3f | ' % float(run.tool_l) if run.tool_loss else ''}world "
                   f"{len(world.ents)} entities, {n_live} live nodes | peak VRAM {peak_gb():.2f} GB [{time.time() - t0:.0f}s]",
                   flush=True)
             print(f"  read actions: {pp} | integrate by kind (n, store, NEW, replace): {ws}", flush=True)

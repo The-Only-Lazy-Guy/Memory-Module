@@ -1,0 +1,23 @@
+{
+ "name": "tn2c_s1",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "1000",
+  "--eval-every",
+  "500",
+  "--eval-q",
+  "288",
+  "--skip-eval0",
+  "--forget-q",
+  "0.2",
+  "--seed",
+  "1"
+ ],
+ "init": "rd7_s1.pt",
+ "init_from": "ckpt",
+ "gpu_gb": 6,
+ "keep": true,
+ "cancel": false
+}
