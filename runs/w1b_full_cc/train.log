@@ -432,3 +432,13 @@ step 900 loss 2.465 action acc 0.73 answer said 1.00 tool outputs said 1.0 | wor
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [26, 0.16, 0.02, 0.03, 0.34, 1.0, 1.0], 'look': [26, 0.98, 0.98, 0.03, 0.46, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 0.96
   roundtrip in training (said exactly): 1.00
+step 925 loss 2.058 action acc 0.76 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 14.17 GB [10717s]
+  read actions: {'halt': 0.98, 'read': 0.46, 'tool': 1.0} | integrate by kind (n, store, NEW, replace): {'state': (761, 0.12, 0.0, 0.0), 'decided drop': (3426, 0.0, 0.0, 0.0), 'name': (152, 0.2, 0.0, 0.0), 'delta': (90, 0.98, 0.0, 0.01), 'how delta (n, rule read, copy)': (90, 1.0, 0.0, 0.0), 'noise': (50, 0.08, 0.0, 0.0), 'fact': (159, 0.78, 0.0, 0.01), 'how fact (n, rule read, copy)': (159, 1.0, 0.0, 0.0), 'multi': (13, 0.98, 0.0, 0.01), 'decided attach': (191, 0.0, 0.0, 0.0), 'decided new': (48, 0.0, 0.0, 0.0), 'rule': (8, 0.42, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> new': 3, 'note: drop -> new': 15}
+  step time (9.8 s / step): other (log / evict / eval) 0.20 (2%) | frames 3.97 (41%) | notes 1.13 (12%) | ask 0.35 (4%) | questions 1.52 (15%) | roundtrip+invariance 0.27 (3%) | backward 1.59 (16%) | commit+step 0.76 (8%)
+  reference re-read (inside the parts above): 0.26 s / step | calls 35 | rows 3873 | new texts 55 / step | texts cached 2403
+  forget (model's choice): 10.3 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-0.92, -0.01, 0.26, 0.48, 0.31, -0.72, -0.8]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 4.04
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [18, 0.18, 0.02, 0.07, 0.4, 1.0, 1.0], 'look': [18, 0.98, 0.98, 0.07, 0.49, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.99
+  roundtrip in training (said exactly): 1.00
