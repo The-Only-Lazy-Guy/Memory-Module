@@ -1328,6 +1328,8 @@ class Loop(nn.Module):
         with torch.no_grad():
             self.Wpr.weight.copy_(torch.eye(dk)); self.Wpr.bias.zero_()
         self.proc0 = nn.Parameter(torch.randn(dk) / dk ** 0.5)        # the default procedure
+        self.Wph = nn.Linear(d, dk)                                    # --proc-read: Walker's state after READING the
+        nn.init.zeros_(self.Wph.weight); nn.init.zeros_(self.Wph.bias)  # procedure node -> HOW (zero: no change at init)
         self.empty_v = nn.Parameter(torch.randn(dk) / dk ** 0.5)      # what a node holds when nothing was stored
         self.empty_s = nn.Parameter(torch.randn(dk) / dk ** 0.5)      # (readout / adapters are scale-invariant: a
         #                                                               value is mixed toward these, not scaled)
@@ -1407,6 +1409,8 @@ def main():
     P.add_argument("--neural-tools", type=int, default=0, help="TN1: arithmetic tool outputs come from the network "
                    "(the exact operation is only the teacher: target = the exact result's encoding)")
     P.add_argument("--w-tool", type=float, default=1.0, help="weight of the tool network's teacher loss")
+    P.add_argument("--proc-read", type=int, default=0, help="the procedure (rule) node a frame points at is READ like any "
+                   "node: Walker's state after reading it decides HOW (the pooled value carried no rule content)")
     P.add_argument("--confusion", type=float, default=0.0, help="weight of the CONFUSION signal (user 2026-10-26): "
                    "the model's own uncertainty at any action (address entropy, saying entropy), recomputed with the "
                    "deciding head frozen so it punishes only the path before (earlier writes / reads / registers)")
@@ -2828,6 +2832,14 @@ def main():
                     soft_p = pi @ cand_p
                     pj = sp.argmax(-1)
                     p_vec = cand_p[pj] + soft_p - soft_p.detach()                  # hard choice, soft gradient
+                    if A.proc_read:                  # the procedure node is READ (a register; Walker's own state after
+                        rd_ = [b for b in range(B) if int(pj[b]) < N and regs[b]]   # reading its tokens decides HOW):
+                        if rd_:                      # pooled values carry no rule content (add vs set cos .9995)
+                            prg_ = regs_from(M, [int(pj[b]) for b in rd_])
+                            hp_ = ctrl_states([regs[b] + [rg_] for b, rg_ in zip(rd_, prg_)])
+                            sel_ = pi[rd_, pj[rd_]]
+                            ix_ = torch.tensor(rd_, device=dev)
+                            p_vec = p_vec.index_add(0, ix_, loop.Wph(hp_) * (sel_ / sel_.detach())[:, None])
                     pop = torch.softmax(loop.Wop(p_vec), -1)                     # HOW: [copy | add sub max min]
                     oph = pop.argmax(-1).tolist()
                     kap = pop[:, 0]
@@ -3637,6 +3649,20 @@ def main():
                 hw_[(pk_, "copy add sub max min".split()[op_] if op_ is not None else "-")] += 1
             print(f"EVAL {step} one_exposure_rule HOW (procedure read, operation) for the increments: {dict(hw_)}",
                   flush=True)
+            with torch.no_grad():                            # can the op head tell rules apart? (pooled values were
+                Mr_ = materialize()                          # constant across numbers: spread .000)
+                rr_ = [j for j, i in enumerate(Mr_["rows"]) if (store.prov.get(store.nodes[i]["vsrc"]) or ("?",))[0] == "rule"]
+                if len(rr_) > 1:
+                    pol_ = [store.prov[store.nodes[Mr_["rows"][j]]["vsrc"]][2] for j in rr_]
+                    Vr_ = Mr_["V"][rr_].float()
+                    cs_ = lambda X: F.normalize(X, dim=-1) @ F.normalize(X, dim=-1).t()
+                    same_ = torch.tensor([[a_ == b_ for b_ in pol_] for a_ in pol_], device=dev) & ~torch.eye(len(rr_), dtype=torch.bool, device=dev)
+                    diff_ = torch.tensor([[a_ != b_ for b_ in pol_] for a_ in pol_], device=dev)
+                    for nm_, X_ in (("raw V", Vr_), ("centred V", Vr_ - Mr_["V"].float().mean(0))):
+                        c_ = cs_(X_)
+                        print(f"EVAL {step} rule nodes ({len(rr_)}; {Counter_(pol_)}) {nm_} cosine: same policy "
+                              f"{float(c_[same_].mean()) if same_.any() else float('nan'):.4f} | add vs set "
+                              f"{float(c_[diff_].mean()) if diff_.any() else float('nan'):.4f}", flush=True)
             print(f"EVAL {step} one_exposure_rule: totals held {coverage(fk):.3f} of {len(fk)} (rule: add)", flush=True)
             H_, _ = holders()
             why_ = Counter_()
