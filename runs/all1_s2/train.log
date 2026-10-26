@@ -644,3 +644,23 @@ step 1150 loss 1.083 action acc 1.00 answer said 0.73 tool outputs said 0.79 | c
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.55, 0.98, 1.0, 0.67, 1.0, 1.0], 'look': [50, 0.98, 0.98, 1.0, 0.49, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+step 1175 loss 1.409 action acc 1.00 answer said 0.67 tool outputs said 0.73 | confusion 0.014 | world 150 entities, 3000 live nodes | peak VRAM 5.17 GB [4680s]
+  read actions: {'halt': 1.0, 'read': 0.99, 'sub': 1.0, 'tool': 1.0} | integrate by kind (n, store, NEW, replace): {'state': (713, 0.04, 1.0, 0.0), 'decided drop': (4453, 0.0, 0.0, 0.0), 'rule': (5, 0.94, 0.68, 0.28), 'name': (152, 0.06, 0.9, 0.01), 'fact': (165, 0.99, 0.04, 0.87), 'how fact (n, rule read, copy)': (165, 1.0, 0.0, 0.0), 'multi': (23, 0.99, 0.17, 0.76), 'delta': (103, 1.0, 0.03, 0.89), 'how delta (n, rule read, copy)': (103, 1.0, 0.0, 0.0), 'noise': (42, 0.05, 0.79, 0.01), 'decided new': (17, 0.0, 0.0, 0.0), 'decided replace': (281, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (64, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> replace': 16, 'note: replace -> replace': 23, 'note: drop -> replace': 11}
+  step time (4.6 s / step): other (log / evict / eval) 0.28 (6%) | frames 1.05 (23%) | notes 0.52 (11%) | ask 0.16 (3%) | questions 1.22 (26%) | roundtrip+invariance 0.08 (2%) | backward 0.43 (9%) | commit+step 0.89 (19%)
+  reference re-read (inside the parts above): 0.10 s / step | calls 51 | rows 4978 | new texts 128 / step | texts cached 2651
+  forget (model's choice): 1.2 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.47, 0.13, -0.14, 0.92, 0.04, -1.84, -1.84]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.91
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.47, 0.98, 1.0, 0.61, 1.0, 1.0], 'look': [50, 0.98, 0.98, 1.0, 0.42, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+step 1200 loss 1.162 action acc 0.98 answer said 0.82 tool outputs said 0.81 | confusion 0.013 | world 150 entities, 3000 live nodes | peak VRAM 5.17 GB [4793s]
+  read actions: {'halt': 0.99, 'read': 0.97, 'sub': 1.0, 'tool': 1.0} | integrate by kind (n, store, NEW, replace): {'state': (638, 0.04, 1.0, 0.0), 'decided drop': (3892, 0.0, 0.0, 0.0), 'name': (153, 0.06, 0.91, 0.01), 'multi': (20, 0.99, 0.2, 0.74), 'fact': (189, 0.99, 0.04, 0.88), 'how fact (n, rule read, copy)': (189, 1.0, 0.0, 0.0), 'noise': (47, 0.05, 0.85, 0.01), 'delta': (86, 0.99, 0.06, 0.86), 'how delta (n, rule read, copy)': (86, 1.0, 0.0, 0.0), 'decided replace': (280, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (68, 0.0, 0.0, 0.0), 'decided new': (20, 0.0, 0.0, 0.0), 'rule': (3, 0.93, 1.0, 0.0)}
+  look (proposed -> after looking): {'note: replace -> replace': 25, 'note: new -> replace': 19, 'note: drop -> replace': 6}
+  step time (4.5 s / step): other (log / evict / eval) 0.25 (5%) | frames 1.00 (22%) | notes 0.53 (12%) | ask 0.15 (3%) | questions 1.20 (27%) | roundtrip+invariance 0.08 (2%) | backward 0.42 (9%) | commit+step 0.89 (20%)
+  reference re-read (inside the parts above): 0.09 s / step | calls 51 | rows 4925 | new texts 62 / step | texts cached 4200
+  forget (model's choice): 1.7 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.47, 0.13, -0.14, 0.92, 0.03, -1.85, -1.84]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 3.09
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.51, 0.98, 0.99, 0.65, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.99, 0.44, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00

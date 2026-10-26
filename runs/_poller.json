@@ -1,11 +1,13 @@
 {
- "alive": "2026-10-26 17:15:05",
+ "alive": "2026-10-26 17:19:09",
  "running": [
   "all1_s1",
   "all1_s2",
   "all2_s1",
-  "all2_s2"
+  "all2_s2",
+  "all3_s1",
+  "all3_s2"
  ],
- "gpu_free_gb": 72.5,
- "code": "b3528ea"
+ "gpu_free_gb": 83.8,
+ "code": "a30c963"
 }
