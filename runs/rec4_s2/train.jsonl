@@ -96,3 +96,10 @@
 {"type": "eval", "step": 1500, "set": "one_step_after0", "exact": 0.9201388888888888, "n": 288, "by": {"before": 0.488, "0": 1.0, "1": 1.0, "2": 0.974}, "gold_read": 0.9618055555555556, "program_ok": 0.9236111111111112, "exact_given_program": 0.9962406015037594}
 {"type": "eval", "step": 1500, "set": "one_exposure_after10", "exact": 0.8090277777777778, "n": 288, "by": {"before": 0.0, "0": 0.918, "1": 0.98, "2": 0.975}, "gold_read": 0.9155092592592593, "program_ok": 0.8055555555555556, "exact_given_program": 1.0}
 {"type": "eval", "step": 1500, "set": "one_exposure_after100", "exact": 0.9861111111111112, "n": 288, "by": {"before": 1.0, "0": 1.0, "1": 1.0, "2": 0.889}, "gold_read": 0.9942129629629629, "program_ok": 0.9826388888888888, "exact_given_program": 0.9893992932862191}
+{"type": "eval", "step": 1500, "set": "one_exposure_heldkeys_after0", "exact": 0.9027777777777778, "n": 288, "by": {"before": 0.558, "0": 1.0, "1": 0.977, "2": 0.837}, "gold_read": 0.9623842592592593, "program_ok": 0.9166666666666666, "exact_given_program": 0.9734848484848485}
+{"type": "eval", "step": 1500, "set": "one_exposure_dependents", "exact": 1.0, "n": 288, "by": {"0": 1.0}, "gold_read": 1.0, "program_ok": 1.0, "exact_given_program": 1.0}
+{"type": "eval", "step": 1500, "set": "one_exposure_rule", "exact": 0.0, "n": 0, "by": {}, "gold_read": 0.0, "program_ok": 0.0, "exact_given_program": 0.0}
+{"type": "eval", "step": 1500, "set": "one_exposure_coexist", "exact": 0.0, "n": 0, "by": {}, "gold_read": 0.0, "program_ok": 0.0, "exact_given_program": 0.0}
+{"type": "eval", "step": 1500, "set": "corrected_facts", "exact": 1.0, "n": 288, "by": {"before": 1.0, "0": 1.0}, "gold_read": 1.0, "program_ok": 1.0, "exact_given_program": 1.0}
+{"type": "eval", "step": 1500, "set": "identity_lookup", "exact": 0.9583333333333334, "raw": 1.0, "n": 24}
+{"type": "eval", "step": 1500, "set": "first_frame", "exact": 0.9473684210526315, "program_ok": 0.9473684210526315}

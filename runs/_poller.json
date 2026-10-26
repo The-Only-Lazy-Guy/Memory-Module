@@ -1,13 +1,12 @@
 {
- "alive": "2026-10-26 01:12:48",
+ "alive": "2026-10-26 01:14:50",
  "running": [
   "rec4_s1",
-  "rec4_s2",
   "rec5_s1",
   "rec5_s2",
   "w1b_full",
   "w1b_full_cc"
  ],
- "gpu_free_gb": 48.6,
+ "gpu_free_gb": 58.9,
  "code": "4bff9e1"
 }
