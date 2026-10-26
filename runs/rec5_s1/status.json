@@ -1,8 +1,9 @@
 {
- "state": "running",
+ "state": "stopped (poller lifetime)",
  "pid": 5029,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/rd4_s1.pt --corrections 2 --steps 1500 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --recurse 1 --long-ops 4,6 --seed 1 --vslots 128 --train-ops 1,3 --save /marimo/gnm-lab/ckpt/rec5_s1.pt --log /marimo/gnm-lab/runs/runs/rec5_s1/train.jsonl",
  "code": "495d2ef",
  "started": "2026-10-25 21:45:29",
- "updated": "2026-10-25 21:45:29"
+ "updated": "2026-10-26 01:17:52",
+ "ended": "2026-10-26 01:17:52"
 }
