@@ -1,9 +1,6 @@
 {
- "alive": "2026-10-26 15:47:37",
- "running": [
-  "cf_s1",
-  "cf_s2"
- ],
- "gpu_free_gb": 84.7,
+ "alive": "2026-10-26 15:53:06",
+ "running": [],
+ "gpu_free_gb": 95.0,
  "code": "479d9f3"
 }
