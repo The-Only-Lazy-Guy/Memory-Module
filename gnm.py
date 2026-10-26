@@ -1407,6 +1407,9 @@ def main():
     P.add_argument("--neural-tools", type=int, default=0, help="TN1: arithmetic tool outputs come from the network "
                    "(the exact operation is only the teacher: target = the exact result's encoding)")
     P.add_argument("--w-tool", type=float, default=1.0, help="weight of the tool network's teacher loss")
+    P.add_argument("--confusion", type=float, default=0.0, help="weight of the CONFUSION signal (user 2026-10-26): "
+                   "the model's own uncertainty at any action (address entropy, saying entropy), recomputed with the "
+                   "deciding head frozen so it punishes only the path before (earlier writes / reads / registers)")
     P.add_argument("--decode-say", type=int, default=1, help="every tool operand's DECODE is graded where it happens "
                    "(the register must be said as its true value): a misread operand is punished (user 2026-10-26)")
     P.add_argument("--digit-tools", type=int, default=0, help="TN3 M1: digit-fact tool nodes (units / tens / bunits / "
@@ -2580,6 +2583,7 @@ def main():
         read_mask = torch.zeros(B, N, dtype=torch.bool, device=dev)
         losses, n_act, ok_act, say = [], 0, 0, []
         said_ops = set()                             # (row, register) operands already graded on their decode
+        row_conf = [[] for _ in range(B)]            # per row: its confusion at each pass
         recs = [[] for _ in range(B)]                # hard write records per row
         oprec = [[] for _ in range(B)]               # per tool use: (tool, arg register a, arg register b, decoded a, b)
         proposal = [None] * B                        # (record, address, register written, pass, proposed outcome)
@@ -2688,6 +2692,33 @@ def main():
                          for W_ in (loop.Wss, loop.Wse)]
             if phase == "gather":                    # gather: read existing nodes as context (no write, no NEW)
                 logits = torch.cat([logits[:, :N], torch.full_like(logits[:, N:], -1e4)], -1)
+            if A.confusion or not torch.is_grad_enabled():   # CONFUSION (user): the entropy of this choice with the
+                lin_ = lambda m_, x_: F.linear(x_, m_.weight.detach(), None if m_.bias is None else m_.bias.detach())
+                if kind == "frame":                  # DECIDING head frozen: gradient only into the path before
+                    qr_u = lin_(loop.Wq, h) + lin_(loop.Wself, klast)   # (node keys / presence = earlier writes;
+                else:                                                   #  h, klast = earlier reads / tools)
+                    qr_u = lin_(loop.Wq, h) + torch.sigmoid(lin_(loop.Wgq, h)) * lin_(loop.Wqr, klast)
+                qn_u = F.normalize(qr_u - kmean, dim=-1)
+                td_ = tau.detach()
+                cos_u = F.normalize(qr_u, dim=-1) @ F.normalize(R, dim=-1).t()
+                age_u = (age_f * (graph.age.detach()[None, None] + lin_(loop.Wage, h)[:, None])).sum(-1)
+                e_u = td_ * qn_u @ K.t() + logg[None] + graph.w_rel.detach() * cos_u + age_u
+                if kind == "frame":
+                    e_u = e_u + td_ * graph.w_id.detach() * ((idc - A.cluster_cos) / (1 - A.cluster_cos)).clamp(min=0)
+                le_u = td_ * qn_u @ lab.detach().t()
+                le_u = torch.cat([le_u[:, :1] + td_ * loop.b_new.detach(), le_u[:, 1:]], -1)
+                lg_u = torch.cat([e_u, le_u], -1).masked_fill(logits <= -1e3, -1e4)   # the same options
+                p_u = torch.softmax(lg_u, -1)
+                n_opt = (logits > -1e3).sum(-1).clamp(min=2).float()
+                conf = -(p_u * torch.log(p_u.clamp(min=1e-9))).sum(-1) / torch.log(n_opt)   # 0 sure .. 1 lost
+                act_ = torch.tensor([not done[b] and (kind == "frame" or bool(regs[b])) for b in range(B)], device=dev)
+                if bool(act_.any()):
+                    if A.confusion and torch.is_grad_enabled():
+                        run.conf_terms.append(conf[act_].mean())
+                    run.conf_stats.setdefault(kind, []).append(float(conf[act_].mean()))
+                    for b in range(B):
+                        if bool(act_[b]):
+                            row_conf[b].append(float(conf[b]))
             arg_lg = None
             if t and kind != "frame" and any(regs):
                 nr = max(len(r_) for r_ in regs)
@@ -3192,6 +3223,26 @@ def main():
             inject.clear()
         lo = lo.float()
         say_loss = F.cross_entropy(lo.reshape(-1, lo.shape[-1]), tgt_.reshape(-1), ignore_index=-100)
+        if A.confusion and torch.is_grad_enabled():   # CONFUSION when SAYING: the say head frozen -> only the
+            heads_ = [p_ for m_ in (mem.Wo, ro) + ((say_Wo, say_ro) if say_model is not None else ())   # register
+                      for p_ in m_.parameters() if p_.requires_grad]                                    # (its path)
+            for p_ in heads_:
+                p_.requires_grad_(False)
+            try:
+                lo_u = (speak_logits(rv, rs, inp, Lm) if kind == "question" else None)
+                if lo_u is None:
+                    inject.set(mem.Wo(rv), ro.Us(padS(rs, Lm)), a0)
+                    lo_u, _ = model(inp, r_active=False)
+                    inject.clear()
+            finally:
+                for p_ in heads_:
+                    p_.requires_grad_(True)
+            pu_ = torch.softmax(lo_u.float(), -1)
+            ent_ = -(pu_ * torch.log(pu_.clamp(min=1e-9))).sum(-1) / math.log(pu_.shape[-1])
+            pos_ = (tgt_ != -100).float()
+            sc_ = (ent_ * pos_).sum(-1) / pos_.sum(-1).clamp(min=1)
+            run.conf_terms.append(sc_.mean())
+            run.conf_stats.setdefault(kind + " say", []).append(float(sc_.mean()))
         em = ((lo.argmax(-1) == tgt_) | (tgt_ == -100) | (tgt_ == EOS_ID)).all(-1).float()   # value tokens decide
         #                                                                                    (the end token is trained)
         pr = lo.argmax(-1)
@@ -3206,6 +3257,7 @@ def main():
                              float(acts[b][:len(gold_seq)] == gold_seq and len(acts[b]) == len(gold_seq))))
         run.acts = acts
         run.oprec = oprec
+        run.row_conf = [sum(c_) / len(c_) if c_ else 0.0 for c_ in row_conf]   # per row: mean confusion of its passes
         run.final_regs = [regs[b][-1] if regs[b] else None for b in range(B)]
         if kind == "question" and run.self_pairs:           # contrastive (plain cosine collapsed to one direction):
             ws_ = torch.cat([x[0] for x in run.self_pairs])  # Wself(label) must match ITS question's query among the
@@ -3223,6 +3275,7 @@ def main():
     run.comp_stats = []
     run.how_log = []
     run.tool_loss = []
+    run.conf_terms, run.conf_stats, run.row_conf = [], {}, []
     run.forget_stats = []
     run.fcommit, run.fcommit_stats = [], []
     import collections as _co
@@ -3414,7 +3467,7 @@ def main():
             return "program right, answer mis-said"
 
         def score(name, specs, mix, ops=(1, 2), mode="any"):
-            em_, dg_, qs_, wh_ = [], [], [], []
+            em_, dg_, qs_, wh_, cf_ = [], [], [], [], []
             op_examples.clear()
             for _ in range(0, A.eval_q, A.questions):
                 qs = ask(er, [(A.questions * n // max(1, sum(n_ for n_, _ in specs)), p) for n, p in specs], mix,
@@ -3423,7 +3476,7 @@ def main():
                     continue
                 qs_ += qs
                 _, em, _, _ = run(qs, False)
-                em_ += em.tolist(); dg_ += run.diag
+                em_ += em.tolist(); dg_ += run.diag; cf_ += run.row_conf[:len(qs)]
                 wh_ += ["right" if float(e) else why_wrong(q, a_, o_, sd_)
                         for q, e, a_, o_, sd_ in zip(qs, em, run.acts, run.oprec, run.said)]
                 evict()
@@ -3436,6 +3489,11 @@ def main():
                          "by": {str(k): round(sum(v) / len(v), 3) for k, v in sorted(by.items(), key=str)},
                          "gold_read": sum(d_[0] for d_ in dg_) / n_, "program_ok": sum(d_[1] for d_ in dg_) / n_,
                          "exact_given_program": sum(ok_given) / max(1, len(ok_given))}
+            if cf_ and em_:                              # is confusion an error signal? (right vs wrong answers)
+                cr_ = [c for c, e in zip(cf_, em_) if e]
+                cw_ = [c for c, e in zip(cf_, em_) if not e]
+                print(f"EVAL {step} {name} confusion: right {sum(cr_) / max(1, len(cr_)):.3f} (n {len(cr_)}) | wrong "
+                      f"{sum(cw_) / max(1, len(cw_)):.3f} (n {len(cw_)})", flush=True)
             print(f"EVAL {step} {name}: exact {out[name]['exact']:.3f} | by {out[name]['by']} | gold read "
                   f"{out[name]['gold_read']:.3f} | program {out[name]['program_ok']:.3f} | exact|program "
                   f"{out[name]['exact_given_program']:.3f} | n {len(em_)}", flush=True)
@@ -4363,6 +4421,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         ask_losses.clear()                                # (questions are encoded in ask(), before run())
         run.tool_loss = []
         run.how_log = []
+        run.conf_terms = []
         mem.update_stats = not A.say_only                 # running statistics follow real training data only (a
         #                                                   frozen GNM keeps its stats: say2 drifted them, program .79->.6)
         t_before = store.time
@@ -4435,6 +4494,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         #                                                        misread operands were the arithmetic bottleneck)
         rt_stats.append(rt_ok)
         loss = loss + A.w_self * run.self_loss + A.w_inv * invariance_loss(rng) + A.w_rt * rt_loss
+        if run.conf_terms:                                # CONFUSION: punished upwards (the path before)
+            run.conf_l = torch.stack(run.conf_terms).mean()
+            loss = loss + A.confusion * run.conf_l
         if run.tool_loss:                                 # TN1: the tool network learns the exact results (teacher)
             run.tool_l = torch.stack(run.tool_loss).mean()
             loss = loss + A.w_tool * run.tool_l
@@ -4477,7 +4539,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             print(f"step {step} loss {float(loss):.3f} action acc {act:.2f} answer said {said_} "
                   f"tool outputs said {tool_said if tool_said is None else round(tool_said, 2)} | "
                   f"{'ask distill %.3f | ' % float(run.ask_loss) if ask_losses else ''}"
-                  f"{'tool net %.3f | ' % float(run.tool_l) if run.tool_loss else ''}world "
+                  f"{'tool net %.3f | ' % float(run.tool_l) if run.tool_loss else ''}"
+                  f"{'confusion %.3f | ' % float(run.conf_l) if run.conf_terms else ''}world "
                   f"{len(world.ents)} entities, {n_live} live nodes | peak VRAM {peak_gb():.2f} GB [{time.time() - t0:.0f}s]",
                   flush=True)
             print(f"  read actions: {pp} | integrate by kind (n, store, NEW, replace): {ws}", flush=True)
