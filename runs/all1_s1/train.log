@@ -181,3 +181,60 @@ step 400 loss 1.370 action acc 1.00 answer said 0.70 tool outputs said 0.71 | co
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.39, 0.98, 0.98, 0.54, 1.0, 1.0], 'look': [50, 0.97, 0.98, 0.98, 0.43, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+step 425 loss 1.031 action acc 0.95 answer said 0.96 tool outputs said 0.93 | confusion 0.015 | world 150 entities, 3000 live nodes | peak VRAM 4.79 GB [1205s]
+  read actions: {'halt': 0.95, 'read': 0.96, 'sub': 1.0, 'tool': 0.96} | integrate by kind (n, store, NEW, replace): {'state': (641, 0.05, 0.99, 0.0), 'decided drop': (3877, 0.0, 0.0, 0.0), 'name': (148, 0.07, 0.88, 0.01), 'delta': (69, 0.99, 0.06, 0.86), 'how delta (n, rule read, copy)': (69, 1.0, 0.0, 0.0), 'fact': (175, 0.99, 0.15, 0.76), 'how fact (n, rule read, copy)': (175, 1.0, 0.0, 0.0), 'multi': (22, 0.99, 0.14, 0.79), 'noise': (52, 0.05, 0.97, 0.0), 'decided replace': (231, 0.0, 0.0, 0.0), 'decided new': (37, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (59, 0.0, 0.0, 0.0), 'rule': (2, 0.95, 1.0, 0.0)}
+  look (proposed -> after looking): {'note: replace -> replace': 33, 'note: new -> replace': 7, 'note: drop -> replace': 9, 'note: new -> new': 1}
+  step time (3.0 s / step): other (log / evict / eval) 0.15 (5%) | frames 0.56 (19%) | notes 0.35 (12%) | ask 0.15 (5%) | questions 0.67 (22%) | roundtrip+invariance 0.04 (1%) | backward 0.40 (13%) | commit+step 0.67 (22%)
+  reference re-read (inside the parts above): 0.07 s / step | calls 95 | rows 4507 | new texts 114 / step | texts cached 1465
+  reference edges: dependents -> their source 0.84 | other facts -> none 0.94 | dependents / step 1.6 | misses hit: {'none': 2, 'other fact': 2}
+  forget (model's choice): 1.3 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.19, -0.17, -0.24, 0.65, 0.22, -1.9, -1.64]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.59
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.58, 0.98, 0.98, 0.72, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.98, 0.53, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+step 450 loss 1.139 action acc 0.97 answer said 0.79 tool outputs said 0.75 | confusion 0.018 | world 150 entities, 3000 live nodes | peak VRAM 4.79 GB [1282s]
+  read actions: {'halt': 0.95, 'read': 0.93, 'sub': 1.0, 'tool': 0.98} | integrate by kind (n, store, NEW, replace): {'state': (625, 0.05, 0.96, 0.0), 'decided drop': (3580, 0.0, 0.0, 0.0), 'decided new': (46, 0.0, 0.0, 0.0), 'name': (145, 0.06, 0.77, 0.01), 'delta': (94, 0.99, 0.06, 0.85), 'how delta (n, rule read, copy)': (94, 1.0, 0.0, 0.0), 'fact': (157, 0.97, 0.17, 0.71), 'how fact (n, rule read, copy)': (157, 1.0, 0.0, 0.0), 'noise': (47, 0.05, 0.9, 0.0), 'decided replace': (223, 0.0, 0.0, 0.0), 'replace into own fact': (59, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'multi': (15, 0.98, 0.4, 0.55), 'rule': (2, 0.92, 1.0, 0.0), 'absorbed copies': (2, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: replace -> replace': 17, 'note: drop -> replace': 15, 'note: new -> replace': 17, 'note: drop -> new': 1}
+  step time (3.1 s / step): other (log / evict / eval) 0.17 (5%) | frames 0.57 (19%) | notes 0.30 (10%) | ask 0.16 (5%) | questions 0.77 (25%) | roundtrip+invariance 0.05 (2%) | backward 0.40 (13%) | commit+step 0.67 (22%)
+  reference re-read (inside the parts above): 0.07 s / step | calls 96 | rows 4527 | new texts 70 / step | texts cached 3211
+  reference edges: dependents -> their source 0.92 | other facts -> none 0.86 | dependents / step 1.0 | misses hit: {'none': 2}
+  forget (model's choice): 1.7 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.19, -0.17, -0.24, 0.65, 0.22, -1.9, -1.65]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.60
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.42, 0.97, 0.96, 0.59, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.96, 0.15, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+  demonstrated targets on masked choices (skipped, since the last report): {'question @pass 1: read: not visible': 1}
+step 475 loss 0.897 action acc 0.99 answer said 0.81 tool outputs said 0.84 | confusion 0.018 | world 150 entities, 3000 live nodes | peak VRAM 4.79 GB [1356s]
+  read actions: {'halt': 0.98, 'read': 0.97, 'sub': 1.0, 'tool': 0.99} | integrate by kind (n, store, NEW, replace): {'state': (569, 0.05, 0.97, 0.0), 'decided drop': (3696, 0.0, 0.0, 0.0), 'name': (146, 0.07, 0.79, 0.01), 'fact': (155, 0.99, 0.12, 0.78), 'how fact (n, rule read, copy)': (155, 1.0, 0.0, 0.0), 'delta': (100, 0.99, 0.07, 0.84), 'how delta (n, rule read, copy)': (100, 1.0, 0.0, 0.0), 'multi': (15, 0.99, 0.07, 0.84), 'noise': (38, 0.05, 0.76, 0.01), 'decided replace': (247, 0.0, 0.0, 0.0), 'decided new': (33, 0.0, 0.0, 0.0), 'replace into own fact': (64, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'rule': (7, 0.96, 0.43, 0.5), 'dependent': (2, 0.92, 0.92, 0.07)}
+  look (proposed -> after looking): {'note: new -> replace': 16, 'note: replace -> replace': 30, 'note: drop -> replace': 2, 'note: attach -> replace': 1, 'note: new -> new': 1}
+  step time (3.0 s / step): other (log / evict / eval) 0.16 (5%) | frames 0.58 (20%) | notes 0.34 (11%) | ask 0.11 (4%) | questions 0.69 (23%) | roundtrip+invariance 0.04 (1%) | backward 0.39 (13%) | commit+step 0.66 (22%)
+  reference re-read (inside the parts above): 0.06 s / step | calls 84 | rows 4565 | new texts 57 / step | texts cached 4645
+  reference edges: dependents -> their source 0.66 | other facts -> none 0.95 | dependents / step 1.2 | misses hit: {'other fact': 4, 'source entity, other attribute': 2, 'none': 1, 'a item / delta node': 1}
+  forget (model's choice): 1.4 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.19, -0.17, -0.24, 0.65, 0.22, -1.9, -1.65]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.37
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.56, 0.95, 0.97, 0.72, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.97, 0.27, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+step 500 loss 1.171 action acc 0.97 answer said 0.82 tool outputs said 0.77 | confusion 0.016 | world 150 entities, 3000 live nodes | peak VRAM 4.79 GB [1431s]
+  read actions: {'halt': 1.0, 'read': 0.97, 'sub': 1.0, 'tool': 0.98} | integrate by kind (n, store, NEW, replace): {'state': (774, 0.05, 0.96, 0.0), 'decided drop': (4701, 0.0, 0.0, 0.0), 'name': (160, 0.06, 0.85, 0.01), 'multi': (19, 0.99, 0.16, 0.78), 'fact': (190, 0.99, 0.09, 0.81), 'how fact (n, rule read, copy)': (190, 1.0, 0.0, 0.0), 'delta': (92, 0.99, 0.1, 0.82), 'how delta (n, rule read, copy)': (92, 1.0, 0.0, 0.0), 'decided new': (35, 0.0, 0.0, 0.0), 'decided replace': (273, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'noise': (47, 0.05, 0.83, 0.01), 'dependent': (1, 0.93, 0.99, 0.01), 'replace into own fact': (72, 0.0, 0.0, 0.0), 'rule': (6, 0.96, 0.57, 0.38)}
+  look (proposed -> after looking): {'note: replace -> replace': 32, 'note: new -> replace': 14, 'note: attach -> replace': 1, 'note: drop -> replace': 2, 'note: new -> new': 1}
+  step time (3.0 s / step): other (log / evict / eval) 0.17 (6%) | frames 0.59 (20%) | notes 0.33 (11%) | ask 0.12 (4%) | questions 0.68 (23%) | roundtrip+invariance 0.04 (1%) | backward 0.41 (14%) | commit+step 0.65 (22%)
+  reference re-read (inside the parts above): 0.07 s / step | calls 74 | rows 4716 | new texts 121 / step | texts cached 1676
+  reference edges: dependents -> their source 0.96 | other facts -> none 1.00 | dependents / step 1.1 | misses hit: {'other fact': 1}
+  forget (model's choice): 1.9 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.19, -0.17, -0.24, 0.65, 0.22, -1.9, -1.65]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.39
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.56, 0.95, 0.98, 0.72, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.98, 0.38, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+EVAL 500 old_facts confusion: right 0.010 (n 276) | wrong 0.042 (n 12)
+EVAL 500 old_facts: exact 0.958 | by {'0': 0.958, '1': 0.954, '2': 0.965} | gold read 0.981 | program 0.941 | exact|program 0.996 | n 288
+EVAL 500 old_facts operand misreads (true, decoded, value the node holds, node kind): [(21, 15, None, '-')] | node holds the decoded (not the asked) value: 0/1
+EVAL 500 old_facts why wrong (by ops): 0: {'ran on': 3, 'wrong read @1/3: same entity': 2, 'wrong read @1/2: same entity': 2} | 1: {'wrong read @1/3: same fact, other node': 2, 'wrong read @1/3: same entity': 1} | 2: {'read instead of sub @1/2': 1, 'operand misread: stored number, far': 1}
+EVAL 500 versions_before confusion: right 0.045 (n 200) | wrong 0.055 (n 88)
+EVAL 500 versions_before: exact 0.694 | by {'before': 0.694} | gold read 0.847 | program 0.694 | exact|program 1.000 | n 288
+EVAL 500 versions_before why wrong (by ops): before: {'wrong read @1/2: same fact, other node': 45, 'wrong read @1/2: a version': 36, 'wrong read @1/2: unrelated': 7}
+EVAL 500 held_compositions confusion: right 0.006 (n 275) | wrong 0.016 (n 13)
+EVAL 500 held_compositions: exact 0.955 | by {'2': 0.955} | gold read 0.990 | program 0.958 | exact|program 0.993 | n 288
+EVAL 500 held_compositions wrong spans (question | gold sub-question | handed to the child): What is the larger of the bid of Goror and (the difference between the worker of Baka and the host of Torlo)? | GOLD: the difference between the worker of Baka and the host of Torlo | SAID: the || What is the smaller of the width of Kapel and (the sum of the old age of Saka and the series of Rilvin)? | GOLD: the sum of the old age of Saka and the series of Rilvin | SAID: the || What is the larger of (the difference between the old age of Orne and the old door of Gorlo) and the first locale of Kamer? | GOLD: the difference between the old age of Orne and the old door of Gorlo | SAID: the difference between the old age of Orne and the old door of Gorlo) and the first locale of Kamer || What is the larger of the route of Nemer and (the difference between the old age of Sadun and the daily worker of Torvin)? | GOLD: the difference between the old age of Sadun and the daily worker of Torvin | SAID: the || What is the larger of the main seat of Thaor and (the difference between the board of Torvin and the series of Tharil)? | GOLD: the difference between the board of Torvin and the series of Tharil | SAID: the
+EVAL 500 held_compositions operand misreads (true, decoded, value the node holds, node kind): [(0, 27, None, '-'), (7, 17, None, '-')] | node holds the decoded (not the asked) value: 0/2
+EVAL 500 held_compositions why wrong (by ops): 2: {'wrong sub-question span @2': 4, 'wrong read @2/2: same fact, other node': 4, 'wrong read @1/2: same fact, other node': 2, 'operand misread: stored number, far': 2, 'wrong sub-question span @1': 1}
