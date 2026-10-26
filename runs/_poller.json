@@ -1,9 +1,8 @@
 {
- "alive": "2026-10-26 19:34:35",
+ "alive": "2026-10-26 19:39:51",
  "running": [
-  "all4_s1",
-  "all4_s2"
+  "all4_s1"
  ],
- "gpu_free_gb": 84.6,
+ "gpu_free_gb": 90.8,
  "code": "67365eb"
 }
