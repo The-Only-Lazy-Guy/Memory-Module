@@ -1,11 +1,13 @@
 {
- "alive": "2026-10-26 14:13:41",
+ "alive": "2026-10-26 14:17:45",
  "running": [
+  "cf_s1",
+  "cf_s2",
   "rec6_s1",
   "tn2_s1",
   "tn2_s2",
   "tn2c_s1"
  ],
- "gpu_free_gb": 73.5,
- "code": "57100fb"
+ "gpu_free_gb": 75.5,
+ "code": "479d9f3"
 }

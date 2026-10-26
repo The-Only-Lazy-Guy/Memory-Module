@@ -1,0 +1,8 @@
+{
+ "state": "running",
+ "pid": 45610,
+ "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/rd7_s1.pt --corrections 2 --steps 1000 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --tool-nodes 1 --confusion 1.0 --seed 2 --save /marimo/gnm-lab/ckpt/cf_s2.pt --log /marimo/gnm-lab/runs/runs/cf_s2/train.jsonl",
+ "code": "479d9f3",
+ "started": "2026-10-26 14:17:45",
+ "updated": "2026-10-26 14:17:45"
+}
