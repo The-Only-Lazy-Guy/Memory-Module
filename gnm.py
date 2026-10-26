@@ -1411,6 +1411,8 @@ def main():
     P.add_argument("--w-tool", type=float, default=1.0, help="weight of the tool network's teacher loss")
     P.add_argument("--proc-read", type=int, default=0, help="the procedure (rule) node a frame points at is READ like any "
                    "node: Walker's state after reading it decides HOW (the pooled value carried no rule content)")
+    P.add_argument("--proc-demo", type=float, default=0.0, help="weight of the demonstrated PROCEDURE read (frame rows: "
+                   "the rule node of the value's key, else the default procedure)")
     P.add_argument("--confusion", type=float, default=0.0, help="weight of the CONFUSION signal (user 2026-10-26): "
                    "the model's own uncertainty at any action (address entropy, saying entropy), recomputed with the "
                    "deciding head frozen so it punishes only the path before (earlier writes / reads / registers)")
@@ -2828,6 +2830,24 @@ def main():
                     sp = (tau * F.normalize(qp - kmean, dim=-1) @ K.t() + logg[None]).masked_fill(~visible, -1e4)
                     sp = torch.cat([sp, (tau * loop.b_proc).expand(B, 1)], -1)    # [nodes | default]
                     pi = torch.softmax(sp, -1)
+                    if A.proc_demo and soft and torch.is_grad_enabled():   # the procedure READ is demonstrated (as
+                        rule_of = {}                                       # every read: CoT = imitation): the rule
+                        for j_, i_ in enumerate(M["rows"]):               # node of the incoming value's key, else
+                            m_ = store.prov.get(store.nodes[i_]["vsrc"]) or ("?",)   # the default procedure
+                            if m_[0] == "rule" and bool(visible[:, j_].any()):
+                                if m_[1] not in rule_of or store.nodes[i_]["time"] > store.nodes[M["rows"][rule_of[m_[1]]]]["time"]:
+                                    rule_of[m_[1]] = j_
+                        gp_ = []
+                        for b in range(B):
+                            m_ = store.prov.get(store.nodes[rows[b]["qnid"]]["vsrc"]) or ("?",)
+                            if m_[0] in ("fact", "delta") and len(m_) > 2 and m_[2] in world.num_keys:
+                                gp_.append(rule_of.get(m_[2], N))
+                            else:
+                                gp_.append(-100)
+                        gp_ = torch.tensor(gp_, device=dev)
+                        for grp_ in (gp_ == N, (gp_ >= 0) & (gp_ < N)):   # balanced: values under a rule are rare
+                            if bool(grp_.any()):
+                                run.proc_terms.append(F.cross_entropy(sp[grp_], gp_[grp_]))
                     cand_p = torch.cat([V, loop.proc0[None]])
                     soft_p = pi @ cand_p
                     pj = sp.argmax(-1)
@@ -3288,6 +3308,7 @@ def main():
     run.how_log = []
     run.tool_loss = []
     run.conf_terms, run.conf_stats, run.row_conf = [], {}, []
+    run.proc_terms = []
     run.forget_stats = []
     run.fcommit, run.fcommit_stats = [], []
     import collections as _co
@@ -4448,6 +4469,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         run.tool_loss = []
         run.how_log = []
         run.conf_terms = []
+        run.proc_terms = []
         mem.update_stats = not A.say_only                 # running statistics follow real training data only (a
         #                                                   frozen GNM keeps its stats: say2 drifted them, program .79->.6)
         t_before = store.time
@@ -4520,6 +4542,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         #                                                        misread operands were the arithmetic bottleneck)
         rt_stats.append(rt_ok)
         loss = loss + A.w_self * run.self_loss + A.w_inv * invariance_loss(rng) + A.w_rt * rt_loss
+        if run.proc_terms:                                # the demonstrated procedure read
+            run.proc_l = torch.stack(run.proc_terms).mean()
+            loss = loss + A.proc_demo * run.proc_l
         if run.conf_terms:                                # CONFUSION: punished upwards (the path before)
             run.conf_l = torch.stack(run.conf_terms).mean()
             loss = loss + A.confusion * run.conf_l
@@ -4566,7 +4591,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                   f"tool outputs said {tool_said if tool_said is None else round(tool_said, 2)} | "
                   f"{'ask distill %.3f | ' % float(run.ask_loss) if ask_losses else ''}"
                   f"{'tool net %.3f | ' % float(run.tool_l) if run.tool_loss else ''}"
-                  f"{'confusion %.3f | ' % float(run.conf_l) if run.conf_terms else ''}world "
+                  f"{'confusion %.3f | ' % float(run.conf_l) if run.conf_terms else ''}"
+                  f"{'procedure read %.3f | ' % float(run.proc_l) if run.proc_terms else ''}world "
                   f"{len(world.ents)} entities, {n_live} live nodes | peak VRAM {peak_gb():.2f} GB [{time.time() - t0:.0f}s]",
                   flush=True)
             print(f"  read actions: {pp} | integrate by kind (n, store, NEW, replace): {ws}", flush=True)
