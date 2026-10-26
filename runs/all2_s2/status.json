@@ -1,8 +1,10 @@
 {
- "state": "running",
+ "state": "failed",
  "pid": 48437,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/rec6_s1.pt --corrections 2 --steps 1500 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --recurse 1 --long-ops 4,6 --vslots 128 --train-ops 1,3 --tool-nodes 1 --proc-read 1 --confusion 1.0 --proc-demo 1.0 --seed 2 --save /marimo/gnm-lab/ckpt/all2_s2.pt --log /marimo/gnm-lab/runs/runs/all2_s2/train.jsonl",
  "code": "b3528ea",
  "started": "2026-10-26 16:34:37",
- "updated": "2026-10-26 16:34:37"
+ "updated": "2026-10-26 17:20:11",
+ "exit_code": -15,
+ "ended": "2026-10-26 17:20:11"
 }

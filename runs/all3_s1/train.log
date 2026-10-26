@@ -1,0 +1,8 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2598.35it/s]
+INIT from /marimo/gnm-lab/ckpt/rec6_s1.pt: 137 tensors loaded, 0 skipped (new heads / interface / shape changes)
+TOOL NODES: 5 (add, sub, max, min, edit)
+WORLD: 43 entities, 172 nodes after 60 warm frames
+/marimo/gnm-lab/jobs/all3_s1/gnm.py:2724: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  run.conf_stats.setdefault(kind, []).append(float(conf[act_].mean()))
