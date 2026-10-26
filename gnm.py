@@ -2845,7 +2845,9 @@ def main():
                             else:
                                 gp_.append(-100)
                         gp_ = torch.tensor(gp_, device=dev)
-                        spd_ = (tau.detach() * F.normalize(qp - kmean, dim=-1) @ K.detach().t()   # the demo trains the
+                        qpd_ = loop.Wp(h.detach()) + loop.Wpr(xk.detach())   # (h / xk detached too: through xk it bent
+                        #                                                       the NEW fact's key -> stored .32)
+                        spd_ = (tau.detach() * F.normalize(qpd_ - kmean, dim=-1) @ K.detach().t()   # the demo trains the
                                 + logg.detach()[None]).masked_fill(~visible, -1e4)          # POINTER only: its
                         spd_ = torch.cat([spd_, (tau.detach() * loop.b_proc).expand(B, 1)], -1)   # gradient into the
                         for grp_ in (gp_ == N, (gp_ >= 0) & (gp_ < N)):   # node keys collapsed storage (stored .88 ->
