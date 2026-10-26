@@ -484,3 +484,8 @@ step 1000 loss 0.689 action acc 0.99 answer said 1.00 tool outputs said 1.0 | wo
 EVAL 1000 old_facts: exact 0.986 | by {'0': 0.994, '1': 0.983, '2': 0.967} | gold read 0.991 | program 0.969 | exact|program 0.993 | n 288
 EVAL 1000 old_facts operand misreads (true, decoded, value the node holds, node kind): [(29, 8, None, '-'), (1, 23, None, '-')] | node holds the decoded (not the asked) value: 0/2
 EVAL 1000 old_facts why wrong (by ops): 0: {'wrong read @2/3: same entity': 1} | 1: {'wrong read @2/3: same fact, other node': 1} | 2: {'operand misread: stored number, far': 2}
+EVAL 1000 versions_before: exact 0.760 | by {'before': 0.76} | gold read 0.880 | program 0.760 | exact|program 1.000 | n 288
+EVAL 1000 versions_before why wrong (by ops): before: {'wrong read @1/2: same fact, other node': 69}
+EVAL 1000 held_compositions: exact 0.972 | by {'2': 0.972} | gold read 0.988 | program 0.972 | exact|program 0.989 | n 288
+EVAL 1000 held_compositions operand misreads (true, decoded, value the node holds, node kind): [(29, 8, None, '-'), (29, 8, None, '-'), (25, 4, None, '-')] | node holds the decoded (not the asked) value: 0/3
+EVAL 1000 held_compositions why wrong (by ops): 2: {'wrong read @1/2: unrelated': 3, 'operand misread: stored number, far': 3, 'wrong read @2/2: same fact, other node': 1, 'stopped early': 1}

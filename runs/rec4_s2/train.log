@@ -761,3 +761,20 @@ EVAL 1500 versions_before: exact 0.917 | by {'before': 0.917} | gold read 0.958 
 EVAL 1500 versions_before why wrong (by ops): before: {'wrong read @1/2: a version': 24}
 EVAL 1500 held_compositions: exact 0.979 | by {'2': 0.979} | gold read 0.988 | program 0.972 | exact|program 1.000 | n 288
 EVAL 1500 held_compositions why wrong (by ops): 2: {'wrong read @2/2: unrelated': 3, 'wrong read @1/2: same entity': 1, 'wrong read @1/2: unrelated': 1, 'wrong read @2/2: same fact, other node': 1}
+EVAL 1500 longer_programs: exact 0.076 | by {'3': 0.12, '4': 0.133, '5': 0.053, '6': 0.013} | gold read 0.910 | program 0.010 | exact|program 0.000 | n 288
+EVAL 1500 longer_programs operand misreads (true, decoded, value the node holds, node kind): [(-3, 23, None, '-'), (15, 18, None, '-'), (22, 25, None, '-')] | node holds the decoded (not the asked) value: 0/3
+EVAL 1500 longer_programs why wrong (by ops): 3: {'wrong sub-question span @1': 38, 'wrong sub-question span @2': 24, 'operand misread: stored number, far': 3, 'ran on': 1} | 4: {'wrong sub-question span @1': 45, 'wrong sub-question span @2': 7} | 5: {'wrong sub-question span @1': 57, 'wrong sub-question span @2': 15} | 6: {'wrong sub-question span @1': 70, 'wrong sub-question span @2': 6}
+EVAL 1500 one_exposure_after0: stored 0.778 of 18 new / updated facts
+EVAL 1500 one_exposure_after0: exact 0.872 | by {'before': 0.163, '0': 1.0, '1': 1.0, '2': 0.971} | gold read 0.938 | program 0.872 | exact|program 1.000 | n 288
+EVAL 1500 one_exposure_after0 why wrong (by ops): 2: {'stopped early': 1} | before: {'wrong read @1/2: unrelated': 35, 'wrong read @1/2: same fact, other node': 1}
+EVAL 1500 one_step_after0: exact 0.920 | by {'before': 0.488, '0': 1.0, '1': 1.0, '2': 0.974} | gold read 0.962 | program 0.924 | exact|program 0.996 | n 288
+EVAL 1500 one_step_after0 operand misreads (true, decoded, value the node holds, node kind): [(56, 28, None, '-')] | node holds the decoded (not the asked) value: 0/1
+EVAL 1500 one_step_after0 why wrong (by ops): 2: {"operand misread: stored number, the other operand's value": 1} | before: {'wrong read @1/2: same fact, other node': 22}
+EVAL 1500 one_exposure_after10: stored 0.636 of 22 new / updated facts
+EVAL 1500 one_exposure_after10: exact 0.809 | by {'before': 0.0, '0': 0.918, '1': 0.98, '2': 0.975} | gold read 0.916 | program 0.806 | exact|program 1.000 | n 288
+EVAL 1500 one_exposure_after10 why wrong (by ops): 0: {'wrong read @2/3: unrelated': 13} | 1: {'stopped early': 1} | 2: {'wrong sub-question span @1': 1} | before: {'wrong read @1/2: unrelated': 39, 'wrong read @1/2: same fact, other node': 1}
+EVAL 1500 one_exposure_after100: stored 0.727 of 22 new / updated facts
+EVAL 1500 one_exposure_after100: exact 0.986 | by {'before': 1.0, '0': 1.0, '1': 1.0, '2': 0.889} | gold read 0.994 | program 0.983 | exact|program 0.989 | n 288
+EVAL 1500 one_exposure_after100 operand misreads (true, decoded, value the node holds, node kind): [(62, 49, None, '-'), (2, 17, None, '-'), (100, 24, None, '-')] | node holds the decoded (not the asked) value: 0/3
+EVAL 1500 one_exposure_after100 why wrong (by ops): 2: {'operand misread: stored number, far': 3, 'wrong read @2/2: unrelated': 1}
+EVAL 1500 one_exposure_heldkeys_after0: stored 0.636 of 22 new / updated facts
