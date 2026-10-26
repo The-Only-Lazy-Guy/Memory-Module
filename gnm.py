@@ -2845,9 +2845,12 @@ def main():
                             else:
                                 gp_.append(-100)
                         gp_ = torch.tensor(gp_, device=dev)
-                        for grp_ in (gp_ == N, (gp_ >= 0) & (gp_ < N)):   # balanced: values under a rule are rare
-                            if bool(grp_.any()):
-                                run.proc_terms.append(F.cross_entropy(sp[grp_], gp_[grp_]))
+                        spd_ = (tau.detach() * F.normalize(qp - kmean, dim=-1) @ K.detach().t()   # the demo trains the
+                                + logg.detach()[None]).masked_fill(~visible, -1e4)          # POINTER only: its
+                        spd_ = torch.cat([spd_, (tau.detach() * loop.b_proc).expand(B, 1)], -1)   # gradient into the
+                        for grp_ in (gp_ == N, (gp_ >= 0) & (gp_ < N)):   # node keys collapsed storage (stored .88 ->
+                            if bool(grp_.any()):                          # .48); balanced: rule cases are rare
+                                run.proc_terms.append(F.cross_entropy(spd_[grp_], gp_[grp_]))
                     cand_p = torch.cat([V, loop.proc0[None]])
                     soft_p = pi @ cand_p
                     pj = sp.argmax(-1)
