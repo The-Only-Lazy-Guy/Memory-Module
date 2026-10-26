@@ -215,3 +215,25 @@ step 475 loss 2.058 action acc 0.95 answer said 0.82 tool outputs said 0.89 | co
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.57, 0.87, 0.97, 0.73, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.97, 0.49, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 0.89
   roundtrip in training (said exactly): 1.00
+step 500 loss 5.243 action acc 0.89 answer said 0.74 tool outputs said 0.74 | confusion 0.024 | procedure read 0.181 | world 150 entities, 3000 live nodes | peak VRAM 4.68 GB [2027s]
+  read actions: {'halt': 0.99, 'read': 0.87, 'sub': 0.99, 'tool': 0.98} | integrate by kind (n, store, NEW, replace): {'state': (645, 0.05, 0.9, 0.0), 'decided drop': (3988, 0.0, 0.0, 0.0), 'name': (155, 0.08, 0.91, 0.01), 'fact': (159, 0.96, 0.11, 0.75), 'how fact (n, rule read, copy)': (159, 0.35, 0.26, 0.0), 'noise': (44, 0.05, 0.97, 0.0), 'delta': (106, 0.98, 0.1, 0.78), 'how delta (n, rule read, copy)': (106, 0.46, 0.21, 0.0), 'decided replace': (246, 0.0, 0.0, 0.0), 'decided new': (35, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (61, 0.0, 0.0, 0.0), 'rule': (5, 0.95, 0.4, 0.5), 'multi': (16, 1.0, 0.06, 0.87), 'absorbed copies': (21, 0.0, 0.0, 0.0), 'decided attach': (1, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: replace -> replace': 40, 'note: new -> replace': 4, 'note: attach -> replace': 2, 'note: new -> new': 4}
+  step time (3.6 s / step): other (log / evict / eval) 0.18 (5%) | frames 0.78 (22%) | notes 0.38 (10%) | ask 0.18 (5%) | questions 0.85 (24%) | roundtrip+invariance 0.06 (2%) | backward 0.43 (12%) | commit+step 0.75 (21%)
+  reference re-read (inside the parts above): 0.06 s / step | calls 61 | rows 4632 | new texts 53 / step | texts cached 5832
+  reference edges: dependents -> their source 1.00 | other facts -> none 1.00 | dependents / step 1.0 | misses hit: {}
+  forget (model's choice): 2.2 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.63, 0.29, 0.15, 1.16, -0.43, -2.17, -2.35]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.78
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.66, 0.91, 0.91, 0.81, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.91, 0.52, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 0.83
+  roundtrip in training (said exactly): 1.00
+EVAL 500 old_facts confusion: right 0.017 (n 255) | wrong 0.038 (n 33)
+EVAL 500 old_facts: exact 0.885 | by {'0': 0.915, '1': 0.873, '2': 0.804} | gold read 0.925 | program 0.826 | exact|program 0.971 | n 288
+EVAL 500 old_facts operand misreads (true, decoded, value the node holds, node kind): [(17, 18, None, '-'), (6, 9, None, '-'), (32, 14, None, '-'), (-20, -22, None, '-'), (18, 13, None, '-'), (-4, 9, None, '-'), (23, 5, None, '-')] | node holds the decoded (not the asked) value: 0/7
+EVAL 500 old_facts why wrong (by ops): 0: {'wrong read @2/3: same attribute': 5, 'wrong read @1/2: same attribute': 4, 'wrong read @1/3: same attribute': 3, 'ran on': 1, 'wrong read @1/2: unrelated': 1, 'wrong read @2/3: same entity': 1} | 1: {'wrong read @2/3: unrelated': 3, 'wrong read @1/3: same attribute': 2, 'wrong read @2/3: same entity': 1, 'wrong read @2/3: same attribute': 1} | 2: {'operand misread: stored number, far': 5, 'operand misread: stored number, near (+-2)': 2, 'wrong read @2/2: same entity': 1, 'wrong read @2/2: unrelated': 1, 'wrong read @1/2: same entity': 1, 'wrong read @1/2: same attribute': 1}
+EVAL 500 versions_before confusion: right 0.073 (n 207) | wrong 0.098 (n 81)
+EVAL 500 versions_before: exact 0.719 | by {'before': 0.719} | gold read 0.859 | program 0.719 | exact|program 1.000 | n 288
+EVAL 500 versions_before why wrong (by ops): before: {'wrong read @1/2: a version': 51, 'wrong read @1/2: same fact, other node': 24, 'wrong read @1/2: unrelated': 6}
+EVAL 500 held_compositions confusion: right 0.009 (n 261) | wrong 0.024 (n 27)
+EVAL 500 held_compositions: exact 0.906 | by {'2': 0.906} | gold read 0.962 | program 0.920 | exact|program 0.966 | n 288
+EVAL 500 held_compositions operand misreads (true, decoded, value the node holds, node kind): [(34, 16, None, '-'), (14, 13, None, '-'), (19, 21, None, '-'), (4, 16, None, '-'), (20, 21, None, '-'), (-8, 4, None, '-'), (9, 8, None, '-'), (0, 15, None, '-')] | node holds the decoded (not the asked) value: 0/8
+EVAL 500 held_compositions why wrong (by ops): 2: {'wrong read @1/2: same attribute': 6, 'operand misread: stored number, far': 4, 'operand misread: stored number, near (+-2)': 4, 'stopped early': 4, 'wrong read @1/2: unrelated': 3, 'wrong read @2/2: same attribute': 2, 'wrong read @2/2: unrelated': 2, 'wrong read @2/2: same entity': 1, 'operand not decoded': 1}
