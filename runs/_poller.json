@@ -1,11 +1,10 @@
 {
- "alive": "2026-10-26 17:45:28",
+ "alive": "2026-10-26 17:47:52",
  "running": [
   "all1_s1",
-  "all1_s2",
   "all3_s1",
   "all3_s2"
  ],
- "gpu_free_gb": 75.4,
+ "gpu_free_gb": 77.5,
  "code": "a30c963"
 }
