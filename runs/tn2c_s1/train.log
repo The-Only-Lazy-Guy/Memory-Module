@@ -364,3 +364,23 @@ step 700 loss 1.328 action acc 0.97 answer said 0.68 tool outputs said 0.73 | wo
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.47, 0.58, 0.98, 0.68, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.98, 0.88, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+step 725 loss 1.973 action acc 1.00 answer said 0.57 tool outputs said 0.46 | world 150 entities, 3000 live nodes | peak VRAM 4.14 GB [4223s]
+  read actions: {'halt': 0.98, 'read': 0.97, 'tool': 0.98} | integrate by kind (n, store, NEW, replace): {'state': (853, 0.07, 0.25, 0.02), 'decided drop': (6235, 0.0, 0.0, 0.0), 'name': (151, 0.07, 0.07, 0.03), 'fact': (170, 0.99, 0.04, 0.85), 'how fact (n, rule read, copy)': (170, 1.0, 0.0, 0.0), 'delta': (78, 0.99, 0.04, 0.86), 'how delta (n, rule read, copy)': (78, 1.0, 0.0, 0.0), 'noise': (47, 0.07, 0.0, 0.03), 'decided new': (23, 0.0, 0.0, 0.0), 'decided replace': (252, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (70, 0.0, 0.0, 0.0), 'rule': (7, 0.94, 0.71, 0.26), 'multi': (20, 0.98, 0.3, 0.62), 'absorbed copies': (3, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: new -> replace': 24, 'note: drop -> replace': 17, 'note: attach -> replace': 8, 'note: new -> new': 1}
+  step time (5.8 s / step): other (log / evict / eval) 0.20 (3%) | frames 1.66 (29%) | notes 0.62 (11%) | ask 0.16 (3%) | questions 1.68 (29%) | roundtrip+invariance 0.10 (2%) | backward 0.40 (7%) | commit+step 0.97 (17%)
+  reference re-read (inside the parts above): 0.13 s / step | calls 48 | rows 5100 | new texts 93 / step | texts cached 4428
+  forget (model's choice): 1.6 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.14, 0.45, -0.24, 1.12, 0.21, -1.79, -1.91]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.59
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.36, 0.48, 0.98, 0.57, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.98, 0.78, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+step 750 loss 1.287 action acc 0.96 answer said 0.78 tool outputs said 0.71 | world 150 entities, 3000 live nodes | peak VRAM 4.14 GB [4372s]
+  read actions: {'halt': 0.99, 'read': 0.97, 'tool': 0.98} | integrate by kind (n, store, NEW, replace): {'state': (900, 0.06, 0.27, 0.02), 'decided drop': (6472, 0.0, 0.0, 0.0), 'name': (151, 0.07, 0.08, 0.03), 'delta': (88, 0.99, 0.05, 0.87), 'how delta (n, rule read, copy)': (88, 1.0, 0.0, 0.0), 'fact': (152, 0.99, 0.02, 0.87), 'how fact (n, rule read, copy)': (152, 1.0, 0.0, 0.0), 'noise': (40, 0.07, 0.0, 0.03), 'multi': (23, 0.99, 0.17, 0.75), 'decided replace': (253, 0.0, 0.0, 0.0), 'decided new': (17, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (69, 0.0, 0.0, 0.0), 'rule': (8, 0.96, 0.75, 0.23)}
+  look (proposed -> after looking): {'note: drop -> replace': 13, 'note: new -> replace': 23, 'note: attach -> replace': 11, 'note: replace -> replace': 3}
+  step time (6.0 s / step): other (log / evict / eval) 0.23 (4%) | frames 1.72 (29%) | notes 0.67 (11%) | ask 0.12 (2%) | questions 1.81 (30%) | roundtrip+invariance 0.10 (2%) | backward 0.40 (7%) | commit+step 0.91 (15%)
+  reference re-read (inside the parts above): 0.14 s / step | calls 48 | rows 5141 | new texts 154 / step | texts cached 2311
+  forget (model's choice): 1.7 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.14, 0.45, -0.24, 1.12, 0.21, -1.79, -1.91]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 2.32
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.38, 0.42, 0.99, 0.58, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.99, 0.81, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
