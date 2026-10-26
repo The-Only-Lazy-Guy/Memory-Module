@@ -1,5 +1,5 @@
 {
- "alive": "2026-10-26 00:13:03",
+ "alive": "2026-10-26 00:18:06",
  "running": [
   "rd7_s1",
   "rd7_s2",
@@ -10,6 +10,6 @@
   "w1b_full",
   "w1b_full_cc"
  ],
- "gpu_free_gb": 45.7,
+ "gpu_free_gb": 39.8,
  "code": "4bff9e1"
 }
