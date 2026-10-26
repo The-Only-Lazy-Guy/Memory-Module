@@ -808,3 +808,64 @@ EVAL 1500 longer_programs wrong spans (question | gold sub-question | handed to 
 EVAL 1500 longer_programs operand misreads (true, decoded, value the node holds, node kind): [(-20, 10, None, '-'), (29, 1, None, '-'), (-28, -5, None, '-'), (28, 36, None, '-'), (-2, 64, None, '-'), (-13, -25, None, '-'), (20, -32, None, '-'), (66, 62, None, '-')] | node holds the decoded (not the asked) value: 0/32
 EVAL 1500 longer_programs why wrong (by ops): 4: {'wrong sub-question span @2': 14, 'wrong sub-question span @1': 10, 'operand misread: stored number, far': 9, 'operand misread: stored number, near (+-2)': 1} | 5: {'wrong sub-question span @1': 29, 'wrong sub-question span @2': 17, 'operand misread: stored number, far': 15, 'sub instead of op @3/2': 3, 'sub instead of op @3/1': 1, 'wrong read @2/2: same attribute': 1} | 6: {'wrong sub-question span @1': 32, 'wrong sub-question span @2': 27, 'operand misread: stored number, far': 7, 'sub instead of read @2/2': 6, 'sub instead of op @3/2': 4, 'sub instead of op @3/1': 1, 'wrong read @2/2: same entity': 1}
 EVAL 1500 one_exposure_after0: stored 0.750 of 24 new / updated facts
+EVAL 1500 one_exposure_after0 confusion: right 0.006 (n 277) | wrong 0.037 (n 11)
+EVAL 1500 one_exposure_after0: exact 0.962 | by {'before': 0.75, '0': 1.0, '1': 0.933, '2': 0.95} | gold read 0.988 | program 0.962 | exact|program 0.996 | n 288
+EVAL 1500 one_exposure_after0 operand misreads (true, decoded, value the node holds, node kind): [(-25, 4, None, '-')] | node holds the decoded (not the asked) value: 0/1
+EVAL 1500 one_exposure_after0 why wrong (by ops): 1: {'read instead of op @3/3': 2} | 2: {'stopped early': 1, 'operand misread: stored number, far': 1} | before: {'wrong read @1/2: same fact, other node': 7}
+EVAL 1500 one_step_after0 confusion: right 0.011 (n 287) | wrong 0.009 (n 1)
+EVAL 1500 one_step_after0: exact 0.997 | by {'before': 1.0, '0': 1.0, '1': 1.0, '2': 0.967} | gold read 1.000 | program 0.997 | exact|program 0.997 | n 288
+EVAL 1500 one_step_after0 operand misreads (true, decoded, value the node holds, node kind): [(42, 63, None, '-')] | node holds the decoded (not the asked) value: 0/1
+EVAL 1500 one_step_after0 why wrong (by ops): 2: {'operand misread: stored number, far': 1}
+EVAL 1500 one_exposure_after10: stored 0.864 of 22 new / updated facts
+EVAL 1500 one_exposure_after10 confusion: right 0.009 (n 279) | wrong 0.049 (n 9)
+EVAL 1500 one_exposure_after10: exact 0.969 | by {'before': 1.0, '0': 1.0, '1': 0.853, '2': 0.917} | gold read 0.998 | program 0.948 | exact|program 0.996 | n 288
+EVAL 1500 one_exposure_after10 operand misreads (true, decoded, value the node holds, node kind): [(0, 5, None, '-')] | node holds the decoded (not the asked) value: 0/1
+EVAL 1500 one_exposure_after10 why wrong (by ops): 1: {'read instead of op @3/3': 4, 'stopped early': 1} | 2: {'read instead of op @3/2': 3, 'operand misread: stored number, far': 1}
+EVAL 1500 one_exposure_after100: stored 0.741 of 27 new / updated facts
+EVAL 1500 one_exposure_after100 confusion: right 0.007 (n 259) | wrong 0.020 (n 29)
+EVAL 1500 one_exposure_after100: exact 0.899 | by {'before': 0.721, '0': 0.948, '1': 0.946, '2': 0.833} | gold read 0.961 | program 0.917 | exact|program 0.977 | n 288
+EVAL 1500 one_exposure_after100 operand misreads (true, decoded, value the node holds, node kind): [(-8, -9, None, '-'), (24, 14, None, '-'), (24, 14, None, '-'), (24, 14, None, '-'), (38, 28, None, '-'), (24, 14, None, '-')] | node holds the decoded (not the asked) value: 0/6
+EVAL 1500 one_exposure_after100 why wrong (by ops): 0: {'wrong read @1/2: same fact, other node': 9} | 1: {'wrong read @2/3: same entity': 1, 'wrong tool': 1} | 2: {"operand misread: stored number, the other operand's value": 3, 'operand misread: stored number, far': 2, 'operand misread: stored number, near (+-2)': 1} | before: {'wrong read @1/2: same fact, other node': 12}
+EVAL 1500 one_exposure_heldkeys_after0: stored 0.815 of 27 new / updated facts
+EVAL 1500 one_exposure_heldkeys_after0 confusion: right 0.008 (n 270) | wrong 0.007 (n 18)
+EVAL 1500 one_exposure_heldkeys_after0: exact 0.938 | by {'before': 1.0, '0': 0.965, '1': 0.886, '2': 0.795} | gold read 0.977 | program 0.948 | exact|program 0.978 | n 288
+EVAL 1500 one_exposure_heldkeys_after0 operand misreads (true, decoded, value the node holds, node kind): [(4, 13, None, '-'), (10, 1, None, '-'), (35, 26, None, '-'), (-8, 1, None, '-'), (8, -1, None, '-'), (10, 1, None, '-')] | node holds the decoded (not the asked) value: 0/6
+EVAL 1500 one_exposure_heldkeys_after0 why wrong (by ops): 0: {'wrong read @1/2: same entity': 6} | 1: {'wrong read @2/3: same entity': 3, 'wrong read @1/3: same entity': 1} | 2: {'operand misread: stored number, far': 5, "operand misread: stored number, the other operand's value": 1, 'wrong read @1/2: same entity': 1, 'wrong read @2/2: unrelated': 1}
+  dependent Vinvin.Zone (value 20, dep flag True) -> source Loka.backup-temperature | has 1.00 | top: ('fact', 'Pello', 'student') (item) | source node MISSING
+  dependent Baril.Term (value 28, dep flag True) -> source Torpel.font | has 1.00 | top: ('delta', 'Torlo', 'Birth') (item) | source node in memory
+  dependent Orgor.Slot (value 3, dep flag True) -> source Karil.Term | has 1.00 | top: ('delta', 'Karil', 'Quota') (item) | source node MISSING
+  dependent Peltha.Old Age (value 28, dep flag True) -> source Rilba.main_seat | has 1.00 | top: ('fact', 'Bapel', 'oldTerm') (item) | source node in memory
+  dependent Zekba.LAST_BOARD (value 97, dep flag True) -> source Dunzek.oldCurrency | has 1.00 | top: ('fact', 'Gordun', 'First Course') (item) | source node MISSING
+  dependent Sagor.LIST (value 13, dep flag True) -> source Mertha.ship | has 1.00 | top: ('fact', 'Mulo', 'Birth') (item) | source node MISSING
+  dependent Gorzek.LAST_DEVICE (value 7, dep flag True) -> source Merne.dailyWorker | has 1.00 | top: ('fact', 'Mulo', 'Birth') (item) | source node MISSING
+  dependent Muka.oldCurrency (value 8, dep flag True) -> source Loka.Board | has 1.00 | top: ('fact', 'Lopel', 'SERIES') (item) | source node in memory
+EVAL 1500 dependents diagnosis: stored 8/8 | edge -> the source's node (has > .5, top = source) 0/8 | source updates decided replace 6/8 | propagated 0
+EVAL 1500 one_exposure_dependents: follow 0.000 of 8 dependents
+EVAL 1500 one_exposure_dependents confusion: right 0.000 (n 0) | wrong 0.003 (n 288)
+EVAL 1500 one_exposure_dependents: exact 0.000 | by {'0': 0.0} | gold read 0.667 | program 0.000 | exact|program 0.000 | n 288
+EVAL 1500 one_exposure_dependents why wrong (by ops): 0: {'stopped early': 288}
+EVAL 1500 one_exposure_rule HOW (procedure read, operation) for the increments: {('its rule', 'sub'): 8}
+EVAL 1500 rule nodes (4; Counter({'set': 2, 'add': 2})) raw V cosine: same policy 0.9989 | add vs set 0.9990
+EVAL 1500 rule nodes (4; Counter({'set': 2, 'add': 2})) centred V cosine: same policy 0.9579 | add vs set 0.9600
+EVAL 1500 one_exposure_rule: totals held 0.000 of 8 (rule: add)
+EVAL 1500 one_exposure_rule nodes after the increments: {'hist 25 | total held False | old held False | values held 1': 1, 'hist 19 | total held False | old held False | values held 2': 1, 'hist 13 | total held False | old held False | values held 1': 3, 'hist 14 | total held False | old held False | values held 1': 1, 'hist 27 | total held False | old held True | values held 1': 1, 'hist 2 | total held False | old held False | values held 1': 1}
+EVAL 1500 one_exposure_rule: 8 totals graded on their node; askable 8
+EVAL 1500 one_exposure_rule confusion: right 0.000 (n 0) | wrong 0.005 (n 288)
+EVAL 1500 one_exposure_rule: exact 0.000 | by {'0': 0.0} | gold read 1.000 | program 1.000 | exact|program 0.000 | n 288
+EVAL 1500 one_exposure_rule why wrong (by ops): 0: {'mis-said: other number': 129, 'mis-said: another value of the same fact (older / newer)': 89, "mis-said: same attribute, other entity's value": 35, "mis-said: same entity, other attribute's value": 35}
+EVAL 1500 one_exposure_coexist: both values held 0.000 of 8
+EVAL 1500 one_exposure_coexist: exact 0.000 | by {} | gold read 0.000 | program 0.000 | exact|program 0.000 | n 0
+EVAL 1500 integrate by kind (mean store gate / NEW / replace weight): {'replace into own fact': {'n': 32, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'name': {'n': 106, 'store': 0.05, 'new': 0.97, 'replace': 0.0}, 'fact': {'n': 85, 'store': 0.92, 'new': 0.72, 'replace': 0.22}, 'how fact (n, rule read, copy)': {'n': 85, 'store': 0.18, 'new': 0.27, 'replace': 0.0}, 'dependent': {'n': 18, 'store': 0.9, 'new': 1.0, 'replace': 0.0}, 'noise': {'n': 14, 'store': 0.05, 'new': 1.0, 'replace': 0.0}, 'multi': {'n': 16, 'store': 0.93, 'new': 0.5, 'replace': 0.38}, 'delta': {'n': 22, 'store': 0.91, 'new': 0.23, 'replace': 0.49}, 'how delta (n, rule read, copy)': {'n': 22, 'store': 0.55, 'new': 0.15, 'replace': 0.0}, 'decided drop': {'n': 1978, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'decided new': {'n': 96, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'state': {'n': 1838, 'store': 0.04, 'new': 0.99, 'replace': 0.0}, 'replace into OTHER fact': {'n': 1, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'propagated': {'n': 0, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'decided replace': {'n': 21, 'store': 0.0, 'new': 0.0, 'replace': 0.0}, 'rule': {'n': 1, 'store': 0.96, 'new': 1.0, 'replace': 0.0}}
+EVAL 1500 corrections by the loop: edit said right 1.000 | program right 1.000 | n 24
+EVAL 1500 correction writes: {'replace': 24} | first notes did (* = the target): [['read', 'read*', 'edit', 'read*', 'read*'], ['read', 'read*', 'edit', 'read*', 'read*'], ['read', 'read*', 'edit', 'read*', 'read*']]
+EVAL 1500 correction write records (target, gate, replace, confidence, gate_new, same): [[('proposal TGT', 0.32, 0.98, 1.0, 0.56, True), ('look TGT', 0.98, 0.98, 1.0, 0.26, True)], [('proposal TGT', 0.65, 0.98, 1.0, 0.83, True), ('look TGT', 0.98, 0.98, 1.0, 0.75, True)], [('proposal TGT', 0.78, 0.98, 1.0, 0.89, True), ('look TGT', 0.98, 0.98, 1.0, 0.3, True)], [('proposal TGT', 0.77, 0.98, 1.0, 0.89, True), ('look TGT', 0.98, 0.98, 1.0, 0.65, True)]]
+EVAL 1500 correction look (proposed -> after looking): {'note: new -> replace': 8, 'note: replace -> replace': 14, 'note: drop -> replace': 2}
+EVAL 1500 corrected_facts confusion: right 0.009 (n 278) | wrong 0.022 (n 10)
+EVAL 1500 corrected_facts: exact 0.965 | by {'before': 0.884, '0': 1.0} | gold read 0.995 | program 0.990 | exact|program 0.975 | n 288
+EVAL 1500 corrected_facts why wrong (by ops): before: {'mis-said: another value of the same fact (older / newer)': 7, 'wrong read @1/2: same fact, other node': 3}
+EVAL 1500 duplicates: 38 of 751 facts held by >1 current node | nodes per fact 1.05
+EVAL 1500 roundtrip (encode -> say): numbers 1.000 | names 1.000 | unseen strings 1.000
+EVAL 1500 frame-pair roundtrip (a value encoded inside a record, said from its node, no memory ops): 1.000
+EVAL 1500 identity_lookup: update -> its identity node is the best match: raw label 0.958 | Wself query 0.958 | n 24
+FIRST FRAME: stored 19/19 facts | answered 19/19 = 1.000 | read the right node 0.895
+EVAL 1500 first_frame: exact 1.000 | read the right node 0.895
