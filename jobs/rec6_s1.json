@@ -1,0 +1,31 @@
+{
+ "name": "rec6_s1",
+ "args": [
+  "--corrections",
+  "2",
+  "--steps",
+  "2000",
+  "--eval-every",
+  "500",
+  "--eval-q",
+  "288",
+  "--skip-eval0",
+  "--forget-q",
+  "0.2",
+  "--recurse",
+  "1",
+  "--long-ops",
+  "4,6",
+  "--seed",
+  "1",
+  "--vslots",
+  "128",
+  "--train-ops",
+  "1,3"
+ ],
+ "init": "rd7_s1.pt",
+ "init_from": "ckpt",
+ "gpu_gb": 6,
+ "keep": true,
+ "cancel": false
+}

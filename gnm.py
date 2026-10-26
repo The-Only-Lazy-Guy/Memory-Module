@@ -1398,6 +1398,15 @@ def main():
                    "= every tensor touching the LM width is re-fit)")
     P.add_argument("--freeze-core", action="store_true", help="with --swap-from: train only the interface (stage 1)")
     P.add_argument("--inject", type=int, default=6)
+    P.add_argument("--say-ckpt", default="", help="a second LM (the 1B Walker) SAYS the answers: GNM + the main LM "
+                   "(GPT-2) store / read / compute; an adapter maps GNM's read into the speaker's residual stream")
+    P.add_argument("--say-inject", type=int, default=-1, help="speaker block for the read (-1 = the middle block)")
+    P.add_argument("--say-only", type=int, default=0, help="train only the speaker adapter (GNM frozen)")
+    P.add_argument("--ask-1b", type=int, default=0, help="with --say-ckpt: question frames are READ by the 1B; a ridge "
+                   "map (fit once, same tokens through both LMs) takes its states into GPT-2's state space, so GNM's "
+                   "encoder works unchanged")
+    P.add_argument("--ask-train", type=float, default=0.0, help="weight of the ask adapter's distillation: the 1B's "
+                   "mapped question must ENCODE (GNM's frozen node encoder) like GPT-2's; the loop runs on the 1B's")
     P.add_argument("--lr", type=float, default=5e-4)
     P.add_argument("--eval-every", type=int, default=500)
     P.add_argument("--eval-q", type=int, default=96)
@@ -1528,6 +1537,110 @@ def main():
                 p_.requires_grad_(False); n_fr += 1
         print(f"FREEZE core: {n_fr} tensors frozen, training the interface only", flush=True)
     inject = Inject(model, A.inject % nL, ro)
+    say_model = say_Wo = say_ro = say_inject = None
+    if A.say_ckpt:                                       # the speaker (user 2026-10-26: GPT-2 runs the memory, an
+        say_model, _sraw = load_walker("gpt2", A.say_ckpt, 0, dev)   # adapter lets the 1B say what it read)
+        d_say = say_model.emb.weight.shape[1]
+        assert len(_sraw) == len(raw), "the speaker must share the main LM's tokenizer (answer tokens are the same)"
+        say_Wo = nn.Linear(A.dk, d_say).to(dev)          # GNM's pooled read -> the speaker's first answer position
+        say_ro = Readout(d_say, A.dk, A.vslots).to(dev)  # + per-slot reads for the following answer positions
+        nLs = len(say_model.blocks)
+        say_inject = Inject(say_model, (A.say_inject if A.say_inject >= 0 else nLs // 2) % nLs, say_ro)
+        print(f"SPEAKER {A.say_ckpt}: d={d_say}, {nLs} blocks, read injected at block "
+              f"{(A.say_inject if A.say_inject >= 0 else nLs // 2) % nLs}", flush=True)
+        with torch.no_grad():
+            say_ro.gs.fill_(1.0)                         # per-token reads on from the start (fresh adapter)
+        if A.init_full:                                   # a trained speaker adapter in the init checkpoint
+            _st = torch.load(A.init_full, map_location=dev, weights_only=False).get("say")
+            if _st and _st.get("ckpt") == A.say_ckpt:
+                say_Wo.load_state_dict(_st["Wo"]); say_ro.load(_st["ro"])
+                print(f"SPEAKER adapter from {A.init_full}", flush=True)
+            del _st
+        say_ps = list(say_Wo.parameters()) + list(say_ro.parameters())
+        say_knobs = [say_ro.gate, say_ro.gs]             # gates at the knob lr, as GNM's own readout gates (at the base
+        opt.add_param_group({"params": [p_ for p_ in say_ps if all(p_ is not k_ for k_ in say_knobs)],   # lr the
+                             "lr_mult": 1.0, "weight_decay": 0.0})                                 # speaker said .00
+        opt.add_param_group({"params": say_knobs, "lr_mult": 50.0, "weight_decay": 0.0})           # for 50 steps)
+        if A.say_only:                                  # GNM frozen: only the speaker's adapter learns
+            for p_ in params:
+                p_.requires_grad_(False)
+            print(f"SAY-ONLY: GNM frozen, training the speaker adapter ({sum(x.numel() for x in say_ps):,} params)",
+                  flush=True)
+
+    ask_map, ask_losses = {}, []
+    ask_A = None
+    if say_model is not None and A.ask_1b:              # 1B states -> GPT-2 states (ridge init, then learned)
+        ask_A = nn.Linear(d_say, d).to(dev)
+        opt.add_param_group({"params": list(ask_A.parameters()), "lr_mult": 1.0, "weight_decay": 0.0})
+
+    def fit_ask_map(n_frames=160, lam=1e-2):
+        """least squares (ridge) from the 1B's encoder-layer states to GPT-2's, same token ids through both"""
+        g = random.Random(A.seed + 99)
+        w_ = copy.deepcopy(world)                        # a copy: calibration frames never touch the live world
+        objs = [state_frame(g) for _ in range(n_frames // 2)] + [w_.component(g) for _ in range(n_frames // 4)]
+        nms = sorted(n_ for n_, e_ in w_.ents.items() if e_)
+        objs += [{"question": f"What is {leaf(nm_, g.choice(sorted(w_.ents[nm_])))}?"}
+                 for nm_ in g.sample(nms, min(len(nms), n_frames // 4))]
+        Xb_, Xg_ = [], []
+        with torch.no_grad():
+            for o in objs:
+                ids_ = doc_encoding(tok.ids, tok.decode, o, "state")[0]["ids"][:512]
+                t_ = torch.tensor([ids_], device=dev)
+                Xg_.append(walker_states(model, t_)[0].float())
+                Xb_.append(walker_states(say_model, t_)[0].float())
+        Xb, Xg = torch.cat(Xb_), torch.cat(Xg_)
+        n_tr = int(0.85 * Xb.shape[0])
+        mb, mg = Xb[:n_tr].mean(0), Xg[:n_tr].mean(0)
+        B_, G_ = Xb[:n_tr] - mb, Xg[:n_tr] - mg
+        W_ = torch.linalg.solve(B_.t() @ B_ + lam * B_.shape[0] * torch.eye(B_.shape[1], device=dev), B_.t() @ G_)
+        pred = (Xb[n_tr:] - mb) @ W_ + mg
+        r2 = 1 - ((pred - Xg[n_tr:]) ** 2).sum() / ((Xg[n_tr:] - Xg[n_tr:].mean(0)) ** 2).sum()
+        sd_ = Xg[n_tr:].std(0) + 1e-3                    # per dim as GNM's encoder sees it (it standardizes)
+        r2s = 1 - (((pred - Xg[n_tr:]) / sd_) ** 2).mean(0) / (((Xg[n_tr:] - Xg[n_tr:].mean(0)) / sd_) ** 2).mean(0)
+        with torch.no_grad():
+            ask_A.weight.copy_(W_.t()); ask_A.bias.copy_(mg - mb @ W_)
+        ask_map.update(fit=True)
+        print(f"ASK MAP 1B -> GPT-2 states: {Xb.shape[0]:,} tokens, held-out R^2 {float(r2):.3f} (mean per dim "
+              f"{float(r2s.mean()):.3f}, worst 10% of dims {float(r2s.sort().values[:len(r2s) // 10].mean()):.3f})",
+              flush=True)
+
+    def ask_distill(Xa, Xg, encs):
+        """the 1B's mapped question must give GNM's frozen node encoder what GPT-2's states give it"""
+        xa, xg, ids_, spans, ptr, vpos, off = [], [], [], [], [], [], 0
+        for j, e in enumerate(encs):
+            en = e[0]
+            n_ = len(en["ids"])
+            xa.append(Xa[j, :n_]); xg.append(Xg[j, :n_]); ids_ += en["ids"]
+            for r_ in range(len(en["spans"])):
+                spans.append([off + x for x in en["spans"][r_]]); ptr.append([off + x for x in en["ptr"][r_]])
+                vpos.append([off + x for x in en["vpos"][r_]])
+            off += n_
+        if not spans:
+            return
+        with torch.no_grad():
+            E = model.emb(torch.tensor(ids_, device=dev)).float()
+            tg = graph.nodes(torch.cat(xg), E, spans, ptr, vpos)
+        pr = graph.nodes(torch.cat(xa), E, spans, ptr, vpos)
+        ask_losses.append(sum(F.mse_loss(p_.float(), t_.float()) / (t_.float().var() + 1e-6)
+                              for p_, t_ in zip(pr, tg) if t_.numel() > 1))
+
+    def ask_states(ids):
+        """question frames as the 1B reads them, in GPT-2's state space"""
+        if not ask_map:
+            fit_ask_map()
+        return ask_A(walker_states(say_model, ids).float())
+
+    def speak_logits(rv, rs, inp, Lm):
+        """the answer tokens' logits from GNM's read (rv pooled, rs slots): by the speaker if there is one"""
+        if say_model is not None:
+            say_inject.set(say_Wo(rv), say_ro.Us(padS(rs, Lm)), a0)
+            lo_, _ = say_model(inp, r_active=False)
+            say_inject.clear()
+            return lo_
+        inject.set(mem.Wo(rv), ro.Us(padS(rs, Lm)), a0)
+        lo_, _ = model(inp, r_active=False)
+        inject.clear()
+        return lo_
     ans_ids = tok.ids(" Answer:")
     a0 = len(ans_ids) - 1
     start_ids = tok.ids(" Steps:")
@@ -1949,7 +2062,14 @@ def main():
                 return [], torch.zeros((), device=dev)
         L = max(len(e[0]["ids"]) for e in encs)
         ids = torch.tensor([e[0]["ids"] + [0] * (L - len(e[0]["ids"])) for e in encs], device=dev)
-        X = walker_states(model, ids).to(torch.bfloat16)
+        if A.ask_1b and say_model is not None and kind == "question":
+            with torch.set_grad_enabled(bool(A.ask_train) and torch.is_grad_enabled()):
+                Xa = ask_states(ids)
+                if Xa.requires_grad:
+                    ask_distill(Xa, walker_states(model, ids).float(), encs)
+            X = Xa.detach().to(torch.bfloat16)           # the loop runs on what the 1B read
+        else:
+            X = walker_states(model, ids).to(torch.bfloat16)
         nid_lists = [store.add_frame(enc["ids"], X[j, :len(enc["ids"])].clone(), enc, leaf_meta(o, kind), kind)
                      for j, ((enc, _), o) in enumerate(zip(encs, objs))]
         for o, nl in zip(objs, nid_lists):                    # which pairs share a record (observable structure)
@@ -2957,9 +3077,12 @@ def main():
         tgt_ = torch.full((len(ys), len(ans_ids) + Lm - 1), -100, dtype=torch.long, device=dev)
         for i, y in enumerate(ys):
             tgt_[i, a0:a0 + len(y)] = torch.tensor(y, device=dev)
-        inject.set(mem.Wo(rv), ro.Us(padS(rs, Lm)), a0)
-        lo, _ = model(inp, r_active=False)
-        inject.clear()
+        if kind == "question":
+            lo = speak_logits(rv, rs, inp, Lm)
+        else:
+            inject.set(mem.Wo(rv), ro.Us(padS(rs, Lm)), a0)
+            lo, _ = model(inp, r_active=False)
+            inject.clear()
         lo = lo.float()
         say_loss = F.cross_entropy(lo.reshape(-1, lo.shape[-1]), tgt_.reshape(-1), ignore_index=-100)
         em = ((lo.argmax(-1) == tgt_) | (tgt_ == -100) | (tgt_ == EOS_ID)).all(-1).float()   # value tokens decide
@@ -3105,6 +3228,7 @@ def main():
         out = {}
 
         op_examples = []
+        span_examples = []
 
         def why_wrong(q, acts_b, ops_b, said=None):
             """where a wrong answer's program first went wrong (eval diagnosis)"""
@@ -3118,6 +3242,10 @@ def main():
 
             for pos, (g, a_) in enumerate(zip(acts_b, gold)):
                 if g != a_ and g[0] == a_[0] == "sub":
+                    if len(span_examples) < 6:            # what was handed to the child vs what should have been
+                        ids_ = tok.ids(q["text"])
+                        cut = lambda sp_: tok.decode(ids_[sp_[0]:sp_[1]]) if sp_ else "?"
+                        span_examples.append((q["text"], "GOLD: " + cut(a_[1]), "SAID: " + cut(g[1])))
                     return f"wrong sub-question span @{pos}"
                 if g != a_:
                     if g[0] == a_[0] == "read":
@@ -3203,6 +3331,10 @@ def main():
                 if w_ != "right":
                     k_ = "before" if q["before"] else q["ops"]
                     fails.setdefault(k_, Counter_())[w_] += 1
+            if span_examples:
+                print(f"EVAL {step} {name} wrong spans (question | gold sub-question | handed to the child): "
+                      + " || ".join(" | ".join(x) for x in span_examples), flush=True)
+                span_examples.clear()
             if op_examples:
                 n_h = sum(1 for g_, d_, h_, _ in op_examples if h_ == d_ and h_ != g_)
                 print(f"EVAL {step} {name} operand misreads (true, decoded, value the node holds, node kind): "
@@ -3890,6 +4022,15 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
     def peak_gb():
         return torch.cuda.max_memory_allocated() / 2 ** 30 if dev.type == "cuda" else 0.0
 
+    if A.load:                                            # the trained weights BEFORE the warm world is written
+        st = torch.load(A.load, map_location=dev)         # (they were loaded after it: the warm memory was written
+        load_memory(mem, st["mem"]); ro.load(st)          # by an untrained GNM -> old facts .00 on --load evals)
+        graph.load_state_dict(st["graph"], strict=False); loop.load_state_dict(st["loop"], strict=False)
+        tools.load_state_dict(st["tools"], strict=False)
+        if say_model is not None and "say" in st:         # the speaker's adapter (same --say-ckpt LM)
+            say_Wo.load_state_dict(st["say"]["Wo"]); say_ro.load(st["say"]["ro"])
+            if ask_A is not None and "ask" in st["say"]:   # a trained ask adapter (no ridge refit)
+                ask_A.load_state_dict(st["say"]["ask"]); ask_map.update(fit=True)
     # ------------------------------------------------------------------ the ONE world
     with torch.no_grad():
         write([world.rule(rng) for _ in range(min(6, A.warm_frames // 10))]       # a few rules, shown once
@@ -3897,10 +4038,6 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         store.commit()
     print(f"WORLD: {len(world.ents)} entities, {len(store.alive())} nodes after {A.warm_frames} warm frames", flush=True)
     if A.load:
-        st = torch.load(A.load, map_location=dev)
-        load_memory(mem, st["mem"]); ro.load(st)
-        graph.load_state_dict(st["graph"], strict=False); loop.load_state_dict(st["loop"], strict=False)
-        tools.load_state_dict(st["tools"], strict=False)
         if float(graph.kmu_n) == 0:                       # an older checkpoint: key mean from the warm memory
             with torch.no_grad():
                 graph.kmu.copy_(materialize()["kraw"].mean(0)); graph.kmu_n.fill_(1)
@@ -3941,7 +4078,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         lr = A.lr * min(1.0, step / 100) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / A.steps)))
         for gp in opt.param_groups:
             gp["lr"] = lr * gp.get("lr_mult", 1.0)
-        mem.update_stats = True                           # running statistics follow real training data only
+        ask_losses.clear()                                # (questions are encoded in ask(), before run())
+        mem.update_stats = not A.say_only                 # running statistics follow real training data only (a
+        #                                                   frozen GNM keeps its stats: say2 drifted them, program .79->.6)
         t_before = store.time
         recent_times.append(t_before)
         hist0 = {f: len(v) for f, v in world.hist.items()}
@@ -4012,6 +4151,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         #                                                        misread operands were the arithmetic bottleneck)
         rt_stats.append(rt_ok)
         loss = loss + A.w_self * run.self_loss + A.w_inv * invariance_loss(rng) + A.w_rt * rt_loss
+        if ask_losses:                                    # the 1B asks: its mapped questions encode like GPT-2's
+            run.ask_loss = torch.stack(ask_losses).mean()
+            loss = loss + A.ask_train * run.ask_loss
         tmark("roundtrip+invariance")
         opt.zero_grad(set_to_none=True)
         opt_ref.zero_grad(set_to_none=True)
@@ -4046,7 +4188,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 run.masked_gold = {}
             said_ ="- (no question this step: no fact held)" if em is None else f"{float(em.mean()):.2f}"
             print(f"step {step} loss {float(loss):.3f} action acc {act:.2f} answer said {said_} "
-                  f"tool outputs said {tool_said if tool_said is None else round(tool_said, 2)} | world "
+                  f"tool outputs said {tool_said if tool_said is None else round(tool_said, 2)} | "
+                  f"{'ask distill %.3f | ' % float(run.ask_loss) if ask_losses else ''}world "
                   f"{len(world.ents)} entities, {n_live} live nodes | peak VRAM {peak_gb():.2f} GB [{time.time() - t0:.0f}s]",
                   flush=True)
             print(f"  read actions: {pp} | integrate by kind (n, store, NEW, replace): {ws}", flush=True)
@@ -4110,13 +4253,17 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         if not A.smoke and (step % A.eval_every == 0 or step == A.steps):
             out = evaluate(step)
             sc = sum(v["exact"] for v in out.values())
+            say_st = ({"say": {"Wo": say_Wo.state_dict(), "ro": say_ro.state(), "ckpt": A.say_ckpt,
+                               **({"ask": ask_A.state_dict()} if ask_A is not None and ask_map else {})}}
+                      if say_model is not None else {})
             torch.save({"mem": mem.state_dict(), **ro.state(), "graph": graph.state_dict(), "loop": loop.state_dict(),
-                        "tools": tools.state_dict(), "step": step, "args": vars(A)}, A.save.replace(".pt", "_last.pt"))
+                        "tools": tools.state_dict(), "step": step, "args": vars(A), **say_st},
+                       A.save.replace(".pt", "_last.pt"))
             if sc > best:
                 best = sc
                 torch.save({"mem": mem.state_dict(), **ro.state(), "graph": graph.state_dict(),
-                            "loop": loop.state_dict(), "tools": tools.state_dict(), "step": step, "args": vars(A)},
-                           A.save)
+                            "loop": loop.state_dict(), "tools": tools.state_dict(), "step": step, "args": vars(A),
+                            **say_st}, A.save)
     if A.smoke:
         A.eval_q = A.questions
         evaluate(-1)
