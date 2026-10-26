@@ -311,3 +311,23 @@ step 575 loss 0.838 action acc 0.98 answer said 0.91 tool outputs said 0.88 | wo
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.61, 0.58, 0.96, 0.8, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.96, 0.32, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+step 600 loss 0.440 action acc 0.99 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 4.09 GB [15317s]
+  read actions: {'halt': 0.99, 'read': 0.96, 'sub': 1.0, 'tool': 0.98} | integrate by kind (n, store, NEW, replace): {'state': (782, 0.05, 0.83, 0.01), 'decided drop': (4067, 0.0, 0.0, 0.0), 'rule': (7, 0.89, 0.6, 0.33), 'name': (147, 0.07, 0.8, 0.01), 'fact': (172, 0.99, 0.04, 0.84), 'how fact (n, rule read, copy)': (172, 1.0, 0.0, 0.0), 'delta': (89, 1.0, 0.01, 0.9), 'how delta (n, rule read, copy)': (89, 1.0, 0.0, 0.0), 'noise': (45, 0.06, 0.42, 0.02), 'decided new': (17, 0.0, 0.0, 0.0), 'decided replace': (271, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'replace into own fact': (76, 0.0, 0.0, 0.0), 'dependent': (1, 0.93, 1.0, 0.0), 'multi': (20, 0.99, 0.15, 0.77), 'absorbed copies': (5, 0.0, 0.0, 0.0)}
+  look (proposed -> after looking): {'note: replace -> replace': 33, 'note: new -> replace': 2, 'note: attach -> replace': 15}
+  step time (7.7 s / step): other (log / evict / eval) 0.20 (3%) | frames 2.23 (29%) | notes 0.91 (12%) | ask 0.14 (2%) | questions 2.46 (32%) | roundtrip+invariance 0.16 (2%) | backward 0.38 (5%) | commit+step 1.25 (16%)
+  reference re-read (inside the parts above): 0.21 s / step | calls 49 | rows 4899 | new texts 70 / step | texts cached 4784
+  forget (model's choice): 1.0 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.4, 0.0, 0.0, 0.43, 0.37, -1.07, -1.0]
+  commit target (writing helps) 0.98 | gate 0.98 | NLL old - new 4.99
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.7, 0.63, 0.98, 0.85, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.98, 0.41, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
+step 625 loss 0.583 action acc 1.00 answer said 1.00 tool outputs said 1.0 | world 150 entities, 3000 live nodes | peak VRAM 4.09 GB [15504s]
+  read actions: {'halt': 1.0, 'read': 0.95, 'sub': 1.0, 'tool': 0.99} | integrate by kind (n, store, NEW, replace): {'state': (523, 0.06, 0.83, 0.01), 'decided drop': (3843, 0.0, 0.0, 0.0), 'name': (149, 0.06, 0.91, 0.0), 'fact': (157, 0.99, 0.06, 0.83), 'how fact (n, rule read, copy)': (157, 1.0, 0.0, 0.0), 'delta': (95, 0.99, 0.06, 0.85), 'how delta (n, rule read, copy)': (95, 1.0, 0.0, 0.0), 'noise': (49, 0.05, 0.66, 0.01), 'decided replace': (255, 0.0, 0.0, 0.0), 'replace into own fact': (64, 0.0, 0.0, 0.0), 'propagated': (0, 0.0, 0.0, 0.0), 'decided new': (23, 0.0, 0.0, 0.0), 'multi': (20, 0.99, 0.1, 0.81), 'rule': (4, 0.91, 0.75, 0.16)}
+  look (proposed -> after looking): {'note: attach -> replace': 21, 'note: new -> replace': 3, 'note: replace -> replace': 24, 'note: new -> new': 2}
+  step time (7.5 s / step): other (log / evict / eval) 0.20 (3%) | frames 2.02 (27%) | notes 0.88 (12%) | ask 0.17 (2%) | questions 2.42 (32%) | roundtrip+invariance 0.16 (2%) | backward 0.39 (5%) | commit+step 1.21 (16%)
+  reference re-read (inside the parts above): 0.21 s / step | calls 48 | rows 4862 | new texts 115 / step | texts cached 1650
+  forget (model's choice): 1.4 nodes / step | keep head weights [ver, log use, log age, log act, gate, state, question] [-1.41, -0.02, 0.02, 0.41, 0.39, -1.06, -0.99]
+  commit target (writing helps) 1.00 | gate 0.98 | NLL old - new 7.71
+  note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.72, 0.57, 0.94, 0.86, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.94, 0.36, 1.0, 1.0]}
+  label invariance (same fact, two contexts, top-1 of 16): 1.00
+  roundtrip in training (said exactly): 1.00
