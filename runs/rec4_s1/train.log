@@ -231,3 +231,13 @@ EVAL 500 versions_before why wrong (by ops): before: {'wrong read @1/2: same fac
 EVAL 500 held_compositions: exact 0.938 | by {'2': 0.938} | gold read 0.986 | program 0.931 | exact|program 0.981 | n 288
 EVAL 500 held_compositions operand misreads (true, decoded, value the node holds, node kind): [(-2, 21, None, '-'), (20, -1, None, '-'), (27, 14, None, '-'), (2, 23, None, '-'), (14, 13, None, '-')] | node holds the decoded (not the asked) value: 0/5
 EVAL 500 held_compositions why wrong (by ops): 2: {'stopped early': 5, 'operand misread: stored number, far': 4, 'wrong read @1/2: same fact, other node': 2, 'wrong read @2/2: same entity': 2, 'wrong read @2/2: same fact, other node': 2, 'wrong read @1/2: unrelated': 1, 'wrong sub-question span @2': 1, "operand misread: stored number, the other operand's value": 1}
+EVAL 500 longer_programs: exact 0.097 | by {'3': 0.221, '4': 0.11, '5': 0.051, '6': 0.015} | gold read 0.868 | program 0.000 | exact|program 0.000 | n 288
+EVAL 500 longer_programs why wrong (by ops): 3: {'wrong sub-question span @1': 42, 'wrong sub-question span @2': 8, 'stopped early': 2, 'sub instead of read @1/2': 1} | 4: {'wrong sub-question span @1': 53, 'wrong sub-question span @2': 10, 'sub instead of read @1/2': 2} | 5: {'wrong sub-question span @1': 62, 'wrong sub-question span @2': 9, 'sub instead of read @1/2': 3, 'wrong read @1/2: same attribute': 1} | 6: {'wrong sub-question span @1': 54, 'wrong sub-question span @2': 7, 'sub instead of read @1/2': 6}
+EVAL 500 one_exposure_after0: stored 0.895 of 19 new / updated facts
+EVAL 500 one_exposure_after0: exact 0.962 | by {'before': 1.0, '0': 0.951, '1': 1.0, '2': 0.947} | gold read 0.990 | program 0.962 | exact|program 0.996 | n 288
+EVAL 500 one_exposure_after0 operand misreads (true, decoded, value the node holds, node kind): [(46, 48, None, '-')] | node holds the decoded (not the asked) value: 0/1
+EVAL 500 one_exposure_after0 why wrong (by ops): 0: {'op instead of read @2/3': 9} | 2: {'wrong sub-question span @2': 1, 'operand misread: stored number, near (+-2)': 1}
+EVAL 500 one_step_after0: exact 0.993 | by {'before': 1.0, '0': 1.0, '1': 1.0, '2': 0.939} | gold read 1.000 | program 0.997 | exact|program 0.993 | n 288
+EVAL 500 one_step_after0 operand misreads (true, decoded, value the node holds, node kind): [(20, 12, None, '-'), (4, 0, None, '-')] | node holds the decoded (not the asked) value: 0/2
+EVAL 500 one_step_after0 why wrong (by ops): 2: {'operand misread: stored number, far': 2}
+EVAL 500 one_exposure_after10: stored 0.696 of 23 new / updated facts
