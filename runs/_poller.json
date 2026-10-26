@@ -1,11 +1,11 @@
 {
- "alive": "2026-10-26 17:10:02",
+ "alive": "2026-10-26 17:15:05",
  "running": [
   "all1_s1",
   "all1_s2",
   "all2_s1",
   "all2_s2"
  ],
- "gpu_free_gb": 76.6,
+ "gpu_free_gb": 72.5,
  "code": "b3528ea"
 }
