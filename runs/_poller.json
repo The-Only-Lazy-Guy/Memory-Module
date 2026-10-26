@@ -1,9 +1,9 @@
 {
- "alive": "2026-10-26 11:53:30",
+ "alive": "2026-10-26 11:58:32",
  "running": [
   "rec6_s1",
   "rec6_s2"
  ],
- "gpu_free_gb": 95.0,
+ "gpu_free_gb": 84.4,
  "code": "4f2b5f0"
 }
