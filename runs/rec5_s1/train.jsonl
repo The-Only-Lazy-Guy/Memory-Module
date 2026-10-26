@@ -21,3 +21,4 @@
 {"type": "eval", "step": 500, "set": "old_facts", "exact": 0.9340277777777778, "n": 288, "by": {"0": 0.976, "1": 0.877, "2": 0.87}, "gold_read": 0.9704861111111112, "program_ok": 0.9097222222222222, "exact_given_program": 0.9847328244274809}
 {"type": "eval", "step": 500, "set": "versions_before", "exact": 0.9097222222222222, "n": 288, "by": {"before": 0.91}, "gold_read": 0.9548611111111112, "program_ok": 0.9097222222222222, "exact_given_program": 1.0}
 {"type": "eval", "step": 500, "set": "held_compositions", "exact": 0.90625, "n": 288, "by": {"2": 0.906}, "gold_read": 0.9774305555555556, "program_ok": 0.8854166666666666, "exact_given_program": 0.9725490196078431}
+{"type": "eval", "step": 500, "set": "longer_programs", "exact": 0.16319444444444445, "n": 288, "by": {"4": 0.277, "5": 0.182, "6": 0.011}, "gold_read": 0.9496527777777778, "program_ok": 0.19791666666666666, "exact_given_program": 0.5087719298245614}
