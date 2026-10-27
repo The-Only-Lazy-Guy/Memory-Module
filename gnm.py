@@ -1330,6 +1330,8 @@ class Loop(nn.Module):
         self.proc0 = nn.Parameter(torch.randn(dk) / dk ** 0.5)        # the default procedure
         self.Wph = nn.Linear(d, dk)                                    # --proc-read: Walker's state after READING the
         nn.init.zeros_(self.Wph.weight); nn.init.zeros_(self.Wph.bias)  # procedure node -> HOW (zero: no change at init)
+        self.Woph = nn.Linear(d, 1 + N_ARITH)                          # --proc-op: that state -> the OPERATION logits
+        nn.init.zeros_(self.Woph.weight); nn.init.zeros_(self.Woph.bias)  # directly (Wph fed the pooled vector: unmoved)
         self.empty_v = nn.Parameter(torch.randn(dk) / dk ** 0.5)      # what a node holds when nothing was stored
         self.empty_s = nn.Parameter(torch.randn(dk) / dk ** 0.5)      # (readout / adapters are scale-invariant: a
         #                                                               value is mixed toward these, not scaled)
@@ -1413,6 +1415,9 @@ def main():
                    "node: Walker's state after reading it decides HOW (the pooled value carried no rule content)")
     P.add_argument("--proc-demo", type=float, default=0.0, help="weight of the demonstrated PROCEDURE read (frame rows: "
                    "the rule node of the value's key, else the default procedure)")
+    P.add_argument("--proc-op", type=float, default=0.0, help="the OPERATION comes from Walker's state after reading the "
+                   "procedure node (Woph -> op logits), and its weight demonstrates it: the gold rule node read, the "
+                   "op its policy says (add -> add, set / default -> copy); only the op heads learn from it")
     P.add_argument("--confusion", type=float, default=0.0, help="weight of the CONFUSION signal (user 2026-10-26): "
                    "the model's own uncertainty at any action (address entropy, saying entropy), recomputed with the "
                    "deciding head frozen so it punishes only the path before (earlier writes / reads / registers)")
@@ -2830,21 +2835,24 @@ def main():
                     sp = (tau * F.normalize(qp - kmean, dim=-1) @ K.t() + logg[None]).masked_fill(~visible, -1e4)
                     sp = torch.cat([sp, (tau * loop.b_proc).expand(B, 1)], -1)    # [nodes | default]
                     pi = torch.softmax(sp, -1)
-                    if A.proc_demo and soft and torch.is_grad_enabled():   # the procedure READ is demonstrated (as
+                    gp_ = None
+                    if (A.proc_demo or A.proc_op) and soft and torch.is_grad_enabled():   # the procedure READ is demonstrated (as
                         rule_of = {}                                       # every read: CoT = imitation): the rule
                         for j_, i_ in enumerate(M["rows"]):               # node of the incoming value's key, else
                             m_ = store.prov.get(store.nodes[i_]["vsrc"]) or ("?",)   # the default procedure
                             if m_[0] == "rule" and bool(visible[:, j_].any()):
                                 if m_[1] not in rule_of or store.nodes[i_]["time"] > store.nodes[M["rows"][rule_of[m_[1]]]]["time"]:
                                     rule_of[m_[1]] = j_
-                        gp_ = []
+                        gp_, gop_ = [], []
                         for b in range(B):
                             m_ = store.prov.get(store.nodes[rows[b]["qnid"]]["vsrc"]) or ("?",)
                             if m_[0] in ("fact", "delta") and len(m_) > 2 and m_[2] in world.num_keys:
                                 gp_.append(rule_of.get(m_[2], N))
                             else:
                                 gp_.append(-100)
+                            gop_.append(1 if m_[0] == "delta" else 0)   # the world's own HOW: an increment adds
                         gp_ = torch.tensor(gp_, device=dev)
+                    if gp_ is not None and A.proc_demo:
                         qpd_ = loop.Wp(h.detach()) + loop.Wpr(xk.detach())   # (h / xk detached too: through xk it bent
                         #                                                       the NEW fact's key -> stored .32)
                         spd_ = (tau.detach() * F.normalize(qpd_ - kmean, dim=-1) @ K.detach().t()   # the demo trains the
@@ -2857,15 +2865,40 @@ def main():
                     soft_p = pi @ cand_p
                     pj = sp.argmax(-1)
                     p_vec = cand_p[pj] + soft_p - soft_p.detach()                  # hard choice, soft gradient
-                    if A.proc_read:                  # the procedure node is READ (a register; Walker's own state after
+                    op_lg = loop.Wop(p_vec)
+                    if A.proc_read or A.proc_op:     # the procedure node is READ (a register; Walker's own state after
                         rd_ = [b for b in range(B) if int(pj[b]) < N and regs[b]]   # reading its tokens decides HOW):
                         if rd_:                      # pooled values carry no rule content (add vs set cos .9995)
-                            prg_ = regs_from(M, [int(pj[b]) for b in rd_])
-                            hp_ = ctrl_states([regs[b] + [rg_] for b, rg_ in zip(rd_, prg_)])
+                            with torch.set_grad_enabled(torch.is_grad_enabled() and bool(A.proc_read)):
+                                prg_ = regs_from(M, [int(pj[b]) for b in rd_])
+                                hp_ = ctrl_states([regs[b] + [rg_] for b, rg_ in zip(rd_, prg_)])
                             sel_ = pi[rd_, pj[rd_]]
                             ix_ = torch.tensor(rd_, device=dev)
-                            p_vec = p_vec.index_add(0, ix_, loop.Wph(hp_) * (sel_ / sel_.detach())[:, None])
-                    pop = torch.softmax(loop.Wop(p_vec), -1)                     # HOW: [copy | add sub max min]
+                            if A.proc_read:
+                                p_vec = p_vec.index_add(0, ix_, loop.Wph(hp_) * (sel_ / sel_.detach())[:, None])
+                                op_lg = loop.Wop(p_vec)
+                            if A.proc_op:            # the reading decides the operation itself (state detached: only
+                                op_lg = op_lg.index_add(0, ix_, loop.Woph(hp_.detach()) * (sel_ / sel_.detach())[:, None])
+                    if A.proc_op and gp_ is not None:    # demonstrated HOW: the gold procedure read (teacher-forced),
+                        dm_ = [b for b in range(B) if int(gp_[b]) >= 0     # the op its policy says; trains Wop / Woph
+                               and not (int(gp_[b]) == N and gop_[b])]       # (an increment whose rule is not visible:
+                        #                                                      the default cannot know; not demonstrated)
+                        if dm_:
+                            go_ = torch.tensor([gop_[b] for b in dm_], device=dev)
+                            pv_ = torch.stack([V[int(gp_[b])].detach() if int(gp_[b]) < N else loop.proc0.detach()
+                                               for b in dm_])
+                            lgd_ = loop.Wop(pv_)
+                            rr_ = [i_ for i_, b in enumerate(dm_) if int(gp_[b]) < N and regs[b]]
+                            if rr_:
+                                with torch.no_grad():
+                                    grg_ = regs_from(M, [int(gp_[dm_[i_]]) for i_ in rr_])
+                                    hg_ = ctrl_states([regs[dm_[i_]] + [rg_] for i_, rg_ in zip(rr_, grg_)])
+                                lgd_ = lgd_.index_add(0, torch.tensor(rr_, device=dev), loop.Woph(hg_))
+                            for grp_ in (go_ == 0, go_ == 1):    # balanced: add rows are rare
+                                if bool(grp_.any()):
+                                    run.op_terms.append(F.cross_entropy(lgd_[grp_], go_[grp_]))
+                            run.op_acc.extend(zip(go_.tolist(), (lgd_.argmax(-1) == go_).float().tolist()))
+                    pop = torch.softmax(op_lg, -1)                               # HOW: [copy | add sub max min]
                     oph = pop.argmax(-1).tolist()
                     kap = pop[:, 0]
                     up = loop.Wup(p_vec)
@@ -3313,7 +3346,7 @@ def main():
     run.how_log = []
     run.tool_loss = []
     run.conf_terms, run.conf_stats, run.row_conf = [], {}, []
-    run.proc_terms = []
+    run.proc_terms, run.op_terms, run.op_acc = [], [], []
     run.forget_stats = []
     run.fcommit, run.fcommit_stats = [], []
     import collections as _co
@@ -4474,7 +4507,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         run.tool_loss = []
         run.how_log = []
         run.conf_terms = []
-        run.proc_terms = []
+        run.proc_terms, run.op_terms, run.op_acc = [], [], []
         mem.update_stats = not A.say_only                 # running statistics follow real training data only (a
         #                                                   frozen GNM keeps its stats: say2 drifted them, program .79->.6)
         t_before = store.time
@@ -4550,6 +4583,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         if run.proc_terms:                                # the demonstrated procedure read
             run.proc_l = torch.stack(run.proc_terms).mean()
             loss = loss + A.proc_demo * run.proc_l
+        if run.op_terms:                                  # the demonstrated operation (from the procedure's reading)
+            run.op_l = torch.stack(run.op_terms).mean()
+            loss = loss + A.proc_op * run.op_l
         if run.conf_terms:                                # CONFUSION: punished upwards (the path before)
             run.conf_l = torch.stack(run.conf_terms).mean()
             loss = loss + A.confusion * run.conf_l
@@ -4597,7 +4633,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                   f"{'ask distill %.3f | ' % float(run.ask_loss) if ask_losses else ''}"
                   f"{'tool net %.3f | ' % float(run.tool_l) if run.tool_loss else ''}"
                   f"{'confusion %.3f | ' % float(run.conf_l) if run.conf_terms else ''}"
-                  f"{'procedure read %.3f | ' % float(run.proc_l) if run.proc_terms else ''}world "
+                  f"{'procedure read %.3f | ' % float(run.proc_l) if run.proc_terms else ''}"
+                  f"{'procedure op %.3f (acc copy %s | add %s) | ' % ((float(run.op_l),) + tuple(('%.2f of %d' % (sum(c_ for g_, c_ in run.op_acc if g_ == o_) / max(1, sum(g_ == o_ for g_, _ in run.op_acc)), sum(g_ == o_ for g_, _ in run.op_acc))) for o_ in (0, 1))) if run.op_terms else ''}world "
                   f"{len(world.ents)} entities, {n_live} live nodes | peak VRAM {peak_gb():.2f} GB [{time.time() - t0:.0f}s]",
                   flush=True)
             print(f"  read actions: {pp} | integrate by kind (n, store, NEW, replace): {ws}", flush=True)
