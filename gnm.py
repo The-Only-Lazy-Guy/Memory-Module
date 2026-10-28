@@ -2878,7 +2878,9 @@ def main():
                                 p_vec = p_vec.index_add(0, ix_, loop.Wph(hp_) * (sel_ / sel_.detach())[:, None])
                                 op_lg = loop.Wop(p_vec)
                             if A.proc_op:            # the reading decides the operation itself (state detached: only
-                                op_lg = op_lg.index_add(0, ix_, loop.Woph(hp_.detach()) * (sel_ / sel_.detach())[:, None])
+                                op_lg = op_lg.index_add(0, ix_, loop.Woph(hp_.detach()))   # the op head; NOT scaled by
+                                #   the pointer's weight: that path carried the op outcome into the pointer -> Wp(h) /
+                                #   Wpr(xk) -> the new fact's key (all5 @500: rules unread 8/8, old facts .97 -> .85-.90)
                     if A.proc_op and gp_ is not None:    # demonstrated HOW: the gold procedure read (teacher-forced),
                         dm_ = [b for b in range(B) if int(gp_[b]) >= 0     # the op its policy says; trains Wop / Woph
                                and not (int(gp_[b]) == N and gop_[b])]       # (an increment whose rule is not visible:
