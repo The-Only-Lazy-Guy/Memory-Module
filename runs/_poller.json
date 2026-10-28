@@ -1,9 +1,10 @@
 {
- "alive": "2026-10-28 00:28:39",
+ "alive": "2026-10-28 00:30:06",
  "running": [
+  "all1_s1",
   "all5_s1",
   "all5_s2"
  ],
- "gpu_free_gb": 77.7,
+ "gpu_free_gb": 77.6,
  "code": "e6fb30c"
 }
