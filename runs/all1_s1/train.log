@@ -226,3 +226,15 @@ step 500 loss 1.634 action acc 1.00 answer said 0.61 tool outputs said 0.62 | co
   note writes at the target (n, gate, replace, confidence, gate_new, same, is target) by pass: {'proposal': [50, 0.55, 0.61, 0.98, 0.7, 1.0, 1.0], 'look': [50, 0.98, 0.98, 0.98, 0.51, 1.0, 1.0]}
   label invariance (same fact, two contexts, top-1 of 16): 1.00
   roundtrip in training (said exactly): 1.00
+EVAL 500 old_facts confusion: right 0.013 (n 268) | wrong 0.043 (n 20)
+EVAL 500 old_facts: exact 0.931 | by {'0': 0.912, '1': 1.0, '2': 0.906} | gold read 0.964 | program 0.896 | exact|program 0.988 | n 288
+EVAL 500 old_facts operand misreads (true, decoded, value the node holds, node kind): [(49, 27, None, '-'), (-13, 12, None, '-'), (4, 22, None, '-')] | node holds the decoded (not the asked) value: 0/3
+EVAL 500 old_facts why wrong (by ops): 0: {'wrong read @1/2: same entity': 8, 'ran on': 2, 'wrong read @1/3: same entity': 1, 'wrong read @1/2: same fact, other node': 1, 'wrong read @1/3: same attribute': 1, 'wrong read @2/3: same entity': 1, 'wrong read @2/3: same fact, other node': 1} | 2: {'operand misread: stored number, far': 3, 'wrong read @2/2: same entity': 1, 'stopped early': 1}
+EVAL 500 versions_before confusion: right 0.038 (n 232) | wrong 0.060 (n 56)
+EVAL 500 versions_before: exact 0.806 | by {'before': 0.806} | gold read 0.903 | program 0.806 | exact|program 1.000 | n 288
+EVAL 500 versions_before why wrong (by ops): before: {'wrong read @1/2: a version': 42, 'wrong read @1/2: same fact, other node': 14}
+EVAL 500 held_compositions confusion: right 0.005 (n 266) | wrong 0.016 (n 22)
+EVAL 500 held_compositions: exact 0.924 | by {'2': 0.924} | gold read 0.984 | program 0.913 | exact|program 0.985 | n 288
+EVAL 500 held_compositions wrong spans (question | gold sub-question | handed to the child): What is the smaller of the daily worker of Muril and (the sum of the last device of Neor and the list of Sasa)? | GOLD: the sum of the last device of Neor and the list of Sasa | SAID: the || What is the larger of (the difference between the bid of Pelor and the font of Sane) and the worker of Torne? | GOLD: the difference between the bid of Pelor and the font of Sane | SAID: the difference between the bid of Pelor and the font of Sane) and the worker of Torne || What is the larger of (the difference between the license of Meror and the birth of Loka) and the host of Pelor? | GOLD: the difference between the license of Meror and the birth of Loka | SAID: the difference between the license of Meror and the birth of Loka) and the host of Pelor
+EVAL 500 held_compositions operand misreads (true, decoded, value the node holds, node kind): [(12, 10, None, '-'), (36, 11, None, '-'), (15, 13, None, '-'), (22, 25, None, '-')] | node holds the decoded (not the asked) value: 0/4
+EVAL 500 held_compositions why wrong (by ops): 2: {'wrong read @1/2: same fact, other node': 8, 'stopped early': 6, 'wrong sub-question span @1': 2, 'operand misread: stored number, near (+-2)': 2, 'operand misread: stored number, far': 2, 'op instead of read @2/2': 1, 'wrong sub-question span @2': 1}
