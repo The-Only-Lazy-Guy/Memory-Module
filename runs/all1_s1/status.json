@@ -1,10 +1,10 @@
 {
- "state": "done",
- "pid": 27120,
+ "state": "running",
+ "pid": 34881,
  "cmd": "gnm.py --init-full /marimo/gnm-lab/ckpt/rec6_s1.pt --corrections 2 --steps 1500 --eval-every 500 --eval-q 288 --skip-eval0 --forget-q 0.2 --recurse 1 --long-ops 4,6 --vslots 128 --train-ops 1,3 --tool-nodes 1 --proc-read 1 --confusion 1.0 --seed 1 --save /marimo/gnm-lab/ckpt/all1_s1.pt --log /marimo/gnm-lab/runs/runs/all1_s1/train.jsonl",
- "code": "5497010",
- "started": "2026-10-26 15:58:09",
- "updated": "2026-10-26 17:54:00",
+ "code": "e6fb30c",
+ "started": "2026-10-28 00:04:52",
+ "updated": "2026-10-28 00:04:52",
  "exit_code": 0,
  "ended": "2026-10-26 17:54:00"
 }
