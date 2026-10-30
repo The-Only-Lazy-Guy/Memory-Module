@@ -2317,6 +2317,11 @@ def main():
                 out.append(nxt)
                 off += T_
                 ids = nxt[:, None]
+                if A.ans_eos:                            # every row has ended: the rest is cut at the end token
+                    ended = ended | (nxt == EOS_ID) if len(out) > 1 else nxt == EOS_ID
+                    if len(out) < n_new and bool(ended.all()):
+                        out += [torch.full_like(nxt, EOS_ID)] * (n_new - len(out))
+                        break
         finally:
             inject.off = 0
             inject.clear()
