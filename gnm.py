@@ -1620,6 +1620,11 @@ def main():
                    "T2 = the WRONG rows the model was most confused on (active imitation), or the first rows of a kind")
     P.add_argument("--demo-per-step", type=int, default=2, help="T2: at most this many demonstrations per step")
     P.add_argument("--rl-w", type=float, default=1.0, help="weight of the REINFORCE term on free question rows")
+    P.add_argument("--rl-say", type=float, default=0.0, help="free rows: the say head learns from the rows it answered "
+                   "EXACTLY (its own output = the outcome; never from a wrong one). 0 = the say head is not trained on "
+                   "free rows (old: it drifted once the demos ran out -> right programs said wrong -> reads punished)")
+    P.add_argument("--rl-neg", type=float, default=1.0, help="weight of NEGATIVE advantages in the REINFORCE terms "
+                   "(question + frame rows); 0 = self-imitation (only better-than-baseline outcomes are reinforced)")
     P.add_argument("--rl-temp", type=float, default=1.0, help="sampling temperature of free rows' actions (training)")
     P.add_argument("--proc-keep", type=int, default=0, help="multi keys get a KEEP rule (announced like add / set; "
                    "a key coexists only after it); Walker's reading of the procedure node also decides attach vs "
@@ -2098,12 +2103,53 @@ def main():
         if miss:
             with torch.no_grad():
                 cache["src"].update(encode_sources(miss, False))
-        got = {s_: cache["src"][s_] for s_ in srcs if s_ not in gsrc}
-        if gsrc:
-            got.update(encode_sources(sorted(gsrc, key=lambda s_: s_[1:]), True))
-        ks, vs, gs_, sls, rs, nsl, rqs, hms = [], [], [], [], [], [], [], []
-        qfull = {}
+        # sources -> rows of tables (a per-step BANK of the constant sources, stacked once when first seen, + this
+        # call's gradient sources); nodes index them (stacking 3,000 per-node tensors every call: ~65 ms / call)
+        bk = cache.get("bank")
+        if bk is None or bk["src"] is not cache["src"]:
+            bk = cache["bank"] = {"src": cache["src"], "row": {}, "T": None}
         zg = torch.zeros((), device=dev)
+        Wc_ = A.mem_slots if A.q_slots_mode == "reg" else max(A.mem_slots, A.q_slots)   # slots a node can keep
+
+        def table(items):                        # (k, v, logg, slots, r, rq, hm) per source -> one tensor per field
+            return [torch.stack([x[0] for x in items]), torch.stack([x[1] for x in items]),
+                    torch.stack([x[2] for x in items]), stackS([x[3][:Wc_] for x in items]),
+                    torch.stack([x[4] for x in items]), torch.stack([x[5] for x in items]),
+                    torch.stack([x[6] for x in items]),
+                    torch.tensor([min(x[3].shape[0], Wc_) for x in items], device=dev)]
+
+        def cat_t(a, b):
+            W_ = max(a[3].shape[1], b[3].shape[1])
+            return [torch.cat([x, y]) if j != 3 else torch.cat([padS(x, W_), padS(y, W_)])
+                    for j, (x, y) in enumerate(zip(a, b))]
+
+        def as_item(s_):
+            if s_[0] == "tok":
+                return cache["src"][s_] if s_ not in gsrc else None
+            vec = store.vecs[s_]
+            return (vec[0], vec[1], zg, vec[3], vec[2], torch.zeros_like(vec[0]), torch.zeros(2 * d, device=dev))
+
+        vsrc_ = {store.nodes[i]["vsrc"] for i in live if store.nodes[i]["vsrc"][0] != "tok"}
+        vgrad = {s_ for s_ in vsrc_ if any(x.requires_grad for x in store.vecs[s_])}
+        new_ = [s_ for s_ in sorted(srcs - gsrc, key=lambda s_: s_[1:]) if s_ not in bk["row"]] \
+            + [s_ for s_ in sorted(vsrc_ - vgrad, key=lambda s_: s_[1:]) if s_ not in bk["row"]]
+        if new_:
+            n0 = 0 if bk["T"] is None else bk["T"][0].shape[0]
+            T_ = table([as_item(s_) for s_ in new_])
+            bk["T"] = T_ if bk["T"] is None else cat_t(bk["T"], T_)
+            bk["row"].update({s_: n0 + j for j, s_ in enumerate(new_)})
+        row = bk["row"]
+        T_ = bk["T"]
+        gl_ = sorted(gsrc, key=lambda s_: s_[1:]) + sorted(vgrad, key=lambda s_: s_[1:])
+        if gl_:                                  # this call's gradient sources: rows after the bank's
+            gi_ = encode_sources(sorted(gsrc, key=lambda s_: s_[1:]), True) if gsrc else {}
+            Tg = table([gi_[s_] if s_[0] == "tok" else as_item(s_) for s_ in gl_])
+            nb_ = 0 if T_ is None else T_[0].shape[0]
+            row = dict(row)
+            row.update({s_: nb_ + j for j, s_ in enumerate(gl_)})
+            T_ = Tg if T_ is None else cat_t(T_, Tg)
+        nz_ = T_[0].shape[0]                     # (the zero row: no stated reference)
+        lab_ix, val_ix, ref_ix, cap_l, nsl, qrow = [], [], [], [], [], []
         for i in live:
             nd = store.nodes[i]
             L_, V_ = nd["lsrc"], nd["vsrc"]
@@ -2111,27 +2157,26 @@ def main():
             cap_ = A.q_slots if (q_in and A.q_slots_mode == "mem") else A.mem_slots   # the current input keeps its
             #   whole text: 16 slots cut a 1-operation question inside its 2nd operand's name and dropped the 2nd /
             #   3rd operands of a 2-operation one (the 2nd read failed: "unrelated" / tool fired early, read .70)
-            if L_ is not None and L_[0] == "tok":
-                ks.append(got[L_][0]); rs.append(got[L_][4])
-            else:
-                vec = store.vecs[V_]
-                ks.append(vec[0]); rs.append(vec[2])
+            lab_ix.append(row[L_] if L_ is not None and L_[0] == "tok" else row[V_])
             Rs_ = nd.get("rsrc", V_)                    # the reference: from the node's own stated text
             okr_ = Rs_ is not None and Rs_[0] == "tok" and nd["kind"] in ("item", "state")
-            rqs.append(got[Rs_][5] if okr_ else None)
-            hms.append(got[Rs_][6] if okr_ else None)
-            if V_[0] == "tok":
-                vs.append(got[V_][1]); sls.append(got[V_][3][:cap_]); gs_.append(got[V_][2])
-                if q_in and A.q_slots_mode == "reg":      # whole text for Walker's register only (memory stays 16 wide)
-                    qfull[len(vs) - 1] = got[V_][3][:A.q_slots]
-            else:
-                vec = store.vecs[V_]
-                vs.append(vec[1]); sls.append(vec[3][:cap_]); gs_.append(zg)
+            ref_ix.append(row[Rs_] if okr_ else nz_)
+            val_ix.append(row[V_])
+            if V_[0] == "tok" and q_in and A.q_slots_mode == "reg":   # whole text for Walker's register only
+                qrow.append((len(val_ix) - 1, V_))                    # (memory stays 16 wide)
+            cap_l.append(cap_)
             nsl.append(min(nd["nslots"], cap_))
-        kraw, v, logg, r = torch.stack(ks), torch.stack(vs), torch.stack(gs_), torch.stack(rs)
-        slots = stackS(sls)
-        RQ = torch.stack([x if x is not None else torch.zeros_like(kraw[0]) for x in rqs])
-        HM = torch.stack([x if x is not None else torch.zeros(2 * d, device=dev) for x in hms])
+        lab_ix, val_ix = torch.tensor(lab_ix, device=dev), torch.tensor(val_ix, device=dev)
+        ref_ix = torch.tensor(ref_ix, device=dev)
+        kraw, r, v, logg = T_[0][lab_ix], T_[4][lab_ix], T_[1][val_ix], T_[2][val_ix]
+        RQ = torch.cat([T_[5], T_[5].new_zeros(1, T_[5].shape[1])])[ref_ix]
+        HM = torch.cat([T_[6], T_[6].new_zeros(1, T_[6].shape[1])])[ref_ix]
+        len_ = T_[7][val_ix]
+        ln_ = torch.minimum(len_, torch.tensor(cap_l, device=dev))
+        Wn_ = int(ln_.max())
+        slots = T_[3][:, :Wn_][val_ix]
+        slots = slots * (torch.arange(Wn_, device=dev)[None] < ln_[:, None]).to(slots.dtype)[..., None]
+        qfull = {k_: (gi_[V_] if gl_ and V_ in gsrc else cache["src"][V_])[3][:A.q_slots] for k_, V_ in qrow}
         r = graph.Wrr(RQ) * (RQ.abs().sum(-1, keepdim=True) > 0).float() + graph.r_pool * r   # the node's relation
         ver = torch.tensor([float(store.nodes[i]["kind"] == "version") for i in live], device=dev)
         kraw = kraw + ver[:, None] * graph.ver_e                   # "the value before" is part of a version's label
@@ -3751,7 +3796,15 @@ def main():
                 run.rl_base[k_] = 0.95 * b0_ + 0.05 * float(r_[b])
                 run.rl_stats.setdefault(k_, []).append(float(r_[b]))
             lps_ = torch.stack([torch.stack(l_).sum() if l_ else torch.zeros((), device=dev) for l_ in rl_lp])
+            adv_ = [a_ if a_ >= 0 else A.rl_neg * a_ for a_ in adv_]
             rl_loss = -(torch.tensor(adv_, device=dev) * lps_).mean()
+            if A.rl_say:                             # said exactly -> its own words (= the answer) are reinforced
+                ce_ = F.cross_entropy(lo[:B].reshape(-1, lo.shape[-1]), tgt_[:B].reshape(-1), ignore_index=-100,
+                                      reduction="none").reshape(B, -1)
+                vt_ = (tgt_[:B] != -100).float()
+                ok_ = (r_ > 0.5).float()
+                if float(ok_.sum()) > 0:
+                    rl_loss = rl_loss + A.rl_say * (((ce_ * vt_).sum(-1) / vt_.sum(-1).clamp(min=1)) * ok_).sum()                         / ok_.sum()
             return (A.rl_w * rl_loss + cost, em[:B], ok_act / max(1, n_act),
                     (em[B:].mean().item() if len(em) > B else None))
         return act + say_loss + cost, em[:B], ok_act / max(1, n_act), (em[B:].mean().item() if len(em) > B else None)
@@ -5129,7 +5182,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                     if f_ in fr_:
                         r_ = sum(fr_[f_]) / len(fr_[f_])
                         b0_ = run.rl_base.get("frame " + kd_, 0.5)
-                        terms_.append(-(r_ - b0_) * lp_)
+                        terms_.append(-((r_ - b0_) if r_ >= b0_ else A.rl_neg * (r_ - b0_)) * lp_)
                         run.rl_base["frame " + kd_] = 0.95 * b0_ + 0.05 * r_
                         run.frl_stats.setdefault(kd_, []).append(r_)
                 if terms_:
