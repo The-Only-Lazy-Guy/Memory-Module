@@ -1727,6 +1727,9 @@ def main():
     P.add_argument("--fast-decode", type=int, default=1, help="greedy decode with a key/value cache (GPT-2 stand-in)")
     P.add_argument("--prof-steps", type=lambda x: {int(v) for v in x.split(",") if v}, default=set(),
                    help="with --trace: profile the backward of these steps (op table)")
+    P.add_argument("--diag-grad", type=int, default=0, help="DIAGNOSTIC (no training): run one step, print which "
+                   "loss reaches which head (gradient paths; a head no outcome loss reaches drifts once the demos are "
+                   "spent), then exit")
     P.add_argument("--trace", type=int, default=0, help="print loss / exactness / wall time every step "
                    "(2 = also no eval / save: speed checks)")
     P.add_argument("--warm-inv", type=float, default=1.0, help="warm-up: weight of the label-identity (invariance) loss")
@@ -5104,6 +5107,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         cost = (write([o for k_, o in objs if k_ == "state"], True, "state")
                 + write([o for k_, o in objs if k_ == "item"], True))       # soft integrate: later questions train it
         tmark("frames")
+        dparts = {"frame storage cost": cost}            # (--diag-grad: each loss separately)
         now = {f for f, v in world.hist.items() if len(v) > hist0.get(f, 0)}
         now |= {f for f, v in world.multi.items() if len(v) > multi0.get(f, 0)}
         expect_dependents(now)
@@ -5127,8 +5131,10 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             if bool(lab.any()):                                     # said "a bit less": at m = 1 the answer is right
                 c_loss = c_loss + F.binary_cross_entropy_with_logits(ulc[lab > 0], lab[lab > 0])   # either way)
             note_loss = note_loss + A.w_commit * c_loss
+            dparts["note commit"] = c_loss
             run.commit_stats.append((float(lab.mean()), float(torch.sigmoid(glc).mean()), float((l_old - l_new).mean())))
         tmark("notes")
+        dparts["notes"] = note_loss
         now |= {q["edit"] for q in cq}
         if A.note_expect:
             expect_dependents({q["edit"] for q in cq})   # a correction the note did not write into its fact (drop / new /
@@ -5171,6 +5177,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                         fh_.write(f"[step {step} | {k_} | demo {A.demo_budget - left_ + 1}/{A.demo_budget} | "
                                   f"confusion {conf_[b] if b < len(conf_) else 0.0:.2f}] {nl_trace(qf_[b])}\n")
             parts_ = [(rf_, len(qf_)), (run(qd_, True) if qd_ else None, len(qd_))]
+            dparts["questions FREE (outcome)"], dparts["questions DEMO"] = rf_[0], parts_[1][0][0] if qd_ else None
             parts_ = [(r_, n_) for r_, n_ in parts_ if r_ is not None]
             loss = sum(r_[0] * n_ for r_, n_ in parts_) / max(1, sum(n_ for _, n_ in parts_))
             em = rf_[1]                                   # (the step's exactness = the free rows')
@@ -5192,6 +5199,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                         run.frl_stats.setdefault(kd_, []).append(r_)
                 if terms_:
                     loss = loss + A.rl_frames * torch.stack(terms_).mean()
+                    dparts["frame RL (outcome)"] = torch.stack(terms_).mean()
             run.frame_lp = []
             act = parts_[1][0][2] if qd_ else 0.0
             tool_said = rf_[3]
@@ -5211,6 +5219,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                     qf_.append(q_)
             parts_ = [(run(qd_, True) if qd_ else None, len(qd_)),
                       (run(qf_, False, rl=True) if qf_ else None, len(qf_))]
+            dparts["questions DEMO"] = parts_[0][0][0] if qd_ else None
+            dparts["questions FREE (outcome)"] = parts_[1][0][0] if qf_ else None
             parts_ = [(r_, n_) for r_, n_ in parts_ if r_ is not None]
             loss = sum(r_[0] * n_ for r_, n_ in parts_) / max(1, sum(n_ for _, n_ in parts_))
             ems_ = [r_[1] for r_, _ in parts_ if r_[1] is not None]
@@ -5226,7 +5236,13 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         rt_loss, rt_ok = roundtrip_loss(rng, 12)               # keeps decoding exact (it drifted after the warm-up;
         #                                                        misread operands were the arithmetic bottleneck)
         rt_stats.append(rt_ok)
-        loss = loss + A.w_self * run.self_loss + A.w_inv * invariance_loss(rng) + A.w_rt * rt_loss
+        inv_ = invariance_loss(rng)
+        loss = loss + A.w_self * run.self_loss + A.w_inv * inv_ + A.w_rt * rt_loss
+        dparts.update({"roundtrip": rt_loss, "invariance": inv_, "self": run.self_loss,
+                       "proc demo": run.proc_terms and torch.stack(run.proc_terms).mean(),
+                       "op demo": run.op_terms and torch.stack(run.op_terms).mean(),
+                       "confusion": run.conf_terms and torch.stack(run.conf_terms).mean(),
+                       "tool teacher": run.tool_loss and torch.stack(run.tool_loss).mean()})
         if run.proc_terms:                                # the demonstrated procedure read
             run.proc_l = torch.stack(run.proc_terms).mean()
             loss = loss + A.proc_demo * run.proc_l
@@ -5243,6 +5259,33 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
             run.ask_loss = torch.stack(ask_losses).mean()
             loss = loss + A.ask_train * run.ask_loss
         tmark("roundtrip+invariance")
+        if A.diag_grad:                                   # gradient paths: which loss reaches which head
+            named_ = [(f"{mn_}.{n_.split('.')[0]}", p_) for mn_, m_ in (("graph", graph), ("ro", ro), ("loop", loop),
+                                                                         ("tools", tools)) for n_, p_ in m_.named_parameters()
+                      if p_.requires_grad]
+            groups_ = list(dict.fromkeys(g_ for g_, _ in named_))
+            ps_ = [p_ for _, p_ in named_]
+            live_ = {k_: v_ for k_, v_ in dparts.items() if torch.is_tensor(v_) and v_.requires_grad}
+            print(f"DIAG grad step {step} | demo rows {len(qd_) if A.demo_budget >= 0 else 'all'} | losses with a graph: "
+                  f"{list(live_)} | without: {[k_ for k_ in dparts if k_ not in live_]}", flush=True)
+            reach_ = {g_: {} for g_ in groups_}
+            for k_, v_ in live_.items():
+                gs_ = torch.autograd.grad(v_, ps_, retain_graph=True, allow_unused=True)
+                acc_ = {}
+                for (g_, _), gr_ in zip(named_, gs_):
+                    if gr_ is not None:
+                        acc_[g_] = acc_.get(g_, 0.0) + float(gr_.float().pow(2).sum())
+                for g_, v2_ in acc_.items():
+                    if v2_ > 0:
+                        reach_[g_][k_] = v2_ ** 0.5
+            outc_ = [k_ for k_ in live_ if "outcome" in k_]
+            for g_ in groups_:
+                r_ = reach_[g_]
+                tag_ = ("DEAD (no loss)" if not r_ else "demo-only: DRIFTS once demos are spent" if outc_ and not any(
+                    k_ in r_ for k_ in outc_) and any("DEMO" in k_ or "demo" in k_ for k_ in r_) else "")
+                print(f"DIAG grad {g_:22s} {tag_:40s} " + " | ".join(f"{k_} {v_:.1e}" for k_, v_ in
+                                                                     sorted(r_.items(), key=lambda x: -x[1])), flush=True)
+            return
         opt.zero_grad(set_to_none=True)
         opt_ref.zero_grad(set_to_none=True)
         if loss.requires_grad:                            # (nothing askable this step: no update, decisions still run)
