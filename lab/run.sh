@@ -3,6 +3,8 @@
 # code: a frozen copy per run; checkpoint parts from the ckpt branch; logs /marimo/out/<name>.log, weights /marimo/ckpt/<name>.pt
 set -e
 NAME=$1; INIT=$2; shift 2
+if pgrep -f "out/$NAME.jsonl" > /dev/null; then echo "$NAME already running (not started again)"; exit 0; fi
+export OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
 B=/marimo; mkdir -p $B/out $B/ckpt $B/frozen
 cd $B/mm
 if [ "$INIT" != "-" ] && [ ! -f $B/ckpt/$INIT.pt ]; then
