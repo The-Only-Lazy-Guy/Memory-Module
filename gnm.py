@@ -693,6 +693,7 @@ class Inject:
 
     def __init__(self, model, block, readout):
         self.ro, self.add, self.slots, self.a0 = readout, None, None, None
+        self.block, self.off = block, 0                # off: absolute position of x's first token (cached decode)
         model.blocks[block].register_forward_pre_hook(self._hook)
 
     def set(self, add, slots, a0):
@@ -708,18 +709,21 @@ class Inject:
         B, T = x.shape[:2]
         ar = torch.arange(B, device=x.device)
         a0 = self.a0 if torch.is_tensor(self.a0) else torch.full((B,), int(self.a0), device=x.device)
+        a0 = a0 - self.off                             # (relative to x)
         rms_all = x.float().pow(2).mean(-1, keepdim=True).sqrt()
         a = self.add / self.add.pow(2).mean(-1, keepdim=True).sqrt().clamp(min=1e-6)
-        x[ar, a0] = x[ar, a0] + (torch.tanh(self.ro.gate) * rms_all[ar, a0] * a).to(x.dtype)
+        if self.off == 0:
+            x[ar, a0] = x[ar, a0] + (torch.tanh(self.ro.gate) * rms_all[ar, a0] * a).to(x.dtype)
+        else:                                          # a later token of a cached decode: a0 lies in the cache
+            okA = (a0 >= 0) & (a0 < T)
+            ra, pa = ar[okA], a0[okA]
+            x[ra, pa] = x[ra, pa] + (torch.tanh(self.ro.gate) * rms_all[ra, pa] * a[okA]).to(x.dtype)
         if self.slots is not None:
             sl = self.slots / self.slots.pow(2).mean(-1, keepdim=True).sqrt().clamp(min=1e-6)
-            for t in range(sl.shape[1]):
-                pos = a0 + t
-                ok = pos < T
-                if not bool(ok.any()):
-                    break
-                r, p = ar[ok], pos[ok]
-                x[r, p] = x[r, p] + (torch.tanh(self.ro.gs) * rms_all[r, p] * sl[ok, t]).to(x.dtype)
+            pos = a0[:, None] + torch.arange(sl.shape[1], device=x.device)[None]   # (B, S): slot t at a0 + t
+            ok = (pos >= 0) & (pos < T)
+            r, p = ar[:, None].expand_as(pos)[ok], pos[ok]                        # (one indexed add, no loop)
+            x[r, p] = x[r, p] + (torch.tanh(self.ro.gs) * rms_all[r, p] * sl[ok]).to(x.dtype)
         return (x,) + tuple(args[1:])
 
 
@@ -752,8 +756,12 @@ RULE_PARTS = {"pre": ["", "from now on, ", "note: ", "rule: ", "please remember:
                       "increase the {k} by that much", "count as increments to the {k}",
                       "get summed into the stored {k}"],
               "set": ["replace the old {k}", "overwrite the previous {k}", "are the new {k}; discard the old one",
-                      "become the current {k}", "supersede the stored {k}"]}
-RULE_HELD = {"add": "get summed into the stored {k}", "set": "supersede the stored {k}"}
+                      "become the current {k}", "supersede the stored {k}"],
+              "keep": ["are kept alongside the earlier {k}", "join the {k} values already known",
+                       "are extra {k} values; keep the old ones too", "do not remove the previous {k}",
+                       "coexist with the stored {k}"]}
+RULE_HELD = {"add": "get summed into the stored {k}", "set": "supersede the stored {k}",
+             "keep": "coexist with the stored {k}"}
 
 
 def rule_text(rng, kind, k, held=False):
@@ -779,6 +787,10 @@ class World:
         self.noise = [_style(k.split(), rng) for k in NOISE_KEYS]
         self.names, self.ents, self.hist = set(), {}, {}     # hist[(name, key)] = list of values, oldest first
         self.multi = {}                                       # (name, multi key) -> coexisting values (max 2)
+        self.co_new = set()                                   # (name, multi key, value): a SECOND value, not yet written
+        self.multi_max = 2                                    # coexisting values per multi fact (--multi-max)
+        self.keep_rules = False                               # --proc-keep: a multi key coexists only once its
+        #                                                       "keep" rule was announced (before: restated only)
         self.deps = {}                                        # (name, key) -> (source name, source key)
         self.policy = {}                                      # key -> "add" | "set" (announced once by a rule frame)
         self.side = {}                                        # id(frame) -> {(record, key): truth} (bookkeeping)
@@ -813,15 +825,16 @@ class World:
     def rule(self, rng, k=None, kind=None, held=False, p_change=0.3):
         """a rule frame: how later values of a key are to be written (shown ONCE); rules also change over time"""
         if k is None:
-            free = [x for x in self.num_keys if x not in self.policy]
-            if free and (rng.random() >= p_change or not self.policy):
+            free = [x for x in self.num_keys + (self.multi_keys if self.keep_rules else []) if x not in self.policy]
+            chg = sorted(x for x in self.policy if self.policy[x] != "keep")   # a multi key stays multi
+            if free and (rng.random() >= p_change or not chg):
                 k = rng.choice(sorted(free))
-            elif self.policy:
-                k = rng.choice(sorted(self.policy))
+            elif chg:
+                k = rng.choice(chg)
                 kind = kind or ("set" if self.policy[k] == "add" else "add")
             else:
                 return None
-        kind = kind or rng.choice(["add", "add", "set"])
+        kind = kind or ("keep" if k in self.multi_keys else rng.choice(["add", "add", "set"]))
         self.policy[k] = kind
         return {"rules": {k: rule_text(rng, kind, k, held)}}
 
@@ -893,11 +906,14 @@ class World:
                     continue
                 if k in self.multi_keys:                       # coexisting values: a second one adds, not replaces
                     vs = self.multi.setdefault((nm, k), [])
-                    if vs and (len(vs) >= 2 or rng.random() < 0.3):
+                    if vs and (len(vs) >= self.multi_max or rng.random() < 0.3
+                               or (self.keep_rules and self.policy.get(k) != "keep")):
                         rec[k] = rng.choice(vs)
                     else:
                         vs.append(rng.choice([x for x in range(1, 31) if x not in vs]))
                         rec[k] = vs[-1]
+                        if len(vs) >= 2:
+                            self.co_new.add((nm, k, vs[-1]))
                     continue
                 if k in nums and k not in e and rng.random() < p_dep:
                     w = self._depend(rng, nm, k)
@@ -945,12 +961,14 @@ class World:
 
     def coexist(self, rng):
         """eval: a second value for a multi key that already has one; returns (frame, (nm, k)) or None"""
-        c = sorted(f for f, vs in self.multi.items() if len(vs) == 1)
+        c = sorted(f for f, vs in self.multi.items() if 1 <= len(vs) < self.multi_max
+                   and (not self.keep_rules or self.policy.get(f[1]) == "keep"))
         if not c:
             return None
         nm, k = rng.choice(c)
         vs = self.multi[(nm, k)]
         vs.append(rng.choice([x for x in range(1, 31) if x not in vs]))
+        self.co_new.add((nm, k, vs[-1]))
         return {rng.choice(self.groups): [{"name": nm, k: vs[-1]}]}, (nm, k)
 
     def correction(self, rng, among=None):
@@ -1332,9 +1350,15 @@ class Loop(nn.Module):
         nn.init.zeros_(self.Wph.weight); nn.init.zeros_(self.Wph.bias)  # procedure node -> HOW (zero: no change at init)
         self.Woph = nn.Linear(d, 1 + N_ARITH)                          # --proc-op: that state -> the OPERATION logits
         nn.init.zeros_(self.Woph.weight); nn.init.zeros_(self.Woph.bias)  # directly (Wph fed the pooled vector: unmoved)
+        with torch.no_grad():                                          # it replaces Wop on rule reads: starts at copy
+            self.Woph.bias[0] = 3.0                                    # (.83), not a uniform mix of 5 operations
+        self.Wkh = nn.Linear(d, 1)                                     # --proc-keep: that state -> ATTACH (keep both)
+        nn.init.zeros_(self.Wkh.weight); nn.init.zeros_(self.Wkh.bias)  # vs replace: lowers the replace logit
         self.empty_v = nn.Parameter(torch.randn(dk) / dk ** 0.5)      # what a node holds when nothing was stored
         self.empty_s = nn.Parameter(torch.randn(dk) / dk ** 0.5)      # (readout / adapters are scale-invariant: a
         #                                                               value is mixed toward these, not scaled)
+        self.p_age = nn.Parameter(torch.zeros(()))   # --proc-op: the pointer's recency weight on log(1 + node age)
+        #   (a changed rule leaves two rule nodes of one key: all10_s1 `_changed` read the OLD one / default 8/8)
         self.b_proc = nn.Parameter(torch.tensor(0.5))                  # default-procedure logit offset (x tau): a
         #                         rule whose label matches the pair better than cos .5 is read first (measured: .6-.85)
         self.Wself = nn.Linear(dk, dk)          # "which question retrieves me": a label -> the read query that finds
@@ -1374,7 +1398,116 @@ class Loop(nn.Module):
 
 
 # ====================================================================== main
+def convert_probe(A):
+    """Route 1 (user 2026-10-29): can a pretrained LM's own weights BE graph nodes? Feasibility, no training:
+    (a) the MLP as a key-value node memory: each hidden neuron = a node (key = its input weights, value = its output
+        weights); a token's MLP = a READ of its top-k nodes. LM loss vs k tells how node-like (sparse) it is;
+    (b) attention heads as PROCEDURE nodes (QK = where to read, OV = what to move): how many heads matter (mean-
+        ablation loss increase per head)."""
+    from transformers import GPT2LMHeadModel, GPT2TokenizerFast
+    from datasets import load_dataset
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    lm = GPT2LMHeadModel.from_pretrained(A.hf).to(dev).eval()
+    tk = GPT2TokenizerFast.from_pretrained(A.hf)
+    txt = "\n".join(t for t in load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="validation")["text"] if t.strip())
+    ids = torch.tensor(tk(txt)["input_ids"][:512 * 40]).view(40, 512).to(dev)
+    blocks = lm.transformer.h
+    L, H = len(blocks), lm.config.n_head
+
+    def lm_loss():
+        with torch.no_grad():
+            return sum(float(lm(ids[i:i + 8], labels=ids[i:i + 8]).loss) for i in range(0, 40, 8)) / 5
+
+    base = lm_loss()
+    print(f"CONVERT PROBE ({A.hf}, {L} layers, {blocks[0].mlp.c_fc.weight.shape[1]} neurons / layer, {H} heads): "
+          f"base loss {base:.3f}", flush=True)
+    state = {"k": None, "by": "act", "cos": []}
+
+    def mlp_fwd(mlp):
+        def f(x):
+            a = mlp.act(mlp.c_fc(x))                          # every neuron's activation = its key match
+            if state["k"] is not None:
+                sc_ = a.abs() if state["by"] == "act" else (a * mlp.c_proj.weight.norm(dim=1)).abs()
+                th_ = sc_.topk(state["k"], -1).values[..., -1:]
+                full_ = mlp.c_proj(a)
+                a = a * (sc_ >= th_)                          # READ only the top-k nodes
+                out_ = mlp.c_proj(a)
+                state["cos"].append(float(F.cosine_similarity(out_ - mlp.c_proj.bias, full_ - mlp.c_proj.bias,
+                                                              dim=-1).mean()))
+                return out_
+            return mlp.c_proj(a)
+        return f
+    for b_ in blocks:
+        b_.mlp.forward = mlp_fwd(b_.mlp)
+    for by in ("act", "contrib"):
+        state["by"] = by
+        for k in (8, 32, 128, 512):
+            state["k"], state["cos"] = k, []
+            l_ = lm_loss()
+            print(f"  MLP as a top-{k} node read (by {'|activation|' if by == 'act' else '|activation x value norm|'}): "
+                  f"loss {l_:.3f} (+{l_ - base:.3f}) | output cosine to the full MLP {sum(state['cos']) / len(state['cos']):.3f}",
+                  flush=True)
+    state["by"] = "act"                                       # one layer at a time (no compounding)
+    for li_ in range(L):
+        row_ = []
+        for k in (128, 512, 1536):
+            orig_ = blocks[li_].mlp.forward
+            state["k"], state["cos"] = k, []
+            for lj_, b_ in enumerate(blocks):
+                if lj_ != li_:
+                    b_.mlp.forward = (lambda m_: (lambda x: m_.c_proj(m_.act(m_.c_fc(x)))))(b_.mlp)
+            l_ = lm_loss()
+            row_.append(f"k{k} +{l_ - base:.3f} cos {sum(state['cos']) / len(state['cos']):.2f}")
+            for b_ in blocks:
+                b_.mlp.forward = mlp_fwd(b_.mlp)
+        print(f"  layer {li_} alone as a top-k node read: {' | '.join(row_)}", flush=True)
+    state["k"] = None
+    dh = lm.config.n_embd // H                                # heads: mean-ablate one head's output (before c_proj)
+    means = {}
+    def grab(li):
+        def hk(m_, inp):
+            means[li] = inp[0].mean((0, 1)).detach()
+        return hk
+    hs = [blocks[li].attn.c_proj.register_forward_pre_hook(grab(li)) for li in range(L)]
+    lm_loss()
+    for h_ in hs:
+        h_.remove()
+    deltas = []
+    for li in range(L):
+        for hi in range(H):
+            def abl(m_, inp, li=li, hi=hi):
+                x_ = inp[0].clone()
+                x_[..., hi * dh:(hi + 1) * dh] = means[li][hi * dh:(hi + 1) * dh]
+                return (x_,)
+            h_ = blocks[li].attn.c_proj.register_forward_pre_hook(abl)
+            deltas.append((lm_loss() - base, li, hi))
+            h_.remove()
+    deltas.sort(reverse=True)
+    print(f"  heads (procedure nodes): mean-ablation loss increase > .05: {sum(d_ > .05 for d_, *_ in deltas)} | > .01: "
+          f"{sum(d_ > .01 for d_, *_ in deltas)} | of {L * H}; top 8 (layer.head +nats): "
+          f"{[(f'{li}.{hi}', round(d_, 3)) for d_, li, hi in deltas[:8]]}", flush=True)
+
+
+def unthrottle():
+    """Windows: a process started in the background gets power-throttled (EcoQoS: efficiency cores, low clock).
+    Measured here: GPU kernel launch 95 -> 44 us, pure Python 3.2x faster with it off. This process only."""
+    if os.name != "nt":
+        return
+    import ctypes
+    k = ctypes.windll.kernel32
+    k.GetCurrentProcess.restype = ctypes.c_void_p
+    k.SetProcessInformation.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_ulong]
+    k.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+
+    class PPT(ctypes.Structure):
+        _fields_ = [("Version", ctypes.c_ulong), ("ControlMask", ctypes.c_ulong), ("StateMask", ctypes.c_ulong)]
+    st = PPT(1, 0x1 | 0x4, 0)     # control EXECUTION_SPEED + IGNORE_TIMER_RESOLUTION, state 0 = not throttled
+    k.SetProcessInformation(k.GetCurrentProcess(), 4, ctypes.byref(st), ctypes.sizeof(st))   # ProcessPowerThrottling
+    k.SetPriorityClass(k.GetCurrentProcess(), 0x8000)   # ABOVE_NORMAL (the desktop stays responsive)
+
+
 def main():
+    unthrottle()
     P = argparse.ArgumentParser()
     P.add_argument("--hf", default="gpt2")
     P.add_argument("--ckpt", default="")
@@ -1418,6 +1551,34 @@ def main():
     P.add_argument("--proc-op", type=float, default=0.0, help="the OPERATION comes from Walker's state after reading the "
                    "procedure node (Woph -> op logits), and its weight demonstrates it: the gold rule node read, the "
                    "op its policy says (add -> add, set / default -> copy); only the op heads learn from it")
+    P.add_argument("--co-keep", type=float, default=0.0, help="a multi key's SECOND value (world: it coexists with the "
+                   "first) counts as kept only when written NEW / attached, not replaced into its own fact; the value "
+                   "weights that term (x w_pend)")
+    P.add_argument("--multi-max", type=int, default=2, help="coexisting values per multi fact (more = coexist frames "
+                   "keep coming: at 2 the 150 facts ran out after ~100 steps of --p-coexist .6)")
+    P.add_argument("--convert-probe", type=int, default=0, help="route 1: can the LM's own weights be graph nodes "
+                   "(MLP neurons = key-value nodes read top-k, attention heads = procedure nodes)? prints and exits")
+    P.add_argument("--demo-budget", type=int, default=-1, help="supervision (user 2026-10-29): only the first N "
+                   "question rows of each kind are DEMONSTRATED (an NL step-by-step trace -> teacher-forced loop "
+                   "actions, logged to <log>_demos.txt); later rows run free and learn from the answer (REINFORCE). "
+                   "-1 = every row demonstrated (old)")
+    P.add_argument("--frame-demo-budget", type=int, default=-1, help="phase 2: the dense FRAME labels (procedure "
+                   "pointer / op / keep demos, pending-content and co-keep terms) act only on the first N frame rows of "
+                   "each kind (fact / delta / multi / rule); later rows learn from the outcome. -1 = always (old)")
+    P.add_argument("--rl-frames", type=float, default=0.0, help="phase 2: REINFORCE on each frame row's executed write "
+                   "decision (address, gate, mode, op, procedure read); reward = exactness of this step's free question "
+                   "rows about the fact it carried")
+    P.add_argument("--demo-pick", default="confused", choices=["confused", "first"], help="which rows get the budget: "
+                   "T2 = the WRONG rows the model was most confused on (active imitation), or the first rows of a kind")
+    P.add_argument("--demo-per-step", type=int, default=2, help="T2: at most this many demonstrations per step")
+    P.add_argument("--rl-w", type=float, default=1.0, help="weight of the REINFORCE term on free question rows")
+    P.add_argument("--rl-temp", type=float, default=1.0, help="sampling temperature of free rows' actions (training)")
+    P.add_argument("--proc-keep", type=int, default=0, help="multi keys get a KEEP rule (announced like add / set; "
+                   "a key coexists only after it); Walker's reading of the procedure node also decides attach vs "
+                   "replace (Wkh lowers the replace logit), demonstrated: keep rule -> attach, else not")
+    P.add_argument("--proc-top", type=int, default=0, help="no default procedure slot: the pointer always reads its "
+                   "TOP node and Walker's reading of (the incoming fact + that node) decides the op (not its key's "
+                   "rule -> copy); the fixed default score (25.5) beat its own rule whenever the match fell under it")
     P.add_argument("--confusion", type=float, default=0.0, help="weight of the CONFUSION signal (user 2026-10-26): "
                    "the model's own uncertainty at any action (address entropy, saying entropy), recomputed with the "
                    "deciding head frozen so it punishes only the path before (earlier writes / reads / registers)")
@@ -1475,6 +1636,8 @@ def main():
                    "label deltas scrambled the key space (ablation: identity lookup .58 -> 1.00 without them)")
     P.add_argument("--w-rt", type=float, default=0.5, help="round-trip (encode -> say) loss in every step")
     P.add_argument("--p-rule", type=float, default=0.2, help="chance per step of a rule frame (new or changed rule)")
+    P.add_argument("--p-coexist", type=float, default=0.0, help="chance per step of a frame giving a multi key its "
+                   "SECOND value (coexists with the first; with --co-keep the write is taught to keep both)")
     P.add_argument("--init-full", default="", help="start from a GNM checkpoint: every tensor whose name and shape match")
     P.add_argument("--swap-from", default="", help="new LM: load only the GNM core from this checkpoint (the interface "
                    "= every tensor touching the LM width is re-fit)")
@@ -1507,10 +1670,19 @@ def main():
     P.add_argument("--viz-min", type=float, default=0.3, help="weakest dependence / relation edge drawn")
     P.add_argument("--first-warm", type=int, default=0, help="control for --first: memory first holds N other frames")
     P.add_argument("--skip-eval0", action="store_true")
+    P.add_argument("--tf32", type=int, default=1, help="TF32 matmuls (10-bit mantissa inputs, fp32 accumulate)")
+    P.add_argument("--fast-decode", type=int, default=1, help="greedy decode with a key/value cache (GPT-2 stand-in)")
+    P.add_argument("--trace", type=int, default=0, help="print loss / exactness / wall time every step "
+                   "(2 = also no eval / save: speed checks)")
     P.add_argument("--warm-inv", type=float, default=1.0, help="warm-up: weight of the label-identity (invariance) loss")
     P.add_argument("--warm-tools", type=int, default=0, help="warm-up steps of encode -> decode round trips first")
     P.add_argument("--vram-frac", type=float, default=0.9, help="hard VRAM cap: OOM instead of spilling into RAM")
     A = P.parse_args()
+    if A.tf32:                                            # fp32 matmuls on tensor cores (4050: 2.1 -> 9.2 TFLOPS)
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+    if A.convert_probe:
+        return convert_probe(A)
     ckpt_home = "E:/WEIGHTS/gnm_runs"               # user (2026-10-21): checkpoints live on E:, never on C: (full)
     if os.path.isdir("E:/WEIGHTS"):
         os.makedirs(ckpt_home, exist_ok=True)
@@ -1552,7 +1724,7 @@ def main():
     tools.norm_io = bool(A.tool_nodes)
     params = list({id(p): p for p in list(graph.parameters()) + list(ro.parameters()) + list(loop.parameters())
                    + list(tools.parameters())}.values())
-    knob_names = ("age", "keep", "w_prop", "w_rel", "tau_o", "tau", "beta", "gate", "gs", "w_id")   # write heads: normal lr
+    knob_names = ("age", "keep", "w_prop", "w_rel", "tau_o", "tau", "beta", "gate", "gs", "w_id", "p_age")   # write heads: normal lr
     knobs = [p for n, p in list(graph.named_parameters()) + list(ro.named_parameters()) + list(loop.named_parameters())
              + [("tau", mem.tau)] if n.split(".")[-1] in knob_names]
     knobs += list(graph.Wf_feat.parameters())    # the forget head's 8 weights: at the base lr they had not moved
@@ -1741,6 +1913,8 @@ def main():
     model.blocks[0].register_forward_pre_hook(fb_hook)
 
     world = World(rng, max_ents=A.max_ents)
+    world.multi_max = A.multi_max
+    world.keep_rules = bool(A.proc_keep)
     store = Store()
     pend = []                                               # integrate decisions waiting for commit (training)
     wstats = {}                                             # integrate diagnostics
@@ -1758,8 +1932,7 @@ def main():
         return x[..., :W, :] if n_ >= W else F.pad(x, (0, 0, 0, W - n_))
 
     def stackS(xs):
-        W = max(x.shape[0] for x in xs)
-        return torch.stack([padS(x, W) for x in xs])
+        return torch.nn.utils.rnn.pad_sequence(list(xs), batch_first=True)   # zero-padded to the longest
 
     alone = {"row": {}, "X": None, "E": None, "M": None}   # value text -> row of a bank of Walker states
     ref_t = {"s": 0.0, "calls": 0, "rows": 0, "new": 0}
@@ -2007,6 +2180,44 @@ def main():
 
     NUM = re.compile(r"-?\d+")
 
+    fast_lm = bool(A.fast_decode) and isinstance(model, SmallWalker)
+
+    def lm_greedy(add, sl, n_new):
+        """greedy tokens after " Answer:" with the read injected, GPT-2 stand-in only: one prefix pass, then one
+        token per step through a key/value cache; the vocabulary head on the last position only (the plain loop
+        re-ran the whole sequence n_new times with the head on every position)"""
+        tr = model.hf.transformer
+        B_ = add.shape[0]
+        ids = torch.tensor([list(ans_ids)] * B_, device=dev)
+        kv = [None] * len(model.blocks)
+        out, off = [], 0
+        inject.set(add, sl, a0)
+        try:
+            for _ in range(n_new):
+                T_ = ids.shape[1]
+                x = tr.wte(ids) + tr.wpe(torch.arange(off, off + T_, device=dev)[None])
+                for li, blk in enumerate(model.blocks):
+                    if li == inject.block:
+                        inject.off = off
+                        x = inject._hook(blk, (x,))[0]
+                    at = blk.attn
+                    q, k, v = at.c_attn(blk.ln_1(x)).split(at.split_size, dim=2)
+                    q, k, v = (z_.view(B_, T_, at.num_heads, at.head_dim).transpose(1, 2) for z_ in (q, k, v))
+                    if kv[li] is not None:
+                        k, v = torch.cat([kv[li][0], k], 2), torch.cat([kv[li][1], v], 2)
+                    kv[li] = (k, v)
+                    o = F.scaled_dot_product_attention(q, k, v, is_causal=off == 0, scale=at.scaling)
+                    x = x + at.c_proj(o.transpose(1, 2).reshape(B_, T_, -1))
+                    x = x + blk.mlp(blk.ln_2(x))
+                nxt = model.hf.lm_head(tr.ln_f(x[:, -1])).argmax(-1)
+                out.append(nxt)
+                off += T_
+                ids = nxt[:, None]
+        finally:
+            inject.off = 0
+            inject.clear()
+        return torch.stack(out, 1).tolist()
+
     @torch.no_grad()
     def decode(vs, ss, text=False):
         """the model's own head reads latent values out loud (greedy): value vector + slots -> number (or None),
@@ -2016,13 +2227,21 @@ def main():
             v_, s_ = vs[i0:i0 + 256], ss[i0:i0 + 256]
             seq = [list(ans_ids) for _ in range(v_.shape[0])]
             add, sl = mem.Wo(v_), ro.Us(s_)
-            for _ in range(A.max_ans):
-                inp = torch.tensor(seq, device=dev)
-                inject.set(add, padS(sl, inp.shape[1] - a0), a0)
-                lo, _ = model(inp, r_active=False)
-                inject.clear()
-                for b, n_ in enumerate(lo[:, -1].argmax(-1).tolist()):
-                    seq[b].append(n_)
+            if fast_lm and not (A.trace and not decode_chk):
+                seq = [list(ans_ids) + g_ for g_ in lm_greedy(add, sl, A.max_ans)]
+            else:
+                for _ in range(A.max_ans):
+                    inp = torch.tensor(seq, device=dev)
+                    inject.set(add, padS(sl, inp.shape[1] - a0), a0)
+                    lo, _ = model(inp, r_active=False)
+                    inject.clear()
+                    for b, n_ in enumerate(lo[:, -1].argmax(-1).tolist()):
+                        seq[b].append(n_)
+                if fast_lm:                          # --trace: the cached path once against the plain loop
+                    new_ = [list(ans_ids) + g_ for g_ in lm_greedy(add, sl, A.max_ans)]
+                    nd_ = sum(a_ != b_ for a_, b_ in zip(seq, new_))
+                    decode_chk.append(nd_)
+                    print(f"  decode check: cached vs plain loop differ on {nd_} of {len(seq)} rows", flush=True)
             for sq in seq:
                 gen = sq[len(ans_ids):]
                 if EOS_ID in gen:                    # the answer ends here (trained with an end token)
@@ -2040,6 +2259,8 @@ def main():
                 m_ = NUM.search(tx)
                 out.append(int(m_.group()) if m_ else None)
         return out
+
+    decode_chk = []
 
     def tail(reg):
         """the slot just before a statement's final period (where it puts its value: "... is now 18.") — the model
@@ -2276,7 +2497,8 @@ def main():
                 return None                                  # (soft phase: the same node is still both)
             return f"What was {leaf(nm, k)} before?", [("read", node)], [pv], pv
         if kind == "multi":                                  # coexisting values: both are read and combined
-            cands = [f for f, vs in world.multi.items() if len(vs) == 2 and all(f + (v,) in H for v in vs)
+            cands = [f for f, vs in world.multi.items() if len(vs) == 2 and all(f + (v,) in H for v in vs)   # ("both":
+                     #                                            facts with 3+ values (--multi-max) are not asked)
                      and (pool is None or f in pool)]
             if not cands:
                 return None
@@ -2545,7 +2767,7 @@ def main():
         return (reg[0], v_, S_, S_.shape[0], torch.cat([loop.Wfv(v_)[None], loop.Wfs(S_) + loop.spos[:S_.shape[0]]], 0),
                 None)
 
-    def run(rows, teacher, kind="question", soft=False, depth=0):
+    def run(rows, teacher, kind="question", soft=False, depth=0, rl=False):
         """Walker's loop for a batch of rows of one kind: 'frame' (a candidate pair to integrate; free-running),
         'note' (a text note: read it, read the target, compute, write), 'question'. Every pass: ADDRESS one of
         [memory nodes | NEW | tools | HALT] -> READ the node (value before this pass's write) / run the tool ->
@@ -2620,6 +2842,17 @@ def main():
             tlab = tools.labels
         lab = F.normalize(torch.cat([loop.new_lab[None], tlab, loop.halt[None], loop.sub_lab[None]]), dim=-1)
         stat_rows = []
+        dense_b = [True] * B                         # phase 2: this frame row still gets the dense labels?
+        if kind == "frame" and soft and torch.is_grad_enabled() and A.frame_demo_budget >= 0:
+            for b in range(B):
+                m_ = store.prov.get(store.nodes[rows[b]["qnid"]]["vsrc"]) or ("?",)
+                kd_ = ("multi" if m_[0] == "fact" and len(m_) > 2 and m_[2] in world.multi_keys else m_[0])
+                if kd_ in ("fact", "delta", "multi", "rule"):
+                    left_ = run.fdemo_left.setdefault(kd_, A.frame_demo_budget)
+                    dense_b[b] = left_ > 0
+                    run.fdemo_left[kd_] = left_ - 1
+        rl_on = rl and kind == "question" and not teacher and torch.is_grad_enabled()   # free row: OUTCOME credit
+        rl_lp = [[] for _ in range(B)]               # log-probs of the actions it took (sampled)
         for t in range(T):
             if kind == "frame" and lookk and t >= w0 + A.write_passes:
                 for b in range(B):                   # only a row that proposed a write into a node gets the look pass
@@ -2794,6 +3027,23 @@ def main():
                             n_act += int(v2.sum()); ok_act += int(((arg_lg[i].argmax(-1) == tg) & v2).sum())
                 choice = gold
                 args = [[r_[i] if len(r_) > i else 0 for r_ in gargs] for i in range(2)]
+            elif rl_on:                              # free row (training): SAMPLE its actions; credit = the answer
+                lsm_ = F.log_softmax(logits.float() / A.rl_temp, -1)
+                ch_ = torch.distributions.Categorical(logits=lsm_).sample()
+                lp_ = F.log_softmax(logits.float(), -1).gather(1, ch_[:, None]).squeeze(1)
+                choice = ch_.tolist()
+                args = [[0] * B, [0] * B]
+                for i in range(2):
+                    if arg_lg is not None:
+                        ca_ = torch.distributions.Categorical(logits=arg_lg[i].float() / A.rl_temp).sample()
+                        la_ = F.log_softmax(arg_lg[i].float(), -1).gather(1, ca_[:, None]).squeeze(1)
+                        args[i] = ca_.tolist()
+                        for b in range(B):
+                            if not done[b] and N < choice[b] < I_HALT:   # operands count only for a tool
+                                rl_lp[b].append(la_[b])
+                for b in range(B):
+                    if not done[b]:
+                        rl_lp[b].append(lp_[b])
             else:
                 choice = logits.argmax(-1).tolist()
                 args = [arg_lg[i].argmax(-1).tolist() if arg_lg is not None else [0] * B for i in range(2)]
@@ -2826,14 +3076,21 @@ def main():
                             ck[b] = (F.normalize(torch.stack(rk_) - kmean, dim=-1) @ K.t()).max(0).values
                 gw, mw = loop.gate_w, loop.mode_w
                 gh, uh = loop.Wg(h), loop.Wum(h)
+                keep_lg = None
                 sb = lambda x: 4 * torch.tanh(x / 4)  # bounded gate logits; raw logits drifting far past +-4 still
                 gl_node = gh + gw[0] * cv + gw[1] * ck + gw[2]   # flattened the gradient (tanh saturates too: rules sat
                 gl_new = gh.squeeze(-1) + gw[3]                  # at the .018 floor with state noise) -> a penalty keeps
                 up, kap, pj = torch.zeros(B, 1, device=dev), None, None
                 if kind == "frame":                  # HOW to write: a procedure node read from memory, or the default
-                    qp = loop.Wp(h) + loop.Wpr(xk)
-                    sp = (tau * F.normalize(qp - kmean, dim=-1) @ K.t() + logg[None]).masked_fill(~visible, -1e4)
-                    sp = torch.cat([sp, (tau * loop.b_proc).expand(B, 1)], -1)    # [nodes | default]
+                    dt_ = (lambda x: x.detach()) if A.proc_op else (lambda x: x)   # --proc-op: the pointer's inputs
+                    qp = loop.Wp(dt_(h)) + loop.Wpr(dt_(xk))                       # detached (its outcome credit
+                    sp = (dt_(tau) * F.normalize(qp - dt_(kmean), dim=-1) @ dt_(K).t()   # trains only Wp / Wpr /
+                          + dt_(logg)[None]).masked_fill(~visible, -1e4)                 # b_proc, never the keys)
+                    prec_ = (loop.p_age * torch.log1p((float(store.time) - M["time"]).clamp(min=0))[None]
+                            if A.proc_op else 0.0)                        # learned recency (newest rule wins)
+                    sp = sp + prec_
+                    sp = torch.cat([sp, (dt_(tau) * loop.b_proc).expand(B, 1)
+                                    - (1e4 if A.proc_top else 0.0)], -1)                  # [nodes | default]
                     pi = torch.softmax(sp, -1)
                     gp_ = None
                     if (A.proc_demo or A.proc_op) and soft and torch.is_grad_enabled():   # the procedure READ is demonstrated (as
@@ -2846,8 +3103,9 @@ def main():
                         gp_, gop_ = [], []
                         for b in range(B):
                             m_ = store.prov.get(store.nodes[rows[b]["qnid"]]["vsrc"]) or ("?",)
-                            if m_[0] in ("fact", "delta") and len(m_) > 2 and m_[2] in world.num_keys:
-                                gp_.append(rule_of.get(m_[2], N))
+                            if m_[0] in ("fact", "delta") and len(m_) > 2 and (m_[2] in world.num_keys
+                                                                              or (A.proc_keep and m_[2] in world.multi_keys)):
+                                gp_.append(rule_of.get(m_[2], N) if dense_b[b] else -100)   # (budget spent: no demo)
                             else:
                                 gp_.append(-100)
                             gop_.append(1 if m_[0] == "delta" else 0)   # the world's own HOW: an increment adds
@@ -2856,16 +3114,22 @@ def main():
                         qpd_ = loop.Wp(h.detach()) + loop.Wpr(xk.detach())   # (h / xk detached too: through xk it bent
                         #                                                       the NEW fact's key -> stored .32)
                         spd_ = (tau.detach() * F.normalize(qpd_ - kmean, dim=-1) @ K.detach().t()   # the demo trains the
-                                + logg.detach()[None]).masked_fill(~visible, -1e4)          # POINTER only: its
+                                + logg.detach()[None] + prec_).masked_fill(~visible, -1e4)   # POINTER only: its
                         spd_ = torch.cat([spd_, (tau.detach() * loop.b_proc).expand(B, 1)], -1)   # gradient into the
                         for grp_ in (gp_ == N, (gp_ >= 0) & (gp_ < N)):   # node keys collapsed storage (stored .88 ->
-                            if bool(grp_.any()):                          # .48); balanced: rule cases are rare
-                                run.proc_terms.append(F.cross_entropy(spd_[grp_], gp_[grp_]))
+                            if A.proc_top and bool((grp_ & (gp_ == N)).any()):   # .48); balanced: rule cases are rare
+                                continue                                  # (--proc-top: no default slot to point at)
+                            if bool(grp_.any()):
+                                run.proc_terms.append(F.cross_entropy(spd_[grp_][:, :N] if A.proc_top else spd_[grp_],
+                                                                      gp_[grp_]))
                     cand_p = torch.cat([V, loop.proc0[None]])
                     soft_p = pi @ cand_p
                     pj = sp.argmax(-1)
                     p_vec = cand_p[pj] + soft_p - soft_p.detach()                  # hard choice, soft gradient
-                    op_lg = loop.Wop(p_vec)
+                    op_lg = loop.Wop(cand_p[pj] if A.proc_op else p_vec)   # --proc-op: no soft-V gradient into the
+                    #   pointer: it priced reading a rule as Wop(rule's V) (copy +60..90, add -170..-180), not as what
+                    #   the reading decides -> increments pushed the pointer OFF their rule (all7_s1 @300: its rule
+                    #   8/8 in all4 @1500 -> default 8/8); the credit is the chosen read's weight instead (below)
                     if A.proc_read or A.proc_op:     # the procedure node is READ (a register; Walker's own state after
                         rd_ = [b for b in range(B) if int(pj[b]) < N and regs[b]]   # reading its tokens decides HOW):
                         if rd_:                      # pooled values carry no rule content (add vs set cos .9995)
@@ -2878,33 +3142,64 @@ def main():
                                 p_vec = p_vec.index_add(0, ix_, loop.Wph(hp_) * (sel_ / sel_.detach())[:, None])
                                 op_lg = loop.Wop(p_vec)
                             if A.proc_op:            # the reading decides the operation itself (state detached: only
-                                op_lg = op_lg.index_add(0, ix_, loop.Woph(hp_.detach()))   # the op head; NOT scaled by
-                                #   the pointer's weight: that path carried the op outcome into the pointer -> Wp(h) /
-                                #   Wpr(xk) -> the new fact's key (all5 @500: rules unread 8/8, old facts .97 -> .85-.90)
+                                op_lg = op_lg.index_copy(0, ix_, loop.Woph(F.layer_norm(hp_.detach(), hp_.shape[-1:])))
+                            if A.proc_keep:          # the reading also decides keep-both (attach) vs replace
+                                keep_lg = torch.zeros(B, device=dev).index_copy(
+                                    0, ix_, loop.Wkh(F.layer_norm(hp_.detach(), hp_.shape[-1:])).squeeze(-1))
+                                #   the op head; NOT scaled by the pointer's weight: that path carried the op outcome
+                                #   into the pointer -> Wp(h) / Wpr(xk) -> the new fact's key (all5 @500: rules unread
+                                #   8/8, old facts .97 -> .85-.90). REPLACES Wop(rule's V) (not added): V norm ~1e3 gave
+                                #   copy +60..90 / add -170..-180, so Woph had to beat a 250 gap -> the op flipped
+                                #   (all6 CE spikes 16-70); the state is layer-normed (raw norm ~190, max 107)
+                    if A.proc_op:                    # the pointer's outcome credit: the op the CHOSEN read decided,
+                        sc_ = pi[torch.arange(B, device=dev), pj]   # scaled by its weight (value 1): an op that
+                        op_lg = op_lg * (sc_ / sc_.detach())[:, None]   # made the write right raises that read;
+                        #   safe now: the pointer's inputs are detached (all5 leaked through them into the new key)
                     if A.proc_op and gp_ is not None:    # demonstrated HOW: the gold procedure read (teacher-forced),
                         dm_ = [b for b in range(B) if int(gp_[b]) >= 0     # the op its policy says; trains Wop / Woph
-                               and not (int(gp_[b]) == N and gop_[b])]       # (an increment whose rule is not visible:
-                        #                                                      the default cannot know; not demonstrated)
+                               and not (int(gp_[b]) == N and gop_[b])        # (an increment whose rule is not visible:
+                               and 0 <= choice[b] < N]                       # the default cannot know; not demonstrated)
+                        #   only where a stored value exists (the gold target is a node): written NEW, the op is moot,
+                        #   and an add rule + a first statement (copy) vs + an increment (add) read the same -> the
+                        #   labels contradicted (all6 debug: under add rules 7 copy / 3 add, 6 of the copies NEW)
                         if dm_:
                             go_ = torch.tensor([gop_[b] for b in dm_], device=dev)
                             pv_ = torch.stack([V[int(gp_[b])].detach() if int(gp_[b]) < N else loop.proc0.detach()
                                                for b in dm_])
                             lgd_ = loop.Wop(pv_)
-                            rr_ = [i_ for i_, b in enumerate(dm_) if int(gp_[b]) < N and regs[b]]
-                            if rr_:
+                            rr_ = [i_ for i_, b in enumerate(dm_) if (int(gp_[b]) < N or A.proc_top) and regs[b]]
+                            if rr_:                  # (--proc-top: a row with no rule reads its top node -> copy)
                                 with torch.no_grad():
-                                    grg_ = regs_from(M, [int(gp_[dm_[i_]]) for i_ in rr_])
+                                    grg_ = regs_from(M, [int(gp_[dm_[i_]]) if int(gp_[dm_[i_]]) < N
+                                                         else int(pj[dm_[i_]]) for i_ in rr_])
                                     hg_ = ctrl_states([regs[dm_[i_]] + [rg_] for i_, rg_ in zip(rr_, grg_)])
-                                lgd_ = lgd_.index_add(0, torch.tensor(rr_, device=dev), loop.Woph(hg_))
-                            for grp_ in (go_ == 0, go_ == 1):    # balanced: add rows are rare
+                                lgd_ = lgd_.index_copy(0, torch.tensor(rr_, device=dev),
+                                                       loop.Woph(F.layer_norm(hg_, hg_.shape[-1:])))
+                                if A.proc_keep:      # demonstrated: a KEEP rule read -> attach, anything else -> not
+                                    kd_ = loop.Wkh(F.layer_norm(hg_, hg_.shape[-1:])).squeeze(-1)
+                                    gk_ = torch.tensor([float(int(gp_[dm_[i_]]) < N and (store.prov.get(store.nodes[
+                                        M["rows"][int(gp_[dm_[i_]])]]["vsrc"]) or ("?",) * 3)[2] == "keep")
+                                        for i_ in rr_], device=dev)
+                                    for grp_ in (gk_ > 0.5, gk_ < 0.5):
+                                        if bool(grp_.any()):
+                                            run.op_terms.append(F.binary_cross_entropy_with_logits(kd_[grp_], gk_[grp_]))
+                                    run.op_acc.extend(zip((4 - gk_.long()).tolist(),
+                                                          ((kd_ > 0) == (gk_ > 0.5)).float().tolist()))
+                            rl_ = torch.tensor([int(gp_[b]) < N for b in dm_], device=dev)
+                            for grp_ in (~rl_ & (go_ == 0), rl_ & (go_ == 0), rl_ & (go_ == 1)):   # balanced: default
+                                #   copy / a SET rule read -> copy / an ADD rule read -> add (2 groups let default rows
+                                #   fill "copy": Woph learned "any rule read -> add"; all8_s1 set rule read -> add 2/2)
                                 if bool(grp_.any()):
                                     run.op_terms.append(F.cross_entropy(lgd_[grp_], go_[grp_]))
-                            run.op_acc.extend(zip(go_.tolist(), (lgd_.argmax(-1) == go_).float().tolist()))
+                            run.op_acc.extend(zip((go_ + 2 * (rl_ & (go_ == 0)).long()).tolist(),   # 0 default copy,
+                                                  (lgd_.argmax(-1) == go_).float().tolist()))   # 1 add, 2 rule copy
                     pop = torch.softmax(op_lg, -1)                               # HOW: [copy | add sub max min]
                     oph = pop.argmax(-1).tolist()
                     kap = pop[:, 0]
                     up = loop.Wup(p_vec)
                 ul_node = uh + up + mw[0] * cv + mw[1] * ck + mw[2]
+                if keep_lg is not None:
+                    ul_node = ul_node - keep_lg[:, None]
                 if lk_rows:                          # LOOK = a correction of the proposal's own decision: the look
                     dl = loop.Wlook(h)               # state adds a delta (zero at init) to the proposal's gate / mode /
                     lk_m = torch.tensor([b in lk_rows for b in range(B)], device=dev)   # NEW-gate logits; the
@@ -2937,12 +3232,19 @@ def main():
                                 tj[b].append(choice[b]); wr_m[b, choice[b]] = -1.0
                             if soft:
                                 tj[b].append(int(wr_m[b].argmax()))
-                        sx = decode(xv[act_], stackS([srcreg[b][2] for b in act_]))
-                        snum = dict(zip(act_, sx))
-                        pairs = [(b, j) for b in act_ if snum[b] is not None for j in tj[b]]
+                        pairs = [(b, j) for b in act_ for j in tj[b]]   # sources + targets: one decode call
+                        jj = torch.tensor([j for _, j in pairs], device=dev, dtype=torch.long)
+                        S_src = stackS([srcreg[b][2] for b in act_])
+                        S_tgt = M["S"][jj]
+                        W_ = max(S_src.shape[1], S_tgt.shape[1])   # (decode uses slots < max_ans: wider padding
+                        if min(S_src.shape[1], S_tgt.shape[1]) >= A.max_ans or S_src.shape[1] == S_tgt.shape[1]:
+                            dx_ = decode(torch.cat([xv[act_], V[jj]]), torch.cat([padS(S_src, W_), padS(S_tgt, W_)]))
+                        else:                                       #  would inject Us(0) = its bias there)
+                            dx_ = decode(xv[act_], S_src) + (decode(V[jj], S_tgt) if len(jj) else [])
+                        snum = dict(zip(act_, dx_[:len(act_)]))
+                        pairs = [(b, j) for (b, j), x_ in zip(pairs, dx_[len(act_):]) if snum[b] is not None]
+                        tnum = dict(zip([(b, j) for b in act_ for j in tj[b]], dx_[len(act_):]))
                         if pairs:
-                            jj = torch.tensor([j for _, j in pairs], device=dev)
-                            tnum = dict(zip(pairs, decode(V[jj], M["S"][jj])))
                             todo = []                        # (b, j, op, value)
                             for b, j in pairs:
                                 if tnum[(b, j)] is None:
@@ -2974,11 +3276,39 @@ def main():
                     if b in comp_now:
                         store.live[comp_now[b]] = dd_
                     same_id = (F.normalize(xk[b] - kmean[0], dim=-1) @ K.t() > A.cluster_cos).float()   # its own fact
+                    if t == w0 and kind == "frame" and A.rl_frames and soft and torch.is_grad_enabled():
+                        mq_ = store.prov.get(store.nodes[rows[b]["qnid"]]["vsrc"]) or ("?",)
+                        if mq_[0] in ("fact", "delta") and len(mq_) > 2:   # its executed decision's log-prob
+                            if c_ < N:
+                                g_, u_ = g_node[b, c_], u_node[b, c_]
+                                lp_ = (torch.log(P[b, c_].clamp(min=1e-6))
+                                       + torch.log((g_ if float(g_) >= 0.5 else 1 - g_).clamp(min=1e-6))
+                                       + torch.log((u_ if float(u_) >= 0.5 else 1 - u_).clamp(min=1e-6)))
+                            else:
+                                g_ = g_new[b]
+                                lp_ = (torch.log(P[b, I_NEW].clamp(min=1e-6))
+                                       + torch.log((g_ if float(g_) >= 0.5 else 1 - g_).clamp(min=1e-6)))
+                            if kap is not None:
+                                lp_ = lp_ + torch.log(pop[b, oph[b]].clamp(min=1e-6))
+                            if pj is not None:
+                                lp_ = lp_ + torch.log(pi[b, int(pj[b])].clamp(min=1e-6))
+                            kd_ = "multi" if mq_[0] == "fact" and mq_[2] in world.multi_keys else mq_[0]
+                            run.frame_lp.append(((mq_[1], mq_[2]), kd_, lp_))
                     if t == w0 and kind == "frame":
                         stat_rows.append((b, float(w_keep[b] + w_rep[b].sum()), float(P[b, I_NEW]),
                                           float(w_rep[b].sum()), int(pj[b]) < N, float(kap[b]) if kap is not None else 1.0))
                         run.how_log.append((rows[b]["qnid"], M["rows"][int(pj[b])] if int(pj[b]) < N else None,
                                             oph[b] if A.object_tools else None))   # HOW: which procedure, which op
+                        if getattr(run, "how_detail", None) is not None:          # the pointer's scores: its key's
+                            mq_ = store.prov.get(store.nodes[rows[b]["qnid"]]["vsrc"]) or ("?",)   # rules (age), default
+                            if mq_[0] == "delta" and len(mq_) > 2:
+                                kr_ = [(float(sp[b, j_]), int(store.time - store.nodes[i_]["time"]),
+                                        (store.prov.get(store.nodes[i_]["vsrc"]) or ("?",) * 3)[2])
+                                       for j_, i_ in enumerate(M["rows"]) if bool(visible[b, j_])
+                                       and (store.prov.get(store.nodes[i_]["vsrc"]) or ("?",))[0] == "rule"
+                                       and (store.prov.get(store.nodes[i_]["vsrc"]) or ("?", "?"))[1] == mq_[2]]
+                                run.how_detail.append((round(float(sp[b, N]), 1), round(float(sp[b, :N].max()), 1),
+                                                       sorted(((round(s_, 1), a_, p_) for s_, a_, p_ in kr_), key=lambda x: x[1])))
                     if c_ > I_NEW:                   # a tool / HALT pass writes nothing: it must not replace the soft
                         continue                     # write of the pass that did (notes' soft write came from their
                     #                                  HALT pass: write / look heads got no gradient at their own state)
@@ -3039,6 +3369,13 @@ def main():
                 elif c_ == I_SUB:
                     if teacher:
                         span_ = rows[b]["prog"][t][1]
+                    elif rl_on and sp_lg is not None:   # free row: the span is sampled too (its own credit)
+                        cs_ = [torch.distributions.Categorical(logits=sp_lg[i_][b].float() / A.rl_temp).sample()
+                               for i_ in (0, 1)]
+                        for i_ in (0, 1):
+                            rl_lp[b].append(F.log_softmax(sp_lg[i_][b].float(), -1)[cs_[i_]])
+                        s_ = int(cs_[0])
+                        span_ = (s_, max(s_, int(cs_[1])) + 1)
                     else:
                         s_ = int(sp_lg[0][b].argmax()) if sp_lg is not None else 0
                         e_ = max(s_, int(sp_lg[1][b].argmax()) if sp_lg is not None else 0) + 1
@@ -3229,8 +3566,15 @@ def main():
                     store.mix.append((M["rows"][j], nid, wa - wa.detach()))
                 cost = cost + A.cost_new * (wk if rep_ is None else wk.detach())
                 m0 = store.prov.get(store.nodes[src0]["vsrc"], ("?",))
-                if kind == "frame" and store.nodes[src0]["kind"] == "item" and m0[0] in ("fact", "delta", "rule"):
-                    cost = cost - A.w_pend * torch.log((wk + wr_same).clamp(1e-4, 1.0))   # pending content is what is
+                co_ = A.co_keep and m0[0] == "fact" and len(m0) > 3 and (m0[1], m0[2], m0[3]) in world.co_new
+                if co_:                                       # --co-keep: a multi key's SECOND value coexists with the
+                    world.co_new.discard((m0[1], m0[2], m0[3]))   # first: kept = NEW / attach only (a replace into its
+                    w_ = wstats.setdefault("co-keep (n, kept, replace own)", [0, 0.0, 0.0, 0.0])
+                    w_[0] += 1; w_[1] += float(wk); w_[2] += float(wr_same)
+                    #   own fact counted as kept -> the first value became a version 7/8, both held .125 in all13)
+                if kind == "frame" and store.nodes[src0]["kind"] == "item" and m0[0] in ("fact", "delta", "rule") \
+                        and dense_b[b]:
+                    cost = cost - A.w_pend * (A.co_keep if co_ else 1.0) * torch.log((wk + (0.0 if co_ else wr_same)).clamp(1e-4, 1.0))   # pending content is what is
                     #   to be remembered (user's two streams): kept as its own node or replaced INTO ITS OWN FACT (a
                     #   replace into another fact is not "kept": counting it taught P(NEW)=0 + corrupting replaces)
             if soft:
@@ -3338,9 +3682,53 @@ def main():
             lg_ = F.normalize(ws_ - km_, dim=-1) @ F.normalize(qs_ - km_, dim=-1).t() / A.inv_temp
             run.self_loss = F.cross_entropy(lg_, torch.arange(lg_.shape[0], device=dev))
             run.self_pairs = []
+        if rl_on:                                    # REINFORCE: reward = the answer said exactly, per-kind baseline;
+            r_ = em[:B].detach()                     # the say head is NOT trained on a free row (a wrong program
+            adv_ = []                                # would teach it to say the answer from a wrong register)
+            for b in range(B):
+                k_ = demo_kind(rows[b])
+                b0_ = run.rl_base.get(k_, 0.5)
+                adv_.append(float(r_[b]) - b0_)
+                run.rl_base[k_] = 0.95 * b0_ + 0.05 * float(r_[b])
+                run.rl_stats.setdefault(k_, []).append(float(r_[b]))
+            lps_ = torch.stack([torch.stack(l_).sum() if l_ else torch.zeros((), device=dev) for l_ in rl_lp])
+            rl_loss = -(torch.tensor(adv_, device=dev) * lps_).mean()
+            return (A.rl_w * rl_loss + cost, em[:B], ok_act / max(1, n_act),
+                    (em[B:].mean().item() if len(em) > B else None))
         return act + say_loss + cost, em[:B], ok_act / max(1, n_act), (em[B:].mean().item() if len(em) > B else None)
 
     run.per_pass = {}
+    run.rl_base, run.rl_stats = {}, {}                 # REINFORCE baselines / rewards by question kind
+    run.fdemo_left, run.frame_lp, run.frl_stats = {}, [], {}   # phase 2: frame demo budget, frame log-probs
+    run.demo_left = {}                                 # --demo-budget: demonstrations left per kind
+
+    def demo_kind(q):
+        """the skill a question row exercises (budget / baseline key)"""
+        nr_ = sum(1 for s_ in (q.get("prog") or [])[1:] if s_[0] == "read")
+        return (("sub-question " if q.get("child") else "") + ("before" if q.get("before") else "multi"
+                if q.get("multi") else "ops%d" % q.get("ops", 0)) + " | reads %d" % nr_)
+
+    def nl_trace(q):
+        """the demonstration as natural-language steps (one per loop action)"""
+        out_, vals_ = [], q.get("vals") or []
+        for i_, (kd_, x_, ra_) in enumerate(q["prog"]):
+            v_ = vals_[i_] if i_ < len(vals_) else None
+            if kd_ == "read" and x_ == q["qnid"]:
+                out_.append(f"read the question: {q['text']!r}")
+            elif kd_ in ("read", "write"):
+                lm_ = store.prov.get(store.nodes[x_]["lsrc"]) if store.nodes[x_]["lsrc"] else None
+                what_ = (leaf(lm_[1], lm_[2]) if lm_ and lm_[0] == "fact" else
+                         "the " + store.nodes[x_]["kind"] + " node")
+                out_.append(f"{kd_} {what_}" + (f" (it holds {v_})" if v_ is not None and kd_ == "read" else ""))
+            elif kd_ == "sub":
+                ws_ = q["text"].split()
+                out_.append(f"solve the sub-question first (words {x_[0]}-{x_[1]}) -> {v_}")
+            else:
+                nm_ = TOOLS[x_][0] if x_ < len(TOOLS) else "edit"
+                a_ = [vals_[j_] if j_ < len(vals_) else "?" for j_ in ra_]
+                out_.append(f"{nm_} {' and '.join(map(str, a_))} -> {v_}")
+        out_.append(f"say {q['ans']}")
+        return " ; ".join(f"step {j_ + 1}: {t_}" for j_, t_ in enumerate(out_))
     run.masked_gold = {}
     run.commit_items = {}
     run.commit_stats = []
@@ -3685,68 +4073,107 @@ def main():
             print(f"EVAL {step} one_exposure_dependents: follow {coverage(fd):.3f} of {len(fd)} dependents", flush=True)
             score("one_exposure_dependents", [(1, fd)], "lookup:1.0")
         # a RULE shown once (wording never trained, on a key without a rule): later values of that key are increments
-        H, _ = holders()
-        free = {}
-        for (nm, k, v) in H:
-            if k in world.num_keys and world.policy.get(k) != "add" and world.ents.get(nm, {}).get(k) == v:
-                free.setdefault(k, []).append(nm)
-        if free:
-            k = max(sorted(free), key=lambda k_: len(free[k_]))
-            write([world.rule(er, k, "add", held=True)], False)
-            for _ in range(5):                               # some distance between the rule and its use
-                write([state_frame(er) for _ in range(2)], False, "state")
-            fr = sorted(set(free[k]))[:8]
-            run.how_log = []
-            write([world.update_one(er, nm, k) for nm in fr], False)
-            fk = {(nm, k) for nm in fr}
-            hw_ = Counter_()                                 # TN0: which procedure each increment used, which op
-            for qn_, pn_, op_ in run.how_log:
-                m_ = store.prov.get(store.nodes[qn_]["vsrc"], ("?",))
-                if m_[0] != "delta":
-                    continue
-                pm_ = store.prov.get(store.nodes[pn_]["vsrc"], ("?",)) if pn_ is not None else ("default",)
-                pk_ = ("its rule" if pm_[0] == "rule" and len(pm_) > 1 and pm_[1] == k else
-                       "another rule" if pm_[0] == "rule" else pm_[0])
-                hw_[(pk_, "copy add sub max min".split()[op_] if op_ is not None else "-")] += 1
-            print(f"EVAL {step} one_exposure_rule HOW (procedure read, operation) for the increments: {dict(hw_)}",
-                  flush=True)
-            with torch.no_grad():                            # can the op head tell rules apart? (pooled values were
-                Mr_ = materialize()                          # constant across numbers: spread .000)
-                rr_ = [j for j, i in enumerate(Mr_["rows"]) if (store.prov.get(store.nodes[i]["vsrc"]) or ("?",))[0] == "rule"]
-                if len(rr_) > 1:
-                    pol_ = [store.prov[store.nodes[Mr_["rows"][j]]["vsrc"]][2] for j in rr_]
-                    Vr_ = Mr_["V"][rr_].float()
-                    cs_ = lambda X: F.normalize(X, dim=-1) @ F.normalize(X, dim=-1).t()
-                    same_ = torch.tensor([[a_ == b_ for b_ in pol_] for a_ in pol_], device=dev) & ~torch.eye(len(rr_), dtype=torch.bool, device=dev)
-                    diff_ = torch.tensor([[a_ != b_ for b_ in pol_] for a_ in pol_], device=dev)
-                    for nm_, X_ in (("raw V", Vr_), ("centred V", Vr_ - Mr_["V"].float().mean(0))):
-                        c_ = cs_(X_)
-                        print(f"EVAL {step} rule nodes ({len(rr_)}; {Counter_(pol_)}) {nm_} cosine: same policy "
-                              f"{float(c_[same_].mean()) if same_.any() else float('nan'):.4f} | add vs set "
-                              f"{float(c_[diff_].mean()) if diff_.any() else float('nan'):.4f}", flush=True)
-            print(f"EVAL {step} one_exposure_rule: totals held {coverage(fk):.3f} of {len(fk)} (rule: add)", flush=True)
-            H_, _ = holders()
-            why_ = Counter_()
-            for nm_, k_ in sorted(fk):
-                v_, hs_ = world.ents[nm_][k_], world.hist.get((nm_, k_), [])
-                held_v = sorted({v2 for (n2, k2, v2) in H_ if (n2, k2) == (nm_, k_)})
-                why_[f"hist {len(hs_)} | total held {(nm_, k_, v_) in H_} | old held {len(hs_) > 1 and (nm_, k_, hs_[-2]) in H_}"
-                     f" | values held {len(held_v)}"] += 1
-            print(f"EVAL {step} one_exposure_rule nodes after the increments: {dict(why_)}", flush=True)
-            expect_dependents(fk)                            # a total no node holds is asked anyway (graded on the
-            Hx_, _ = holders()
-            print(f"EVAL {step} one_exposure_rule: {len(store.expect)} totals graded on their node; askable "
-                  f"{sum(1 for (n2, k2, v2) in Hx_ if (n2, k2) in fk and world.ents[n2][k2] == v2)}", flush=True)
-            score("one_exposure_rule", [(1, fk)], "lookup:1.0")   # fact's own node: where the sum should be)
-            store.expect = {}
+        for held_, tag_, was_, pol_k in ((True, "", False, "add"), (False, "_trained_wording", False, "add"),
+                                         (False, "_changed", True, "add"), (False, "_set_only", False, "set")):
+            #   + a TRAINED wording, + a CHANGED rule (the key had a set rule first: the newest rule must win)
+            #   splits 'the op was not learned' from 'it does not carry to an unseen phrasing'
+            H, _ = holders()
+            free = {}
+            for (nm, k, v) in H:
+                if k in world.num_keys and world.policy.get(k) != "add" and world.ents.get(nm, {}).get(k) == v:
+                    free.setdefault(k, []).append(nm)
+            if free:                                             # 4 keys, 4 rules (one rule decided all 8
+                ks_ = sorted(sorted(free), key=lambda k_: -len(free[k_]))[:4]   # increments: all-or-nothing)
+                k = ks_[0]
+                if was_:                                         # the old rules first, then the new ones
+                    write([world.rule(er, k_, "set") for k_ in ks_], False)
+                    for _ in range(5):
+                        write([state_frame(er) for _ in range(2)], False, "state")
+                write([world.rule(er, k_, pol_k, held=held_) for k_ in ks_], False)   # (_set_only: op stays copy)
+                rn_ = [(i_, (store.prov.get(nd_["vsrc"]) or ("?",))) for i_, nd_ in enumerate(store.nodes)
+                       if nd_["alive"] and (store.prov.get(nd_["vsrc"]) or ("?",))[0] == "rule"]
+                print(f"EVAL {step} one_exposure_rule{tag_} rule nodes alive after the rule: of its key "
+                      f"{[(m_[1], m_[2], store.nodes[i_]['kind'], store.time - store.nodes[i_]['time']) for i_, m_ in rn_ if m_[1] in ks_]}"
+                      f" | all rules {len(rn_)} (keys {len({m_[1] for _, m_ in rn_})})", flush=True)
+                for _ in range(5):                               # some distance between the rule and its use
+                    write([state_frame(er) for _ in range(2)], False, "state")
+                fk = {(nm, k_) for k_ in ks_ for nm in sorted(set(free[k_]))[:max(2, 8 // len(ks_))]}
+                run.how_log, run.how_detail = [], []
+                write([world.update_one(er, nm, k_) for nm, k_ in sorted(fk)], False)
+                print(f"EVAL {step} one_exposure_rule{tag_} pointer scores per increment (default, best node, "
+                      f"[its key's rules (score, age, policy)]): {run.how_detail}", flush=True)
+                run.how_detail = None
+                fk_set = fk
+                hw_ = Counter_()                                 # TN0: which procedure each increment used, which op
+                for qn_, pn_, op_ in run.how_log:
+                    m_ = store.prov.get(store.nodes[qn_]["vsrc"], ("?",))
+                    if m_[0] != "delta" and not (pol_k == "set" and qn_ is not None and (m_[1:3] if len(m_) > 2 else None) in [tuple(f_) for f_ in fk_set]):
+                        continue
+                    pm_ = store.prov.get(store.nodes[pn_]["vsrc"], ("?",)) if pn_ is not None else ("default",)
+                    pk_ = (("its rule" if len(pm_) < 3 or pm_[2] == pol_k else "its OLD rule (" + str(pm_[2]) + ")")
+                           if pm_[0] == "rule" and len(pm_) > 1 and len(m_) > 2 and pm_[1] == m_[2] else
+                           "another rule" if pm_[0] == "rule" else pm_[0])
+                    hw_[(pk_, "copy add sub max min".split()[op_] if op_ is not None else "-")] += 1
+                print(f"EVAL {step} one_exposure_rule{tag_} HOW (procedure read, operation) for the increments: {dict(hw_)}",
+                      flush=True)
+                with torch.no_grad():                            # can the op head tell rules apart? (pooled values were
+                    Mr_ = materialize()                          # constant across numbers: spread .000)
+                    rr_ = [j for j, i in enumerate(Mr_["rows"]) if (store.prov.get(store.nodes[i]["vsrc"]) or ("?",))[0] == "rule"]
+                    if len(rr_) > 1:
+                        pol_ = [store.prov[store.nodes[Mr_["rows"][j]]["vsrc"]][2] for j in rr_]
+                        Vr_ = Mr_["V"][rr_].float()
+                        cs_ = lambda X: F.normalize(X, dim=-1) @ F.normalize(X, dim=-1).t()
+                        same_ = torch.tensor([[a_ == b_ for b_ in pol_] for a_ in pol_], device=dev) & ~torch.eye(len(rr_), dtype=torch.bool, device=dev)
+                        diff_ = torch.tensor([[a_ != b_ for b_ in pol_] for a_ in pol_], device=dev)
+                        hr_ = F.layer_norm(ctrl_states([[rg_] for rg_ in regs_from(Mr_, rr_)]), (d,))   # Walker's state
+                        #   after reading the rule ALONE (what Woph sees, minus the frame): does it carry the policy?
+                        for nm_, X_ in (("raw V", Vr_), ("centred V", Vr_ - Mr_["V"].float().mean(0)),
+                                        ("reading state", hr_), ("centred reading state", hr_ - hr_.mean(0))):
+                            c_ = cs_(X_)
+                            print(f"EVAL {step} rule nodes ({len(rr_)}; {Counter_(pol_)}) {nm_} cosine: same policy "
+                                  f"{float(c_[same_].mean()) if same_.any() else float('nan'):.4f} | add vs set "
+                                  f"{float(c_[diff_].mean()) if diff_.any() else float('nan'):.4f}", flush=True)
+                        ph_ = torch.softmax(loop.Woph(hr_), -1)[:, 1]   # P(add) from the rule read alone, by policy
+                        print(f"EVAL {step} rule nodes: Woph P(add) reading the rule alone: add rules "
+                              f"{[round(float(x_), 2) for x_, q_ in zip(ph_, pol_) if q_ == 'add']} | set rules "
+                              f"{[round(float(x_), 2) for x_, q_ in zip(ph_, pol_) if q_ == 'set']}", flush=True)
+                print(f"EVAL {step} one_exposure_rule{tag_}: totals held {coverage(fk):.3f} of {len(fk)} (rule: {pol_k})", flush=True)
+                H_, _ = holders()
+                why_ = Counter_()
+                for nm_, k_ in sorted(fk):
+                    v_, hs_ = world.ents[nm_][k_], world.hist.get((nm_, k_), [])
+                    held_v = sorted({v2 for (n2, k2, v2) in H_ if (n2, k2) == (nm_, k_)})
+                    why_[f"hist {len(hs_)} | total held {(nm_, k_, v_) in H_} | old held {len(hs_) > 1 and (nm_, k_, hs_[-2]) in H_}"
+                         f" | values held {len(held_v)}"] += 1
+                print(f"EVAL {step} one_exposure_rule{tag_} nodes after the increments: {dict(why_)}", flush=True)
+                expect_dependents(fk)                            # a total no node holds is asked anyway (graded on the
+                Hx_, _ = holders()
+                print(f"EVAL {step} one_exposure_rule{tag_}: {len(store.expect)} totals graded on their node; askable "
+                      f"{sum(1 for (n2, k2, v2) in Hx_ if (n2, k2) in fk and world.ents[n2][k2] == v2)}", flush=True)
+                score("one_exposure_rule" + tag_, [(1, fk)], "lookup:1.0")   # fact's own node: where the sum should be)
+                store.expect = {}
         # coexisting values: a second value of a multi key (must be attached, not replaced)
+        if A.proc_keep:                                      # its keys' KEEP rules first (announced, as in training)
+            kk_ = sorted({f[1] for f, vs in world.multi.items() if len(vs) == 1} - {k_ for k_, p_ in world.policy.items()
+                                                                                  if p_ == "keep"})
+            if kk_:
+                write([world.rule(er, k_, "keep") for k_ in kk_], False)
+                for _ in range(5):
+                    write([state_frame(er) for _ in range(2)], False, "state")
         co = [x for x in (world.coexist(er) for _ in range(8)) if x]
         if co:
+            Hp_, Hpv_ = holders()                            # the first value BEFORE the second arrives
+            pre_ = [('cur' if f + (world.multi[f][0],) in Hp_ else 'ver' if f + (world.multi[f][0],) in Hpv_ else '-')
+                    for _, f in sorted(co, key=lambda x_: x_[1])]
             write([x[0] for x in co], False)
             fc = {f for _, f in co}
             H, _ = holders()
             both = sum(all(f + (v,) in H for v in world.multi[f]) for f in fc) / len(fc)
             print(f"EVAL {step} one_exposure_coexist: both values held {both:.3f} of {len(fc)}", flush=True)
+            Hv_ = holders()[1]                               # where each value went (current / version / nowhere)
+            print(f"EVAL {step} one_exposure_coexist values (old, new -> held as): "
+                  f"{[tuple((v, 'cur' if f + (v,) in H else 'ver' if f + (v,) in Hv_ else '-') for v in world.multi[f]) for f in sorted(fc)]}"
+                  f" | first value before it: {pre_} | decided {Counter_(o[0] for _, o in getattr(run, 'last_plans', []) or [])}", flush=True)
             score("one_exposure_coexist", [(1, fc)], "multi:1.0")
         ws = {k: {"n": v[0], "store": round(v[1] / max(1, v[0]), 2), "new": round(v[2] / max(1, v[0]), 2),
                   "replace": round(v[3] / max(1, v[0]), 2)} for k, v in wstats.items()}
@@ -4457,8 +4884,11 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         print(f"DIGIT TOOL NODES: {', '.join(d[0] for d in DIGIT_TOOLS)}", flush=True)
     with torch.no_grad():
         write([world.rule(rng) for _ in range(min(6, A.warm_frames // 10))]       # a few rules, shown once
-              + [world.component(rng) for _ in range(A.warm_frames)], False)
+              + [world.component(rng) for _ in range(min(60, A.warm_frames))], False)
         store.commit()
+        for _ in range(60, A.warm_frames, 60):            # a bigger warm memory in chunks (1000 at once: OOM)
+            write([world.component(rng) for _ in range(min(60, A.warm_frames - _))], False)
+            store.commit()
     print(f"WORLD: {len(world.ents)} entities, {len(store.alive())} nodes after {A.warm_frames} warm frames", flush=True)
     if A.load:
         if float(graph.kmu_n) == 0:                       # an older checkpoint: key mean from the warm memory
@@ -4500,6 +4930,32 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         t0[0] = now_
 
     tmark.last_print = 0
+    t_trace = time.perf_counter()
+    tfn = {}                                              # --trace: synchronized time per helper (inclusive)
+    if A.trace:
+        def timed(name, f):
+            def g(*a_, **k_):
+                if dev.type == "cuda":
+                    torch.cuda.synchronize()
+                t_ = time.perf_counter()
+                r_ = f(*a_, **k_)
+                if dev.type == "cuda":
+                    torch.cuda.synchronize()
+                x_ = tfn.setdefault(name, [0, 0.0])
+                x_[0] += 1
+                x_[1] += time.perf_counter() - t_
+                return r_
+            return g
+        ctrl_states = timed("ctrl_states", ctrl_states)
+        decode = timed("decode", decode)
+        lm_greedy = timed("lm_greedy", lm_greedy)
+        encode_values = timed("encode_values", encode_values)
+        encode_sources = timed("encode_sources", encode_sources)
+        materialize = timed("materialize", materialize)
+        regs_from = timed("regs_from", regs_from)
+        ref_loss = timed("ref_loss", ref_loss)
+        invariance_loss = timed("invariance_loss", invariance_loss)
+        roundtrip_loss = timed("roundtrip_loss", roundtrip_loss)
     for step in range(1, steps + 1):
         tmark("other (log / evict / eval)" if step > 1 else None)
         lr = A.lr * min(1.0, step / 100) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / A.steps)))
@@ -4510,6 +4966,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         run.how_log = []
         run.conf_terms = []
         run.proc_terms, run.op_terms, run.op_acc = [], [], []
+        run.frame_lp = []
         mem.update_stats = not A.say_only                 # running statistics follow real training data only (a
         #                                                   frozen GNM keeps its stats: say2 drifted them, program .79->.6)
         t_before = store.time
@@ -4522,6 +4979,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         rng.shuffle(objs)
         if rule is not None:
             objs.insert(0, ("item", rule))
+        co_f = world.coexist(rng) if rng.random() < A.p_coexist else None   # a multi key's second value (coexists:
+        if co_f is not None:                                                   # was 2-4 per 25 steps from components)
+            objs.insert(rng.randint(1 if rule is not None else 0, len(objs)), ("item", co_f[0]))
         multi0 = {f: len(v) for f, v in world.multi.items()}
         cost = (write([o for k_, o in objs if k_ == "state"], True, "state")
                 + write([o for k_, o in objs if k_ == "item"], True))       # soft integrate: later questions train it
@@ -4574,7 +5034,74 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                  A.mix, tr_ops, "train", soft=True)
         tmark("ask")
         run.self_loss = torch.zeros((), device=dev)
-        loss, em, act, tool_said = run(qs, True)
+        if A.demo_budget >= 0 and A.demo_pick == "confused":   # T2: every row runs FREE first; the demo budget
+            qf_ = qs                                      # goes to the rows the model got WRONG and was most
+            rf_ = run(qf_, False, rl=True)                # CONFUSED on (active imitation, DAgger-style), a few
+            conf_ = list(run.row_conf)                    # per step so the budget spreads over training
+            wrong_ = sorted((b for b in range(len(qf_)) if float(rf_[1][b]) < 0.5),
+                            key=lambda b: -conf_[b] if b < len(conf_) else 0.0)
+            qd_ = []
+            for b in wrong_:
+                if len(qd_) >= A.demo_per_step:
+                    break
+                k_ = demo_kind(qf_[b])
+                left_ = run.demo_left.setdefault(k_, A.demo_budget)
+                if left_ > 0:
+                    run.demo_left[k_] = left_ - 1
+                    qd_.append(qf_[b])
+                    with open(os.path.splitext(A.log)[0] + "_demos.txt", "a", encoding="utf-8") as fh_:
+                        fh_.write(f"[step {step} | {k_} | demo {A.demo_budget - left_ + 1}/{A.demo_budget} | "
+                                  f"confusion {conf_[b] if b < len(conf_) else 0.0:.2f}] {nl_trace(qf_[b])}\n")
+            parts_ = [(rf_, len(qf_)), (run(qd_, True) if qd_ else None, len(qd_))]
+            parts_ = [(r_, n_) for r_, n_ in parts_ if r_ is not None]
+            loss = sum(r_[0] * n_ for r_, n_ in parts_) / max(1, sum(n_ for _, n_ in parts_))
+            em = rf_[1]                                   # (the step's exactness = the free rows')
+            if A.rl_frames and run.frame_lp:              # phase 2: a frame row's write decision is credited with
+                fr_ = {}                                  # how exactly this step's free questions about ITS fact were
+                for b, q_ in enumerate(qf_):              # answered (which question touches which fact: bookkeeping)
+                    for kd_, x_, *_ in q_["prog"][1:]:
+                        if kd_ == "read":
+                            lm_ = store.prov.get(store.nodes[x_]["lsrc"]) if store.nodes[x_]["lsrc"] else None
+                            if lm_ and lm_[0] == "fact":
+                                fr_.setdefault((lm_[1], lm_[2]), []).append(float(rf_[1][b]))
+                terms_ = []
+                for f_, kd_, lp_ in run.frame_lp:
+                    if f_ in fr_:
+                        r_ = sum(fr_[f_]) / len(fr_[f_])
+                        b0_ = run.rl_base.get("frame " + kd_, 0.5)
+                        terms_.append(-(r_ - b0_) * lp_)
+                        run.rl_base["frame " + kd_] = 0.95 * b0_ + 0.05 * r_
+                        run.frl_stats.setdefault(kd_, []).append(r_)
+                if terms_:
+                    loss = loss + A.rl_frames * torch.stack(terms_).mean()
+            run.frame_lp = []
+            act = parts_[1][0][2] if qd_ else 0.0
+            tool_said = rf_[3]
+            run.free_n = len(qf_)
+        elif A.demo_budget >= 0:                          # demonstrated (budget left for the kind) vs free rows
+            qd_, qf_ = [], []
+            for q_ in qs:
+                k_ = demo_kind(q_)
+                left_ = run.demo_left.setdefault(k_, A.demo_budget)
+                if left_ > 0:
+                    run.demo_left[k_] = left_ - 1
+                    qd_.append(q_)
+                    with open(os.path.splitext(A.log)[0] + "_demos.txt", "a", encoding="utf-8") as fh_:
+                        fh_.write(f"[step {step} | {k_} | demo {A.demo_budget - left_ + 1}/{A.demo_budget}] "
+                                  f"{nl_trace(q_)}\n")
+                else:
+                    qf_.append(q_)
+            parts_ = [(run(qd_, True) if qd_ else None, len(qd_)),
+                      (run(qf_, False, rl=True) if qf_ else None, len(qf_))]
+            parts_ = [(r_, n_) for r_, n_ in parts_ if r_ is not None]
+            loss = sum(r_[0] * n_ for r_, n_ in parts_) / max(1, sum(n_ for _, n_ in parts_))
+            ems_ = [r_[1] for r_, _ in parts_ if r_[1] is not None]
+            em = torch.cat(ems_) if ems_ else None
+            act = parts_[0][0][2] if qd_ else 0.0
+            tool_said = next((r_[3] for r_, _ in parts_ if r_[3] is not None), None)
+            run.free_n = len(qf_)
+        else:
+            loss, em, act, tool_said = run(qs, True)
         tmark("questions")
         loss = loss + 0.01 * run.logit_pen               # (gate logits accumulated over this step's frame / note rows)
         loss = (loss * len(qs) + note_loss * len(cq)) / max(1, len(qs) + len(cq)) + cost   # notes weigh as rows
@@ -4614,6 +5141,15 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         opt_ref.step()                                   # (own optimizer: inside the main one they did not learn)
         opt_ref.zero_grad(set_to_none=True)
         tmark("commit+step")
+        if A.trace:                                      # per-step check line (speed work: old vs new code agree?)
+            print(f"TRACE step {step} loss {float(loss):.6f} em {float(em.float().mean()) if torch.is_tensor(em) else em} "
+                  f"live {len(store.alive())} t {time.perf_counter() - t_trace:.2f}s", flush=True)
+            print("  parts " + " | ".join(f"{k_} {v_:.2f}" for k_, v_ in tsum.items()), flush=True)
+            print("  helpers " + " | ".join(f"{k_} {v_[1]:.2f}s/{v_[0]}" for k_, v_ in sorted(tfn.items(), key=lambda x: -x[1][1])),
+                  flush=True)
+            tfn.clear()
+            tsum.clear()
+            t_trace = time.perf_counter()
         store.commit()
         evict(gone=gone if gone else None)
         if step % 10 == 0 and dev.type == "cuda":
@@ -4636,10 +5172,18 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                   f"{'tool net %.3f | ' % float(run.tool_l) if run.tool_loss else ''}"
                   f"{'confusion %.3f | ' % float(run.conf_l) if run.conf_terms else ''}"
                   f"{'procedure read %.3f | ' % float(run.proc_l) if run.proc_terms else ''}"
-                  f"{'procedure op %.3f (acc copy %s | add %s) | ' % ((float(run.op_l),) + tuple(('%.2f of %d' % (sum(c_ for g_, c_ in run.op_acc if g_ == o_) / max(1, sum(g_ == o_ for g_, _ in run.op_acc)), sum(g_ == o_ for g_, _ in run.op_acc))) for o_ in (0, 1))) if run.op_terms else ''}world "
+                  f"{'procedure op %.3f (acc default copy %s | add %s | set-rule copy %s | keep-rule attach %s | other not attach %s) | ' % ((float(run.op_l),) + tuple(('%.2f of %d' % (sum(c_ for g_, c_ in run.op_acc if g_ == o_) / max(1, sum(g_ == o_ for g_, _ in run.op_acc)), sum(g_ == o_ for g_, _ in run.op_acc))) for o_ in (0, 1, 2, 3, 4))) if run.op_terms else ''}world "
                   f"{len(world.ents)} entities, {n_live} live nodes | peak VRAM {peak_gb():.2f} GB [{time.time() - t0:.0f}s]",
                   flush=True)
             print(f"  read actions: {pp} | integrate by kind (n, store, NEW, replace): {ws}", flush=True)
+            if A.demo_budget >= 0:                        # free rows: the answer's exactness by kind (their reward)
+                print(f"  free rows (outcome only) said exactly, by kind: "
+                      f"{ {k_: ('%.2f of %d' % (sum(v_) / len(v_), len(v_))) for k_, v_ in sorted(run.rl_stats.items())} }"
+                      f" | demonstrations used {sum(A.demo_budget - v_ for v_ in run.demo_left.values())} "
+                      f"({len(run.demo_left)} kinds) | frame rows credited (reward by kind): "
+                      f"{ {k_: ('%.2f of %d' % (sum(v_) / len(v_), len(v_))) for k_, v_ in sorted(run.frl_stats.items())} }"
+                      f" | frame dense labels left {dict(run.fdemo_left)}", flush=True)
+                run.rl_stats, run.frl_stats = {}, {}
             if A.look and run.look_tr:
                 print(f"  look (proposed -> after looking): {dict(run.look_tr)}", flush=True)
                 run.look_tr.clear()
@@ -4697,7 +5241,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 rt_stats.clear()
             logf.write(json.dumps({"type": "train", "step": step, "loss": float(loss), "action": act, "per_pass": pp,
                                    "integrate": ws, "said": None if em is None else float(em.mean()), "nodes": n_live}) + "\n")
-        if not A.smoke and (step % A.eval_every == 0 or step == A.steps):
+        if not A.smoke and A.trace < 2 and (step % A.eval_every == 0 or step == A.steps):
             out = evaluate(step)
             sc = sum(v["exact"] for v in out.values())
             say_st = ({"say": {"Wo": say_Wo.state_dict(), "ro": say_ro.state(), "ckpt": A.say_ckpt,
