@@ -1050,6 +1050,50 @@ def rand_tree(rng, leaves, n, mode):
 
 
 # ====================================================================== the live store (one world, never reset)
+class _RowSink(torch.autograd.Function):
+    """Rows gathered from a big node tensor (slots: nodes x 16 x d) each gave the backward a FULL-size gradient
+    (IndexBackward = zeros + index_put per gather): backward ~ gathers x nodes, 20 s / step at 3,000 nodes. Rows taken
+    through a sink (take()) accumulate into ONE buffer, handed to the tensor once (same gradient)."""
+
+    @staticmethod
+    def forward(ctx, T, hold):
+        ctx.hold = hold
+        return T.new_zeros(())
+
+    @staticmethod
+    def backward(ctx, g):
+        buf, ctx.hold["buf"] = ctx.hold.get("buf"), None
+        return buf, None
+
+
+class _RowTake(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, tok, T, ix, hold):
+        ctx.save_for_backward(ix)
+        ctx.hold, ctx.shape, ctx.dt = hold, T.shape, T.dtype
+        return T[ix]
+
+    @staticmethod
+    def backward(ctx, g):
+        ix, = ctx.saved_tensors
+        if ctx.hold.get("buf") is None:
+            ctx.hold["buf"] = torch.zeros(ctx.shape, dtype=ctx.dt, device=g.device)
+        ctx.hold["buf"].index_add_(0, ix, g.to(ctx.dt))
+        return g.new_zeros(()), None, None, None
+
+
+def take(M, key, ix):
+    """M[key][ix] (ix: 1-D index tensor) with one shared gradient buffer per materialized tensor"""
+    T = M[key]
+    if not (torch.is_grad_enabled() and T.requires_grad):
+        return T[ix]
+    sk = M.setdefault("_sink", {})
+    if key not in sk:
+        hold = {}
+        sk[key] = (_RowSink.apply(T, hold), hold)
+    return _RowTake.apply(sk[key][0], T.detach(), ix, sk[key][1])
+
+
 class Store:
     """Frames' token states + nodes. A node has a LABEL source (its identity: which pair's tokens) and a VALUE source
     (a pair's tokens, or a vector made by a tool / an edit). Integrate re-points a node's value source and keeps the
@@ -1179,15 +1223,19 @@ class Graph(nn.Module):
         r = self.Wr(self.pr.flat(*self.mem.last_flat))
         return kraw, v, logg, slots, r
 
-    def ref_logits(self, K, RQ, kmean, ver=None, HM=None):
+    def ref_logits(self, K, RQ, kmean, ver=None, HM=None, rows=None):
         """[nodes | none] logits of each node's relation edge: its r (RQ arg: raw, key space) addressing all labels K
         (centered, normalized); self excluded; zero r -> none.
         The none logit is a SEPARATE binary decision (sigmoid), not a softmax column: against 3,000 node scores its
         calibration drifted with memory size (dependents -> none 269 misses at step 100)"""
         n_ = K.shape[0]
+        if rows is not None:                      # only these nodes' edges (rows of the [nodes x nodes] matrix)
+            RQ, HM = RQ[rows], (HM[rows] if HM is not None else None)
+        ri = rows if rows is not None else torch.arange(n_, device=K.device)
         q_ = RQ + self.Wref(RQ)
         qn = F.normalize(q_ - kmean, dim=-1)
-        sc = (self.tau_ref.exp() * qn @ K.t()).masked_fill(torch.eye(n_, dtype=torch.bool, device=K.device), -1e4)
+        sc = (self.tau_ref.exp() * qn @ K.t()).index_put((torch.arange(len(ri), device=K.device), ri),
+                                                         torch.tensor(-1e4, device=K.device))   # self excluded
         has = (RQ.abs().sum(-1, keepdim=True) > 0)
         if ver is not None:                       # "same as X" means X now: a version ("the value before") is a
             sc = sc + self.b_ver * ver[None]      # model-visible node flag (ver_e on its key); direct learned bias
@@ -1672,6 +1720,8 @@ def main():
     P.add_argument("--skip-eval0", action="store_true")
     P.add_argument("--tf32", type=int, default=1, help="TF32 matmuls (10-bit mantissa inputs, fp32 accumulate)")
     P.add_argument("--fast-decode", type=int, default=1, help="greedy decode with a key/value cache (GPT-2 stand-in)")
+    P.add_argument("--prof-steps", type=lambda x: {int(v) for v in x.split(",") if v}, default=set(),
+                   help="with --trace: profile the backward of these steps (op table)")
     P.add_argument("--trace", type=int, default=0, help="print loss / exactness / wall time every step "
                    "(2 = also no eval / save: speed checks)")
     P.add_argument("--warm-inv", type=float, default=1.0, help="warm-up: weight of the label-identity (invariance) loss")
@@ -1932,7 +1982,17 @@ def main():
         return x[..., :W, :] if n_ >= W else F.pad(x, (0, 0, 0, W - n_))
 
     def stackS(xs):
-        return torch.nn.utils.rnn.pad_sequence(list(xs), batch_first=True)   # zero-padded to the longest
+        """zero-padded to the longest. pad_sequence's backward was quadratic (one in-place slice copy per row, each
+        cloning the whole gradient: 3,000 nodes x [3,000 x 16 x 512]): it only stacks the constant rows; rows with a
+        gradient are padded + stacked and copied in (backward = one index_select)"""
+        xs = list(xs)
+        out = torch.nn.utils.rnn.pad_sequence([x.detach() for x in xs], batch_first=True)
+        if torch.is_grad_enabled():
+            g = [i for i, x in enumerate(xs) if x.requires_grad]
+            if g:
+                src = torch.stack([padS(xs[i], out.shape[1]) for i in g])
+                out = out.index_copy(0, torch.tensor(g, device=out.device), src.to(out.dtype))
+        return out
 
     alone = {"row": {}, "X": None, "E": None, "M": None}   # value text -> row of a bank of Walker states
     ref_t = {"s": 0.0, "calls": 0, "rows": 0, "new": 0}
@@ -2100,15 +2160,14 @@ def main():
             rc = torch.tensor([x[1] for x in mix], device=dev)
             m = torch.stack([torch.as_tensor(x[2], device=dev, dtype=v.dtype) for x in mix])
             dV, dS = v[rc] - v[rt], slots[rc] - slots[rt]
-            free = torch.tensor([store.nodes[i]["kind"] in ("item", "state") for i in live], device=dev)
-            ar = torch.arange(len(mix), device=dev)
-            km_ = graph.kmu[None] if float(graph.kmu_n) > 0 else kraw.mean(0, keepdim=True)
-            C = graph.dep_ref(F.normalize(kraw - km_, dim=-1), r, km_, ver, HM)[:, rt] * m[None] * free[:, None].float()
-            if A.dep_follow != "eager":                 # lazy: dependents are followed by reads, never overwritten
-                C = C * 0.0
-            C = C.index_put((rc, ar), torch.zeros(len(mix), device=dev)).index_put((rt, ar), torch.zeros(len(mix), device=dev))
-            v = v + C @ dV                                         # dependents follow (one damped step)
-            slots = slots + torch.einsum("nr,rsd->nsd", C, dS)
+            if A.dep_follow == "eager":                 # (lazy: dependents are followed by reads, never overwritten —
+                free = torch.tensor([store.nodes[i]["kind"] in ("item", "state") for i in live], device=dev)
+                ar = torch.arange(len(mix), device=dev)  # the [nodes x nodes] edges were built and multiplied by 0)
+                km_ = graph.kmu[None] if float(graph.kmu_n) > 0 else kraw.mean(0, keepdim=True)
+                C = graph.dep_ref(F.normalize(kraw - km_, dim=-1), r, km_, ver, HM)[:, rt] * m[None] * free[:, None].float()
+                C = C.index_put((rc, ar), torch.zeros(len(mix), device=dev)).index_put((rt, ar), torch.zeros(len(mix), device=dev))
+                v = v + C @ dV                                     # dependents follow (one damped step)
+                slots = slots + torch.einsum("nr,rsd->nsd", C, dS)
             v = v.index_add(0, rt, m[:, None] * dV)                # the write itself: the value moves into the node
             slots = slots.index_add(0, rt, m[:, None, None] * dS)
         esel = [(k_, store.empty[nid]) for k_, nid in enumerate(live) if nid in store.empty]
@@ -2312,7 +2371,7 @@ def main():
         if not ix_list:
             return []
         ix = torch.tensor(ix_list, device=dev)
-        Kc, Vc, Sc = M["kraw"][ix], M["V"][ix], M["S"][ix]
+        Kc, Vc, Sc = take(M, "kraw", ix), take(M, "V", ix), take(M, "S", ix)
         fv, fs = loop.Wfv(Vc), loop.Wfs(Sc) + loop.spos[:Sc.shape[1]]
         out = []
         for j, c_ in enumerate(ix_list):
@@ -3235,7 +3294,7 @@ def main():
                         pairs = [(b, j) for b in act_ for j in tj[b]]   # sources + targets: one decode call
                         jj = torch.tensor([j for _, j in pairs], device=dev, dtype=torch.long)
                         S_src = stackS([srcreg[b][2] for b in act_])
-                        S_tgt = M["S"][jj]
+                        S_tgt = take(M, "S", torch.as_tensor(jj, dtype=torch.long, device=dev))
                         W_ = max(S_src.shape[1], S_tgt.shape[1])   # (decode uses slots < max_ans: wider padding
                         if min(S_src.shape[1], S_tgt.shape[1]) >= A.max_ans or S_src.shape[1] == S_tgt.shape[1]:
                             dx_ = decode(torch.cat([xv[act_], V[jj]]), torch.cat([padS(S_src, W_), padS(S_tgt, W_)]))
@@ -4508,10 +4567,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                 rq_[k_] = qq
         rq_ = torch.stack(rq_)                           # the selected nodes' r with a gradient path (content part)
         R_ = M["R"].detach().index_put((ix,), M["R"][ix].detach() + graph.Wrr(rq_) - graph.Wrr(rq_).detach())
-        L = graph.ref_logits(M["K"].detach(), R_, M["kmean"].detach(), M["ver"], M["HM"].detach())
-        n_ = L.shape[0]
+        Ls = graph.ref_logits(M["K"].detach(), R_, M["kmean"].detach(), M["ver"], M["HM"].detach(), rows=ix)
+        n_ = M["K"].shape[0]
         tg = torch.tensor([x[1] for x in pos] + [n_] * len(neg), device=dev)
-        Ls = L[ix]
         isref = torch.tensor([1.0] * len(pos) + [0.0] * len(neg), device=dev)
         bce = F.binary_cross_entropy_with_logits(-Ls[:, -1], isref, reduction="none")
         bce = bce[:len(pos)].mean() + (bce[len(pos):].mean() if neg else 0.0)   # class-balanced: dependents fell to
@@ -4958,6 +5016,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         roundtrip_loss = timed("roundtrip_loss", roundtrip_loss)
     for step in range(1, steps + 1):
         tmark("other (log / evict / eval)" if step > 1 else None)
+        if A.trace and A.prof_steps:                      # (profiled steps: forward tracebacks of each op)
+            torch.autograd.set_detect_anomaly(step in A.prof_steps, check_nan=False)
         lr = A.lr * min(1.0, step / 100) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / A.steps)))
         for gp in opt.param_groups:
             gp["lr"] = lr * gp.get("lr_mult", 1.0)
@@ -5128,7 +5188,32 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         opt.zero_grad(set_to_none=True)
         opt_ref.zero_grad(set_to_none=True)
         if loss.requires_grad:                            # (nothing askable this step: no update, decisions still run)
-            loss.backward()
+            if A.trace and step in A.prof_steps:          # speed checks: what the backward spends its time on
+                from torch.profiler import profile, ProfilerActivity
+                seen_, todo_, big_ = set(), [loss.grad_fn], []   # the gathers' source sizes (their backward = zeros
+                while todo_:                                     # of that size + scatter)
+                    fn_ = todo_.pop()
+                    if fn_ is None or fn_ in seen_:
+                        continue
+                    seen_.add(fn_)
+                    if type(fn_).__name__ in ("IndexBackward0", "SelectBackward0", "SliceBackward0"):
+                        sz_ = tuple(getattr(fn_, "_saved_self_sym_sizes", ()))
+                        big_.append((math.prod(sz_) if sz_ else 0, type(fn_).__name__, sz_,
+                                     fn_.metadata.get("traceback_", "")[-600:]))
+                    todo_.extend(f_ for f_, _ in fn_.next_functions)
+                big_.sort(key=lambda x: -x[0])
+                print("PROF gathers by source size (top):", [(n_, s_) for _, n_, s_, _ in big_[:12]], flush=True)
+                for _, n_, s_, tb_ in big_[:3]:
+                    print("PROF", n_, s_, "".join(tb_[-2:]) if isinstance(tb_, list) else tb_, flush=True)
+                with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True) as pf_:
+                    loss.backward()
+                    torch.cuda.synchronize()
+                print(pf_.key_averages().table(sort_by="cuda_time_total", row_limit=25), flush=True)
+                print(pf_.key_averages(group_by_input_shape=True).table(sort_by="cuda_time_total", row_limit=30),
+                      flush=True)
+                print(pf_.key_averages().table(sort_by="cpu_time_total", row_limit=15), flush=True)
+            else:
+                loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
         tmark("backward")
         mem.update_stats = False
@@ -5143,7 +5228,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         tmark("commit+step")
         if A.trace:                                      # per-step check line (speed work: old vs new code agree?)
             print(f"TRACE step {step} loss {float(loss):.6f} em {float(em.float().mean()) if torch.is_tensor(em) else em} "
-                  f"live {len(store.alive())} t {time.perf_counter() - t_trace:.2f}s", flush=True)
+                  f"live {len(store.alive())} t {time.perf_counter() - t_trace:.2f}s | allocator retries "
+                  f"{torch.cuda.memory_stats().get('num_alloc_retries', 0) if dev.type == 'cuda' else 0} | reserved "
+                  f"{torch.cuda.memory_reserved() / 2**30 if dev.type == 'cuda' else 0:.2f} GB", flush=True)
             print("  parts " + " | ".join(f"{k_} {v_:.2f}" for k_, v_ in tsum.items()), flush=True)
             print("  helpers " + " | ".join(f"{k_} {v_[1]:.2f}s/{v_[0]}" for k_, v_ in sorted(tfn.items(), key=lambda x: -x[1][1])),
                   flush=True)
