@@ -26,4 +26,6 @@ for f in sorted(glob.glob(pat)):
                 rows.append(f"E{m.group(1)} {m.group(2)[:22]} {m.group(3)}")
         elif "Traceback" in l or l.startswith("RuntimeError") or "Error:" in l:
             rows.append("!! " + l[:150])
-    print("== " + f.split("/")[-1] + " | " + " ; ".join(rows[-6:]))
+    print("== " + f.split("/")[-1])
+    for r in rows[-int(sys.argv[2]) if len(sys.argv) > 2 else -5:]:
+        print("   " + r)
