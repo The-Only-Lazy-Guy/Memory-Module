@@ -1727,6 +1727,8 @@ def main():
     P.add_argument("--fast-decode", type=int, default=1, help="greedy decode with a key/value cache (GPT-2 stand-in)")
     P.add_argument("--prof-steps", type=lambda x: {int(v) for v in x.split(",") if v}, default=set(),
                    help="with --trace: profile the backward of these steps (op table)")
+    P.add_argument("--lr-const", type=int, default=0, help="DIAGNOSTIC: constant lr (no warm-up / cosine) -> a short run "
+                   "from a good checkpoint shows whether training keeps it (stability test) at full lr")
     P.add_argument("--diag-grad", type=int, default=0, help="DIAGNOSTIC (no training): run one step, print which "
                    "loss reaches which head (gradient paths; a head no outcome loss reaches drifts once the demos are "
                    "spent), then exit")
@@ -5079,7 +5081,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         tmark("other (log / evict / eval)" if step > 1 else None)
         if A.trace and A.prof_steps:                      # (profiled steps: forward tracebacks of each op)
             torch.autograd.set_detect_anomaly(step in A.prof_steps, check_nan=False)
-        lr = A.lr * min(1.0, step / 100) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / A.steps)))
+        lr = A.lr if A.lr_const else A.lr * min(1.0, step / 100) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / A.steps)))
         for gp in opt.param_groups:
             gp["lr"] = lr * gp.get("lr_mult", 1.0)
         ask_losses.clear()                                # (questions are encoded in ask(), before run())
