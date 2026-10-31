@@ -1613,6 +1613,10 @@ def main():
     P.add_argument("--frame-demo-budget", type=int, default=-1, help="phase 2: the dense FRAME labels (procedure "
                    "pointer / op / keep demos, pending-content and co-keep terms) act only on the first N frame rows of "
                    "each kind (fact / delta / multi / rule); later rows learn from the outcome. -1 = always (old)")
+    P.add_argument("--note-demo-budget", type=int, default=-1, help="D1: only the first N correction NOTES are "
+                   "demonstrated (teacher-forced read / tool / write); later notes run free, their sampled actions credited "
+                   "(like --rl-frames, same weight) with how exactly this step's questions about the EDITED fact were "
+                   "answered. -1 = every note demonstrated (old: dense, unbudgeted)")
     P.add_argument("--rl-frames", type=float, default=0.0, help="phase 2: REINFORCE on each frame row's executed write "
                    "decision (address, gate, mode, op, procedure read); reward = exactness of this step's free question "
                    "rows about the fact it carried")
@@ -2967,7 +2971,7 @@ def main():
                     left_ = run.fdemo_left.setdefault(kd_, A.frame_demo_budget)
                     dense_b[b] = left_ > 0
                     run.fdemo_left[kd_] = left_ - 1
-        rl_on = rl and kind == "question" and not teacher and torch.is_grad_enabled()   # free row: OUTCOME credit
+        rl_on = rl and kind in ("question", "note") and not teacher and torch.is_grad_enabled()   # free row: OUTCOME credit
         rl_lp = [[] for _ in range(B)]               # log-probs of the actions it took (sampled)
         for t in range(T):
             if kind == "frame" and lookk and t >= w0 + A.write_passes:
@@ -3451,7 +3455,7 @@ def main():
                                                     M["S"][c_].detach(), wv_[1].detach(), wv_[2].detach(),
                                                     world.ents[tl_[1]][tl_[2]], tl_[2] in world.multi_keys))
                         if kind == "note" and soft and A.w_commit and not (lookk and look[b] == 0):
-                            run.commit_items[b] = (sb(gl_node[b, c_]), sb(ul_node[b, c_]), V[c_].detach(), M["S"][c_].detach(),
+                            run.commit_items[rows[b]["qnid"]] = (sb(gl_node[b, c_]), sb(ul_node[b, c_]), V[c_].detach(), M["S"][c_].detach(),
                                                    srcreg[b][1].detach(), srcreg[b][2].detach(), rows[b]["ans"])
                         if lookk and look[b] == 0:        # the first write into a node is a PROPOSAL: tentative,
                             rec_["tentative"] = True      # shown to the row (look register), decided at the next pass
@@ -3798,6 +3802,12 @@ def main():
             lg_ = F.normalize(ws_ - km_, dim=-1) @ F.normalize(qs_ - km_, dim=-1).t() / A.inv_temp
             run.self_loss = F.cross_entropy(lg_, torch.arange(lg_.shape[0], device=dev))
             run.self_pairs = []
+        if rl_on and kind == "note":                 # a free note: its actions are credited later (training step)
+            for b in range(B):                       # with this step's questions about the fact it EDITED
+                if rl_lp[b]:
+                    run.frame_lp.append((rows[b]["edit"], "note", torch.stack(rl_lp[b]).sum()))
+            run.nrl_stats.append(float(em[:B].mean()))
+            return cost, em[:B], ok_act / max(1, n_act), None
         if rl_on:                                    # REINFORCE: reward = the answer said exactly, per-kind baseline;
             r_ = em[:B].detach()                     # the say head is NOT trained on a free row (a wrong program
             adv_ = []                                # would teach it to say the answer from a wrong register)
@@ -3825,6 +3835,7 @@ def main():
     run.rl_base, run.rl_stats = {}, {}                 # REINFORCE baselines / rewards by question kind
     run.fdemo_left, run.frame_lp, run.frl_stats = {}, [], {}   # phase 2: frame demo budget, frame log-probs
     run.demo_left = {}                                 # --demo-budget: demonstrations left per kind
+    run.note_left, run.nrl_stats = A.note_demo_budget, []   # --note-demo-budget: note demos left; free notes' exactness
 
     def demo_kind(q):
         """the skill a question row exercises (budget / baseline key)"""
@@ -5124,7 +5135,13 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         n_corr = int(rng.random() < A.corrections) + int(rng.random() < A.corrections - 1)
         cq = corrections(rng, n_corr)
         run.commit_items = {}
-        note_loss = run(cq, True, "note", soft=True)[0] if cq else torch.zeros((), device=dev)
+        if A.note_demo_budget >= 0 and cq:                # D1 budgeted: the first N notes demonstrated, later ones free
+            nd_ = max(0, min(run.note_left, len(cq)))
+            run.note_left -= nd_
+            nl_ = ([(run(cq[:nd_], True, "note", soft=True)[0], nd_)] if nd_ else []) +                   ([(run(cq[nd_:], False, "note", soft=True, rl=True)[0], len(cq) - nd_)] if nd_ < len(cq) else [])
+            note_loss = sum(l_ * n_ for l_, n_ in nl_) / len(cq)
+        else:
+            note_loss = run(cq, True, "note", soft=True)[0] if cq else torch.zeros((), device=dev)
         if run.commit_items:                         # "if I edit this, what happens?": the fact's question answered from
             it_ = list(run.commit_items.values())    # the target as it is (old value) vs as written (the edit's value);
             l_old = say_nll(torch.stack([x[2] for x in it_]), stackS([x[3] for x in it_]), [x[6] for x in it_])
@@ -5375,8 +5392,11 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                       f" | demonstrations used {sum(A.demo_budget - v_ for v_ in run.demo_left.values())} "
                       f"({len(run.demo_left)} kinds) | frame rows credited (reward by kind): "
                       f"{ {k_: ('%.2f of %d' % (sum(v_) / len(v_), len(v_))) for k_, v_ in sorted(run.frl_stats.items())} }"
-                      f" | frame dense labels left {dict(run.fdemo_left)}", flush=True)
-                run.rl_stats, run.frl_stats = {}, {}
+                      f" | frame dense labels left {dict(run.fdemo_left)}"
+                      + (f" | notes demos left {max(0, run.note_left)}, free notes computed exactly "
+                         f"{sum(run.nrl_stats) / max(1, len(run.nrl_stats)):.2f} of {len(run.nrl_stats)} batches"
+                         if A.note_demo_budget >= 0 else ""), flush=True)
+                run.rl_stats, run.frl_stats, run.nrl_stats = {}, {}, []
             if A.look and run.look_tr:
                 print(f"  look (proposed -> after looking): {dict(run.look_tr)}", flush=True)
                 run.look_tr.clear()
