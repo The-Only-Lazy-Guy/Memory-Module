@@ -1625,6 +1625,8 @@ def main():
                    "free rows (old: it drifted once the demos ran out -> right programs said wrong -> reads punished)")
     P.add_argument("--rl-neg", type=float, default=1.0, help="weight of NEGATIVE advantages in the REINFORCE terms "
                    "(question + frame rows); 0 = self-imitation (only better-than-baseline outcomes are reinforced)")
+    P.add_argument("--rl-neg-frames", type=float, default=-1.0, help="weight of negative advantages in the FRAME RL "
+                   "terms only (-1 = same as --rl-neg); st2: rl-neg 1 kept compositions (.99) but killed the rules")
     P.add_argument("--rl-temp", type=float, default=1.0, help="sampling temperature of free rows' actions (training)")
     P.add_argument("--proc-keep", type=int, default=0, help="multi keys get a KEEP rule (announced like add / set; "
                    "a key coexists only after it); Walker's reading of the procedure node also decides attach vs "
@@ -5192,11 +5194,12 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                             if lm_ and lm_[0] == "fact":
                                 fr_.setdefault((lm_[1], lm_[2]), []).append(float(rf_[1][b]))
                 terms_ = []
+                nf_ = A.rl_neg if A.rl_neg_frames < 0 else A.rl_neg_frames
                 for f_, kd_, lp_ in run.frame_lp:
                     if f_ in fr_:
                         r_ = sum(fr_[f_]) / len(fr_[f_])
                         b0_ = run.rl_base.get("frame " + kd_, 0.5)
-                        terms_.append(-((r_ - b0_) if r_ >= b0_ else A.rl_neg * (r_ - b0_)) * lp_)
+                        terms_.append(-((r_ - b0_) if r_ >= b0_ else nf_ * (r_ - b0_)) * lp_)
                         run.rl_base["frame " + kd_] = 0.95 * b0_ + 0.05 * r_
                         run.frl_stats.setdefault(kd_, []).append(r_)
                 if terms_:
