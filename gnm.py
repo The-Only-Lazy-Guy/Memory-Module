@@ -1665,6 +1665,9 @@ def main():
     P.add_argument("--recurse", type=int, default=0, help="long chains by recursion: SUB hands a span of the question "
                    "to a child row whose answer returns as a register (every row <= one operation)")
     P.add_argument("--max-depth", type=int, default=6)
+    P.add_argument("--sub-budget", type=int, default=8, help="compute bound: sub-questions per ROOT question in a free "
+                   "run, shared by its whole recursion tree (sampled SUBs at every pass of every child grew "
+                   "exponentially: rd2c 10-31 went from 12 s to ~15 min per step); spent -> SUB unavailable")
     P.add_argument("--q-slots", type=int, default=128, help="value slots of question / note nodes (the current input)")
     P.add_argument("--mem-slots", type=int, default=16, help="value slots a node keeps in memory (answers use <= max-ans)")
     P.add_argument("--write-slots", type=int, default=16, help="value slots Walker reads of a frame row's candidate")
@@ -2895,6 +2898,8 @@ def main():
         Training (soft): a row's hard decision is what the step's later rows see (straight-through), the
         alternatives act softly so gradient reaches address, gate and mode. Returns (loss, em, action acc, said)."""
         B = len(rows)
+        if depth == 0 and kind == "question":        # --sub-budget: a fresh budget per root question (children share
+            run.sub_left = {r_["qnid"]: A.sub_budget for r_ in rows}   # their root's qnid)
         if not B:
             return torch.zeros((), device=dev), None, 0.0, None
         writer = kind in ("frame", "note")
@@ -3044,6 +3049,9 @@ def main():
                 #                                  trained by question rows, frame queries inherited its pull)
             if not (A.recurse and kind == "question" and depth < A.max_depth):
                 le = torch.cat([le[:, :-1], torch.full_like(le[:, -1:], -1e4)], -1)   # no SUB
+            elif not teacher:                        # free run: a root question whose sub-question budget is spent
+                spent_ = torch.tensor([run.sub_left.get(r_["qnid"], 0) <= 0 for r_ in rows], device=dev)
+                le = torch.cat([le[:, :-1], le[:, -1:].masked_fill(spent_[:, None], -1e4)], -1)
             logits = torch.cat([e, le], -1)          # [nodes | NEW | tools | HALT | SUB]
             sp_lg = None
             if A.recurse and kind == "question" and any(regs):   # span pointer over each row's question slots
@@ -3516,6 +3524,8 @@ def main():
                     for (b, _), (_, rg) in zip(subs, enc_):
                         regs[b].append(rg)
                 else:                                # free run: actually solve the sub-question (recursion)
+                    for b, _ in subs:                    # (one budget per root question, its whole tree: --sub-budget)
+                        run.sub_left[rows[b]["qnid"]] = run.sub_left.get(rows[b]["qnid"], 0) - 1
                     kids = [{"qnid": rows[b]["qnid"], "reg0": span_reg(regs[b][0], *sp_), "prog": None, "ans": 0,
                              "vals": None, "ops": 0, "before": False} for b, sp_ in subs]
                     keep_ = {k_: getattr(run, k_, None) for k_ in ("acts", "oprec", "said", "diag", "final_regs")}
@@ -3835,7 +3845,7 @@ def main():
     run.rl_base, run.rl_stats = {}, {}                 # REINFORCE baselines / rewards by question kind
     run.fdemo_left, run.frame_lp, run.frl_stats = {}, [], {}   # phase 2: frame demo budget, frame log-probs
     run.demo_left = {}                                 # --demo-budget: demonstrations left per kind
-    run.note_left, run.nrl_stats = A.note_demo_budget, []   # --note-demo-budget: note demos left; free notes' exactness
+    run.note_left, run.nrl_stats, run.sub_left = A.note_demo_budget, [], {}   # --note-demo-budget: note demos left; free notes' exactness
 
     def demo_kind(q):
         """the skill a question row exercises (budget / baseline key)"""
