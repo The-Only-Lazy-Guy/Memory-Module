@@ -1443,6 +1443,8 @@ class Loop(nn.Module):
         self.Wdk, self.Wdv, self.Wdr = nn.Linear(d, dk), nn.Linear(d, dk), nn.Linear(d, dk)
         for m in (self.Wdk, self.Wdv, self.Wdr):
             nn.init.zeros_(m.weight); nn.init.zeros_(m.bias)
+        self.Wv = nn.Linear(d, 1)                # --rl-critic: a frame row's expected outcome from its own state
+        nn.init.zeros_(self.Wv.weight); nn.init.constant_(self.Wv.bias, 0.5)   # (= the old baseline's start)
 
 
 # ====================================================================== main
@@ -1631,6 +1633,9 @@ def main():
                    "(question + frame rows); 0 = self-imitation (only better-than-baseline outcomes are reinforced)")
     P.add_argument("--rl-neg-frames", type=float, default=-1.0, help="weight of negative advantages in the FRAME RL "
                    "terms only (-1 = same as --rl-neg); st2: rl-neg 1 kept compositions (.99) but killed the rules")
+    P.add_argument("--rl-critic", type=int, default=0, help="frame RL baseline = a learned value of the row's own "
+                   "Walker state (loop.Wv, MSE to the outcome) instead of one running mean per kind: 'delta' mixes plain "
+                   "updates with rule applications, the hard rows got biased negative advantages (st3d: rules .79 -> 0)")
     P.add_argument("--rl-temp", type=float, default=1.0, help="sampling temperature of free rows' actions (training)")
     P.add_argument("--proc-keep", type=int, default=0, help="multi keys get a KEEP rule (announced like add / set; "
                    "a key coexists only after it); Walker's reading of the procedure node also decides attach vs "
@@ -3421,7 +3426,7 @@ def main():
                             if pj is not None:
                                 lp_ = lp_ + torch.log(pi[b, int(pj[b])].clamp(min=1e-6))
                             kd_ = "multi" if mq_[0] == "fact" and mq_[2] in world.multi_keys else mq_[0]
-                            run.frame_lp.append(((mq_[1], mq_[2]), kd_, lp_))
+                            run.frame_lp.append(((mq_[1], mq_[2]), kd_, lp_, h[b].detach()))
                     if t == w0 and kind == "frame":
                         stat_rows.append((b, float(w_keep[b] + w_rep[b].sum()), float(P[b, I_NEW]),
                                           float(w_rep[b].sum()), int(pj[b]) < N, float(kap[b]) if kap is not None else 1.0))
@@ -3815,7 +3820,7 @@ def main():
         if rl_on and kind == "note":                 # a free note: its actions are credited later (training step)
             for b in range(B):                       # with this step's questions about the fact it EDITED
                 if rl_lp[b]:
-                    run.frame_lp.append((rows[b]["edit"], "note", torch.stack(rl_lp[b]).sum()))
+                    run.frame_lp.append((rows[b]["edit"], "note", torch.stack(rl_lp[b]).sum(), None))
             run.nrl_stats.append(float(em[:B].mean()))
             return cost, em[:B], ok_act / max(1, n_act), None
         if rl_on:                                    # REINFORCE: reward = the answer said exactly, per-kind baseline;
@@ -5220,15 +5225,22 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                             lm_ = store.prov.get(store.nodes[x_]["lsrc"]) if store.nodes[x_]["lsrc"] else None
                             if lm_ and lm_[0] == "fact":
                                 fr_.setdefault((lm_[1], lm_[2]), []).append(float(rf_[1][b]))
-                terms_ = []
+                terms_, vterms_ = [], []
                 nf_ = A.rl_neg if A.rl_neg_frames < 0 else A.rl_neg_frames
-                for f_, kd_, lp_ in run.frame_lp:
+                for f_, kd_, lp_, hv_ in run.frame_lp:
                     if f_ in fr_:
                         r_ = sum(fr_[f_]) / len(fr_[f_])
                         b0_ = run.rl_base.get("frame " + kd_, 0.5)
-                        terms_.append(-((r_ - b0_) if r_ >= b0_ else nf_ * (r_ - b0_)) * lp_)
                         run.rl_base["frame " + kd_] = 0.95 * b0_ + 0.05 * r_
+                        if A.rl_critic and hv_ is not None:      # the row's own expected outcome
+                            v_ = loop.Wv(hv_).squeeze()
+                            vterms_.append((v_ - r_) ** 2)
+                            b0_ = float(v_)
+                        terms_.append(-((r_ - b0_) if r_ >= b0_ else nf_ * (r_ - b0_)) * lp_)
                         run.frl_stats.setdefault(kd_, []).append(r_)
+                if vterms_:
+                    loss = loss + torch.stack(vterms_).mean()
+                    dparts["frame critic"] = torch.stack(vterms_).mean()
                 if terms_:
                     loss = loss + A.rl_frames * torch.stack(terms_).mean()
                     dparts["frame RL (outcome)"] = torch.stack(terms_).mean()
