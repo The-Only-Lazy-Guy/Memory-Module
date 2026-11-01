@@ -580,7 +580,6 @@ class Translator(nn.Module):
         self.norm = nn.LayerNorm(D, elementwise_affine=False)
         self.gate = nn.Sequential(nn.Linear(D, 256), nn.GELU(), nn.Linear(256, 1))
         self.proj = nn.Sequential(nn.Linear(D, 512), nn.GELU(), nn.Linear(512, d))
-        self.ruleq = nn.Sequential(nn.Linear(d, 256), nn.GELU(), nn.Linear(256, d))
         self.d = d
 
     def encode(self, texts):
@@ -608,11 +607,9 @@ class NeuralT:
     def label(self, text):
         return self._l(text)[0].cpu().numpy().astype(np.float32)
 
-    @torch.no_grad()
     def rule_query(self, text):
-        if self.key(text)[0] != "fact":
-            return None
-        return F.normalize(self.m.ruleq(self._l(text)), dim=-1)[0].cpu().numpy().astype(np.float32)
+        k = self.key(text)
+        return self.label(f"rule: {k[1]}") if k[0] == "fact" else None
 
 
 def views(rng, nm, k):
@@ -634,14 +631,10 @@ def label_loss(model, rng, vocab, n=8):
     N = len(facts)
     sim = y @ x.T / .07
     loss = F.cross_entropy(sim, torch.arange(N, device=sim.device))
-    r_keys = keys[:n]
-    kinds = [rng.choice(("add", "set", "keep")) for _ in r_keys]
-    r = model.encode([rule_text(rng, t, k) for t, k in zip(kinds, r_keys)])
-    r2 = model.encode([rule_text(rng, rng.choice(("add", "set", "keep")), k) for k in r_keys])
-    st = model.encode([f"{leaf(rng.choice(names), k)} is {rng.randint(1, 60)}." for k in r_keys])
-    q = F.normalize(model.ruleq(st), dim=-1)
-    t = torch.arange(n, device=sim.device)
-    return loss + F.cross_entropy(q @ r.T / .07, t) + F.cross_entropy(r2 @ r.T / .07, t)
+    rv = lambda k: rng.choice([f"rule: {k}", rule_text(rng, rng.choice(("add", "set", "keep")), k)])
+    a = model.encode([rv(k) for k in keys] + [f"the {k} is {rng.randint(1, 60)}." for k in keys] + [leaf(rng.choice(names), k) for k in keys])
+    b = model.encode([rv(k) for k in keys])
+    return loss + F.cross_entropy(b @ a.T / .07, torch.arange(n, device=sim.device))
 
 
 @torch.no_grad()
@@ -663,9 +656,11 @@ def label_eval(model, rng, vocab, n=40):
         pos = d.diag()
         neg = (d + torch.eye(len(facts), device=d.device) * 9).min(1)[0]
         out[name + "_pos99"], out[name + "_neg01"] = float(pos.quantile(.99)), float(neg.quantile(.01))
-    R = enc([rule_text(rng, "add", k) for k in keys])
-    q = F.normalize(model.ruleq(enc([f"{leaf(rng.choice(names), k)} is 3." for k in keys])), dim=-1)
-    out["rule"] = float(((q @ R.T).argmax(1) == torch.arange(n, device=q.device)).float().mean())
+    R = enc([rule_text(rng, rng.choice(("add", "set", "keep")), k) for k in keys] + [f"the {k} is 3." for k in keys])
+    C = enc([f"rule: {k}" for k in keys]) @ R.T
+    d = (2 - 2 * C).clamp(min=0).sqrt()
+    out["rule"] = float((C.argmax(1) == torch.arange(n, device=C.device)).float().mean())
+    out["rule_pos99"], out["rule_neg01"] = float(d[:, :n].diag().quantile(.99)), float((d + torch.eye(*d.shape, device=d.device) * 9).min(1)[0].quantile(.01))
     return out
 
 
@@ -787,7 +782,7 @@ class Machine:
 
     def f_insert(self, r, derived=False):              # A to be B: a new entry where the statement belongs
         self.t += 1
-        label = self.T.label(r.src)
+        label = self.T.label(phrase_of(r.src) or r.src)   # the phrase a lookup would use, not the whole sentence
         p = self.find(label)
         p = p if p >= 0 else self.g.add_place(label)
         text = f"{phrase_of(r.src)} is {r.stack[-1].value}." if derived else r.src
@@ -989,6 +984,6 @@ if __name__ == "__main__":
     P.add_argument("--save", default="")
     P.add_argument("--log", default="")
     P.add_argument("--lr", type=float, default=3e-4)
-    P.add_argument("--tau", type=float, default=.3, help="closer than this = the same place")
+    P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
     train_translator(A) if A.train else gold(A)
