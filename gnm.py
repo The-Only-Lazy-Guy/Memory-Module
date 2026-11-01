@@ -992,7 +992,7 @@ FUNCS = ["split", "lookup", "rule", "prev", "open", "drop", "nip", "join", "add"
 
 def view(r):
     """what a pass sees: the top of what it holds, then what it reads next; bounded at every depth"""
-    held = " | ".join(it.text[:60].strip() for it in r.stack[-3:])
+    held = " | ".join(it.text[:60].strip() for it in r.stack[-5:])   # [word, a, mid, b, ")"]: the tool needs the word
     base = len(held) + 4
     return f"{held} || {r.focus[-1][:90] if r.focus else ''}", base
 
@@ -1065,6 +1065,26 @@ def reader_loss(rd, batch):
     if k.any():
         loss = loss + F.cross_entropy(ends[k].masked_fill(mask[k] == 0, -1e4), t[k])
     return loss, float((logits.argmax(1) == y).float().mean())
+
+
+@torch.no_grad()
+def step_report(rd, bank, rng, n=1024):
+    """on demonstrated steps with fresh names: accuracy per function, and of split ends"""
+    S = [fresh(rng, x) for x in rng.sample(bank, min(n, len(bank)))]
+    hit, tot, eh, et = {}, {}, 0, 0
+    for i in range(0, len(S), 128):
+        b = S[i:i + 128]
+        views, names, chars = zip(*b)
+        logits, ends, off, mask = rd(views)
+        t = step_targets(views, names, chars, off).to(logits.device)
+        e = ends.masked_fill(mask == 0, -1e4).argmax(1)
+        for j, name in enumerate(names):
+            tot[name] = tot.get(name, 0) + 1
+            hit[name] = hit.get(name, 0) + int(FUNCS[int(logits[j].argmax())] == name)
+            if t[j] >= 0:
+                et += 1
+                eh += int(e[j] == t[j])
+    return " ".join(f"{k} {hit[k] / tot[k]:.3f}" for k in FUNCS if k in tot) + f" | split end {eh / max(1, et):.3f}"
 
 
 def run_free(m, rd, r, stop, max_pass=90, show=False):
@@ -1152,6 +1172,7 @@ def train_reader(A):
     w0 = new_world(rng)
     bank = collect(w0, Machine(Oracle(w0)), rng, A.demos)
     opt = torch.optim.AdamW([p for n, p in rd.named_parameters() if not n.startswith("tr.")], lr=A.lr)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, A.steps, eta_min=A.lr / 50)
     t0 = time.time()
     for step in range(1, A.steps + 1):
         rd.train()
@@ -1159,8 +1180,10 @@ def train_reader(A):
         opt.zero_grad()
         loss.backward()
         opt.step()
+        sched.step()
         if step % A.every == 0:
             rd.eval()
+            print("   per function:", step_report(rd, bank, rng), flush=True)
             w = new_world(rng)
             T = NeuralT(tr, Oracle(w), A.tau)
             m = Machine(T, T.d)
