@@ -624,8 +624,9 @@ def views(rng, nm, k):
 
 def label_loss(model, rng, vocab, n=8):
     """two views of each fact meet; same name / other key and same key / other name are the negatives (grid)"""
-    names = [_name(rng, 2) for _ in range(n)]
-    keys = [" ".join(_key(rng, vocab, set())) for _ in range(n)]
+    used, ku = set(), set()
+    names = [_name(rng, 2, used) for _ in range(n)]
+    keys = [" ".join(_key(rng, vocab, ku)) for _ in range(n)]
     facts = [(a, b) for a in names for b in keys]
     side = [f"the {' '.join(p)} is {_value(rng, rng.choice(_KINDS[:-2]))}." for p in (_key(rng, vocab, set()) for _ in range(16))]
     x = model.encode([views(rng, *f) for f in facts] + side)
@@ -646,8 +647,9 @@ def label_loss(model, rng, vocab, n=8):
 @torch.no_grad()
 def label_eval(model, rng, vocab, n=40):
     """fresh names and keys: does a phrase find its fact among everything, and how far apart are same and different"""
-    names = [_name(rng, 2) for _ in range(n)]
-    keys = [" ".join(_key(rng, vocab, set())) for _ in range(n)]
+    used, ku = set(), set()
+    names = [_name(rng, 2, used) for _ in range(n)]
+    keys = [" ".join(_key(rng, vocab, ku)) for _ in range(n)]
     facts = [(a, b) for a in names for b in keys]
     enc = lambda T: torch.cat([model.encode(T[i:i + 256]) for i in range(0, len(T), 256)])
     S = enc([f"{leaf(*f)} is {rng.randint(1, 60)}." for f in facts])
