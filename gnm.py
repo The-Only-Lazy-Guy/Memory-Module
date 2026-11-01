@@ -1642,6 +1642,9 @@ def main():
     P.add_argument("--rule-set-frac", type=float, default=1 / 3, help="data: share of new numeric rules that are 'set' "
                    "(else 'add'). At 1/3 reading ANOTHER key's rule was usually harmless (add vs add) and got reinforced: "
                    "the pointer learned recency, not the key (st7: newer foreign rules +10..20 over its own)")
+    P.add_argument("--co-ask", type=int, default=0, help="data: a multi fact that got its second value this step is "
+                   "asked 'sum of both' in the same step, and asked even when memory lost one value (before: only when "
+                   "BOTH were held -> a replace that dropped one was never answered wrong; coexist 1.0 @100 -> 0 @200)")
     P.add_argument("--rl-critic", type=int, default=0, help="frame RL baseline = a learned value of the row's own "
                    "Walker state (loop.Wv, MSE to the outcome) instead of one running mean per kind: 'delta' mixes plain "
                    "updates with rule applications, the hard rows got biased negative advantages (st3d: rules .79 -> 0)")
@@ -2644,15 +2647,18 @@ def main():
                 return None                                  # (soft phase: the same node is still both)
             return f"What was {leaf(nm, k)} before?", [("read", node)], [pv], pv
         if kind == "multi":                                  # coexisting values: both are read and combined
-            cands = [f for f, vs in world.multi.items() if len(vs) == 2 and all(f + (v,) in H for v in vs)   # ("both":
-                     #                                            facts with 3+ values (--multi-max) are not asked)
+            relax_ = A.co_ask and mode == "train"            # --co-ask: asked even when memory LOST one value (a
+            cands = [f for f, vs in world.multi.items() if len(vs) == 2   # replace that dropped it is then answered
+                     and (any if relax_ else all)(f + (v,) in H for v in vs)   # wrong -> its frame gets the outcome)
+                     #                                            ("both": facts with 3+ values (--multi-max) are not asked)
                      and (pool is None or f in pool)]
             if not cands:
                 return None
             nm, k = qrng.choice(sorted(cands))
             v1, v2 = world.multi[(nm, k)]
+            g1_, g2_ = gold_node(H, nm, k, v1), gold_node(H, nm, k, v2)
             return (f"What is the sum of both {words(k)} values of {nm}?",
-                    [("read", gold_node(H, nm, k, v1)), ("read", gold_node(H, nm, k, v2)), ("op", 0, [1, 2])],
+                    [("read", g1_ if g1_ is not None else g2_), ("read", g2_ if g2_ is not None else g1_), ("op", 0, [1, 2])],
                     [v1, v2, v1 + v2], v1 + v2)
         if kind == "chain":
             cands = [(nm, k) for (nm, k) in facts if k in world.ent_keys]
@@ -5326,6 +5332,10 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         qs = ask(rng, [(n_now, now), (n_col, coll), (n_rec, recent), (n_fg, forgot), (n_dp, deps_now),
                        (A.questions - n_now - n_col - n_rec - n_fg - n_dp, None)],
                  A.mix, tr_ops, "train", soft=True)
+        if A.co_ask:                                      # every multi fact that got its 2nd value this step is asked
+            co_now = {f for f in now if len(world.multi.get(f, ())) == 2}   # "both" in the same step (its frame's credit)
+            if co_now:
+                qs += ask(rng, [(len(co_now), co_now)], "multi:1.0", tr_ops, "train", soft=True)
         tmark("ask")
         run.self_loss = torch.zeros((), device=dev)
         if A.demo_budget >= 0 and A.demo_pick == "confused":   # T2: every row runs FREE first; the demo budget
