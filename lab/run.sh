@@ -11,7 +11,7 @@ if [ "$INIT" != "-" ] && [ ! -f $B/ckpt/$INIT.pt ]; then
   git fetch -q --depth 1 origin +ckpt:refs/remotes/origin/ckpt   # latest commit only; explicit ref (single-branch clones)
   PARTS=$(git ls-tree --name-only origin/ckpt | grep "^$INIT.pt" | sort -V)
   [ -n "$PARTS" ] || { echo "no $INIT on the ckpt branch"; exit 1; }
-  for p in $PARTS; do git show origin/ckpt:$p; done > $B/ckpt/$INIT.pt.tmp && mv $B/ckpt/$INIT.pt.tmp $B/ckpt/$INIT.pt
+  for p in $PARTS; do git show origin/ckpt:$p; done > $B/ckpt/$INIT.pt.tmp$$ && mv $B/ckpt/$INIT.pt.tmp$$ $B/ckpt/$INIT.pt
 fi
 F=$B/frozen/$NAME; rm -rf $F; mkdir -p $F; cp *.py $F/
 INITARG=(); [ "$INIT" != "-" ] && INITARG=(--init-full $B/ckpt/$INIT.pt)
