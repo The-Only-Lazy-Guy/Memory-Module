@@ -14,7 +14,7 @@ if [ "$INIT" != "-" ] && [ ! -f $B/ckpt/$INIT.pt ]; then
   for p in $PARTS; do git show origin/ckpt:$p; done > $B/ckpt/$INIT.pt.tmp$$ && mv $B/ckpt/$INIT.pt.tmp$$ $B/ckpt/$INIT.pt
 fi
 F=$B/frozen/$NAME; rm -rf $F; mkdir -p $F; cp *.py $F/
-INITARG=(); [ "$INIT" != "-" ] && INITARG=(--init-full $B/ckpt/$INIT.pt)
+INITARG=(); [ "$INIT" != "-" ] && INITARG=(--init $B/ckpt/$INIT.pt)
 cd $F
 nohup python -u gnm.py "${INITARG[@]}" "$@" --save $B/ckpt/$NAME.pt --log $B/out/$NAME.jsonl > $B/out/$NAME.log 2>&1 &
 echo "started $NAME pid $! (git $(git -C $M log --oneline -1 | cut -c1-40))"
