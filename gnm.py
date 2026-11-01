@@ -563,6 +563,9 @@ class Oracle:
         k = self.key(text)
         return self._vec(("rule", k[1])) if k[0] == "fact" else None
 
+    def same(self, a, b):
+        return np.linalg.norm(a - b) < self.tau
+
 
 # ====================================================================== the translator
 class Translator(nn.Module):
@@ -580,6 +583,7 @@ class Translator(nn.Module):
         self.norm = nn.LayerNorm(D, elementwise_affine=False)
         self.gate = nn.Sequential(nn.Linear(D, 256), nn.GELU(), nn.Linear(256, 1))
         self.proj = nn.Sequential(nn.Linear(D, 512), nn.GELU(), nn.Linear(512, d))
+        self.rel = nn.Sequential(nn.Linear(2 * d, 256), nn.GELU(), nn.Linear(256, 1))   # the relate tool: same place?
         self.d = d
 
     def encode(self, texts):
@@ -589,6 +593,9 @@ class Translator(nn.Module):
             h = self.norm(self.lm(**b).last_hidden_state)
         w = torch.sigmoid(self.gate(h)) * b["attention_mask"][..., None]
         return F.normalize(self.proj((w * h).sum(1) / w.sum(1).clamp(min=1e-6)), dim=-1)
+
+    def relate(self, a, b):
+        return self.rel(torch.cat([(a - b).abs(), a * b], -1)).squeeze(-1)
 
 
 class NeuralT:
@@ -611,12 +618,26 @@ class NeuralT:
         k = self.key(text)
         return self.label(f"rule: {k[1]}") if k[0] == "fact" else None
 
+    @torch.no_grad()
+    def same(self, a, b):
+        dev = next(self.m.proj.parameters()).device
+        return float(self.m.relate(torch.tensor(a, device=dev), torch.tensor(b, device=dev))) > 0
+
 
 def views(rng, nm, k):
     """one fact, said in the ways the input says it"""
     v, ph = rng.randint(1, 60), leaf(nm, k)
     return rng.choice([ph, ph, f"{ph} is {v}.", f"{ph} is {v}.", f"Correction: {ph} is now {v}.",
                        f"{ph} is {_name(rng, 2)}.", f"{ph} is {v} (same as {leaf(_name(rng, 2), ' '.join(_key(rng, KEYS_TRAIN, set())))})."])
+
+
+def relate_loss(model, y, x, sim):
+    """the tool is shown a true pair and each row's nearest wrong one"""
+    n = len(y)
+    i = torch.arange(n, device=y.device)
+    far = (sim.detach() - 1e4 * torch.eye(n, device=y.device)).argmax(1)
+    a, b = torch.cat([y.detach(), y.detach()]), torch.cat([x[i].detach(), x[far].detach()])
+    return F.binary_cross_entropy_with_logits(model.relate(a, b), torch.cat([torch.ones(n), torch.zeros(n)]).to(y.device))
 
 
 def label_loss(model, rng, vocab, n=8):
@@ -630,11 +651,12 @@ def label_loss(model, rng, vocab, n=8):
     y = model.encode([views(rng, *f) for f in facts])
     N = len(facts)
     sim = y @ x.T / .07
-    loss = F.cross_entropy(sim, torch.arange(N, device=sim.device))
+    t = torch.arange(N, device=sim.device)
+    loss = F.cross_entropy(sim, t) + relate_loss(model, y, x[:N], sim[:, :N])
     rv = lambda k: rng.choice([f"rule: {k}", rule_text(rng, rng.choice(("add", "set", "keep")), k)])
     a = model.encode([rv(k) for k in keys] + [f"the {k} is {rng.randint(1, 60)}." for k in keys] + [leaf(rng.choice(names), k) for k in keys])
     b = model.encode([rv(k) for k in keys])
-    return loss + F.cross_entropy(b @ a.T / .07, torch.arange(n, device=sim.device))
+    return loss + F.cross_entropy(b @ a.T / .07, torch.arange(n, device=sim.device)) + relate_loss(model, b, a[:n], b @ a[:n].T)
 
 
 @torch.no_grad()
@@ -652,15 +674,14 @@ def label_eval(model, rng, vocab, n=40):
         Q = enc(T)
         C = Q @ S.T
         out[name] = float((C.argmax(1) == torch.arange(len(facts), device=C.device)).float().mean())
-        d = (2 - 2 * C).clamp(min=0).sqrt()
-        pos = d.diag()
-        neg = (d + torch.eye(len(facts), device=d.device) * 9).min(1)[0]
-        out[name + "_pos99"], out[name + "_neg01"] = float(pos.quantile(.99)), float(neg.quantile(.01))
+        out[name + "_rel+"] = float((model.relate(Q, S) > 0).float().mean())
+        out[name + "_rel-"] = float((model.relate(Q, S[(C - 2 * torch.eye(len(facts), device=C.device)).argmax(1)]) <= 0).float().mean())
     R = enc([rule_text(rng, rng.choice(("add", "set", "keep")), k) for k in keys] + [f"the {k} is 3." for k in keys])
     C = enc([f"rule: {k}" for k in keys]) @ R.T
-    d = (2 - 2 * C).clamp(min=0).sqrt()
     out["rule"] = float((C.argmax(1) == torch.arange(n, device=C.device)).float().mean())
-    out["rule_pos99"], out["rule_neg01"] = float(d[:, :n].diag().quantile(.99)), float((d + torch.eye(*d.shape, device=d.device) * 9).min(1)[0].quantile(.01))
+    Q, S = enc([f"rule: {k}" for k in keys]), R[:n]
+    out["rule_rel+"] = float((model.relate(Q, S) > 0).float().mean())
+    out["rule_rel-"] = float((model.relate(Q, R[(C - 2 * torch.eye(*C.shape, device=C.device)).argmax(1)]) <= 0).float().mean())
     return out
 
 
@@ -718,9 +739,10 @@ class Machine:
     def find(self, label):
         if self.flat:
             j = self.g.flat(label)
-            return j if j >= 0 and np.linalg.norm(self.g.L[j] - label) < self.T.tau else -1
-        c = self.g.search(label)
-        return c[0][1] if c and c[0][0] < self.T.tau else -1
+        else:
+            c = self.g.search(label)
+            j = c[0][1] if c else -1
+        return j if j >= 0 and self.T.same(label, self.g.L[j]) else -1
 
     def entry_item(self, p, idx=-1):
         ch = self.g.chain[p]
