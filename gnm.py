@@ -1037,6 +1037,23 @@ def step_targets(views, names, chars, off):
     return torch.tensor(t)
 
 
+def fresh(rng, step):
+    """the same demonstrated step about other names and numbers: no new supervision, the skill must not be the names"""
+    (text, base), name, n = step
+    held, focus = text[:base], text[base:]
+    seen = {}
+
+    def sub(m):
+        w = m.group()
+        if w in ("What", "Correction", "The"):
+            return w
+        return seen.setdefault(w, str(rng.randint(1, 60)) if w.isdigit() else _name(rng, 2))
+    swap = lambda x: re.sub(r"\b(?:[A-Z][a-z]{2,}|\d+)\b", sub, x)
+    head, tail = (focus[:n], focus[n:]) if n is not None else (focus, "")
+    h2, a, b = swap(held), swap(head), swap(tail)
+    return (h2 + a + b, len(h2)), name, len(a) if n is not None else None
+
+
 def reader_loss(rd, batch):
     views, names, chars = zip(*batch)
     logits, ends, off, mask = rd(views)
@@ -1138,7 +1155,7 @@ def train_reader(A):
     t0 = time.time()
     for step in range(1, A.steps + 1):
         rd.train()
-        loss, acc = reader_loss(rd, rng.sample(bank, min(A.batch, len(bank))))
+        loss, acc = reader_loss(rd, [fresh(rng, x) for x in rng.sample(bank, min(A.batch, len(bank)))])
         opt.zero_grad()
         loss.backward()
         opt.step()
