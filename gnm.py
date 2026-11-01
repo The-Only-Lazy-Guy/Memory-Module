@@ -1050,7 +1050,7 @@ def reader_loss(rd, batch):
     return loss, float((logits.argmax(1) == y).float().mean())
 
 
-def run_free(m, rd, r, stop, max_pass=90):
+def run_free(m, rd, r, stop, max_pass=90, show=False):
     """the reader drives the row; returns False when it asks for something impossible"""
     try:
         while r.passes < max_pass:
@@ -1058,6 +1058,8 @@ def run_free(m, rd, r, stop, max_pass=90):
             with torch.no_grad():
                 logits, ends, off, mask = rd([v])
             name = FUNCS[int(logits.argmax(1))]
+            if show:
+                print("     ", repr(v[0][:110]), "->", name, flush=True)
             if name == "split":
                 o = off[0].tolist()
                 ok = [i for i, (a, e) in enumerate(o) if a >= v[1] and e > a]
@@ -1118,7 +1120,7 @@ def free_eval(world, m, rd, rng, q):
             if x:
                 r = Row(x[0])
                 n += 1
-                if run_free(m, rd, r, ("say",)):
+                if run_free(m, rd, r, ("say",), show=_ == 0 and kind in ("lookup", "before")):
                     ok += next((it.value for it in reversed(r.stack) if it.value is not None), None) == x[1]
         out.append(f"{kind} {ok}/{n}")
     return " | ".join(out)
