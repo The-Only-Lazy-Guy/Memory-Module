@@ -695,7 +695,7 @@ def train_translator(A):
     rng = random.Random(A.seed)
     t0 = time.time()
     for step in range(1, A.steps + 1):
-        loss = label_loss(model, rng, KEYS_TRAIN)
+        loss = label_loss(model, rng, KEYS_TRAIN, A.grid)
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -1006,6 +1006,7 @@ if __name__ == "__main__":
     P.add_argument("--save", default="")
     P.add_argument("--log", default="")
     P.add_argument("--lr", type=float, default=3e-4)
+    P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
     train_translator(A) if A.train else gold(A)
