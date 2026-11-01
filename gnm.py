@@ -1680,6 +1680,8 @@ def main():
                    "over leaves / earlier results; its answer takes the span's place in the question register, a child "
                    "inherits the registers of the result slots in its span) -> the span a pass picks stays short at any "
                    "depth (P2 closure); 0 = outermost-first (the span grows with depth)")
+    P.add_argument("--reinit-span", type=int, default=0, help="after --init-full: fresh span pointer heads (Wss / Wse); "
+                   "for --inner from an outermost-first checkpoint (in1 / in2: 50 demos at 5e-5 did not unlearn it)")
     P.add_argument("--recurse", type=int, default=0, help="long chains by recursion: SUB hands a span of the question "
                    "to a child row whose answer returns as a register (every row <= one operation)")
     P.add_argument("--max-depth", type=int, default=6)
@@ -1860,6 +1862,9 @@ def main():
         n_ok, n_skip = load_matching(st0, only_core=bool(A.swap_from))
         print(f"{'SWAP (core only)' if A.swap_from else 'INIT'} from {A.init_full or A.swap_from}: {n_ok} tensors "
               f"loaded, {n_skip} skipped (new heads / interface / shape changes)", flush=True)
+        if A.reinit_span:                                 # --inner from an outermost-first checkpoint: the span
+            loop.Wss.reset_parameters(); loop.Wse.reset_parameters()   # pointer starts blank (its demos re-teach it)
+            print("RESET the span pointer (loop.Wss / loop.Wse)", flush=True)
         if A.swap_from:                                   # a new LM = a new encoder: the running key mean (dk space,
             with torch.no_grad():                         # so loaded as "core") belongs to the OLD encoder's keys;
                 graph.kmu.zero_(); graph.kmu_n.zero_()    # at .9995 per step it took thousands of steps to follow
