@@ -8,7 +8,7 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
 B=/marimo; mkdir -p $B/out $B/ckpt $B/frozen
 M=$(cd "$(dirname "$0")/.." && pwd); cd $M   # the repo clone this script lives in
 if [ "$INIT" != "-" ] && [ ! -f $B/ckpt/$INIT.pt ]; then
-  git fetch -q origin ckpt
+  git fetch -q --depth 1 origin ckpt   # latest commit only (the branch holds every old checkpoint)
   for p in $(git ls-tree --name-only origin/ckpt | grep "^$INIT.pt"); do git show origin/ckpt:$p; done > $B/ckpt/$INIT.pt
 fi
 F=$B/frozen/$NAME; rm -rf $F; mkdir -p $F; cp *.py $F/
