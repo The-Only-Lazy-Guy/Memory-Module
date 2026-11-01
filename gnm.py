@@ -1160,7 +1160,7 @@ def free_eval(world, m, rd, rng, q):
             if x:
                 r = Row(x[0])
                 n += 1
-                if run_free(m, rd, r, ("say",), show=_ == 0 and kind in ("lookup", "before")):
+                if run_free(m, rd, r, ("say",), show=_ == 0 and kind == "ops"):
                     ok += next((it.value for it in reversed(r.stack) if it.value is not None), None) == x[1]
         out.append(f"{kind} {ok}/{n}")
     return " | ".join(out)
