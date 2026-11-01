@@ -753,7 +753,7 @@ class Machine:
         return Item(ch[idx][0], value_of(ch[idx][0]), p, idx, ch[idx + 1][1] if idx + 1 < len(ch) else None)
 
     def f_split(self, r, n):                           # text -> chunk, rest
-        c, r.focus[-1] = r.focus[-1][:n], r.focus[-1][n:]
+        c, r.focus[-1] = r.focus[-1][:n].strip(), r.focus[-1][n:].lstrip()   # no stray spaces: a chunk ends on a token
         if not r.focus[-1]:
             r.focus.pop()
             r.until = None
@@ -869,7 +869,7 @@ def gold_tree(m, r, t):
     mid, post = rest.split("{1}")
     lit = [pre, mid, post]
     for i, c in enumerate(t[2]):
-        n = len(lit[i]) + (1 if c[0] == "op" else 0)
+        n = len((lit[i] + ("(" if c[0] == "op" else "")).strip())
         if n:
             m.do(r, "split", n)
         gold_tree(m, r, c)
