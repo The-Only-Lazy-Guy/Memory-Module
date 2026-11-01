@@ -1037,18 +1037,21 @@ def step_targets(views, names, chars, off):
     return torch.tensor(t)
 
 
-def fresh(rng, step):
-    """the same demonstrated step about other names and numbers: no new supervision, the skill must not be the names"""
+def fresh(rng, step, keys=None):
+    """the same demonstrated step about other names, keys and numbers: no new supervision, the skill must not be them"""
     (text, base), name, n = step
     held, focus = text[:base], text[base:]
     seen = {}
+    pat = (keys + "|" if keys else "") + r"\b(?:[A-Z][a-z]{2,}|\d+)\b"
 
     def sub(m):
         w = m.group()
         if w in ("What", "Correction", "The"):
             return w
-        return seen.setdefault(w, str(rng.randint(1, 60)) if w.isdigit() else _name(rng, 2))
-    swap = lambda x: re.sub(r"\b(?:[A-Z][a-z]{2,}|\d+)\b", sub, x)
+        if w not in seen:
+            seen[w] = str(rng.randint(1, 60)) if w.isdigit() else _name(rng, 2) if w[0].isupper() else " ".join(_key(rng, KEYS_TRAIN, set()))
+        return seen[w]
+    swap = lambda x: re.sub(pat, sub, x)
     head, tail = (focus[:n], focus[n:]) if n is not None else (focus, "")
     h2, a, b = swap(held), swap(head), swap(tail)
     return (h2 + a + b, len(h2)), name, len(a) if n is not None else None
@@ -1068,9 +1071,9 @@ def reader_loss(rd, batch):
 
 
 @torch.no_grad()
-def step_report(rd, bank, rng, n=1024):
+def step_report(rd, bank, rng, keys, n=1024):
     """on demonstrated steps with fresh names: accuracy per function, and of split ends"""
-    S = [fresh(rng, x) for x in rng.sample(bank, min(n, len(bank)))]
+    S = [fresh(rng, x, keys) for x in rng.sample(bank, min(n, len(bank)))]
     hit, tot, eh, et = {}, {}, 0, 0
     for i in range(0, len(S), 128):
         b = S[i:i + 128]
@@ -1171,30 +1174,33 @@ def train_reader(A):
     rng = random.Random(A.seed)
     w0 = new_world(rng)
     bank = collect(w0, Machine(Oracle(w0)), rng, A.demos)
+    ks = sorted({words(k) for k in w0.num_keys + w0.multi_keys + w0.ent_keys}, key=len, reverse=True)
+    keys = r"\b(?:" + "|".join(re.escape(k) for k in ks) + r")\b"
     opt = torch.optim.AdamW([p for n, p in rd.named_parameters() if not n.startswith("tr.")], lr=A.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, A.steps, eta_min=A.lr / 50)
     t0 = time.time()
     for step in range(1, A.steps + 1):
         rd.train()
-        loss, acc = reader_loss(rd, [fresh(rng, x) for x in rng.sample(bank, min(A.batch, len(bank)))])
+        loss, acc = reader_loss(rd, [fresh(rng, x, keys) for x in rng.sample(bank, min(A.batch, len(bank)))])
         opt.zero_grad()
         loss.backward()
         opt.step()
         sched.step()
         if step % A.every == 0:
             rd.eval()
-            print("   per function:", step_report(rd, bank, rng), flush=True)
+            print("   per function:", step_report(rd, bank, rng, keys), flush=True)
             w = new_world(rng)
             T = NeuralT(tr, Oracle(w), A.tau)
             m = Machine(T, T.d)
             m.g.beam = A.beam
-            placed = 0
+            placed = rows = 0
             for _ in range(A.world):
                 for draw in world_step(w, rng):
                     o = draw()
                     for s in statements(o) if o else []:
+                        rows += 1
                         placed += run_free(m, rd, Row(s), ("insert", "derive"))
-            print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
+            print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} of {rows} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
             if A.save:
                 torch.save({k: v for k, v in rd.state_dict().items() if not k.startswith("tr.")}, A.save)
 
