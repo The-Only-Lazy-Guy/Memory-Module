@@ -713,27 +713,30 @@ class Budget(Exception):
 
 
 class Item:
-    def __init__(self, text, value=None, place=-1, idx=-1):
-        self.text, self.value, self.place, self.idx = text, value, place, idx
+    def __init__(self, text, value=None, place=-1, idx=-1, until=None):
+        self.text, self.value, self.place, self.idx, self.until = text, value, place, idx, until
 
 
 class Row:
     """one thought: what it is reading (focus) and what it holds (stack)"""
 
     def __init__(self, text):
-        self.src, self.focus, self.stack, self.passes = text, [text], [], 0
+        self.src, self.focus, self.stack, self.passes, self.until = text, [text], [], 0, None
 
 
 class Machine:
     """f(nodes) -> nodes. Every step of every row is one call of one function."""
 
     def __init__(self, translator, d=64, budget=400):
-        self.T, self.g, self.t, self.budget, self.flat = translator, Graph(d), 0, budget, False
+        self.T, self.g, self.t, self.budget, self.flat, self.trace = translator, Graph(d), 0, budget, False, None
 
     def do(self, r, name, *a):
         r.passes += 1
         if r.passes > self.budget:
             raise Budget()
+        if self.trace is not None:
+            f = a[0] if name == "tool" else "derive" if name == "insert" and a else name
+            self.trace.append((view(r), f, a[0] if name == "split" else None))
         return getattr(self, "f_" + name)(r, *a)
 
     def find(self, label):
@@ -747,17 +750,20 @@ class Machine:
     def entry_item(self, p, idx=-1):
         ch = self.g.chain[p]
         idx = idx % len(ch)
-        return Item(ch[idx][0], value_of(ch[idx][0]), p, idx)
+        return Item(ch[idx][0], value_of(ch[idx][0]), p, idx, ch[idx + 1][1] if idx + 1 < len(ch) else None)
 
     def f_split(self, r, n):                           # text -> chunk, rest
         c, r.focus[-1] = r.focus[-1][:n], r.focus[-1][n:]
         if not r.focus[-1]:
             r.focus.pop()
+            r.until = None
         m = re.search(r"(?<![\w-])\d+(?![\w-])", c)
         r.stack.append(Item(c, int(m.group()) if m else None))
 
     def f_open(self, r):                               # a node's text -> what the row reads next
-        r.focus.append(r.stack.pop().text)
+        it = r.stack.pop()
+        r.focus.append(it.text)
+        r.until = it.until                             # an old copy is read as it was then
 
     def f_drop(self, r):
         r.stack.pop()
@@ -769,11 +775,14 @@ class Machine:
         b, a = r.stack.pop(), r.stack.pop()
         r.stack.append(Item(f"{a.text.strip()} {b.value}"))
 
-    def f_lookup(self, r, until=None):                 # phrase -> newest entry of its place (older than `until`)
+    def f_say(self, r):                                # the row is done; its answer is what it holds
+        pass
+
+    def f_lookup(self, r):                             # phrase -> newest entry of its place (as of the row's time)
         p = self.find(self.T.label(r.stack.pop().text))
         idx = -1
-        if p >= 0 and until is not None:
-            idx = sum(t < until for _, t in self.g.chain[p]) - 1
+        if p >= 0 and r.until is not None:
+            idx = sum(t < r.until for _, t in self.g.chain[p]) - 1
             if idx < 0:
                 p = -1
         r.stack.append(self.entry_item(p, idx) if p >= 0 else Item("unknown"))
@@ -815,8 +824,8 @@ class Machine:
 ADD_RE = [re.compile(v.format(k=".*")) for v in RULE_PARTS["add"]]
 
 
-def gold_follow(m, r, until=None):
-    """the top entry may say it is a copy of another fact: follow it (as of `until`, for an old copy)"""
+def gold_follow(m, r):
+    """the top entry may say it is a copy of another fact: follow it"""
     seen = set()
     while "(same as" in r.stack[-1].text:
         t = r.stack[-1].text
@@ -829,7 +838,7 @@ def gold_follow(m, r, until=None):
         m.do(r, "split", t.index(src))
         m.do(r, "drop")
         m.do(r, "split", len(src))
-        m.do(r, "lookup", until)
+        m.do(r, "lookup")
         m.do(r, "split", len(t) - t.index(src) - len(src))
         m.do(r, "drop")
 
@@ -847,7 +856,7 @@ def gold_older(m, r):
         it = r.stack[-1]
         m.do(r, "prev")
         if it.place >= 0 and it.idx > 0:
-            gold_follow(m, r, m.g.chain[it.place][it.idx][1])   # an old copy is read as it was then
+            gold_follow(m, r)
         if r.stack[-1].value != cur or r.stack[-1].text == "unknown":
             return
         m.do(r, "nip")
@@ -877,10 +886,8 @@ def arrive(m, text):
     if m.T.key(text)[0] != "fact" or text.startswith("Correction"):
         return m.do(r, "insert")
     m.do(r, "rule")
-    add = any(x.search(r.stack[-1].text) for x in ADD_RE)
-    ph = phrase_of(text)
-    if add and m.find(m.T.label(ph)) >= 0 and "(same as" not in text:
-        gold_read(m, r, ph)
+    if any(x.search(r.stack[-1].text) for x in ADD_RE) and "(same as" not in text:
+        gold_read(m, r, phrase_of(text))
         if r.stack[-1].text != "unknown":
             m.do(r, "split", len(r.focus[-1]))
             m.do(r, "tool", "add")
@@ -888,71 +895,271 @@ def arrive(m, text):
     m.do(r, "insert")
 
 
-def ask(m, kind, world, rng, ops=(1, 3)):
-    """(question, truth, what the row holds, passes), or None when the world has no such question yet"""
+def question(kind, world, rng, ops=(1, 3)):
+    """(text, truth, the correct calls), or None when the world has no such question yet"""
     num = sorted(f for f in world.hist if f[1] in world.num_keys and f[0] in world.ents and f[1] in world.ents[f[0]])
     if not num:
         return None
     if kind == "lookup":
         nm, k = rng.choice(num)
-        q, truth = leaf(nm, k), world.ents[nm][k]
-        r = Row(f"What is {q}?")
-        m.do(r, "split", len("What is "))
-        gold_read(m, r, q)
-    elif kind == "before":
+        q = leaf(nm, k)
+
+        def calls(m, r):
+            m.do(r, "split", len("What is "))
+            gold_read(m, r, q)
+        return f"What is {q}?", world.ents[nm][k], calls
+    if kind == "before":
         c = [f for f in num if len(set(world.hist[f])) > 1]
         if not c:
             return None
         nm, k = rng.choice(c)
-        h = world.hist[(nm, k)]
-        truth = next(v for v in reversed(h) if v != h[-1])
-        q = leaf(nm, k)
-        r = Row(f"What was {q} before?")
-        m.do(r, "split", len("What was "))
-        gold_read(m, r, q)
-        gold_older(m, r)
-    elif kind == "coexist":
+        h, q = world.hist[(nm, k)], leaf(nm, k)
+
+        def calls(m, r):
+            m.do(r, "split", len("What was "))
+            gold_read(m, r, q)
+            gold_older(m, r)
+        return f"What was {q} before?", next(v for v in reversed(h) if v != h[-1]), calls
+    if kind == "coexist":
         c = sorted(f for f, v in world.multi.items() if len(v) == 2)
         if not c:
             return None
         nm, k = rng.choice(c)
-        truth = sum(world.multi[(nm, k)])
         q = leaf(nm, k)
-        r = Row(f"What is the sum of both values of {q}?")
-        m.do(r, "split", len("What is the sum of both values of "))
-        gold_read(m, r, q)
-        gold_older(m, r)
-        m.do(r, "tool", "add")
-    elif kind == "chain":
+
+        def calls(m, r):
+            m.do(r, "split", len("What is the sum of both values of "))
+            gold_read(m, r, q)
+            gold_older(m, r)
+            m.do(r, "tool", "add")
+        return f"What is the sum of both values of {q}?", sum(world.multi[(nm, k)]), calls
+    if kind == "chain":
         c = [(nm, k, k2) for nm, e in sorted(world.ents.items()) for k in sorted(e) if k in world.ent_keys
              for k2 in sorted(world.ents.get(e[k], {})) if k2 in world.num_keys]
         if not c:
             return None
         nm, k, k2 = rng.choice(c)
-        truth = world.ents[world.ents[nm][k]][k2]
-        a, b = f"the {words(k2)} of ", leaf(nm, k)
-        r = Row(f"What is {a}{b}?")
-        m.do(r, "split", len("What is "))
-        m.do(r, "split", len(a))
-        gold_read(m, r, b)
-        m.do(r, "join")
-        m.do(r, "lookup")
-        gold_follow(m, r)
-    else:
-        t = rand_tree(rng, num, rng.randint(*ops), "any")
-        truth = (lambda f: f(f, t))(lambda f, x: world.ents[x[1]][x[2]] if x[0] == "leaf" else
-                                    next(y for y in TOOLS if y[0] == x[1])[1](f(f, x[2][0]), f(f, x[2][1])))
-        r = Row(f"What is {render(t)}?")
+        a_, b_ = f"the {words(k2)} of ", leaf(nm, k)
+
+        def calls(m, r):
+            m.do(r, "split", len("What is "))
+            m.do(r, "split", len(a_))
+            gold_read(m, r, b_)
+            m.do(r, "join")
+            m.do(r, "lookup")
+            gold_follow(m, r)
+        return f"What is {a_}{b_}?", world.ents[world.ents[nm][k]][k2], calls
+    t = rand_tree(rng, num, rng.randint(*ops), "any")
+    truth = (lambda f: f(f, t))(lambda f, x: world.ents[x[1]][x[2]] if x[0] == "leaf" else
+                                next(y for y in TOOLS if y[0] == x[1])[1](f(f, x[2][0]), f(f, x[2][1])))
+
+    def calls(m, r):
         m.do(r, "split", len("What is "))
         gold_tree(m, r, t)
-    got = next((it.value for it in reversed(r.stack) if it.value is not None), None)
-    return r.src, truth, got, r.passes
+    return f"What is {render(t)}?", truth, calls
+
+
+def ask(m, kind, world, rng, ops=(1, 3)):
+    """(question, truth, what the row holds, passes), by the correct calls"""
+    x = question(kind, world, rng, ops)
+    if not x:
+        return None
+    r = Row(x[0])
+    x[2](m, r)
+    m.do(r, "say")
+    return r.src, x[1], next((it.value for it in reversed(r.stack) if it.value is not None), None), r.passes
+
+
+def new_world(rng):
+    w = World(rng)
+    w.multi_max, w.p_set = 2, 0.5
+    return w
+
+
+def world_step(world, rng):
+    """one step of input, frame by frame: each frame is read as it happens, the world moves on with it"""
+    draws = ([lambda: world.rule(rng)] if rng.random() < .6 else []) + [lambda: world.component(rng)] * 3
+    if rng.random() < .6:
+        draws.append(lambda: (world.coexist(rng) or (None,))[0])
+    if rng.random() < .8 and world.ents:
+        draws.append(lambda: world.correction(rng)[0])
+    return draws
+
+
+# ====================================================================== the reader: what do I want next?
+FUNCS = ["split", "lookup", "rule", "prev", "open", "drop", "nip", "join", "add", "sub", "max", "min", "insert", "derive", "say"]
+
+
+def view(r):
+    """what a pass sees: the top of what it holds, then what it reads next; bounded at every depth"""
+    held = " | ".join(it.text[:60].strip() for it in r.stack[-3:])
+    base = len(held) + 4
+    return f"{held} || {r.focus[-1][:90] if r.focus else ''}", base
+
+
+class Reader(nn.Module):
+    """reads the view, states a want; the want matches a function node. A split also points at where the chunk ends."""
+
+    def __init__(self, tr, d=256):
+        super().__init__()
+        self.tr = tr
+        D = tr.lm.config.hidden_size
+        self.enc = nn.TransformerEncoder(nn.TransformerEncoderLayer(D, 8, 2048, batch_first=True, activation="gelu"), 2)
+        self.want = nn.Linear(D, d)
+        self.fn = nn.Parameter(F.normalize(torch.randn(len(FUNCS), d), dim=-1))
+        self.tau = nn.Parameter(torch.tensor(20.))
+        self.end = nn.Linear(D, 1)
+
+    def forward(self, views):
+        dev = self.end.weight.device
+        b = self.tr.tok([v[0] for v in views], return_tensors="pt", padding=True, return_offsets_mapping=True)
+        off = b.pop("offset_mapping")
+        b = b.to(dev)
+        with torch.no_grad():
+            h = self.tr.lm(**b).last_hidden_state
+        h = self.enc(h, src_key_padding_mask=b["attention_mask"] == 0)
+        last = b["attention_mask"].sum(1) - 1
+        s = h[torch.arange(len(views), device=dev), last]
+        logits = self.tau * F.normalize(self.want(s), dim=-1) @ F.normalize(self.fn, dim=-1).T
+        return logits, self.end(h).squeeze(-1), off, b["attention_mask"]
+
+
+def step_targets(views, names, chars, off):
+    """a split's end, in tokens: the token whose end is that character"""
+    t = []
+    for (v, base), n, o in zip(views, chars, off.tolist()):
+        if n is None:
+            t.append(-1)
+            continue
+        want = base + n
+        ends = [i for i, (a, e) in enumerate(o) if a >= base and e > a]
+        t.append(min(ends, key=lambda i: abs(o[i][1] - want)) if ends else -1)
+    return torch.tensor(t)
+
+
+def reader_loss(rd, batch):
+    views, names, chars = zip(*batch)
+    logits, ends, off, mask = rd(views)
+    dev = logits.device
+    y = torch.tensor([FUNCS.index(n) for n in names], device=dev)
+    loss = F.cross_entropy(logits, y)
+    t = step_targets(views, names, chars, off).to(dev)
+    k = t >= 0
+    if k.any():
+        loss = loss + F.cross_entropy(ends[k].masked_fill(mask[k] == 0, -1e4), t[k])
+    return loss, float((logits.argmax(1) == y).float().mean())
+
+
+def run_free(m, rd, r, stop, max_pass=90):
+    """the reader drives the row; returns False when it asks for something impossible"""
+    try:
+        while r.passes < max_pass:
+            v = view(r)
+            with torch.no_grad():
+                logits, ends, off, mask = rd([v])
+            name = FUNCS[int(logits.argmax(1))]
+            if name == "split":
+                o = off[0].tolist()
+                ok = [i for i, (a, e) in enumerate(o) if a >= v[1] and e > a]
+                if not ok:
+                    return False
+                j = max(ok, key=lambda i: float(ends[0, i]))
+                m.do(r, "split", o[j][1] - v[1])
+            elif name in ("add", "sub", "max", "min"):
+                m.do(r, "tool", name)
+            elif name == "derive":
+                m.do(r, "insert", True)
+            else:
+                m.do(r, name)
+            if name in stop:
+                return True
+    except (IndexError, AttributeError, Budget, TypeError, ValueError):
+        return False
+    return False
+
+
+def collect(world, m, rng, per_kind):
+    """the demonstrations: a fixed number of step-by-step rows per kind"""
+    bank, count = [], {}
+    m.trace = []
+
+    def keep(kind):
+        if count.get(kind, 0) < per_kind:
+            count[kind] = count.get(kind, 0) + 1
+            bank.extend(m.trace)
+        m.trace = []
+
+    kinds = ("fact", "delta", "rule", "note", "copy", "lookup", "before", "coexist", "chain", "ops")
+    tick = 0
+    while tick < 5000 and any(count.get(k, 0) < per_kind for k in kinds):
+        tick += 1
+        for draw in world_step(world, rng):
+            o = draw()
+            for s in statements(o) if o else []:
+                n = len(bank)
+                arrive(m, s)
+                names = [x[1] for x in m.trace]
+                keep("delta" if "derive" in names else "rule" if m.T.key(s)[0] == "rule" else "note" if s.startswith("Correction")
+                     else "copy" if "(same as" in s else "fact")
+        for k in kinds[5:]:
+            if ask(m, k, world, rng):
+                keep(k)
+            m.trace = []
+    print("demonstrations", count, "steps", len(bank), flush=True)
+    return bank
+
+
+def free_eval(world, m, rd, rng, q):
+    out = []
+    for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6))):
+        ok = n = 0
+        for _ in range(q):
+            x = question(kind, world, rng, ops or (1, 3))
+            if x:
+                r = Row(x[0])
+                n += 1
+                if run_free(m, rd, r, ("say",)):
+                    ok += next((it.value for it in reversed(r.stack) if it.value is not None), None) == x[1]
+        out.append(f"{kind} {ok}/{n}")
+    return " | ".join(out)
+
+
+def train_reader(A):
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    rd = Reader(tr).to(dev)
+    rng = random.Random(A.seed)
+    w0 = new_world(rng)
+    bank = collect(w0, Machine(Oracle(w0)), rng, A.demos)
+    opt = torch.optim.AdamW([p for n, p in rd.named_parameters() if not n.startswith("tr.")], lr=A.lr)
+    t0 = time.time()
+    for step in range(1, A.steps + 1):
+        rd.train()
+        loss, acc = reader_loss(rd, rng.sample(bank, min(A.batch, len(bank))))
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        if step % A.every == 0:
+            rd.eval()
+            w = new_world(rng)
+            T = NeuralT(tr, Oracle(w), A.tau)
+            m = Machine(T, T.d)
+            m.g.beam = A.beam
+            placed = 0
+            for _ in range(A.world):
+                for draw in world_step(w, rng):
+                    o = draw()
+                    for s in statements(o) if o else []:
+                        placed += run_free(m, rd, Row(s), ("insert", "derive"))
+            print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
+            if A.save:
+                torch.save({k: v for k, v in rd.state_dict().items() if not k.startswith("tr.")}, A.save)
 
 
 def gold(A):
     rng = random.Random(A.seed)
-    world = World(rng)
-    world.multi_max, world.p_set = 2, 0.5
+    world = new_world(rng)
     T = Oracle(world)
     if A.init:
         model = Translator().to("cuda" if torch.cuda.is_available() else "cpu").eval()
@@ -965,11 +1172,7 @@ def gold(A):
         for _ in range(2):
             for s in state_statements(state_frame(rng)):
                 arrive(m, s)
-        draws = ([lambda: world.rule(rng)] if rng.random() < .6 else []) + [lambda: world.component(rng)] * 3
-        if rng.random() < .6:
-            draws.append(lambda: (world.coexist(rng) or (None,))[0])
-        if rng.random() < .8 and world.ents:
-            draws.append(lambda: world.correction(rng)[0])
+        draws = world_step(world, rng)
         for draw in draws:                             # each frame is read as it happens: the world moves on with it
             o = draw()
             for s in statements(o) if o else []:
@@ -1002,6 +1205,10 @@ if __name__ == "__main__":
     P.add_argument("--show", type=int, default=2)
     P.add_argument("--seed", type=int, default=1)
     P.add_argument("--train", action="store_true", help="train the translator's labels")
+    P.add_argument("--read", action="store_true", help="train the reader on demonstrations (--init = the translator)")
+    P.add_argument("--demos", type=int, default=50)
+    P.add_argument("--batch", type=int, default=64)
+    P.add_argument("--world", type=int, default=30, help="steps of world the free eval lives through")
     P.add_argument("--init", default="")
     P.add_argument("--save", default="")
     P.add_argument("--log", default="")
@@ -1009,4 +1216,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    train_translator(A) if A.train else gold(A)
+    train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
