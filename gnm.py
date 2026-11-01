@@ -1685,6 +1685,8 @@ def main():
                    "depth (P2 closure); 0 = outermost-first (the span grows with depth)")
     P.add_argument("--reinit-span", type=int, default=0, help="after --init-full: fresh span pointer heads (Wss / Wse); "
                    "for --inner from an outermost-first checkpoint (in1 / in2: 50 demos at 5e-5 did not unlearn it)")
+    P.add_argument("--span-lr-mult", type=float, default=1.0, help="lr multiplier of the span pointer heads (Wss / Wse) "
+                   "only: a blank pointer re-taught by 50 demos at the outcome-phase lr learned too slowly (in3 / in4)")
     P.add_argument("--recurse", type=int, default=0, help="long chains by recursion: SUB hands a span of the question "
                    "to a child row whose answer returns as a register (every row <= one operation)")
     P.add_argument("--max-depth", type=int, default=6)
@@ -1829,10 +1831,13 @@ def main():
     opt_ref = torch.optim.Adam([{"params": ref_ps}, {"params": ref_sc, "lr": 30 * A.rel_lr}], lr=A.rel_lr)
     look_ps = list(loop.Wlook.parameters())    # the look's correction (own group; main18c's "did not move" was a
     look_ids = {id(p) for p in look_ps}        # zero gradient: notes' soft write came from their HALT pass)
+    span_ps = list(loop.Wss.parameters()) + list(loop.Wse.parameters()) if A.span_lr_mult != 1.0 else []
+    look_ids = look_ids | {id(p) for p in span_ps}   # (--span-lr-mult: the span pointer in its own group)
     opt = torch.optim.AdamW([{"params": [p for p in params if id(p) not in knob_ids | look_ids], "lr_mult": 1.0},
                              {"params": list({id(p): p for p in knobs}.values()), "lr_mult": 50.0,
                               "weight_decay": 0.0},
-                             {"params": look_ps, "lr_mult": A.look_lr, "weight_decay": 0.0}], lr=A.lr, weight_decay=0.01)
+                             {"params": look_ps, "lr_mult": A.look_lr, "weight_decay": 0.0}]
+                            + ([{"params": span_ps, "lr_mult": A.span_lr_mult}] if span_ps else []), lr=A.lr, weight_decay=0.01)
     assert A.dk not in (d, 2 * d), "dk must differ from the LM width (the interface is found by shape)"
 
     def is_interface(t):
