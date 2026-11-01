@@ -1645,6 +1645,10 @@ def main():
     P.add_argument("--co-ask", type=int, default=0, help="data: a multi fact that got its second value this step is "
                    "asked 'sum of both' in the same step, and asked even when memory lost one value (before: only when "
                    "BOTH were held -> a replace that dropped one was never answered wrong; coexist 1.0 @100 -> 0 @200)")
+    P.add_argument("--co-credit", type=int, default=0, help="frame RL: every multi fact that got its 2nd value this step "
+                   "is asked 'sum of both' (also when memory lost one value) WITHOUT gradient; its exactness only credits "
+                   "that fact's frame rows (co1: the same questions as trained rows pushed loss into reads of lost "
+                   "values; before: multi frames ~2 credited per 25 steps -> coexist lived only on the frame demos)")
     P.add_argument("--rl-critic", type=int, default=0, help="frame RL baseline = a learned value of the row's own "
                    "Walker state (loop.Wv, MSE to the outcome) instead of one running mean per kind: 'delta' mixes plain "
                    "updates with rule applications, the hard rows got biased negative advantages (st3d: rules .79 -> 0)")
@@ -2654,7 +2658,7 @@ def main():
                 return None                                  # (soft phase: the same node is still both)
             return f"What was {leaf(nm, k)} before?", [("read", node)], [pv], pv
         if kind == "multi":                                  # coexisting values: both are read and combined
-            relax_ = A.co_ask and mode == "train"            # --co-ask: asked even when memory LOST one value (a
+            relax_ = (A.co_ask and mode == "train") or mode == "credit"   # --co-ask / --co-credit: asked even when memory LOST one value (a
             cands = [f for f, vs in world.multi.items() if len(vs) == 2   # replace that dropped it is then answered
                      and (any if relax_ else all)(f + (v,) in H for v in vs)   # wrong -> its frame gets the outcome)
                      #                                            ("both": facts with 3+ values (--multi-max) are not asked)
@@ -5270,6 +5274,8 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         t_before = store.time
         recent_times.append(t_before)
         hist0 = {f: len(v) for f, v in world.hist.items()}
+        multi0 = {f: len(v) for f, v in world.multi.items()}   # before the frames are drawn (taken after them, a multi
+        #   fact's new value was never in `now`: never asked in its step -> its frame ~never credited, coexist lived on demos)
         run.logit_pen = torch.zeros((), device=dev)
         rule = world.rule(rng) if rng.random() < A.p_rule else None   # a new rule: before the frames it governs
         objs = [("state", state_frame(rng)) for _ in range(A.states)] + [("item", world.component(rng))
@@ -5280,7 +5286,6 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
         co_f = world.coexist(rng) if rng.random() < A.p_coexist else None   # a multi key's second value (coexists:
         if co_f is not None:                                                   # was 2-4 per 25 steps from components)
             objs.insert(rng.randint(1 if rule is not None else 0, len(objs)), ("item", co_f[0]))
-        multi0 = {f: len(v) for f, v in world.multi.items()}
         cost = (write([o for k_, o in objs if k_ == "state"], True, "state")
                 + write([o for k_, o in objs if k_ == "item"], True))       # soft integrate: later questions train it
         tmark("frames")
@@ -5376,6 +5381,15 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                             lm_ = store.prov.get(store.nodes[x_]["lsrc"]) if store.nodes[x_]["lsrc"] else None
                             if lm_ and lm_[0] == "fact":
                                 fr_.setdefault((lm_[1], lm_[2]), []).append(float(rf_[1][b]))
+                co_now = {f for f in now if len(world.multi.get(f, ())) == 2} if A.co_credit else set()
+                qc_ = ask(rng, [(len(co_now), co_now)], "multi:1.0", tr_ops, "credit", soft=True) if co_now else []
+                if qc_:                                   # --co-credit: outcome of the fact's 'both' question, no gradient
+                    with torch.no_grad():
+                        rc_ = run(qc_, False)
+                    for b, q_ in enumerate(qc_):
+                        lm_ = store.prov.get(store.nodes[q_["prog"][1][1]]["lsrc"]) if store.nodes[q_["prog"][1][1]]["lsrc"] else None
+                        if lm_ and lm_[0] == "fact":
+                            fr_.setdefault((lm_[1], lm_[2]), []).append(float(rc_[1][b]))
                 terms_, vterms_ = [], []
                 nf_ = A.rl_neg if A.rl_neg_frames < 0 else A.rl_neg_frames
                 np_ = nf_ if A.rl_neg_proc < 0 else A.rl_neg_proc
