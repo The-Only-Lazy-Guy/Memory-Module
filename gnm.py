@@ -1831,7 +1831,8 @@ def main():
     opt_ref = torch.optim.Adam([{"params": ref_ps}, {"params": ref_sc, "lr": 30 * A.rel_lr}], lr=A.rel_lr)
     look_ps = list(loop.Wlook.parameters())    # the look's correction (own group; main18c's "did not move" was a
     look_ids = {id(p) for p in look_ps}        # zero gradient: notes' soft write came from their HALT pass)
-    span_ps = list(loop.Wss.parameters()) + list(loop.Wse.parameters()) if A.span_lr_mult != 1.0 else []
+    span_ps = (list(loop.Wss.parameters()) + list(loop.Wse.parameters()) + list(loop.Wsk.parameters())
+               if A.span_lr_mult != 1.0 else [])
     look_ids = look_ids | {id(p) for p in span_ps}   # (--span-lr-mult: the span pointer in its own group)
     opt = torch.optim.AdamW([{"params": [p for p in params if id(p) not in knob_ids | look_ids], "lr_mult": 1.0},
                              {"params": list({id(p): p for p in knobs}.values()), "lr_mult": 50.0,
@@ -1872,7 +1873,8 @@ def main():
               f"loaded, {n_skip} skipped (new heads / interface / shape changes)", flush=True)
         if A.reinit_span:                                 # --inner from an outermost-first checkpoint: the span
             loop.Wss.reset_parameters(); loop.Wse.reset_parameters()   # pointer starts blank (its demos re-teach it)
-            print("RESET the span pointer (loop.Wss / loop.Wse)", flush=True)
+            loop.Wsk.reset_parameters()                   # (and the slots' key side: it held the outermost cue)
+            print("RESET the span pointer (loop.Wss / loop.Wse / loop.Wsk)", flush=True)
         if A.swap_from:                                   # a new LM = a new encoder: the running key mean (dk space,
             with torch.no_grad():                         # so loaded as "core") belongs to the OLD encoder's keys;
                 graph.kmu.zero_(); graph.kmu_n.zero_()    # at .9995 per step it took thousands of steps to follow
