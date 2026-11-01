@@ -1633,6 +1633,10 @@ def main():
                    "(question + frame rows); 0 = self-imitation (only better-than-baseline outcomes are reinforced)")
     P.add_argument("--rl-neg-frames", type=float, default=-1.0, help="weight of negative advantages in the FRAME RL "
                    "terms only (-1 = same as --rl-neg); st2: rl-neg 1 kept compositions (.99) but killed the rules")
+    P.add_argument("--rl-neg-proc", type=float, default=-1.0, help="weight of negative advantages on the HOW part of "
+                   "a frame row's decision (procedure pointer + op) only; the WHERE part (address / gate / replace-vs-attach) "
+                   "keeps --rl-neg-frames. -1 = same. st3: frame negatives taught attach (coexist 1.0) but drove the rule "
+                   "pointer off (delta reward .05, rules 0)")
     P.add_argument("--rl-critic", type=int, default=0, help="frame RL baseline = a learned value of the row's own "
                    "Walker state (loop.Wv, MSE to the outcome) instead of one running mean per kind: 'delta' mixes plain "
                    "updates with rule applications, the hard rows got biased negative advantages (st3d: rules .79 -> 0)")
@@ -3421,12 +3425,13 @@ def main():
                                 g_ = g_new[b]
                                 lp_ = (torch.log(P[b, I_NEW].clamp(min=1e-6))
                                        + torch.log((g_ if float(g_) >= 0.5 else 1 - g_).clamp(min=1e-6)))
+                            lpp_ = torch.zeros((), device=dev)   # the HOW part: which procedure, which op
                             if kap is not None:
-                                lp_ = lp_ + torch.log(pop[b, oph[b]].clamp(min=1e-6))
+                                lpp_ = lpp_ + torch.log(pop[b, oph[b]].clamp(min=1e-6))
                             if pj is not None:
-                                lp_ = lp_ + torch.log(pi[b, int(pj[b])].clamp(min=1e-6))
+                                lpp_ = lpp_ + torch.log(pi[b, int(pj[b])].clamp(min=1e-6))
                             kd_ = "multi" if mq_[0] == "fact" and mq_[2] in world.multi_keys else mq_[0]
-                            run.frame_lp.append(((mq_[1], mq_[2]), kd_, lp_, h[b].detach()))
+                            run.frame_lp.append(((mq_[1], mq_[2]), kd_, (lp_, lpp_), h[b].detach()))
                     if t == w0 and kind == "frame":
                         stat_rows.append((b, float(w_keep[b] + w_rep[b].sum()), float(P[b, I_NEW]),
                                           float(w_rep[b].sum()), int(pj[b]) < N, float(kap[b]) if kap is not None else 1.0))
@@ -5227,6 +5232,7 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                                 fr_.setdefault((lm_[1], lm_[2]), []).append(float(rf_[1][b]))
                 terms_, vterms_ = [], []
                 nf_ = A.rl_neg if A.rl_neg_frames < 0 else A.rl_neg_frames
+                np_ = nf_ if A.rl_neg_proc < 0 else A.rl_neg_proc
                 for f_, kd_, lp_, hv_ in run.frame_lp:
                     if f_ in fr_:
                         r_ = sum(fr_[f_]) / len(fr_[f_])
@@ -5236,7 +5242,9 @@ physics:{barnesHut:{gravitationalConstant:-6000,springLength:110},stabilization:
                             v_ = loop.Wv(hv_).squeeze()
                             vterms_.append((v_ - r_) ** 2)
                             b0_ = float(v_)
-                        terms_.append(-((r_ - b0_) if r_ >= b0_ else nf_ * (r_ - b0_)) * lp_)
+                        lw_, lpp_ = lp_ if isinstance(lp_, tuple) else (lp_, torch.zeros((), device=dev))
+                        a_ = r_ - b0_                            # where (address / gate / mode) and how (procedure / op)
+                        terms_.append(-(a_ * (lw_ + lpp_)) if a_ >= 0 else -(nf_ * a_ * lw_ + np_ * a_ * lpp_))
                         run.frl_stats.setdefault(kd_, []).append(r_)
                 if vterms_:
                     loss = loss + torch.stack(vterms_).mean()
