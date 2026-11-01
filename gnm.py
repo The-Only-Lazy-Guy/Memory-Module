@@ -1671,6 +1671,10 @@ def main():
     P.add_argument("--w-ref-demo", type=float, default=1.0, help="r edges: weight of the demonstration (the generator "
                    "knows a dependent's source); 0 = the task gradient only")
     P.add_argument("--delta-cap", type=float, default=0.3, help="a model delta is at most this x the vector it adjusts")
+    P.add_argument("--inner", type=int, default=0, help="with --recurse: INNERMOST-FIRST (each SUB = one operation "
+                   "over leaves / earlier results; its answer takes the span's place in the question register, a child "
+                   "inherits the registers of the result slots in its span) -> the span a pass picks stays short at any "
+                   "depth (P2 closure); 0 = outermost-first (the span grows with depth)")
     P.add_argument("--recurse", type=int, default=0, help="long chains by recursion: SUB hands a span of the question "
                    "to a child row whose answer returns as a register (every row <= one operation)")
     P.add_argument("--max-depth", type=int, default=6)
@@ -2658,7 +2662,7 @@ def main():
         if t is None:
             return None
         if A.recurse:
-            return rec_question(t, H)
+            return inner_question(t, H) if A.inner else rec_question(t, H)
         steps, vals = [], []
 
         held_in = {}                                      # a fact already in a register is pointed at, not re-read
@@ -2737,6 +2741,77 @@ def main():
     def count_ops(n):
         return 0 if n[0] == "leaf" else 1 + sum(count_ops(c) for c in n[2])
 
+    def inner_question(t, H):
+        """--inner: the recursive program INNERMOST-FIRST. The root row SUBs every operation below it in post-order;
+        each sub-question is one operation over leaves and earlier results, so its span stays short at any depth.
+        Its answer becomes a root register AND takes the span's place in the root's question register (one slot);
+        a child whose span holds such a slot gets that register (inherited) instead of re-solving it. Spans are in
+        the coordinates of the question AS REWRITTEN so far. Returns (text, root steps, root values, answer,
+        child rows [(span, steps, values, answer, ops, rewrites so far, inherited values)])."""
+        text, spans = render_sp(t)
+        Q = f"What is {text}?"
+        ends = tok_spans(Q)
+        base = len("What is ")
+
+        def value(n):
+            if n[0] == "leaf":
+                return world.ents[n[1]][n[2]]
+            ti = next(i for i, x in enumerate(TOOLS) if x[0] == n[1])
+            return TOOLS[ti][1](*[value(c) for c in n[2]])
+
+        units = [(i, i + 1, None) for i in range(len(ends))]   # (original token range, root register | None)
+        steps, vals, children, rewrites, reg_of = [], [], [], [], {}
+
+        def post(n):
+            for c in n[2]:
+                if c[0] == "op":
+                    post(c)
+            if n is t:
+                return
+            a_, b_ = spans[id(n)]
+            ts, te = char_to_tok(ends, base + a_, base + b_)
+            cur = [j for j, u in enumerate(units) if u[0] >= ts and u[1] <= te]
+            cs, ce = cur[0], cur[-1] + 1
+            inh = [units[j][2] for j in range(cs, ce) if units[j][2] is not None]   # root registers in the span
+            m_ = len(inh)
+            cst, cvl, held_r, regs_ = [], [], {}, []
+            inh_ix = {r_: 1 + k_ for k_, r_ in enumerate(inh)}
+            for c in n[2]:
+                if c[0] == "leaf":
+                    if (c[1], c[2]) not in held_r:
+                        cst.append(("read", gold_node(H, c[1], c[2], world.ents[c[1]][c[2]])))
+                        cvl.append(value(c))
+                        held_r[(c[1], c[2])] = m_ + len(cst)
+                    regs_.append(held_r[(c[1], c[2])])
+                else:
+                    regs_.append(inh_ix[reg_of[id(c)]])
+            ti = next(i for i, x in enumerate(TOOLS) if x[0] == n[1])
+            cst.append(("op", ti, regs_))
+            cvl.append(value(n))
+            children.append(((cs, ce), cst, [None] + [vals[r_ - 1] for r_ in inh] + cvl, value(n), 1,
+                             list(rewrites), [vals[r_ - 1] for r_ in inh]))
+            steps.append(("sub", (cs, ce)))
+            vals.append(value(n))
+            reg_of[id(n)] = len(steps)                         # the root register holding its answer
+            rewrites.append((cs, ce, value(n)))
+            units[cs:ce] = [(ts, te, len(steps))]
+
+        post(t)
+        held_r, regs_ = {}, []
+        for c in t[2]:
+            if c[0] == "leaf":
+                if (c[1], c[2]) not in held_r:
+                    steps.append(("read", gold_node(H, c[1], c[2], world.ents[c[1]][c[2]])))
+                    vals.append(value(c))
+                    held_r[(c[1], c[2])] = len(steps)
+                regs_.append(held_r[(c[1], c[2])])
+            else:
+                regs_.append(reg_of[id(c)])
+        ti = next(i for i, x in enumerate(TOOLS) if x[0] == t[1])
+        steps.append(("op", ti, regs_))
+        vals.append(value(t))
+        return Q, steps, vals, vals[-1], children
+
     def ask(qrng, specs, mix, ops=(1, 2), mode="train", soft=False):
         """specs: list of (n, pool) — n questions drawn from pool (None = any fact the memory holds)"""
         H, Hv = holders()
@@ -2762,9 +2837,10 @@ def main():
                         "ops": sum(1 for s_ in steps if s_[0] == "op") + len(q[4] if len(q) > 4 else []),   # one op per row
                         "before": text.endswith("before?"), "multi": text.startswith("What is the sum of both")})
             if soft and len(q) > 4:                  # training: every sub-question is its own (teacher-forced) row
-                for span, st, cv, cans, cops in q[4]:
+                for span, st, cv, cans, cops, *inn in q[4]:
                     out.append({"text": text, "qnid": nl[0], "span": span, "prog": conv(st), "vals": cv, "ans": cans,
-                                "ops": cops, "before": False, "multi": False, "child": True})
+                                "ops": cops, "before": False, "multi": False, "child": True,
+                                "rewrites": inn[0] if inn else [], "inherit": inn[1] if inn else []})
         return out
 
     def corrections(crng, n):
@@ -2899,6 +2975,17 @@ def main():
         return (reg[0], v_, S_, S_.shape[0], torch.cat([loop.Wfv(v_)[None], loop.Wfs(S_) + loop.spos[:S_.shape[0]]], 0),
                 None)
 
+    def replace_span(reg, s_, e_, vec):
+        """--inner: the question register with words [s_, e_) replaced by ONE slot holding vec (a sub-answer)"""
+        n_ = int(reg[3])
+        s_, e_ = max(0, min(s_, n_ - 1)), max(1, min(e_, n_))
+        if e_ <= s_:
+            e_ = s_ + 1
+        S_ = torch.cat([reg[2][:s_], vec.to(reg[2].dtype)[None], reg[2][e_:]], 0)
+        v_ = S_.mean(0)
+        return (reg[0], v_, S_, S_.shape[0], torch.cat([loop.Wfv(v_)[None], loop.Wfs(S_) + loop.spos[:S_.shape[0]]], 0),
+                reg[5])
+
     def run(rows, teacher, kind="question", soft=False, depth=0, rl=False):
         """Walker's loop for a batch of rows of one kind: 'frame' (a candidate pair to integrate; free-running),
         'note' (a text note: read it, read the target, compute, write), 'question'. Every pass: ADDRESS one of
@@ -2935,11 +3022,22 @@ def main():
         regs = [[] for _ in range(B)]
         pre = [b for b in range(B) if rows[b].get("span") is not None]
         for b, rg in zip(pre, regs_from(M, [M["row_of"][rows[b]["qnid"]] for b in pre])):
+            if rows[b].get("rewrites"):                  # --inner: the root's question as rewritten so far
+                for (s_, e_, _), (_, er_) in zip(rows[b]["rewrites"], encode_values(
+                        [v_ for *_, v_ in rows[b]["rewrites"]], [float(tq[b]) + 0.5] * len(rows[b]["rewrites"]), False)):
+                    rg = replace_span(rg, s_, e_, er_[1])
             regs[b].append(span_reg(rg, *rows[b]["span"]))   # a training sub-question: words of its root question
+            if rows[b].get("inherit"):                   # the registers of the result slots in its span
+                regs[b] += [er_ for _, er_ in encode_values(rows[b]["inherit"], [float(tq[b]) + 0.5] * len(rows[b]["inherit"]), False)]
         for b in range(B):
             if rows[b].get("reg0") is not None:
                 regs[b].append(rows[b]["reg0"])          # a sub-question made during a free run
-        has0 = [1 if regs[b] else 0 for b in range(B)]
+                regs[b] += rows[b].get("inherit_regs") or []
+        has0 = [len(regs[b]) for b in range(B)]
+        slotmap = {}                                 # --inner: b -> per question slot, the register it holds (or None)
+        for b in range(B):
+            if rows[b].get("slotmap") is not None:
+                slotmap[b] = list(rows[b]["slotmap"])
         own = [[] for _ in range(B)]                 # registers that are write sources (not read from memory)
         if kind == "frame":                          # register 0 = the candidate (Walker reads it, 16 slots)
             for b, rg in enumerate(regs_from(M, [M["row_of"][r["qnid"]] for r in rows])):
@@ -3531,21 +3629,41 @@ def main():
                 if teacher:                          # (training: the demonstrated answer, encoded like a tool output)
                     enc_ = encode_values([rows[b]["vals"][len(regs[b])] for b, _ in subs],
                                          [float(tq[b]) + 0.5 for b, _ in subs], False)
-                    for (b, _), (_, rg) in zip(subs, enc_):
+                    for (b, sp_), (_, rg) in zip(subs, enc_):
                         regs[b].append(rg)
+                        if A.inner:                  # its answer takes the span's place in the question register
+                            regs[b][0] = replace_span(regs[b][0], *sp_, rg[1])
                 else:                                # free run: actually solve the sub-question (recursion)
                     for b, _ in subs:                    # (one budget per root question, its whole tree: --sub-budget)
                         run.sub_left[rows[b]["qnid"]] = run.sub_left.get(rows[b]["qnid"], 0) - 1
-                    kids = [{"qnid": rows[b]["qnid"], "reg0": span_reg(regs[b][0], *sp_), "prog": None, "ans": 0,
-                             "vals": None, "ops": 0, "before": False} for b, sp_ in subs]
+                    kids = []
+                    for b, sp_ in subs:
+                        kd_ = {"qnid": rows[b]["qnid"], "reg0": span_reg(regs[b][0], *sp_), "prog": None, "ans": 0,
+                               "vals": None, "ops": 0, "before": False}
+                        if A.inner:                  # the result slots in its span: their registers come along
+                            sm_ = slotmap.setdefault(b, [None] * int(regs[b][0][3]))
+                            n_ = len(sm_)
+                            s_, e_ = max(0, min(sp_[0], n_ - 1)), max(1, min(sp_[1], n_))
+                            e_ = max(e_, s_ + 1)
+                            inh_ = [k_ for k_ in sm_[s_:e_] if k_ is not None]
+                            kd_["inherit_regs"] = [regs[b][k_] for k_ in inh_]
+                            kd_["slotmap"] = [None if k_ is None else 1 + inh_.index(k_) for k_ in sm_[s_:e_]]
+                        kids.append(kd_)
                     keep_ = {k_: getattr(run, k_, None) for k_ in ("acts", "oprec", "said", "diag", "final_regs")}
                     with torch.no_grad():
                         run(kids, False, "question", soft=False, depth=depth + 1)
                     kid_regs = run.final_regs
                     for k_, v_ in keep_.items():
                         setattr(run, k_, v_)
-                    for (b, _), rg in zip(subs, kid_regs):
+                    for (b, sp_), rg in zip(subs, kid_regs):
                         regs[b].append(rg if rg is not None else regs[b][0])
+                        if A.inner and rg is not None:   # the answer takes the span's place (one slot -> that register)
+                            sm_ = slotmap[b]
+                            n_ = len(sm_)
+                            s_, e_ = max(0, min(sp_[0], n_ - 1)), max(1, min(sp_[1], n_))
+                            e_ = max(e_, s_ + 1)
+                            regs[b][0] = replace_span(regs[b][0], s_, e_, rg[1])
+                            slotmap[b] = sm_[:s_] + [len(regs[b]) - 1] + sm_[e_:]
             if lookk:                                # LOOK: "if I write this, what happens?" -> the target as it would
                 fresh = [b for b in range(B) if look[b] == 1 and proposal[b] is not None and len(proposal[b]) == 3]
                 for b, rg in zip(fresh, regs_from(M, [proposal[b][1] for b in fresh])):
