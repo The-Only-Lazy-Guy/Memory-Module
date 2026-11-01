@@ -789,6 +789,7 @@ class World:
         self.multi = {}                                       # (name, multi key) -> coexisting values (max 2)
         self.co_new = set()                                   # (name, multi key, value): a SECOND value, not yet written
         self.multi_max = 2                                    # coexisting values per multi fact (--multi-max)
+        self.p_set = 1 / 3                                    # --rule-set-frac: a new numeric rule is "set" (else "add")
         self.keep_rules = False                               # --proc-keep: a multi key coexists only once its
         #                                                       "keep" rule was announced (before: restated only)
         self.deps = {}                                        # (name, key) -> (source name, source key)
@@ -834,7 +835,8 @@ class World:
                 kind = kind or ("set" if self.policy[k] == "add" else "add")
             else:
                 return None
-        kind = kind or ("keep" if k in self.multi_keys else rng.choice(["add", "add", "set"]))
+        kind = kind or ("keep" if k in self.multi_keys else rng.choice(["add", "add", "set"]) if abs(self.p_set - 1 / 3) < 1e-9
+                        else "set" if rng.random() < self.p_set else "add")   # (1/3: the old draw, same random stream)
         self.policy[k] = kind
         return {"rules": {k: rule_text(rng, kind, k, held)}}
 
@@ -1637,6 +1639,9 @@ def main():
                    "a frame row's decision (procedure pointer + op) only; the WHERE part (address / gate / replace-vs-attach) "
                    "keeps --rl-neg-frames. -1 = same. st3: frame negatives taught attach (coexist 1.0) but drove the rule "
                    "pointer off (delta reward .05, rules 0)")
+    P.add_argument("--rule-set-frac", type=float, default=1 / 3, help="data: share of new numeric rules that are 'set' "
+                   "(else 'add'). At 1/3 reading ANOTHER key's rule was usually harmless (add vs add) and got reinforced: "
+                   "the pointer learned recency, not the key (st7: newer foreign rules +10..20 over its own)")
     P.add_argument("--rl-critic", type=int, default=0, help="frame RL baseline = a learned value of the row's own "
                    "Walker state (loop.Wv, MSE to the outcome) instead of one running mean per kind: 'delta' mixes plain "
                    "updates with rule applications, the hard rows got biased negative advantages (st3d: rules .79 -> 0)")
@@ -1995,6 +2000,7 @@ def main():
     model.blocks[0].register_forward_pre_hook(fb_hook)
 
     world = World(rng, max_ents=A.max_ents)
+    world.p_set = A.rule_set_frac
     world.multi_max = A.multi_max
     world.keep_rules = bool(A.proc_keep)
     store = Store()
