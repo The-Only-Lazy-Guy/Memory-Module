@@ -818,10 +818,10 @@ class Machine:
 
     def f_insert(self, r, derived=False):              # A to be B: a new entry where the statement belongs
         self.t += 1
+        text = f"{phrase_of(r.src)} is {r.stack[-1].value}." if derived else r.src
         label = self.T.label(phrase_of(r.src) or r.src)   # the phrase a lookup would use, not the whole sentence
         p = self.find(label)
         p = p if p >= 0 else self.g.add_place(label)
-        text = f"{phrase_of(r.src)} is {r.stack[-1].value}." if derived else r.src
         self.g.chain[p].append((text, self.t))
 
 
@@ -992,7 +992,7 @@ FUNCS = ["split", "lookup", "rule", "prev", "open", "drop", "nip", "join", "add"
 
 def view(r):
     """what a pass sees: the top of what it holds, then what it reads next; bounded at every depth"""
-    held = " | ".join(it.text[:60].strip() for it in r.stack[-5:])   # [word, a, mid, b, ")"]: the tool needs the word
+    held = " | ".join(it.text.strip() for it in r.stack[-3:])   # [word, a, b] is all a call needs, so depth cannot show
     base = len(held) + 4
     return f"{held} || {r.focus[-1][:90] if r.focus else ''}", base
 
@@ -1136,8 +1136,9 @@ def run_free(m, rd, r, stop, max_pass=90, show=False):
 
 
 def branch(trace):
-    """which way a row went: the functions it called, and whether a rule was there"""
-    return tuple(sorted({"tool" if x[1] in ("add", "sub", "max", "min") else x[1] for x in trace})), any("no rule" in x[0][0] for x in trace)
+    """which way a row went: the functions it called, whether a rule was there, whether it was a copy"""
+    return (tuple(sorted({"tool" if x[1] in ("add", "sub", "max", "min") else x[1] for x in trace})),
+            any("no rule" in x[0][0] for x in trace), any("(same as" in x[0][0] for x in trace))
 
 
 def collect(world, m, rng, per_kind, ticks=180):
