@@ -1,0 +1,11 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4487.83it/s]
+/marimo/frozen/tl5/gnm.py:1045: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} | exact: " + " ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+step 1000 loss 1.078 | exact: depth 1 0.555 depth 2 0.344 depth 3 0.242 depth 4 0.305 join train keys 0.992 same+ 1.000 same- 0.567 rule+ 0.947 rule- 0.926 join held keys 0.406 same+ 1.000 same- 0.597 rule+ 0.985 rule- 0.883 | 114s
+step 2000 loss 0.728 | exact: depth 1 0.711 depth 2 0.500 depth 3 0.383 depth 4 0.312 join train keys 1.000 same+ 0.995 same- 0.669 rule+ 0.986 rule- 0.986 join held keys 0.352 same+ 0.990 same- 0.639 rule+ 0.971 rule- 0.960 | 227s
+step 3000 loss 0.678 | exact: depth 1 0.805 depth 2 0.586 depth 3 0.445 depth 4 0.477 join train keys 1.000 same+ 1.000 same- 0.729 rule+ 1.000 rule- 1.000 join held keys 0.359 same+ 0.982 same- 0.662 rule+ 0.881 rule- 0.975 | 339s
+step 4000 loss 1.028 | exact: depth 1 0.883 depth 2 0.625 depth 3 0.547 depth 4 0.594 join train keys 1.000 same+ 1.000 same- 0.687 rule+ 1.000 rule- 1.000 join held keys 0.367 same+ 0.973 same- 0.671 rule+ 0.931 rule- 0.989 | 451s
+step 5000 loss 0.492 | exact: depth 1 0.977 depth 2 0.742 depth 3 0.617 depth 4 0.578 join train keys 1.000 same+ 1.000 same- 0.658 rule+ 1.000 rule- 0.974 join held keys 0.406 same+ 0.995 same- 0.605 rule+ 0.938 rule- 0.976 | 564s
+step 6000 loss 0.754 | exact: depth 1 0.953 depth 2 0.820 depth 3 0.641 depth 4 0.570 join train keys 1.000 same+ 1.000 same- 0.687 rule+ 1.000 rule- 1.000 join held keys 0.398 same+ 0.975 same- 0.630 rule+ 0.985 rule- 0.964 | 677s
