@@ -1,0 +1,11 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3312.31it/s]
+/marimo/frozen/tr6/gnm.py:761: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} | train keys " + " ".join(f"{k} {v:.3f}" for k, v in tr.items()) + f" | {time.time() - t0:.0f}s", flush=True)
+step 1000 loss 0.834 | train keys phrase 1.000 phrase_rel+ 1.000 phrase_rel- 0.499 correction 0.999 correction_rel+ 0.999 correction_rel- 0.534 copy 1.000 copy_rel+ 1.000 copy_rel- 0.490 rule 1.000 rule_rel+ 1.000 rule_rel- 0.850 ruleq 1.000 ruleq_rel+ 0.700 | 136s
+   held keys phrase 1.000 phrase_rel+ 1.000 phrase_rel- 0.349 correction 1.000 correction_rel+ 1.000 correction_rel- 0.403 copy 1.000 copy_rel+ 1.000 copy_rel- 0.351 rule 1.000 rule_rel+ 1.000 rule_rel- 0.800 ruleq 1.000 ruleq_rel+ 0.300
+step 2000 loss 0.539 | train keys phrase 1.000 phrase_rel+ 1.000 phrase_rel- 0.586 correction 1.000 correction_rel+ 1.000 correction_rel- 0.634 copy 1.000 copy_rel+ 1.000 copy_rel- 0.589 rule 1.000 rule_rel+ 1.000 rule_rel- 0.950 ruleq 1.000 ruleq_rel+ 0.725 | 281s
+   held keys phrase 1.000 phrase_rel+ 1.000 phrase_rel- 0.391 correction 0.999 correction_rel+ 1.000 correction_rel- 0.519 copy 1.000 copy_rel+ 1.000 copy_rel- 0.409 rule 1.000 rule_rel+ 0.925 rule_rel- 0.925 ruleq 0.900 ruleq_rel+ 0.350
+step 3000 loss 0.777 | train keys phrase 1.000 phrase_rel+ 1.000 phrase_rel- 0.626 correction 1.000 correction_rel+ 0.999 correction_rel- 0.682 copy 1.000 copy_rel+ 1.000 copy_rel- 0.624 rule 1.000 rule_rel+ 1.000 rule_rel- 0.925 ruleq 1.000 ruleq_rel+ 0.875 | 426s
+   held keys phrase 1.000 phrase_rel+ 1.000 phrase_rel- 0.511 correction 1.000 correction_rel+ 0.999 correction_rel- 0.586 copy 1.000 copy_rel+ 1.000 copy_rel- 0.516 rule 1.000 rule_rel+ 1.000 rule_rel- 0.850 ruleq 0.950 ruleq_rel+ 0.450
