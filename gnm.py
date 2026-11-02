@@ -1835,11 +1835,20 @@ class Judgment:
 
 
 def rule_merge(m, ev):
-    """confusion: a statement put into a place that holds another subject (the relate node let it in)"""
-    if ev["name"] == "insert" and not ev.get("derived"):
-        a, b = subject(m.T.say(m.g.chain[ev["place"]][0][0])), subject(ev["src"])
-        if a and b:
-            yield Judgment("merge", ev.get("new") or a == b, "relate", (ev["src"], ev["place"]), ev, f"{b} into {a}")
+    """a statement goes where its subject is: into a place about something else is confusion (relate let it in); a new
+    place though its subject already had one is a split (relate turned it away). target: (text, place, same?)"""
+    if ev["name"] != "insert" or ev.get("derived"):
+        return
+    b = subject(ev["src"])
+    if not b:
+        return
+    if ev.get("new"):
+        q = ev.get("known")                            # where this subject already was, before this insert
+        yield Judgment("merge", q is None, "relate", (ev["src"], q, 1.), ev, f"{b} split from place {q}")
+    else:
+        a = subject(m.T.say(m.g.chain[ev["place"]][0][0]))
+        if a:
+            yield Judgment("merge", a == b, "relate", (ev["src"], ev["place"], float(a == b)), ev, f"{b} into {a}")
 
 
 def rule_found(m, ev):
@@ -1850,9 +1859,9 @@ def rule_found(m, ev):
     if ev["place"] >= 0:
         got = subject(m.T.say(m.g.chain[ev["place"]][0][0]))
         if got:
-            yield Judgment("found", got == want, "relate", (ev["asked"], ev["place"]), ev, f"asked {want}, got {got}")
+            yield Judgment("found", got == want, "relate", (ev["asked"], ev["place"], float(got == want)), ev, f"asked {want}, got {got}")
     else:
-        yield Judgment("found", want not in m.subj, "walk", (ev["asked"], m.subj.get(want)), ev, f"asked {want}, unknown")
+        yield Judgment("found", want not in m.subj, "walk", (ev["asked"], m.subj.get(want), 1.), ev, f"asked {want}, unknown")
 
 
 def rule_copy(m, ev):
@@ -1916,8 +1925,10 @@ def judge(m, ledger, row=None, truth=None):
     """run every rule on the events so far (and the row's outcome when its truth is known); keeps the subject index"""
     out = []
     for ev in m.events or []:
-        if ev["name"] == "insert" and not ev.get("derived") and subject(ev["src"]) and ev.get("new"):
-            m.subj.setdefault(subject(ev["src"]), ev["place"])
+        if ev["name"] == "insert" and not ev.get("derived") and subject(ev["src"]):
+            ev["known"] = m.subj.get(subject(ev["src"])) if ev.get("new") else None
+            if ev.get("new"):
+                m.subj.setdefault(subject(ev["src"]), ev["place"])
         for rule in RULES:
             for j in rule(m, ev):
                 ledger.add(j)
@@ -1930,6 +1941,40 @@ def judge(m, ledger, row=None, truth=None):
     if m.events is not None:
         m.events.clear()
     return out
+
+
+def nodes_of(zs, dev):
+    """a list of nodes (L_i x c) as one left-padded batch"""
+    L = max(len(z) for z in zs)
+    z = torch.stack([torch.cat([z.new_zeros(L - len(z), z.shape[-1]), z]) for z in zs]).to(dev)
+    m = torch.stack([torch.cat([torch.zeros(L - len(x), dtype=torch.bool), torch.ones(len(x), dtype=torch.bool)]) for x in zs]).to(dev)
+    return z, m
+
+
+def lessons(tr, bank, m, js, cap=64):
+    """every judgment that knows what should have happened becomes a lesson for the part it blames, and nothing else
+    teaches: relate learns same / not same, the relation learns which words name a statement's source and whether it
+    has one. (Labels and B stay as they are online: changing them would move what is already stored.)"""
+    dev, loss = next(bank.parameters()).device, None
+    rel = [j.target for j in js if j.blame in ("relate", "walk") and j.target and j.target[1] is not None][:cap]
+    if rel:
+        za, ma = tr.content([t for t, _, _ in rel])
+        zb, mb = nodes_of([m.g.chain[p][0][0].detach() for _, p, _ in rel], dev)
+        y = torch.tensor([v for _, _, v in rel], device=dev)
+        loss = F.binary_cross_entropy_with_logits(bank.relate(["same"] * len(rel), za, ma, zb, mb), y)
+    dep = [j for j in js if j.rule == "copy"][:cap]
+    if dep:
+        texts = [j.ev["src"] for j in dep]
+        ra, rg, roff, rmk = tr.relation(texts, parts=True)
+        names = torch.zeros_like(ra)
+        for i, t in enumerate(texts):
+            y = re.search(r"\(same as (the .+?)\)", t)
+            if y:
+                names[i] = ((roff[i, :, 1] > y.start(1)) & (roff[i, :, 0] < y.end(1))).float()
+        has = torch.tensor([float(bool(re.search(r"\(same as ", t))) for t in texts], device=dev)
+        l2 = (F.binary_cross_entropy_with_logits(ra, names, reduction="none") * rmk).sum() / rmk.sum() + F.binary_cross_entropy_with_logits(rg, has)
+        loss = l2 if loss is None else loss + l2
+    return loss
 
 
 # ====================================================================== --gold: the correct calls, written by hand
@@ -2332,50 +2377,25 @@ def train_reader(A):
 
 # ====================================================================== --online: everything at once, as it happens
 def online(A):
-    """the world goes on and the model lives in it. Each tick it reads a few demos (its tool nodes learn, and it makes new
-    ones), is told what happened (stored by the correct calls: relations set, changes trigger what depends on them),
-    answers questions and learns from each answer's truth at once. A tool node that changed runs again what it made."""
+    """the model lives in the world: it is told what happens (stored by the correct calls), answers questions, reads
+    demos. Every call is judged by the rules; the judgments are the only lessons (plus the tools reading demos). The
+    rules' tallies per window show whether it is getting better while it lives."""
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     tr = Translator().to(dev).eval()
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
-    tr.requires_grad_(False)
     bank = load_tools(A, tr) or ToolBank().to(dev)
-    bank.train()
+    for n, p in tr.named_parameters():                 # what learns online: the relation gate (and the bank: relate, tools)
+        p.requires_grad = n.split(".")[0] in ("rgate", "rhow")
+    opt = torch.optim.AdamW([p for p in tr.parameters() if p.requires_grad] + list(bank.parameters()), lr=A.lr)
     rng = random.Random(A.seed)
     w = new_world(rng)
     T = NeuralT(tr, Oracle(w), A.tau, bank)
     m = Machine(T, T.d)
-    m.g.beam = A.beam
-    st, opt, t0, rerun, said = {"step": 0, "last": -10 ** 9, "newest": None}, None, time.time(), 0, 0
+    m.g.beam, m.events = A.beam, []
+    st, t0, said, ledger, total = {"step": 0, "last": -10 ** 9, "newest": None}, time.time(), 0, Ledger(), Ledger()
     for tick in range(1, A.steps + 1):
         st.update(step=tick, spawned=False)
-        loss, route, _ = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A)
-        used = {int(x) for x in route if x >= 0}
-        T.learning, truth = True, []
-        for kind in ("coexist", "ops"):                # asked, answered, then told the truth
-            x = question(kind, w, rng)
-            if not x:
-                continue
-            r = Row(x[0])
-            try:
-                x[2](m, r)
-            except FAIL:
-                continue
-            if r.stack and r.stack[-1].node.requires_grad:
-                z = r.stack[-1].node
-                truth.append(tr.decode_loss(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device), [str(x[1])]))
-                used |= {t for t in range(len(bank.nets))}
-        T.learning = False
-        if truth:
-            loss = loss + torch.stack(truth).mean()
-        if opt is None or st["spawned"]:
-            opt = torch.optim.AdamW(bank.parameters(), lr=A.lr)
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
-        if tick % A.rerun == 0:
-            rerun += m.rerun(used)                     # the tools changed: what they made is made again
         for draw in world_step(w, rng):
             o = draw()
             for s_ in statements(o) if o else []:
@@ -2384,14 +2404,39 @@ def online(A):
                     said += 1
                 except FAIL:
                     pass
+        js = judge(m, ledger)
+        for kind in ("lookup", "chain", "ops"):        # asked, answered, then the truth
+            x = question(kind, w, rng)
+            if not x:
+                continue
+            r = Row(x[0])
+            try:
+                x[2](m, r)
+                m.do(r, "say")
+            except FAIL:
+                pass
+            js += judge(m, ledger, r, x[1])
+        for j in js:
+            total.add(j)
+        loss = lessons(tr, bank, m, js)
+        if A.batch:                                    # reading demos: the tool nodes learn (and are made)
+            l2 = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A)[0]
+            loss = l2 if loss is None else loss + l2
+            if st["spawned"]:
+                opt = torch.optim.AdamW([p for p in tr.parameters() if p.requires_grad] + list(bank.parameters()), lr=A.lr)
+        if loss is not None and loss.requires_grad:
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
         if tick % A.every == 0:
-            bank.eval()
-            with torch.no_grad():
-                line = asked(m, w, rng, A.q)
-            bank.train()
-            print(f"tick {tick} | places {m.g.n}, statements {said}, tools {len(bank.nets)}, entries made again {rerun} | {line} | {time.time() - t0:.0f}s", flush=True)
+            print(f"tick {tick} | places {m.g.n}, statements {said} | this window: {ledger.line()} | {time.time() - t0:.0f}s", flush=True)
+            for r_, cs in ledger.cases.items():
+                print(f"     {r_}: {cs[0]}", flush=True)
+            ledger = Ledger()
             if A.save:
                 bank.save(A.save)
+                torch.save({k: v for k, v in tr.state_dict().items() if not k.startswith("lm.")}, A.save.replace(".pt", "_tr.pt"))
+    print("all ticks: " + total.line(), flush=True)
 
 
 # ====================================================================== --episode: the translator moves, the graph is re-transcribed
