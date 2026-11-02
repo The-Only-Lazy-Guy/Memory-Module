@@ -1,0 +1,45 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4567.88it/s]
+/marimo/frozen/dec4/gnm.py:813: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} | round trip, train keys: {tr} | held keys: {he} | {time.time() - t0:.0f}s", flush=True)
+step 1000 loss 0.191 | round trip, train keys: copy 0.304 fact 0.735 rule 0.429 value 0.054 all 0.539 | held keys: copy 0.091 fact 0.114 rule 0.079 value 0.000 all 0.086 | 55s
+     'Correction: the primary degree of Mermer is now 36.' -> 'Correction: the primary degree of Mermer is now 39.'
+     'last department figures that arrive later are kept alongside the earlier last department' -> 'in departments are later ways to the next department'
+     'rule: signal figures that arrive later overwrite the previous signal' -> 'rule: signal values that arrive later are discarded'
+     'the draft of Pello' -> 'the common share of Pello'
+     'the base height of Nepel is 5.' -> 'the base width of Nepel is 13.'
+     '153' -> '163'
+step 2000 loss 0.279 | round trip, train keys: copy 1.000 fact 0.986 rule 0.745 value 0.907 all 0.926 | held keys: copy 0.786 fact 0.620 rule 0.528 value 0.868 all 0.656 | 110s
+     'later worker values should be added to the existing worker' -> 'with existing worker values should be added to the existing worker'
+     '113' -> '104'
+     'note: each new student join the student values already known' -> "note: each new student join the student join the student's class values already known"
+     'the backup load of Zekzek is Mervin.' -> 'the backup disk of Zekzek is Mervin.'
+     'the reason of Vingor' -> 'the point of Vingor'
+     'the coupon of Dungor is 31.' -> 'the voucher of Dungor is 31.'
+step 3000 loss 0.116 | round trip, train keys: copy 1.000 fact 0.977 rule 0.982 value 1.000 all 0.984 | held keys: copy 0.762 fact 0.818 rule 0.703 value 1.000 all 0.820 | 165s
+     'the daily profile of Samer is 8.' -> 'the daily profile of Samer is 10.'
+     'Correction: the daily font of Zeklo is now 28.' -> 'Correction: the daily font of Zeklo is now 27.'
+     'the income of Thazek is Zekka.' -> 'the income of Thazekka is Zekka.'
+     'Correction: the primary parent of Pelsa is now 25.' -> 'Correction: the primary patron of Pelsa is now 25.'
+     'Correction: the primary group of Karil is now 33.' -> 'Correction: the primary class of Karil is now 33.'
+     'the player of Tormer is 55.' -> 'the user of Tormer is 55.'
+step 4000 loss 0.076 | round trip, train keys: copy 1.000 fact 1.000 rule 0.986 value 1.000 all 0.996 | held keys: copy 0.852 fact 0.748 rule 0.769 value 1.000 all 0.801 | 219s
+     'door figures that arrive later are the new door; discard the old one' -> 'in the new door figure that arrive later are the new door; discard the old one'
+     'note: later rent values join the rent values already known' -> 'note: later ticket values join the ticket values already known'
+     'Correction: the order of Zekba is now 31.' -> 'Correction: the assign of Zekba is now 31.'
+     'Correction: the parent of Zekdun is now 46.' -> 'Correction: the principal of Zekdun is now 46.'
+step 5000 loss 0.065 | round trip, train keys: copy 1.000 fact 1.000 rule 0.947 value 1.000 all 0.988 | held keys: copy 0.750 fact 0.806 rule 0.703 value 1.000 all 0.801 | 274s
+     'primary author figures that arrive later are the new primary author; discard the old one' -> 'note that arrive later are the new primary author figures that arrive later are the new primary author; discard the old one'
+     'board figures that arrive later join the board values already known' -> 'rule figures that arrive later join the board values already known'
+     'speed figures that arrive later do not remove the previous speed' -> 'note figures that arrive later do not remove the previous speed'
+     'the base alias of Tordun' -> 'the base module of Tordun'
+     'each new link are extra link values; keep the old ones too' -> 'each new link are extra path values; keep the old ones too'
+     'rule: main task' -> 'rule: main team'
+step 6000 loss 0.067 | round trip, train keys: copy 1.000 fact 1.000 rule 0.955 value 1.000 all 0.988 | held keys: copy 0.840 fact 0.750 rule 0.672 value 1.000 all 0.770 | 329s
+     'age figures that arrive later join the age values already known' -> 'rule figures that arrive later join the age values already known'
+     'rate figures that arrive later overwrite the previous rate' -> 'back to the previous rate figures that arrive later overwrite the previous rate'
+     'each new daily guest replace the old daily guest' -> 'every new daily guest replace the old daily guest'
+     'each new reason overwrite the previous reason' -> 'each new charge overwrite the previous charge'
+     'every reported main duration are kept alongside the earlier main duration' -> 'every reported main frequency are kept alongside the earlier main frequency'
+     'Correction: the daily status of Zekril is now 58.' -> 'Correction: the daily office of Zekril is now 58.'

@@ -1,0 +1,30 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4767.79it/s]
+   MISS lookup ('What is the first locale of Loba?', 4, 'True')
+   MISS lookup ('What is the first locale of Loba?', 4, 'True')
+   MISS before ('What was the last band of Gordun before?', 18, 40)
+   MISS before ('What was the worker of Nezek before?', 23, 'N')
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+   MISS coexist ('What is the sum of both values of the daily temperature of Nevin?', 33, 41)
+   MISS coexist ('What is the sum of both values of the student of Rilpel?', 28, 29)
+   MISS chain ('What is the salary of the patient of Baor?', 11, 22)
+   MISS chain ('What is the author of the patient of Dunne?', 6, 'the first of the two')
+   MISS ops ('What is the sum of the host of Logor and (the sum of the schedule of Peldun and the ship of Oror)?', 55, 53)
+   MISS ops ('What is the sum of the font of Vinril and (the larger of the first locale of Pelmu and the salary of Pelsa)?', 53, 93)
+   MISS long ('What is the smaller of (the sum of (the difference between the offer of Ortha and the zone of Rildun) and (the larger of (the sum of the store of Saba and (the sum of the first locale of Zekdun and the old locale of Thaka)) and the store of Muka)) and the first course of Vinpel?', 2, -5)
+   MISS long ('What is the larger of (the sum of (the difference between (the larger of the ship of Vinmer and the day of Thaba) and (the smaller of the store of Dunlo and the day of Saba)) and (the difference between the last device of Ortha and the guest of Dunka)) and the font of Batha?', 18, 53)
+step 60 | places 562 | lookup 38/50 (6p) | before 42/50 (7p) | coexist 40/50 (6p) | chain 38/50 (7p) | ops 26/50 (19p) | long 18/50 (39p) | walk = flat 200/200, cost 286 of 562, edges 16.9 / 41 | 169s
+   MISS lookup ('What is the first course of Vinba?', 26, 54)
+   MISS lookup ('What is the old currency of Peltha?', 2, 28)
+   MISS before ('What was the first course of Vintor before?', 13, 26)
+   MISS before ('What was the first course of Loka before?', 24, 52)
+   MISS coexist ('What is the sum of both values of the band of Lone?', 34, 38)
+   MISS coexist ('What is the sum of both values of the old term of Rilzek?', 37, 97)
+   MISS chain ('What is the slot of the memo of Vintor?', 9, 'Mumu')
+   MISS chain ('What is the slot of the memo of Vintor?', 9, 'Mumu')
+   MISS ops ('What is the difference between the schedule of Thane and the salary of Dunsa?', -11, -42)
+   MISS ops ('What is the difference between (the smaller of (the larger of the font of Vinril and the day of Vinpel) and the first course of Pello) and the series of Sadun?', -2, -11)
+   MISS long ('What is the difference between (the sum of (the sum of (the smaller of the birth of Orlo and the zone of Nevin) and the salary of Thaka) and the salary of Kalo) and (the difference between (the larger of the host of Orlo and the slot of Kane) and the old locale of Bagor)?', 62, -99)
+   MISS long ('What is the larger of (the sum of (the larger of the last band of Bator and the salary of Pelsa) and the offer of Thamer) and (the smaller of the store of Neka and the day of Merdun)?', 40, 80)
+step 120 | places 922 | lookup 35/50 (4p) | before 38/50 (6p) | coexist 40/50 (6p) | chain 36/50 (7p) | ops 23/50 (15p) | long 12/50 (37p) | walk = flat 200/200, cost 361 of 922, edges 19.2 / 47 | 318s
