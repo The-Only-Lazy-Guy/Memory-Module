@@ -731,7 +731,7 @@ class NeuralT:
 
     def _apply(self, want, ins, tool):
         self.last = None
-        s = self.tools.gate(self.m.encode([want]))[0] if self.tools.nets else None
+        s = self.tools.gate(self.tools.query(self.m, [want]))[0] if self.tools.nets else None
         if tool is None and (s is None or float(s.max()) <= 1):    # no tool is relevant: a task it has no tool for
             return [self.node("unknown")]
         t = self.last = int(s.argmax()) if tool is None else tool
@@ -978,6 +978,16 @@ class ToolBank(nn.Module):
     def __init__(self, d=128, c=256, cap=16):
         super().__init__()
         self.nets, self.relate, self.d, self.c, self.cap = nn.ModuleList(), Relate(c), d, c, cap
+        self.want = nn.Sequential(nn.Linear(768, 512), nn.GELU(), nn.Linear(512, d))   # a want, in the space the labels live in
+
+    def query(self, tr, texts):
+        """a want as a point: learned from what the tools did, so wants one tool answers come together"""
+        dev = next(self.want.parameters()).device
+        b = tr.tok(texts, return_tensors="pt", padding=True).to(dev)
+        with torch.no_grad():
+            h = tr.norm(tr.lm(**b).last_hidden_state)
+        m = b["attention_mask"][..., None]
+        return F.normalize(self.want((h * m).sum(1) / m.sum(1)), dim=-1)
 
     def spawn(self, key, like=None, scope=.9):
         """a new tool node: its own network (started from the tool it is most like), its label = the want that needed
@@ -1066,7 +1076,7 @@ def learn(tr, bank, demos, st, A, spawn=True):
     whose label is that want (its network started from the closest tool). What the tools then do only teaches the
     labels: a tool that did a demo as well as it usually does is pulled toward that want; a tool that claimed a demo and
     did it unusually badly for itself is pushed away from it. Returns the loss and where each demo went (-1: new task)."""
-    q = tr.encode([d[1] for d in demos]).detach()
+    q = bank.query(tr, [d[1] for d in demos])                  # learns with the labels
     groups = {}
     for i, d in enumerate(demos):
         groups.setdefault(len(d[2]), []).append(i)
@@ -1109,7 +1119,7 @@ def learn(tr, bank, demos, st, A, spawn=True):
 @torch.no_grad()
 def apply_tool(tr, bank, want, ins):
     """the want's label finds the tool by the labels alone (-1: no tool is relevant, a new task); it says how many nodes"""
-    s = bank.gate(tr.encode([want]))[0] if bank.nets else None
+    s = bank.gate(bank.query(tr, [want]))[0] if bank.nets else None
     if s is None or float(s.max()) <= 1:
         return -1, [], None
     t = int(s.argmax())
@@ -1174,6 +1184,17 @@ def relate_run(tr, relate, batch):
     return relate(list(task), *tr.content(list(a)), *tr.content(list(b))), torch.tensor(y, dtype=torch.float, device=dev)
 
 
+@torch.no_grad()
+def want_spread(tr, bank):
+    """how close wants of one kind are in the want space, against wants of other kinds (held phrasings included)"""
+    W = [(k, w) for k in WANTS for w in WANTS[k]]
+    q = bank.query(tr, [w for _, w in W])
+    C = q @ q.T
+    same = [float(C[i, j]) for i in range(len(W)) for j in range(len(W)) if i != j and W[i][0] == W[j][0]]
+    diff = [float(C[i, j]) for i in range(len(W)) for j in range(len(W)) if W[i][0] != W[j][0]]
+    return f"want cos same kind {np.mean(same):.2f} (min {min(same):.2f}), other kinds {np.mean(diff):.2f} (max {max(diff):.2f})"
+
+
 def bank_report(tr, bank, rng, n=96):
     """per kind of demo, values never seen: which tool its want finds, and whether that tool says the right thing;
     the held wants (never read) the same way; a nested use (a tool's output into another tool)"""
@@ -1200,7 +1221,7 @@ def bank_report(tr, bank, rng, n=96):
         if o:
             _, o2, _ = apply_tool(tr, bank, "the sum of", [say(o[0]), said(rng, c)])
             hit += bool(o2) and say(o2[0]) == str(max(a, b) + c)
-    return f"tools {len(bank.nets)} | " + " ".join(line) + f" | nested {hit / n:.2f}"
+    return f"tools {len(bank.nets)} | " + " ".join(line) + f" | nested {hit / n:.2f} | {want_spread(tr, bank)}"
 
 
 def train_tools(A):
@@ -1213,12 +1234,7 @@ def train_tools(A):
     tr.requires_grad_(False)
     bank = ToolBank().to(dev)
     rng = random.Random(A.seed)
-    with torch.no_grad():                              # how far apart the wants start, before any label is learned
-        W = [(k, w) for k in WANTS for w in WANTS[k]]
-        C = tr.encode([w for _, w in W]) @ tr.encode([w for _, w in W]).T
-        same = [float(C[i, j]) for i in range(len(W)) for j in range(len(W)) if i != j and W[i][0] == W[j][0]]
-        diff = [float(C[i, j]) for i in range(len(W)) for j in range(len(W)) if W[i][0] != W[j][0]]
-        print(f"want cos: same kind {np.mean(same):.3f} (min {min(same):.3f}), other kinds {np.mean(diff):.3f} (max {max(diff):.3f})", flush=True)
+    print("before learning:", want_spread(tr, bank), flush=True)
     st, opt, t0 = {"step": 0, "last": -10 ** 9, "newest": None}, None, time.time()
     for step in range(1, A.steps + 1):
         st.update(step=step, spawned=False)
