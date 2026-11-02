@@ -1,0 +1,26 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2742.66it/s]
+demonstrations: 20 ways, 733 rows, 5242 steps; [1, 12, 13, 13, 15, 16, 30, 33, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
+Traceback (most recent call last):
+  File "/marimo/frozen/rd14/gnm.py", line 1481, in <module>
+    diag(A) if A.diag else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+                           ~~~~~~~~~~~~^^^
+  File "/marimo/frozen/rd14/gnm.py", line 1225, in train_reader
+    loss, acc = reader_loss(rd, [fresh(rng, x, keys) for x in rng.choices(bank, weight, k=A.batch)])
+                ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/frozen/rd14/gnm.py", line 1072, in reader_loss
+    logits, ends, off, mask = rd(views)
+                              ~~^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/marimo/frozen/rd14/gnm.py", line 1015, in forward
+    dev = self.end.weight.device
+          ^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1968, in __getattr__
+    raise AttributeError(
+        f"'{type(self).__name__}' object has no attribute '{name}'"
+    )
+AttributeError: 'Sequential' object has no attribute 'weight'

@@ -1,0 +1,18 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2845.86it/s]
+Traceback (most recent call last):
+  File "/marimo/frozen/d7/gnm.py", line 1481, in <module>
+    diag(A) if A.diag else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    ~~~~^^^
+  File "/marimo/frozen/d7/gnm.py", line 1338, in diag
+    print("reader:", rd.load_state_dict(torch.load(A.reader, map_location=dev), strict=False).unexpected_keys, flush=True)
+                                        ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/serialization.py", line 1530, in load
+    with _open_file_like(f, "rb") as opened_file:
+         ~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/serialization.py", line 795, in _open_file_like
+    return _open_file(name_or_buffer, mode)
+  File "/usr/local/lib/python3.13/site-packages/torch/serialization.py", line 776, in __init__
+    super().__init__(open(name, mode))  # noqa: SIM115
+                     ~~~~^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/marimo/ckpt/rd14.pt'
