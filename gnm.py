@@ -1950,8 +1950,8 @@ def rule_rule(m, ev):
     if k[0] != "fact":
         return
     want = m.rulekey.get(k[1], -1)
-    yield Judgment("rule", ev["place"] == want, "relate", (ev["src"], want, 1.) if want >= 0 else None, ev,
-                   f"found place {ev['place']}, rule for {k[1]} is at {want}")
+    teach = ([(ev["src"], want, 1., "rule")] if want >= 0 else []) + ([(ev["src"], ev["place"], 0., "rule")] if ev["place"] >= 0 and ev["place"] != want else [])
+    yield Judgment("rule", ev["place"] == want, "relate", teach, ev, f"found place {ev['place']}, rule for {k[1]} is at {want}")
 
 
 RULES = [rule_merge, rule_found, rule_copy, rule_roundtrip, rule_tool, rule_arith, rule_read, rule_stale, rule_rule]
@@ -2020,14 +2020,24 @@ def lessons(tr, bank, m, js, cap=64):
     teaches: relate learns same / not same, the relation learns which words name a statement's source and whether it
     has one. (Labels and B stay as they are online: changing them would move what is already stored.)"""
     dev, loss = next(bank.parameters()).device, None
-    pairs = [j for j in js if j.blame in ("relate", "walk") and j.target and j.target[1] is not None]
+    teach = lambda j: [x if len(x) == 4 else (*x, "same") for x in (j.target if isinstance(j.target, list) else [j.target])
+                       if x and x[1] is not None and x[1] >= 0]       # (text, place, same?, which question)
+    pairs = [j for j in js if j.blame in ("relate", "walk") and teach(j)]
     wrong, right = [j for j in pairs if not j.ok], [j for j in pairs if j.ok]
-    rel = [j.target for j in wrong[:cap // 2] + random.sample(right, min(len(right), len(wrong[:cap // 2])))]   # learn from mistakes
+    rel = [x for j in wrong[:cap // 2] + random.sample(right, min(len(right), len(wrong[:cap // 2]))) for x in teach(j)]   # learn from mistakes
     if rel:
-        za, ma = tr.content([t for t, _, _ in rel])
-        zb, mb = nodes_of([m.g.chain[p][0][0].detach() for _, p, _ in rel], dev)
-        y = torch.tensor([v for _, _, v in rel], device=dev)
-        loss = F.binary_cross_entropy_with_logits(bank.relate(["same"] * len(rel), za, ma, zb, mb), y)
+        za, ma = tr.content([t for t, _, _, _ in rel])
+        zb, mb = nodes_of([m.g.chain[p][0][0].detach() for _, p, _, _ in rel], dev)
+        y = torch.tensor([v for _, _, v, _ in rel], device=dev)
+        loss = F.binary_cross_entropy_with_logits(bank.relate([q for _, _, _, q in rel], za, ma, zb, mb), y)
+    sums = [j for j in js if j.rule == "arith" and not j.ok and j.ev["after"] and j.ev["after"][len(j.ev["before"]) - 3].made][:cap]
+    for j in sums:                                     # the tool that got it wrong learns the right number on these very inputs
+        t, want, args = j.ev["after"][len(j.ev["before"]) - 3].made
+        if t is None:
+            continue
+        o, _, _ = bank.nets[t]([tr.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in args])
+        l4 = tr.decode_loss(o[0][0], o[0][1], [j.target]) / len(sums)
+        loss = l4 if loss is None else loss + l4
     back = [j.target for j in js if j.rule == "roundtrip" and not j.ok][:cap]
     if back:                                           # the decoder's output side (stored B keeps its meaning)
         l3 = tr.decode_loss(*tr.content(back), back)
