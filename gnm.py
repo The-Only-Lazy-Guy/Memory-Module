@@ -1698,7 +1698,7 @@ class Machine:
     def __init__(self, translator, d=64, budget=400):
         self.T, self.g, self.t, self.budget, self.flat, self.trace, self.made = translator, Graph(d), 0, budget, False, None, {}
         self.events, self.at, self.subj = None, {}, {}     # watched: every call is an event the rules judge
-        self.wrote, self.latest = {}, {}                   # the rules' record: each entry's statement, each subject's last place
+        self.wrote, self.latest, self.rulekey = {}, {}, {}   # the rules' record: each entry's statement, each subject's last place, each key's rule
 
     def do(self, r, name, *a):
         r.passes += 1
@@ -1725,7 +1725,9 @@ class Machine:
         return j if j >= 0 and self.T.same(label, self.g.L[j], q, self.g.chain[j][0][0], task) else -1
 
     def item(self, text):
-        return Item(self.T.node(text), self.T)
+        it = Item(self.T.node(text), self.T)
+        it._t = text                                   # what the row read is that text: no round trip through B
+        return it
 
     def entry_item(self, p, idx=-1):
         ch = self.g.chain[p]
@@ -1756,6 +1758,7 @@ class Machine:
     def f_rule(self, r):                               # statement -> the rule that governs it
         q = self.T.rule_query(r.src)
         p = self.find(q, self.T.node(r.src), "rule") if q is not None else -1
+        self.at = {"place": p}
         r.stack.append(self.entry_item(p) if p >= 0 else self.item("no rule"))
 
     def f_prev(self, r):                               # entry -> the entry it came from
@@ -1934,7 +1937,24 @@ def rule_stale(m, ev):
         yield Judgment("stale", ev["place"] == q, "relate", (ev["asked"], q, 1.), ev, f"reached place {ev['place']}, last said at {q}")
 
 
-RULES = [rule_merge, rule_found, rule_copy, rule_roundtrip, rule_tool, rule_arith, rule_read, rule_stale]
+def teacher(m):
+    """the exact reading of a text (the rules may use it; no function the model calls does)"""
+    return m.T if isinstance(m.T, Oracle) else m.T.o
+
+
+def rule_rule(m, ev):
+    """a statement's rule lookup finds the rule stated for its key, and says no rule only when none was stated"""
+    if ev["name"] != "rule":
+        return
+    k = teacher(m).key(ev["src"])
+    if k[0] != "fact":
+        return
+    want = m.rulekey.get(k[1], -1)
+    yield Judgment("rule", ev["place"] == want, "relate", (ev["src"], want, 1.) if want >= 0 else None, ev,
+                   f"found place {ev['place']}, rule for {k[1]} is at {want}")
+
+
+RULES = [rule_merge, rule_found, rule_copy, rule_roundtrip, rule_tool, rule_arith, rule_read, rule_stale, rule_rule]
 
 
 class Ledger:
@@ -1966,6 +1986,8 @@ def judge(m, ledger, row=None, truth=None):
                 m.subj.setdefault(subject(ev["src"]), ev["place"])
             m.wrote[(ev["place"], ev["index"])] = ev["src"]
             m.latest[subject(ev["src"])] = ev["place"]
+        if ev["name"] == "insert" and not ev.get("derived") and teacher(m).key(ev["src"])[0] == "rule":
+            m.rulekey[teacher(m).key(ev["src"])[1]] = ev["place"]
         if ev["name"] == "trigger" and (ev["source"], ev["from"]) in m.wrote:
             m.wrote[(ev["place"], ev["index"])] = m.wrote[(ev["source"], ev["from"])]
         for rule in RULES:
@@ -2006,6 +2028,10 @@ def lessons(tr, bank, m, js, cap=64):
         zb, mb = nodes_of([m.g.chain[p][0][0].detach() for _, p, _ in rel], dev)
         y = torch.tensor([v for _, _, v in rel], device=dev)
         loss = F.binary_cross_entropy_with_logits(bank.relate(["same"] * len(rel), za, ma, zb, mb), y)
+    back = [j.target for j in js if j.rule == "roundtrip" and not j.ok][:cap]
+    if back:                                           # the decoder's output side (stored B keeps its meaning)
+        l3 = tr.decode_loss(*tr.content(back), back)
+        loss = l3 if loss is None else loss + l3
     dep = [j for j in js if j.rule == "copy"][:cap]
     if dep:
         texts = [j.ev["src"] for j in dep]
@@ -2430,7 +2456,7 @@ def online(A):
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     bank = load_tools(A, tr) or ToolBank().to(dev)
     for n, p in tr.named_parameters():                 # what learns online: the relation gate (and the bank: relate, tools)
-        p.requires_grad = n.split(".")[0] in ("rgate", "rhow")
+        p.requires_grad = n.split(".")[0] in ("rgate", "rhow", "up")
     opt = torch.optim.AdamW([p for p in tr.parameters() if p.requires_grad] + list(bank.parameters()), lr=A.lr)
     rng = random.Random(A.seed)
     w = new_world(rng)
