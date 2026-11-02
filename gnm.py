@@ -1012,7 +1012,7 @@ class Reader(nn.Module):
         self.end = nn.Sequential(nn.Linear(2 * D, d), nn.GELU(), nn.Linear(d, 1))
 
     def forward(self, views):
-        dev = self.end.weight.device
+        dev = self.want.weight.device
         b = self.tr.tok([v[0] for v in views], return_tensors="pt", padding=True, return_offsets_mapping=True)
         off = b.pop("offset_mapping")
         b = b.to(dev)
