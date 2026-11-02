@@ -591,9 +591,7 @@ class Translator(nn.Module):
         self.rel = nn.Sequential(nn.Linear(2 * d, 256), nn.GELU(), nn.Linear(256, 1))   # the relate tool: same place?
         self.ruleq = nn.Sequential(nn.Linear(d, 256), nn.GELU(), nn.Linear(256, d))     # a fact -> where its rule lives
         self.d = d
-        self.K, self.c = 8, 256                        # B: what a statement says, K slots of c (the label only says where)
-        self.slots = nn.Parameter(torch.randn(self.K, D) * .02)
-        self.pool = nn.MultiheadAttention(D, 8, batch_first=True)
+        self.K, self.c = 8, 256                        # B: what a statement says, c per token (the label only says where); K = a tool's output
         self.down = nn.Linear(D, self.c)
         self.up = nn.Sequential(nn.Linear(self.c, D), nn.GELU(), nn.Linear(D, D))
 
@@ -612,39 +610,44 @@ class Translator(nn.Module):
         return F.normalize(self.ruleq(label), dim=-1)
 
     def content(self, texts):
-        """encoder, second head: the slots read the token states and keep what the text says"""
+        """encoder, second head: B, one latent per token, so a name never seen keeps its own vectors and comes back
+        exact. Left-padded, positions counted from each row's first token: B does not depend on the batch."""
         dev = next(self.proj.parameters()).device
+        self.tok.padding_side = "left"
         b = self.tok([self.tok.eos_token + t for t in texts], return_tensors="pt", padding=True).to(dev)
+        self.tok.padding_side = "right"
+        m = b["attention_mask"]
         with torch.no_grad():
-            h = self.norm(self.lm(**b).last_hidden_state)
-        skip = b["attention_mask"] == 0
-        skip[:, 0] = True                              # the first token soaks up attention in GPT-2: a dummy, not read
-        z, _ = self.pool(self.slots[None].expand(len(texts), -1, -1), h, h, key_padding_mask=skip)
-        return F.layer_norm(self.down(z), (self.c,))   # bounded without saturating
+            h = self.norm(self.lm(**b, position_ids=(m.cumsum(1) - 1).clamp(min=0)).last_hidden_state)
+        keep = m.bool()
+        keep[torch.arange(len(texts)), (m == 0).sum(1)] = False   # the first token soaks up attention in GPT-2: a dummy
+        return F.layer_norm(self.down(h), (self.c,)), keep
 
-    def decode_loss(self, z, texts):
-        """decoder: the frozen LM reads the slots as a prefix and writes the text back"""
+    def decode_loss(self, z, zm, texts):
+        """decoder: the frozen LM reads B as a prefix and writes the text back"""
         t = self.tok([x + self.tok.eos_token for x in texts], return_tensors="pt", padding=True).to(z.device)
         ids, mask = t["input_ids"], t["attention_mask"]
+        m = torch.cat([zm.long(), mask], 1)
         x = torch.cat([self.up(z), self.lm.wte(ids)], 1)
-        m = torch.cat([torch.ones(len(texts), self.K, dtype=mask.dtype, device=z.device), mask], 1)
-        h = self.lm(inputs_embeds=x, attention_mask=m).last_hidden_state[:, self.K - 1:-1]
+        h = self.lm(inputs_embeds=x, attention_mask=m, position_ids=(m.cumsum(1) - 1).clamp(min=0)).last_hidden_state
+        h = h[:, z.shape[1] - 1:-1]
         nll = F.cross_entropy((h @ self.lm.wte.weight.T).transpose(1, 2), ids, reduction="none")
         return (nll * mask).sum() / mask.sum()
 
     @torch.no_grad()
-    def decode(self, z, n=48):
-        """slots -> text, greedy"""
-        eos = self.tok.eos_token_id
-        o = self.lm(inputs_embeds=self.up(z), use_cache=True)
-        past, h, out = o.past_key_values, o.last_hidden_state[:, -1], []
+    def decode(self, z, zm, n=48):
+        """B -> text, greedy"""
+        eos, m = self.tok.eos_token_id, zm.long()
+        o = self.lm(inputs_embeds=self.up(z), attention_mask=m, position_ids=(m.cumsum(1) - 1).clamp(min=0), use_cache=True)
+        past, h, out, at = o.past_key_values, o.last_hidden_state[:, -1], [], m.sum(1, keepdim=True)
         for _ in range(n):
             nxt = (h @ self.lm.wte.weight.T).argmax(-1)
             out.append(nxt)
             if all(eos in x for x in torch.stack(out, 1).tolist()):
                 break
-            o = self.lm(inputs_embeds=self.lm.wte(nxt)[:, None], past_key_values=past, use_cache=True)
-            past, h = o.past_key_values, o.last_hidden_state[:, -1]
+            m = torch.cat([m, torch.ones_like(m[:, :1])], 1)
+            o = self.lm(inputs_embeds=self.lm.wte(nxt)[:, None], past_key_values=past, attention_mask=m, position_ids=at, use_cache=True)
+            past, h, at = o.past_key_values, o.last_hidden_state[:, -1], at + 1
         return [self.tok.decode(x[:x.index(eos)] if eos in x else x) for x in torch.stack(out, 1).tolist()]
 
 
@@ -775,7 +778,7 @@ def sentence(rng, vocab):
 def decode_eval(model, rng, vocab, n=256):
     """round trip text -> B -> text on fresh names (and keys), exact, by kind of sentence"""
     T = [sentence(rng, vocab) for _ in range(n)]
-    D = model.decode(model.content(T))
+    D = model.decode(*model.content(T))
     kind = lambda t: "value" if re.fullmatch(r"-?\d+", t) else "rule" if not t.startswith(("the ", "Correction")) else "copy" if "(same as" in t else "fact"
     hit, tot = {}, {}
     for t, d in zip(T, D):
@@ -791,14 +794,14 @@ def train_decoder(A):
     model = Translator().to(dev)
     if A.init:
         model.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
-    new = [p for n, p in model.named_parameters() if n.split(".")[0] in ("slots", "pool", "down", "up")]
+    new = [p for n, p in model.named_parameters() if n.split(".")[0] in ("down", "up")]
     opt = torch.optim.AdamW(new, lr=A.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, A.steps, eta_min=A.lr / 50)
     rng = random.Random(A.seed)
     t0 = time.time()
     for step in range(1, A.steps + 1):
         T = [sentence(rng, KEYS_TRAIN) for _ in range(A.batch)]
-        loss = model.decode_loss(model.content(T), T)
+        loss = model.decode_loss(*model.content(T), T)
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -818,17 +821,30 @@ def train_decoder(A):
 class Tools(nn.Module):
     """tool nodes: f(node, node) -> node, on what the nodes say (B), never on parsed text. One body, one token per tool."""
 
-    def __init__(self, K=8, c=256):
+    def __init__(self, K=8, c=256, L=96):
         super().__init__()
         self.names = [t[0] for t in TOOLS[:N_ARITH]]
         self.emb = nn.Parameter(torch.randn(len(self.names), c) * .02)
-        self.pos = nn.Parameter(torch.randn(2 * K + 1, c) * .02)
+        self.out = nn.Parameter(torch.randn(K, c) * .02)       # the output node's K latents are read off these
+        self.side = nn.Parameter(torch.randn(2, c) * .02)      # first input, second input
+        self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 4)
         self.K = K
 
-    def forward(self, name, a, b):
-        i = torch.tensor([self.names.index(n) for n in name], device=a.device)
-        return F.layer_norm(self.f(torch.cat([self.emb[i][:, None], a, b], 1) + self.pos)[:, 1:1 + self.K], (a.shape[-1],))
+    def forward(self, name, a, am, b, bm):
+        n, dev = len(name), a.device
+        i = torch.tensor([self.names.index(x) for x in name], device=dev)
+        at = lambda z, m, k: z + self.side[k] + self.pos[(m.long().cumsum(1) - 1).clamp(min=0)]
+        x = torch.cat([self.emb[i][:, None], self.out[None].expand(n, -1, -1), at(a, am, 0), at(b, bm, 1)], 1)
+        keep = torch.cat([torch.ones(n, 1 + self.K, dtype=torch.bool, device=dev), am, bm], 1)
+        y = self.f(x, src_key_padding_mask=~keep)[:, 1:1 + self.K]
+        return F.layer_norm(y, (y.shape[-1],)), torch.ones(n, self.K, dtype=torch.bool, device=dev)
+
+
+def lpad(z, m, L):
+    """left-pad a node's latents to length L"""
+    k = L - z.shape[1]
+    return (torch.cat([z.new_zeros(z.shape[0], k, z.shape[2]), z], 1), torch.cat([m.new_zeros(m.shape[0], k), m], 1)) if k else (z, m)
 
 
 def said(rng, v):
@@ -854,12 +870,14 @@ def tool_batch(rng, n, depth):
 
 def tool_run(tr, tools, leaves, levels):
     """the nodes flow through the tool nodes; per level, the output B and the text it should say"""
-    z, outs = tr.content(leaves[0]), []
+    (z, zm), outs = tr.content(leaves[0]), []
     for side, (name, flip, vals) in zip(leaves[1:], levels):
-        w = tr.content(side)
-        fl = torch.tensor(flip, device=z.device)[:, None, None]
-        z = tools(name, torch.where(fl, w, z), torch.where(fl, z, w))
-        outs.append((z, [str(v) for v in vals]))
+        w, wm = tr.content(side)
+        L = max(z.shape[1], w.shape[1])
+        (z, zm), (w, wm) = lpad(z, zm, L), lpad(w, wm, L)
+        fl = torch.tensor(flip, device=z.device)[:, None]
+        z, zm = tools(name, torch.where(fl[..., None], w, z), torch.where(fl, wm, zm), torch.where(fl[..., None], z, w), torch.where(fl, zm, wm))
+        outs.append((z, zm, [str(v) for v in vals]))
     return outs
 
 
@@ -877,7 +895,7 @@ def train_tools(A):
     t0 = time.time()
     for step in range(1, A.steps + 1):
         outs = tool_run(tr, tools, *tool_batch(rng, A.batch, rng.choice((1, 1, 2))))
-        loss = sum(tr.decode_loss(z, t) for z, t in outs)
+        loss = sum(tr.decode_loss(z, zm, t) for z, zm, t in outs)
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -888,8 +906,8 @@ def train_tools(A):
             with torch.no_grad():
                 for depth in (1, 2, 3, 4):                     # trained on 1-2: 3 and 4 say whether B drifts as tools nest
                     outs = tool_run(tr, tools, *tool_batch(rng, 128, depth))
-                    got = tr.decode(outs[-1][0])
-                    line.append(f"depth {depth} {sum(g.strip() == t for g, t in zip(got, outs[-1][1])) / 128:.3f}")
+                    got = tr.decode(*outs[-1][:2])
+                    line.append(f"depth {depth} {sum(g.strip() == t for g, t in zip(got, outs[-1][2])) / 128:.3f}")
             print(f"step {step} loss {float(loss):.3f} | exact: " + " ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
             tools.train()
             if A.save:
