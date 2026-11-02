@@ -875,7 +875,7 @@ class Tools(nn.Module):
         self.ro = nn.Linear(c, 1)
 
     def at(self, z, m, k):
-        return z + self.side[k] + self.pos[(m.long().cumsum(1) - 1).clamp(min=0)]
+        return z + self.side[k] + self.pos[(m.long().cumsum(1) - 1).clamp(0, len(self.pos) - 1)]   # a long node shares the last
 
     def relate(self, task, a, am, b, bm):
         """the relate node: reads both nodes token by token, a logit"""
@@ -966,6 +966,22 @@ def relate_batch(rng, n, vocab=KEYS_TRAIN):
     return out
 
 
+@torch.no_grad()
+def relate_grid(tr, rng, n=8, vocab=KEYS_TRAIN):
+    """the pairs the machine meets: names x keys (some keys with and without an adjective); each fact asks with one saying,
+    its other saying is the yes, the fact nearest to it by label (the place the walk would find) is the no"""
+    used, ku = set(), set()
+    names = [_name(rng, 2, used) for _ in range(n)]
+    keys = [" ".join(_key(rng, vocab, ku)) for _ in range(n - n // 4)]
+    keys += [f"{rng.choice(_ADJ)} {k}" for k in rng.sample(keys, n // 4)]
+    facts = [(a, b) for a in names for b in keys]
+    q, other = [views(rng, *f) for f in facts], [views(rng, *f) for f in facts]
+    L = tr.encode(other)
+    sim = tr.encode(q) @ L.T - 2 * torch.eye(len(facts), device=L.device)
+    near = sim.argmax(1).tolist()
+    return [("same", a, b, 1) for a, b in zip(q, other)] + [("same", a, other[j], 0) for a, j in zip(q, near)]
+
+
 def relate_run(tr, tools, batch):
     task, a, b, y = zip(*batch)
     dev = next(tools.parameters()).device
@@ -1018,7 +1034,8 @@ def train_tools(A):
         outs = tool_run(tr, tools, *tool_batch(rng, A.batch, rng.choice((1, 1, 2))))
         a, b, t = join_batch(rng, A.batch // 2)
         loss = (sum(tr.decode_loss(z, zm, t) for z, zm, t in outs) + tr.decode_loss(*join_run(tr, tools, a, b), t)
-                + F.binary_cross_entropy_with_logits(*relate_run(tr, tools, relate_batch(rng, A.batch))))
+                + F.binary_cross_entropy_with_logits(*relate_run(tr, tools, relate_batch(rng, A.batch)))
+                + F.binary_cross_entropy_with_logits(*relate_run(tr, tools, relate_grid(tr, rng))))
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -1042,6 +1059,10 @@ def train_tools(A):
                         for v in (1, 0):
                             sel = [o for o, x in zip(ok, B) if x[0] == task and x[3] == v]
                             line.append(f"{task}{'+' if v else '-'} {sum(sel) / max(1, len(sel)):.3f}")
+                    G = relate_grid(tr, rng, 12, voc)
+                    lg, y = relate_run(tr, tools, G)
+                    ok = ((lg > 0).float() == y).tolist()
+                    line.append(f"nearest: yes {sum(ok[:len(ok) // 2]) / (len(ok) // 2):.3f} no {sum(ok[len(ok) // 2:]) / (len(ok) // 2):.3f}")
             print(f"step {step} loss {float(loss):.3f} | exact: " + " ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
             tools.train()
             if A.save:
