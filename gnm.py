@@ -589,6 +589,7 @@ class Translator(nn.Module):
         self.gate = nn.Sequential(nn.Linear(D, 256), nn.GELU(), nn.Linear(256, 1))
         self.proj = nn.Sequential(nn.Linear(D, 512), nn.GELU(), nn.Linear(512, d))
         self.rel = nn.Sequential(nn.Linear(2 * d, 256), nn.GELU(), nn.Linear(256, 1))   # the relate tool: same place?
+        self.ruleq = nn.Sequential(nn.Linear(d, 256), nn.GELU(), nn.Linear(256, d))     # a fact -> where its rule lives
         self.d = d
         self.K, self.c = 8, 256                        # B: what a statement says, K slots of c (the label only says where)
         self.slots = nn.Parameter(torch.randn(self.K, D) * .02)
@@ -606,6 +607,9 @@ class Translator(nn.Module):
 
     def relate(self, a, b):
         return self.rel(torch.cat([(a - b).abs(), a * b], -1)).squeeze(-1)
+
+    def rule_of(self, label):
+        return F.normalize(self.ruleq(label), dim=-1)
 
     def content(self, texts):
         """encoder, second head: the slots read the token states and keep what the text says"""
@@ -645,7 +649,7 @@ class Translator(nn.Module):
 
 
 class NeuralT:
-    """the translator as the machine sees it (routing stays exact until the reader exists)"""
+    """the translator as the machine sees it. key is the teacher's routing (gold rows only); no function calls it"""
 
     def __init__(self, model, oracle, tau):
         self.m, self.o, self.tau, self.c, self.d = model, oracle, tau, {}, model.d
@@ -660,9 +664,9 @@ class NeuralT:
     def label(self, text):
         return self._l(text)[0].cpu().numpy().astype(np.float32)
 
+    @torch.no_grad()
     def rule_query(self, text):
-        k = self.key(text)
-        return self.label(f"rule: {k[1]}") if k[0] == "fact" else None
+        return self.m.rule_of(self._l(text))[0].cpu().numpy().astype(np.float32)
 
     @torch.no_grad()
     def same(self, a, b):
@@ -702,7 +706,10 @@ def label_loss(model, rng, vocab, n=8):
     rv = lambda k: rng.choice([f"rule: {k}", rule_text(rng, rng.choice(("add", "set", "keep")), k)])
     a = model.encode([rv(k) for k in keys] + [f"the {k} is {rng.randint(1, 60)}." for k in keys] + [leaf(rng.choice(names), k) for k in keys])
     b = model.encode([rv(k) for k in keys])
-    return loss + F.cross_entropy(b @ a.T / .07, torch.arange(n, device=sim.device)) + relate_loss(model, b, a[:n], b @ a[:n].T)
+    q = model.rule_of(model.encode([views(rng, rng.choice(names), k) for k in keys]))   # a fact asks for its key's rule
+    t = torch.arange(n, device=sim.device)
+    return (loss + F.cross_entropy(b @ a.T / .07, t) + relate_loss(model, b, a[:n], b @ a[:n].T)
+            + F.cross_entropy(q @ b.T / .07, t) + relate_loss(model, q, b, q @ b.T))
 
 
 @torch.no_grad()
@@ -728,6 +735,10 @@ def label_eval(model, rng, vocab, n=40):
     Q, S = enc([f"rule: {k}" for k in keys]), R[:n]
     out["rule_rel+"] = float((model.relate(Q, S) > 0).float().mean())
     out["rule_rel-"] = float((model.relate(Q, R[(C - 2 * torch.eye(*C.shape, device=C.device)).argmax(1)]) <= 0).float().mean())
+    Q = model.rule_of(enc([f"{leaf(rng.choice(names), k)} is {rng.randint(1, 60)}." for k in keys]))
+    C = Q @ R[:n].T
+    out["ruleq"] = float((C.argmax(1) == torch.arange(n, device=C.device)).float().mean())
+    out["ruleq_rel+"] = float((model.relate(Q, R[:n]) > 0).float().mean())
     return out
 
 
@@ -992,7 +1003,7 @@ class Machine:
     def f_insert(self, r, derived=False):              # A to be B: a new entry where the statement belongs
         self.t += 1
         text = f"{phrase_of(r.src)} is {r.stack[-1].value}." if derived else r.src
-        label = self.T.label(phrase_of(r.src) or r.src)   # the phrase a lookup would use, not the whole sentence
+        label = self.T.label(r.src)                    # a statement lands where its phrase does: the labels are trained so
         p = self.find(label)
         p = p if p >= 0 else self.g.add_place(label)
         self.g.chain[p].append((text, self.t))
