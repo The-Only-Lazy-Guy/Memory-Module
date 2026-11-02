@@ -755,7 +755,7 @@ def sentence(rng, vocab):
     """something the memory could be told or could hold: a fact, a correction, a copy, a rule, a bare value"""
     nm, k, r = _name(rng, 2), " ".join(_key(rng, vocab, set())), rng.random()
     return (views(rng, nm, k) if r < .6 else rule_text(rng, rng.choice(("add", "set", "keep")), k) if r < .75
-            else str(rng.randint(-60, 120)) if r < .9 else f"rule: {k}")
+            else str(rng.randint(-300, 300)) if r < .9 else f"rule: {k}")
 
 
 @torch.no_grad()
@@ -800,6 +800,87 @@ def train_decoder(A):
             model.train()
             if A.save:
                 torch.save({k: v for k, v in model.state_dict().items() if not k.startswith("lm.")}, A.save)
+
+
+class Tools(nn.Module):
+    """tool nodes: f(node, node) -> node, on what the nodes say (B), never on parsed text. One body, one token per tool."""
+
+    def __init__(self, K=8, c=256):
+        super().__init__()
+        self.names = [t[0] for t in TOOLS[:N_ARITH]]
+        self.emb = nn.Parameter(torch.randn(len(self.names), c) * .02)
+        self.pos = nn.Parameter(torch.randn(2 * K + 1, c) * .02)
+        self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 4)
+        self.K = K
+
+    def forward(self, name, a, b):
+        i = torch.tensor([self.names.index(n) for n in name], device=a.device)
+        return torch.tanh(self.f(torch.cat([self.emb[i][:, None], a, b], 1) + self.pos)[:, 1:1 + self.K])
+
+
+def said(rng, v):
+    """a node holding the value v, as the memory might hold it"""
+    nm, k = _name(rng, 2), " ".join(_key(rng, KEYS_TRAIN, set()))
+    return rng.choice([str(v), f"{leaf(nm, k)} is {v}.", f"Correction: {leaf(nm, k)} is now {v}."])
+
+
+def tool_batch(rng, n, depth):
+    """trees of tool calls, the leaves as nodes say them; returns leaves, and per level (tool, which inputs, the value)"""
+    ops = [t for t in TOOLS[:N_ARITH]]
+    vals = [rng.randint(1, 60) for _ in range(n)]
+    leaves, levels = [[said(rng, v) for v in vals]], []
+    for _ in range(depth):
+        w = [rng.randint(1, 60) for _ in range(n)]
+        o = [rng.choice(ops) for _ in range(n)]
+        flip = [rng.random() < .5 for _ in range(n)]           # the running result comes left or right
+        vals = [f(y, x) if fl else f(x, y) for (_, f, _), x, y, fl in zip(o, vals, w, flip)]
+        leaves.append([said(rng, x) for x in w])
+        levels.append(([x[0] for x in o], flip, vals))
+    return leaves, levels
+
+
+def tool_run(tr, tools, leaves, levels):
+    """the nodes flow through the tool nodes; per level, the output B and the text it should say"""
+    z, outs = tr.content(leaves[0]), []
+    for side, (name, flip, vals) in zip(leaves[1:], levels):
+        w = tr.content(side)
+        fl = torch.tensor(flip, device=z.device)[:, None, None]
+        z = tools(name, torch.where(fl, w, z), torch.where(fl, z, w))
+        outs.append((z, [str(v) for v in vals]))
+    return outs
+
+
+def train_tools(A):
+    """--init = a translator with its decoder; the translator stays frozen, so B keeps its meaning"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    tr.requires_grad_(False)
+    tools = Tools(tr.K, tr.c).to(dev)
+    opt = torch.optim.AdamW(tools.parameters(), lr=A.lr)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, A.steps, eta_min=A.lr / 50)
+    rng = random.Random(A.seed)
+    t0 = time.time()
+    for step in range(1, A.steps + 1):
+        outs = tool_run(tr, tools, *tool_batch(rng, A.batch, rng.choice((1, 1, 2))))
+        loss = sum(tr.decode_loss(z, t) for z, t in outs)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        sched.step()
+        if step % A.every == 0:
+            tools.eval()
+            line = []
+            with torch.no_grad():
+                for depth in (1, 2, 3, 4):                     # trained on 1-2: 3 and 4 say whether B drifts as tools nest
+                    outs = tool_run(tr, tools, *tool_batch(rng, 128, depth))
+                    got = tr.decode(outs[-1][0])
+                    line.append(f"depth {depth} {sum(g.strip() == t for g, t in zip(got, outs[-1][1])) / 128:.3f}")
+            print(f"step {step} loss {float(loss):.3f} | exact: " + " ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+            tools.train()
+            if A.save:
+                torch.save(tools.state_dict(), A.save)
 
 
 # ====================================================================== function nodes
@@ -1555,6 +1636,7 @@ if __name__ == "__main__":
     P.add_argument("--seed", type=int, default=1)
     P.add_argument("--train", action="store_true", help="train the translator's labels")
     P.add_argument("--decode", action="store_true", help="train the translator's decoder: text -> B -> text (--init = the translator)")
+    P.add_argument("--tools", action="store_true", help="train the tool nodes on B (--init = translator with decoder)")
     P.add_argument("--read", action="store_true", help="train the reader on demonstrations (--init = the translator)")
     P.add_argument("--diag", action="store_true", help="no training: every row by the correct calls and by the reader in lockstep")
     P.add_argument("--reader", default="", help="--diag: the reader's weights")
@@ -1569,4 +1651,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    diag(A) if A.diag else train_decoder(A) if A.decode else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else train_decoder(A) if A.decode else train_tools(A) if A.tools else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
