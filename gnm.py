@@ -610,11 +610,13 @@ class Translator(nn.Module):
     def content(self, texts):
         """encoder, second head: the slots read the token states and keep what the text says"""
         dev = next(self.proj.parameters()).device
-        b = self.tok(texts, return_tensors="pt", padding=True).to(dev)
+        b = self.tok([self.tok.eos_token + t for t in texts], return_tensors="pt", padding=True).to(dev)
         with torch.no_grad():
             h = self.norm(self.lm(**b).last_hidden_state)
-        z, _ = self.pool(self.slots[None].expand(len(texts), -1, -1), h, h, key_padding_mask=b["attention_mask"] == 0)
-        return torch.tanh(self.down(z))
+        skip = b["attention_mask"] == 0
+        skip[:, 0] = True                              # the first token soaks up attention in GPT-2: a dummy, not read
+        z, _ = self.pool(self.slots[None].expand(len(texts), -1, -1), h, h, key_padding_mask=skip)
+        return F.layer_norm(self.down(z), (self.c,))   # bounded without saturating
 
     def decode_loss(self, z, texts):
         """decoder: the frozen LM reads the slots as a prefix and writes the text back"""
@@ -815,7 +817,7 @@ class Tools(nn.Module):
 
     def forward(self, name, a, b):
         i = torch.tensor([self.names.index(n) for n in name], device=a.device)
-        return torch.tanh(self.f(torch.cat([self.emb[i][:, None], a, b], 1) + self.pos)[:, 1:1 + self.K])
+        return F.layer_norm(self.f(torch.cat([self.emb[i][:, None], a, b], 1) + self.pos)[:, 1:1 + self.K], (a.shape[-1],))
 
 
 def said(rng, v):
