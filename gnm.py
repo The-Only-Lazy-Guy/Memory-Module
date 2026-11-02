@@ -722,7 +722,7 @@ class Row:
     """one thought: what it is reading (focus) and what it holds (stack)"""
 
     def __init__(self, text):
-        self.src, self.focus, self.stack, self.passes, self.until = text, [text], [], 0, None
+        self.src, self.focus, self.stack, self.passes, self.until, self.stuck = text, [text], [], 0, None, False
 
 
 class Machine:
@@ -866,19 +866,14 @@ def gold_older(m, r):
 def gold_tree(m, r, t):
     if t[0] == "leaf":
         return gold_read(m, r, leaf(t[1], t[2]))
-    pre, rest = next(x for x in TOOLS if x[0] == t[1])[2].split("{0}")
-    mid, post = rest.split("{1}")
-    lit = [pre, mid, post]
-    for i, c in enumerate(t[2]):
-        n = len((lit[i] + ("(" if c[0] == "op" else "")).strip())
-        if n:
-            m.do(r, "split", n)
-        gold_tree(m, r, c)
-        if c[0] == "op":
-            m.do(r, "split", 1)
-    if post:
-        m.do(r, "split", len(post))
-    m.do(r, "tool", t[1])
+    a, b = t[2]
+    pre = next(x for x in TOOLS if x[0] == t[1])[2].split("{0}")[0]
+    m.do(r, "split", len((pre + ("(" if a[0] == "op" else "")).strip()))
+    gold_tree(m, r, a)
+    m.do(r, "split", re.match(r"[)\s]*and( \()?", r.focus[-1]).end())   # ") and (": closes the left, opens the right
+    m.do(r, "drop")                                    # it has done its job; the word stays until the tool
+    gold_tree(m, r, b)
+    m.do(r, "tool", t[1])                              # closing brackets are never read: the stack says what is left
 
 
 def arrive(m, text):
@@ -1033,7 +1028,7 @@ def step_targets(views, names, chars, off):
             t.append(-1)
             continue
         want = base + n
-        ends = [i for i, (a, e) in enumerate(o) if a >= base and e > a]
+        ends = [i for i, (a, e) in enumerate(o) if e > base]
         t.append(min(ends, key=lambda i: abs(o[i][1] - want)) if ends else -1)
     return torch.tensor(t)
 
@@ -1099,7 +1094,7 @@ def pick(rd, vs):
     out = []
     for i, (v, base) in enumerate(vs):
         o, e = off[i].tolist(), ends[i].tolist()
-        ok = [j for j, (a, b) in enumerate(o) if a >= base and b > a]
+        ok = [j for j, (a, b) in enumerate(o) if b > base]
         n = o[max(ok, key=lambda j: e[j])][1] - base if ok else None
         out.append((FUNCS[int(fn[i, 0])], n, float(p[i, 0]), float(p[i, 0] - p[i, 1]), [o[j][1] - base for j in ok]))
     return out
@@ -1107,8 +1102,14 @@ def pick(rd, vs):
 
 def run_free(m, rd, r, stop, max_pass=90, show=False):
     """the reader drives the row; returns False when it asks for something impossible"""
+    seen = set()
     try:
         while r.passes < max_pass:
+            state = (tuple((it.text, it.place, it.idx) for it in r.stack), tuple(r.focus))
+            if state in seen:
+                r.stuck = True
+                return False
+            seen.add(state)
             v = view(r)
             name, n = pick(rd, [v])[0][:2]
             if show:
@@ -1130,34 +1131,38 @@ def run_free(m, rd, r, stop, max_pass=90, show=False):
     return False
 
 
-def collect(world, m, rng, per_kind):
-    """the demonstrations: a fixed number of step-by-step rows per kind"""
-    bank, count = [], {}
+def branch(trace):
+    """which way a row went: the functions it called, and whether a rule was there"""
+    return tuple(sorted({"tool" if x[1] in ("add", "sub", "max", "min") else x[1] for x in trace})), any("no rule" in x[0][0] for x in trace)
+
+
+def collect(world, m, rng, per_kind, ticks=180):
+    """the demonstrations: rows from a world's whole life, up to per_kind for each way a row can go"""
+    rows, count = {}, {}
     m.trace = []
 
-    def keep(kind):
-        if count.get(kind, 0) < per_kind:
-            count[kind] = count.get(kind, 0) + 1
-            bank.extend(m.trace)
+    def keep():
+        b = branch(m.trace)
+        count[b] = count.get(b, 0) + 1
+        if len(rows.setdefault(b, [])) < per_kind:
+            rows[b].append(m.trace)
+        elif (j := rng.randrange(count[b])) < per_kind:
+            rows[b][j] = m.trace
         m.trace = []
 
-    kinds = ("fact", "delta", "rule", "note", "copy", "lookup", "before", "coexist", "chain", "ops")
-    tick = 0
-    while tick < 5000 and any(count.get(k, 0) < per_kind for k in kinds):
-        tick += 1
+    for _ in range(ticks):
         for draw in world_step(world, rng):
             o = draw()
             for s in statements(o) if o else []:
-                n = len(bank)
                 arrive(m, s)
-                names = [x[1] for x in m.trace]
-                keep("delta" if "derive" in names else "rule" if m.T.key(s)[0] == "rule" else "note" if s.startswith("Correction")
-                     else "copy" if "(same as" in s else "fact")
-        for k in kinds[5:]:
+                keep()
+        for k in ("lookup", "before", "coexist", "chain", "ops"):
             if ask(m, k, world, rng):
-                keep(k)
+                keep()
             m.trace = []
-    print("demonstrations", count, "steps", len(bank), flush=True)
+    m.trace = None
+    bank = [x for r in rows.values() for row in r for x in row]
+    print(f"demonstrations: {len(rows)} ways, {sum(map(len, rows.values()))} rows, {len(bank)} steps;", sorted(len(r) for r in rows.values()), flush=True)
     return bank
 
 
@@ -1381,7 +1386,7 @@ def diag(A):
                         left[e] = left.get(e, 0) + 1
                     if log:
                         log.write(json.dumps(dict(who=who, tr=tname, size=size, part="ask", kind=kind, text=x[0], truth=x[1], gold=ans, said=said,
-                                                  got=held(r), ok=ok, first=first, steps=steps, passes=r.passes, held=[it.text[:60] for it in r.stack[-5:]],
+                                                  got=held(r), ok=ok, first=first, steps=steps, passes=r.passes, stuck=r.stuck, held=[it.text[:60] for it in r.stack[-5:]],
                                                   free=[(v[0][:160], f, c) for v, f, c in ft[:45]] if not ok else None), default=str) + "\n")
                 print(f"   {kind:8s} gold {g_ok}/{n} free {f_ok}/{n} | all calls right {clean}/{n}, steps {hit}/{tot} = {hit / max(1, tot):.4f} | first wrong call: "
                       + ", ".join(f"{a} {b}" for a, b in sorted(left.items(), key=lambda z: -z[1])[:5]) + f" | {time.time() - t0:.0f}s", flush=True)
