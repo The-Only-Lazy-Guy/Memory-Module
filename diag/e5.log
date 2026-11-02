@@ -1,0 +1,6 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 5025.23it/s]
+clear: step 30 | statements read right 300/300 | lookup 30/30 | before 30/30 | coexist 30/30 | chain 30/30 | ops 30/30
+clear: step 60 | statements read right 628/628 | lookup 30/30 | before 30/30 | coexist 30/30 | chain 30/30 | ops 30/30
+held forms: step 30 | statements read right 166/347 | lookup 8/30 | before 0/30 | coexist 0/30 | chain 2/30 | ops 0/30
+held forms: step 60 | statements read right 350/696 | lookup 7/30 | before 0/30 | coexist 0/30 | chain 0/30 | ops 0/30
