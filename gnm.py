@@ -590,6 +590,11 @@ class Translator(nn.Module):
         self.proj = nn.Sequential(nn.Linear(D, 512), nn.GELU(), nn.Linear(512, d))
         self.rel = nn.Sequential(nn.Linear(2 * d, 256), nn.GELU(), nn.Linear(256, 1))   # the relate tool: same place?
         self.d = d
+        self.K, self.c = 8, 256                        # B: what a statement says, K slots of c (the label only says where)
+        self.slots = nn.Parameter(torch.randn(self.K, D) * .02)
+        self.pool = nn.MultiheadAttention(D, 8, batch_first=True)
+        self.down = nn.Linear(D, self.c)
+        self.up = nn.Sequential(nn.Linear(self.c, D), nn.GELU(), nn.Linear(D, D))
 
     def encode(self, texts):
         dev = next(self.proj.parameters()).device
@@ -601,6 +606,40 @@ class Translator(nn.Module):
 
     def relate(self, a, b):
         return self.rel(torch.cat([(a - b).abs(), a * b], -1)).squeeze(-1)
+
+    def content(self, texts):
+        """encoder, second head: the slots read the token states and keep what the text says"""
+        dev = next(self.proj.parameters()).device
+        b = self.tok(texts, return_tensors="pt", padding=True).to(dev)
+        with torch.no_grad():
+            h = self.norm(self.lm(**b).last_hidden_state)
+        z, _ = self.pool(self.slots[None].expand(len(texts), -1, -1), h, h, key_padding_mask=b["attention_mask"] == 0)
+        return torch.tanh(self.down(z))
+
+    def decode_loss(self, z, texts):
+        """decoder: the frozen LM reads the slots as a prefix and writes the text back"""
+        t = self.tok([x + self.tok.eos_token for x in texts], return_tensors="pt", padding=True).to(z.device)
+        ids, mask = t["input_ids"], t["attention_mask"]
+        x = torch.cat([self.up(z), self.lm.wte(ids)], 1)
+        m = torch.cat([torch.ones(len(texts), self.K, dtype=mask.dtype, device=z.device), mask], 1)
+        h = self.lm(inputs_embeds=x, attention_mask=m).last_hidden_state[:, self.K - 1:-1]
+        nll = F.cross_entropy((h @ self.lm.wte.weight.T).transpose(1, 2), ids, reduction="none")
+        return (nll * mask).sum() / mask.sum()
+
+    @torch.no_grad()
+    def decode(self, z, n=48):
+        """slots -> text, greedy"""
+        eos = self.tok.eos_token_id
+        o = self.lm(inputs_embeds=self.up(z), use_cache=True)
+        past, h, out = o.past_key_values, o.last_hidden_state[:, -1], []
+        for _ in range(n):
+            nxt = (h @ self.lm.wte.weight.T).argmax(-1)
+            out.append(nxt)
+            if all(eos in x for x in torch.stack(out, 1).tolist()):
+                break
+            o = self.lm(inputs_embeds=self.lm.wte(nxt)[:, None], past_key_values=past, use_cache=True)
+            past, h = o.past_key_values, o.last_hidden_state[:, -1]
+        return [self.tok.decode(x[:x.index(eos)] if eos in x else x) for x in torch.stack(out, 1).tolist()]
 
 
 class NeuralT:
@@ -708,6 +747,57 @@ def train_translator(A):
             tr, he = label_eval(model, rng, KEYS_TRAIN), label_eval(model, rng, KEYS_EVAL)
             print(f"step {step} loss {float(loss):.3f} | train keys " + " ".join(f"{k} {v:.3f}" for k, v in tr.items()) + f" | {time.time() - t0:.0f}s", flush=True)
             print(f"   held keys " + " ".join(f"{k} {v:.3f}" for k, v in he.items()), flush=True)
+            if A.save:
+                torch.save({k: v for k, v in model.state_dict().items() if not k.startswith("lm.")}, A.save)
+
+
+def sentence(rng, vocab):
+    """something the memory could be told or could hold: a fact, a correction, a copy, a rule, a bare value"""
+    nm, k, r = _name(rng, 2), " ".join(_key(rng, vocab, set())), rng.random()
+    return (views(rng, nm, k) if r < .6 else rule_text(rng, rng.choice(("add", "set", "keep")), k) if r < .75
+            else str(rng.randint(-60, 120)) if r < .9 else f"rule: {k}")
+
+
+@torch.no_grad()
+def decode_eval(model, rng, vocab, n=256):
+    """round trip text -> B -> text on fresh names (and keys), exact, by kind of sentence"""
+    T = [sentence(rng, vocab) for _ in range(n)]
+    D = model.decode(model.content(T))
+    kind = lambda t: "value" if re.fullmatch(r"-?\d+", t) else "rule" if not t.startswith(("the ", "Correction")) else "copy" if "(same as" in t else "fact"
+    hit, tot = {}, {}
+    for t, d in zip(T, D):
+        hit[kind(t)] = hit.get(kind(t), 0) + (d.strip() == t)
+        tot[kind(t)] = tot.get(kind(t), 0) + 1
+    bad = [(t, d) for t, d in zip(T, D) if d.strip() != t][:3]
+    return " ".join(f"{k} {hit[k] / tot[k]:.3f}" for k in sorted(tot)) + f" all {sum(hit.values()) / n:.3f}", bad
+
+
+def train_decoder(A):
+    """the translator's other half; its label heads stay as they are"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    model = Translator().to(dev)
+    if A.init:
+        model.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    new = [p for n, p in model.named_parameters() if n.split(".")[0] in ("slots", "pool", "down", "up")]
+    opt = torch.optim.AdamW(new, lr=A.lr)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, A.steps, eta_min=A.lr / 50)
+    rng = random.Random(A.seed)
+    t0 = time.time()
+    for step in range(1, A.steps + 1):
+        T = [sentence(rng, KEYS_TRAIN) for _ in range(A.batch)]
+        loss = model.decode_loss(model.content(T), T)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        sched.step()
+        if step % A.every == 0:
+            model.eval()
+            tr, bad = decode_eval(model, rng, KEYS_TRAIN)
+            he, bad2 = decode_eval(model, rng, KEYS_EVAL)
+            print(f"step {step} loss {float(loss):.3f} | round trip, train keys: {tr} | held keys: {he} | {time.time() - t0:.0f}s", flush=True)
+            for t, d in bad + bad2:
+                print(f"     {t!r} -> {d!r}", flush=True)
+            model.train()
             if A.save:
                 torch.save({k: v for k, v in model.state_dict().items() if not k.startswith("lm.")}, A.save)
 
@@ -1464,6 +1554,7 @@ if __name__ == "__main__":
     P.add_argument("--show", type=int, default=2)
     P.add_argument("--seed", type=int, default=1)
     P.add_argument("--train", action="store_true", help="train the translator's labels")
+    P.add_argument("--decode", action="store_true", help="train the translator's decoder: text -> B -> text (--init = the translator)")
     P.add_argument("--read", action="store_true", help="train the reader on demonstrations (--init = the translator)")
     P.add_argument("--diag", action="store_true", help="no training: every row by the correct calls and by the reader in lockstep")
     P.add_argument("--reader", default="", help="--diag: the reader's weights")
@@ -1478,4 +1569,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    diag(A) if A.diag else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else train_decoder(A) if A.decode else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
