@@ -1483,8 +1483,8 @@ class Normalizer(nn.Module):
         from transformers import AutoModelForCausalLM, AutoTokenizer
         self.tok = AutoTokenizer.from_pretrained(hf)
         self.tok.pad_token = self.tok.eos_token
-        self.lm = AutoModelForCausalLM.from_pretrained(hf)
-        D, self.c = self.lm.config.n_embd, c
+        self.lm = AutoModelForCausalLM.from_pretrained(hf, dtype=torch.float32)   # some ship in bfloat16; the copy layers are float32
+        D, self.c = self.lm.config.hidden_size, c
         self.cq, self.ck, self.cg = nn.Linear(D, c), nn.Linear(D, c), nn.Linear(D, 1)   # copy: where to look, and how much
 
     def src(self, t):
@@ -1576,7 +1576,7 @@ def norm_report(nz, rng, n=120):
 
 def train_normalizer(A):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    nz = Normalizer().to(dev)
+    nz = Normalizer(A.norm_hf).to(dev)
     if A.init:
         print("normalizer from", A.init, nz.load_state_dict(torch.load(A.init, map_location=dev), strict=False).missing_keys, flush=True)
     opt = torch.optim.AdamW(nz.parameters(), lr=A.lr)
@@ -1608,7 +1608,7 @@ def norm_e2e(A):
     """E4: the memory (exact stand-in) fed held-out forms only, through the normalizer; against the same world fed
     clear statements. Same seed, same questions."""
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    nz = Normalizer().to(dev).eval()
+    nz = Normalizer(A.norm_hf).to(dev).eval()
     nz.load_state_dict(torch.load(A.normw, map_location=dev))
     for fed in ("clear", "held forms"):
         rng = random.Random(A.seed)
@@ -2832,6 +2832,7 @@ if __name__ == "__main__":
     P.add_argument("--norm", action="store_true", help="train the normalizer: any text -> clear statements")
     P.add_argument("--norm-e2e", action="store_true", help="E4: the memory fed held-out forms through the normalizer (--normw)")
     P.add_argument("--normw", default="")
+    P.add_argument("--norm-hf", default="gpt2", help="the normalizer's base language model")
     P.add_argument("--online", action="store_true", help="the model lives in the world: reads, is told, answers, learns, all at once")
     P.add_argument("--rerun", type=int, default=10, help="--online: every this many ticks, what changed tools made is made again")
     P.add_argument("--episode", action="store_true", help="build a memory, unfreeze the translator for --steps, re-transcribe the graph")
