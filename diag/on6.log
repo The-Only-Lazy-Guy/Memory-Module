@@ -1,0 +1,118 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4812.67it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+tick 25 | places 167, statements 245 | this window: rules arith 28/56 wrong, copy 3/242 wrong, found 23/156 wrong, merge 10/225 wrong, outcome 43/74 wrong, read 0/123 wrong, roundtrip 25/242 wrong, rule 53/210 wrong, stale 1/129 wrong, tool 1/80 wrong | wrong answers, first failure on the row: found 21, arith 15, no rule fired 5, stale 1, tool 1 | 38s
+     roundtrip: 'the log ref of Nedun is U228-J.': said back 'the log of Nedun is UJ.'
+     rule: 'the event of Nedun is 3.': found place 3, rule for event is at -1
+     arith: 'What is the sum of (the difference between the last board of Pelba and': the sum of (: 0, 30 -> 54, should be 30
+     outcome: 'What is the sum of (the difference between the last board of Pelba and': said 54, truth 30, first failure: arith
+     found: 'What is the font of the frame of Kapel?': asked the font of merpel, unknown
+     merge: 'the ship of Lozek is 9.': the ship of lozek into the bluesum of lozek
+     copy: 'the zone of Dungor is 10 (same as the first locale of Nedun).': claims [], source 2
+     stale: 'What is the ship of the service of Neril?': reached place 31, last said at 75
+     tool: 'What is the old door of the patient of Lozek?': entry in, 'the old door door' out
+tick 50 | places 334, statements 520 | this window: rules arith 21/44 wrong, copy 4/271 wrong, found 29/147 wrong, merge 17/251 wrong, outcome 43/75 wrong, read 0/115 wrong, roundtrip 23/274 wrong, rule 81/239 wrong, stale 0/116 wrong, tool 0/69 wrong | wrong answers, first failure on the row: found 26, arith 10, no rule fired 7 | 79s
+     roundtrip: 'the log ref of Pelsa is B227-W.': said back 'the log ref of Pelsa is B227.'
+     rule: 'the guest of Saba is 3.': found place 164, rule for guest is at 67
+     found: 'What is the ship of the frame of Kapel?': asked the ship of merpel, unknown
+     outcome: 'What is the ship of the frame of Kapel?': said None, truth 15, first failure: found
+     arith: 'What is the sum of the guest of Vintor and (the sum of the salary of T': the sum of: 7, 14 -> 14, should be 21
+     copy: 'the old age of Lomu is 3 (same as the zone of Neba).': claims [], source 172
+     merge: 'the patient of Bator is Muor.': the patient of bator split from place 92
+tick 75 | places 508, statements 820 | this window: rules arith 29/51 wrong, copy 3/295 wrong, found 29/157 wrong, merge 17/273 wrong, outcome 45/75 wrong, read 0/121 wrong, roundtrip 12/297 wrong, rule 108/269 wrong, stale 1/129 wrong, tool 1/76 wrong | wrong answers, first failure on the row: found 25, arith 13, no rule fired 5, tool 1, stale 1 | 124s
+     rule: 'the main seat of Gorvin is 25.': found place -1, rule for main seat is at 36
+     found: 'What is the font of the frame of Kapel?': asked the font of merpel, unknown
+     outcome: 'What is the font of the frame of Kapel?': said None, truth 27, first failure: found
+     arith: 'What is the sum of (the sum of the first course of Zektha and the last': the sum of (: 47, 17 -> 32, should be 64
+     merge: 'the first cycle of Rilmer is 15.': the first cycle of rilmer into the first cycle of riltha
+     roundtrip: 'the trace id of Neor is H71-E.': said back 'the trace id of Neor is H71-E6.'
+     copy: 'the grade of Pelor is 12 (same as the license of Loor).': claims [], source 151
+     tool: 'What is the backup temperature of the memo of Pelril?': entry in, 'the backup backup backup' out
+     stale: 'What is the license of the memo of Nevin?': reached place 62, last said at 300
+tick 100 | places 595, statements 1089 | this window: rules arith 23/43 wrong, copy 0/263 wrong, found 29/151 wrong, merge 45/246 wrong, outcome 47/75 wrong, read 0/113 wrong, roundtrip 6/263 wrong, rule 143/240 wrong, stale 2/121 wrong, tool 2/68 wrong | wrong answers, first failure on the row: found 23, arith 12, no rule fired 10, tool 1, stale 1 | 171s
+     rule: 'the event of Netha is 8.': found place 274, rule for event is at -1
+     merge: 'the patient of Baril is Mutha.': the patient of baril split from place 198
+     outcome: 'What is the schedule of Loka?': said 30, truth 12, first failure: no rule fired
+     arith: 'What is the larger of (the larger of the ship of Kapel and the board o': the larger of (: 15, 5 -> 14, should be 15
+     found: 'What is the old currency of the next trip of Pelvin?': asked the next trip of pelvin, unknown
+     tool: 'What is the old currency of the next trip of Pelvin?': entry in, 'the old currency' out
+     roundtrip: 'the checksum of Orvin is W80-V.': said back 'the checksum of Orvin is W80V.'
+     stale: 'What is the larger of (the larger of the series of Orne and the schedu': reached place 556, last said at 59
+tick 125 | places 678, statements 1355 | this window: rules arith 20/46 wrong, copy 2/254 wrong, found 34/159 wrong, merge 47/241 wrong, outcome 44/75 wrong, read 0/121 wrong, roundtrip 8/257 wrong, rule 166/230 wrong, stale 3/123 wrong, tool 1/71 wrong | wrong answers, first failure on the row: found 22, arith 11, no rule fired 9, stale 2 | 218s
+     rule: 'the route of Dunne is 1.': found place 519, rule for route is at 166
+     merge: 'the service of Dunvin is Lomu.': the service of dunvin into the service of dunne
+     outcome: 'What is the first course of the service of Thavin?': said None, truth 3, first failure: no rule fired
+     found: 'What is the zone of Thamu?': asked the zone of thamu, got the zone of neba
+     stale: 'What is the route of the patient of Dunsa?': reached place 403, last said at 561
+     arith: 'What is the sum of (the larger of the birth of Torgor and (the larger ': the sum of (: 26, 4 -> 12, should be 30
+     roundtrip: 'the log ref of Zekgor is W900-C.': said back 'the log ref of Zekgor is W90-C.'
+     copy: 'the schedule of Nemu is 1 (same as the worker of Orzek).': claims [], source 463
+     tool: 'What is the sum of the old currency of Kane and (the difference betwee': numbers in, '-' out
+tick 150 | places 762, statements 1643 | this window: rules arith 26/50 wrong, copy 3/278 wrong, found 22/160 wrong, merge 49/259 wrong, outcome 60/75 wrong, read 0/113 wrong, roundtrip 5/279 wrong, rule 164/252 wrong, stale 5/124 wrong, tool 2/75 wrong | wrong answers, first failure on the row: no rule fired 21, found 18, arith 14, stale 5, tool 2 | 266s
+     rule: 'the patient of Lomu is Zektha.': found place 180, rule for patient is at -1
+     merge: 'the frame of Thator is Lotor.': the frame of thator into the frame of muor
+     outcome: 'What is the author of Nepel?': said 25, truth 15, first failure: no rule fired
+     found: 'What is the old currency of the service of Thagor?': asked the old currency of gordun, unknown
+     arith: 'What is the sum of (the larger of the host of Rildun and the first stu': the sum of (: 30, 9 -> 24, should be 39
+     roundtrip: 'the sync token of Dunvin is B878-X.': said back 'the sync token of Dunvin is B78-X78.'
+     stale: 'What is the schedule of the patient of Baril?': reached place 198, last said at 514
+     copy: 'the term of Bavin is 31 (same as the schedule of Pelmu).': claims [], source 565
+     tool: 'What is the old locale of the service of Orzek?': entry in, 'the old locale' out
+tick 175 | places 842, statements 1933 | this window: rules arith 36/64 wrong, copy 2/275 wrong, found 39/165 wrong, merge 40/258 wrong, outcome 56/75 wrong, read 0/128 wrong, roundtrip 8/276 wrong, rule 143/255 wrong, stale 0/139 wrong, tool 0/89 wrong | wrong answers, first failure on the row: found 29, no rule fired 14, arith 13 | 315s
+     merge: 'the priority of Thamu is 30.': the priority of thamu into the priority of thaor
+     rule: 'the old term of Duntha is 6.': found place 429, rule for old term is at -1
+     copy: 'the zone of Mermu is 17 (same as the first course of Kaor).': claims [], source 208
+     outcome: 'What is the store of Gorba?': said 7, truth 16, first failure: no rule fired
+     found: 'What is the series of the next trip of Mermu?': asked the next trip of mermu, got the next trip of meror
+     arith: 'What is the smaller of (the sum of the old currency of Lovin and (the ': the sum of: 9, -20 -> 46, should be -11
+     roundtrip: 'the log ref of Merpel is V982-E.': said back 'the log ref of Merpel is V98-E.'
+tick 200 | places 900, statements 2210 | this window: rules arith 28/49 wrong, copy 2/265 wrong, found 35/158 wrong, merge 51/251 wrong, outcome 55/75 wrong, read 0/108 wrong, roundtrip 3/267 wrong, rule 151/244 wrong, stale 1/120 wrong, tool 2/74 wrong | wrong answers, first failure on the row: found 25, no rule fired 18, arith 10, tool 2 | 362s
+     rule: 'the frame of Thator is Lotor.': found place 76, rule for frame is at -1
+     merge: 'the frame of Thator is Lotor.': the frame of thator into the frame of muor
+     outcome: 'What is the license of the service of Netor?': said None, truth 17, first failure: no rule fired
+     found: 'What is the smaller of the schedule of Riltor and (the difference betw': asked the schedule of riltor, got the schedule of rilor
+     arith: 'What is the smaller of the schedule of Riltor and (the difference betw': the smaller of: 6, -15 -> 6, should be -15
+     tool: 'What is the zone of the service of Kaor?': entry in, '-116666' out
+     roundtrip: 'old locale figures that arrive later are the new old locale; discard t': said back 'rule; discard the old one'
+     copy: 'the width of Toror is 17 (same as the first course of Kaor).': claims [], source 208
+     stale: 'the host of Duntha is 7.': reached place 679, last said at 428
+tick 225 | places 948, statements 2491 | this window: rules arith 27/61 wrong, copy 0/263 wrong, found 35/169 wrong, merge 49/246 wrong, outcome 60/75 wrong, read 0/124 wrong, roundtrip 1/265 wrong, rule 128/251 wrong, stale 5/136 wrong, tool 3/86 wrong | wrong answers, first failure on the row: found 28, no rule fired 16, arith 12, tool 3, stale 1 | 409s
+     rule: 'the board of Gorvin is 14.': found place -1, rule for board is at 203
+     merge: 'the next trip of Gormer is Katha.': the next trip of gormer into the next trip of tormer
+     outcome: 'What is the salary of Pello?': said 13, truth 22, first failure: no rule fired
+     found: 'What is the font of the patient of Salo?': asked the font of rildun, unknown
+     arith: 'What is the smaller of (the difference between the daily worker of Mer': the smaller of (: 11, 11 -> 7, should be 11
+     stale: 'the first course of Torka is 1.': reached place 648, last said at 424
+     roundtrip: 'width figures that arrive later become the current width': said back 'scale figures that arrive later become the current width'
+     tool: 'What is the ship of the service of Torka?': entry in, '-11' out
+tick 250 | places 1011, statements 2751 | this window: rules arith 30/56 wrong, copy 1/247 wrong, found 27/164 wrong, merge 28/235 wrong, outcome 50/75 wrong, read 0/116 wrong, roundtrip 1/248 wrong, rule 114/229 wrong, stale 1/128 wrong, tool 2/81 wrong | wrong answers, first failure on the row: found 24, arith 13, no rule fired 11, tool 2 | 452s
+     rule: 'the next trip of Musa is Salo.': found place 547, rule for next trip is at -1
+     arith: 'the old currency of Tortor is 7.': rule: later old currency value: 27, 7 -> 21, should be 34
+     outcome: 'What is the old locale of Zekril?': said None, truth 30, first failure: no rule fired
+     found: 'What is the last board of the memo of Kator?': asked the last board of kagor, unknown
+     merge: 'the patient of Rilor is Loka.': the patient of rilor into the patient of rildun
+     tool: 'What is the store of the lane of Bapel?': entry in, '-11' out
+     copy: 'the zone of Tormu is 14 (same as the route of Zekgor).': claims [], source 304
+     roundtrip: 'the checksum of Kadun is W845-V.': said back 'the checksum of Kadun is W45-V.'
+     stale: 'What is the sum of (the sum of the host of Pelne and (the difference b': reached place 556, last said at 59
+tick 275 | places 1059, statements 3015 | this window: rules arith 21/49 wrong, copy 3/251 wrong, found 33/156 wrong, merge 35/237 wrong, outcome 53/75 wrong, read 0/108 wrong, roundtrip 2/252 wrong, rule 112/234 wrong, stale 2/122 wrong, tool 3/74 wrong | wrong answers, first failure on the row: found 24, no rule fired 16, arith 8, tool 3, stale 2 | 496s
+     rule: 'the day of Baor is 15.': found place 691, rule for day is at 9
+     merge: 'the worker of Neka is 7.': the worker of neka into the worker of mutor
+     found: 'What is the old age of the frame of Dungor?': asked the frame of dungor, got the frame of loka
+     outcome: 'What is the old age of the frame of Dungor?': said None, truth 14, first failure: found
+     tool: 'What is the old currency of the service of Merba?': entry in, 'the old currency ofSamer' out
+     stale: 'What is the sum of (the sum of the term of Gorsa and the author of Nes': reached place 696, last said at 632
+     arith: 'What is the sum of (the sum of the term of Gorsa and the author of Nes': the sum of: 18, 15 -> 27, should be 33
+     copy: 'the last band of Zektha is 22 (same as the first student of Logor).': claims [], source 68
+     roundtrip: 'the sync token of Vintha is M881-L.': said back 'the sync token of Vintha is M88-L.'
+tick 300 | places 1089, statements 3276 | this window: rules arith 24/55 wrong, copy 0/246 wrong, found 29/160 wrong, merge 27/226 wrong, outcome 55/75 wrong, read 0/119 wrong, roundtrip 1/246 wrong, rule 107/223 wrong, stale 3/129 wrong, tool 3/80 wrong | wrong answers, first failure on the row: no rule fired 21, found 20, arith 10, tool 3, stale 1 | 540s
+     rule: 'the backup temperature of Merlo is 3.': found place -1, rule for backup temperature is at 421
+     merge: 'the license of Pelril is 21.': the license of pelril into the license of pelor
+     found: 'the list of Neril is 29.': asked the list of neril, got the list of saor
+     outcome: 'What is the width of Lotor?': said None, truth 26, first failure: no rule fired
+     stale: 'What is the difference between (the smaller of the first course of Zek': reached place 876, last said at 5
+     arith: 'What is the difference between (the smaller of the first course of Zek': the difference between (: 2, 15 -> -2, should be -13
+     tool: 'What is the main seat of the next trip of Gormer?': entry in, '-2021' out
+     roundtrip: 'the trace id of Loba is J797-R.': said back 'the trace id of Loba is J297-R.'
+all ticks: rules arith 313/624 wrong, copy 23/3150 wrong, found 364/1902 wrong, merge 415/2948 wrong, outcome 611/899 wrong, read 0/1409 wrong, roundtrip 95/3166 wrong, rule 1470/2876 wrong, stale 24/1516 wrong, tool 20/923 wrong
