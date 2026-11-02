@@ -1,0 +1,56 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2836.31it/s]
+demonstrations: 20 ways, 737 rows, 5328 steps; [2, 9, 13, 15, 17, 18, 29, 35, 49, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+   per function: split 0.982 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 0.833 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 0.962
+/marimo/frozen/rd16/gnm.py:1244: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} of {rows} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
+      ' || What is the sum of the period of Nezek and the primary lane of Duntor?' -> split
+      'What is || the sum of the period of Nezek and the primary lane of Duntor?' -> split
+      'What is | the sum of || the period of Nezek and the primary lane of Duntor?' -> split
+      'What is | the sum of | the period of Nezek || and the primary lane of Duntor?' -> lookup
+      'What is | the sum of | the period of Nezek is 6. || and the primary lane of Duntor?' -> split
+      'the sum of | the period of Nezek is 6. | and || the primary lane of Duntor?' -> drop
+      'What is | the sum of | the period of Nezek is 6. || the primary lane of Duntor?' -> split
+      'the sum of | the period of Nezek is 6. | the primary lane of Duntor || ?' -> lookup
+      'the sum of | the period of Nezek is 6. | the primary lane of Duntor is 25. || ?' -> add
+      'What is | 31 || ?' -> say
+step 1500 loss 0.036 acc 1.000 | free world: places 448, rows done 691 of 691 | lookup 30/30 | before 29/30 | coexist 28/30 | chain 30/30 | ops 27/30 | long 20/30 | 160s
+   per function: split 0.985 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 0.947 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 0.943
+      ' || What is the difference between the temperature of Sapel and the driver of Merba?' -> split
+      'What is || the difference between the temperature of Sapel and the driver of Merba?' -> split
+      'What is | the difference between || the temperature of Sapel and the driver of Merba?' -> split
+      'What is | the difference between | the temperature of Sapel || and the driver of Merba?' -> lookup
+      'What is | the difference between | the temperature of Sapel is 13. || and the driver of Merba?' -> split
+      'the difference between | the temperature of Sapel is 13. | and || the driver of Merba?' -> drop
+      'What is | the difference between | the temperature of Sapel is 13. || the driver of Merba?' -> split
+      'the difference between | the temperature of Sapel is 13. | the driver of Merba || ?' -> lookup
+      'the difference between | the temperature of Sapel is 13. | the driver of Merba is 11. || ?' -> sub
+      'What is | 2 || ?' -> say
+step 3000 loss 0.044 acc 0.984 | free world: places 432, rows done 627 of 629 | lookup 28/30 | before 29/30 | coexist 0/30 | chain 29/30 | ops 30/30 | long 26/30 | 317s
+   per function: split 0.992 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 0.857 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 0.964
+      ' || What is the larger of the charge of Saba and the main tax of Torvin?' -> split
+      'What is || the larger of the charge of Saba and the main tax of Torvin?' -> split
+      'What is | the larger of || the charge of Saba and the main tax of Torvin?' -> split
+      'What is | the larger of | the charge of Saba || and the main tax of Torvin?' -> lookup
+      'What is | the larger of | Correction: the charge of Saba is now 11. || and the main tax of Torvin?' -> split
+      'the larger of | Correction: the charge of Saba is now 11. | and || the main tax of Torvin?' -> drop
+      'What is | the larger of | Correction: the charge of Saba is now 11. || the main tax of Torvin?' -> split
+      'the larger of | Correction: the charge of Saba is now 11. | the main tax of Torvin || ?' -> lookup
+      'the larger of | Correction: the charge of Saba is now 11. | Correction: the main tax of Torvin is now 12. || ?' -> max
+      'What is | 12 || ?' -> say
+step 4500 loss 0.051 acc 0.992 | free world: places 469, rows done 680 of 681 | lookup 29/30 | before 28/30 | coexist 0/30 | chain 28/30 | ops 28/30 | long 26/30 | 476s
+   per function: split 0.998 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 0.974 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 0.960
+      ' || What is the smaller of the net worker of Orba and the old service of Sazek?' -> split
+      'What is || the smaller of the net worker of Orba and the old service of Sazek?' -> split
+      'What is | the smaller of || the net worker of Orba and the old service of Sazek?' -> split
+      'What is | the smaller of | the net worker of Orba || and the old service of Sazek?' -> lookup
+      'What is | the smaller of | the net worker of Orba is 26. || and the old service of Sazek?' -> split
+      'the smaller of | the net worker of Orba is 26. | and || the old service of Sazek?' -> drop
+      'What is | the smaller of | the net worker of Orba is 26. || the old service of Sazek?' -> split
+      'the smaller of | the net worker of Orba is 26. | the old service of Sazek || ?' -> lookup
+      'the smaller of | the net worker of Orba is 26. | the old service of Sazek is 6. || ?' -> min
+      'What is | 6 || ?' -> say
+step 6000 loss 0.112 acc 0.977 | free world: places 480, rows done 707 of 707 | lookup 30/30 | before 30/30 | coexist 0/30 | chain 30/30 | ops 30/30 | long 26/30 | 633s

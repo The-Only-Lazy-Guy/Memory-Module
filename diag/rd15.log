@@ -1,0 +1,99 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2787.73it/s]
+demonstrations: 20 ways, 728 rows, 5061 steps; [4, 6, 14, 16, 21, 22, 29, 36, 36, 44, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+   per function: split 0.988 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 0.969 sub 1.000 max 1.000 min 1.000 insert 0.948 derive 1.000 say 1.000 | split end 0.973
+/marimo/frozen/rd15/gnm.py:1244: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} of {rows} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
+      ' || What is the smaller of (the difference between the daily screen of Toror and the next capa' -> split
+      'What is || the smaller of (the difference between the daily screen of Toror and the next capacity of ' -> split
+      'What is | the smaller of ( || the difference between the daily screen of Toror and the next capacity of Bagor)' -> split
+      'What is | the smaller of ( | the difference between || the daily screen of Toror and the next capacity of Bago' -> split
+      'the smaller of ( | the difference between | the daily screen of Toror || and the next capacity of Bagor) and (' -> lookup
+      'the smaller of ( | the difference between | the daily screen of Toror is 20. || and the next capacity of Bagor' -> split
+      'the difference between | the daily screen of Toror is 20. | and || the next capacity of Bagor) and (the sum of' -> drop
+      'the smaller of ( | the difference between | the daily screen of Toror is 20. || the next capacity of Bagor) an' -> split
+      'the difference between | the daily screen of Toror is 20. | the next capacity of Bagor || ) and (the sum of th' -> lookup
+      'the difference between | the daily screen of Toror is 20. | the next capacity of Bagor is 14. || ) and (the su' -> sub
+      'What is | the smaller of ( | 6 || ) and (the sum of the next capacity of Zekril and the first release of Orpel' -> split
+      'the smaller of ( | 6 | ) and ( || the sum of the next capacity of Zekril and the first release of Orpel)?' -> drop
+      'What is | the smaller of ( | 6 || the sum of the next capacity of Zekril and the first release of Orpel)?' -> split
+      'the smaller of ( | 6 | the sum of || the next capacity of Zekril and the first release of Orpel)?' -> split
+      '6 | the sum of | the next capacity of Zekril || and the first release of Orpel)?' -> lookup
+      '6 | the sum of | the next capacity of Zekril is 7. || and the first release of Orpel)?' -> split
+      'the sum of | the next capacity of Zekril is 7. | and || the first release of Orpel)?' -> drop
+      '6 | the sum of | the next capacity of Zekril is 7. || the first release of Orpel)?' -> split
+      'the sum of | the next capacity of Zekril is 7. | the first release of Orpel || )?' -> lookup
+      'the sum of | the next capacity of Zekril is 7. | the first release of Orpel is 19. || )?' -> add
+      'the smaller of ( | 6 | 26 || )?' -> min
+      'What is | 6 || )?' -> say
+step 1500 loss 0.045 acc 0.984 | free world: places 458, rows done 675 of 675 | lookup 30/30 | before 27/30 | coexist 30/30 | chain 28/30 | ops 24/30 | long 19/30 | 158s
+   per function: split 0.987 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 0.962
+      ' || What is the difference between the disk of Mumu and the next license of Rillo?' -> split
+      'What is || the difference between the disk of Mumu and the next license of Rillo?' -> split
+      'What is | the difference between || the disk of Mumu and the next license of Rillo?' -> split
+      'What is | the difference between | the disk of Mumu || and the next license of Rillo?' -> lookup
+      'What is | the difference between | the disk of Mumu is 19. || and the next license of Rillo?' -> split
+      'the difference between | the disk of Mumu is 19. | and || the next license of Rillo?' -> drop
+      'What is | the difference between | the disk of Mumu is 19. || the next license of Rillo?' -> split
+      'the difference between | the disk of Mumu is 19. | the next license of Rillo || ?' -> lookup
+      'the difference between | the disk of Mumu is 19. | Correction: the next license of Rillo is now 27. || ?' -> sub
+      'What is | -8 || ?' -> say
+step 3000 loss 0.105 acc 0.977 | free world: places 428, rows done 618 of 618 | lookup 28/30 | before 29/30 | coexist 25/30 | chain 29/30 | ops 28/30 | long 23/30 | 315s
+   per function: split 0.995 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 0.971
+      ' || What is the difference between (the difference between (the difference between the area of' -> split
+      'What is || the difference between (the difference between (the difference between the area of Mervin ' -> split
+      'What is | the difference between ( || the difference between (the difference between the area of Mervin and th' -> split
+      'What is | the difference between ( | the difference between ( || the difference between the area of Mervin and' -> split
+      'the difference between ( | the difference between ( | the difference between || the area of Mervin and the are' -> split
+      'the difference between ( | the difference between | the area of Mervin || and the area of Loka) and the store ' -> lookup
+      'the difference between ( | the difference between | the area of Mervin is 29 (same as the old meter of Dunvin)' -> open
+      'the difference between ( | the difference between ( | the difference between || the area of Mervin is 29 (same' -> split
+      'the difference between ( | the difference between | the area of Mervin is 29 (same as || the old meter of Dunv' -> drop
+      'the difference between ( | the difference between ( | the difference between || the old meter of Dunvin).' -> split
+      'the difference between ( | the difference between | the old meter of Dunvin || ).' -> lookup
+      'the difference between ( | the difference between | the old meter of Dunvin is 29. || ).' -> split
+      'the difference between | the old meter of Dunvin is 29. | ). || and the area of Loka) and the store of Gorlo) ' -> drop
+      'the difference between ( | the difference between | the old meter of Dunvin is 29. || and the area of Loka) an' -> split
+      'the difference between | the old meter of Dunvin is 29. | and || the area of Loka) and the store of Gorlo) and' -> drop
+      'the difference between ( | the difference between | the old meter of Dunvin is 29. || the area of Loka) and th' -> split
+      'the difference between | the old meter of Dunvin is 29. | the area of Loka || ) and the store of Gorlo) and th' -> lookup
+      'the difference between | the old meter of Dunvin is 29. | the area of Loka is 12. || ) and the store of Gorlo)' -> sub
+      'the difference between ( | the difference between ( | 17 || ) and the store of Gorlo) and the student of Lotha' -> split
+      'the difference between ( | 17 | ) and || the store of Gorlo) and the student of Lotha?' -> drop
+      'the difference between ( | the difference between ( | 17 || the store of Gorlo) and the student of Lotha?' -> split
+      'the difference between ( | 17 | the store of Gorlo || ) and the student of Lotha?' -> lookup
+      'the difference between ( | 17 | the store of Gorlo is 15. || ) and the student of Lotha?' -> sub
+      'What is | the difference between ( | 2 || ) and the student of Lotha?' -> split
+      'the difference between ( | 2 | ) and || the student of Lotha?' -> drop
+      'What is | the difference between ( | 2 || the student of Lotha?' -> split
+      'the difference between ( | 2 | the student of Lotha || ?' -> lookup
+      'the difference between ( | 2 | the student of Lotha is 11. || ?' -> sub
+      'What is | -9 || ?' -> say
+step 4500 loss 0.042 acc 0.984 | free world: places 478, rows done 674 of 674 | lookup 30/30 | before 30/30 | coexist 30/30 | chain 28/30 | ops 30/30 | long 26/30 | 473s
+   per function: split 0.995 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 0.971
+      ' || What is the sum of the currency of Lotha and (the difference between the shelf of Kator an' -> split
+      'What is || the sum of the currency of Lotha and (the difference between the shelf of Kator and (the s' -> split
+      'What is | the sum of || the currency of Lotha and (the difference between the shelf of Kator and (the smaller ' -> split
+      'What is | the sum of | the currency of Lotha || and (the difference between the shelf of Kator and (the smalle' -> lookup
+      'What is | the sum of | the currency of Lotha is 26. || and (the difference between the shelf of Kator and (the' -> split
+      'the sum of | the currency of Lotha is 26. | and ( || the difference between the shelf of Kator and (the smalle' -> drop
+      'What is | the sum of | the currency of Lotha is 26. || the difference between the shelf of Kator and (the smal' -> split
+      'the sum of | the currency of Lotha is 26. | the difference between || the shelf of Kator and (the smaller of t' -> split
+      'the currency of Lotha is 26. | the difference between | the shelf of Kator || and (the smaller of the backup p' -> lookup
+      'the currency of Lotha is 26. | the difference between | the shelf of Kator is 9. || and (the smaller of the ba' -> split
+      'the difference between | the shelf of Kator is 9. | and ( || the smaller of the backup post of Zekne and the b' -> drop
+      'the currency of Lotha is 26. | the difference between | the shelf of Kator is 9. || the smaller of the backup ' -> split
+      'the difference between | the shelf of Kator is 9. | the smaller of || the backup post of Zekne and the base lo' -> split
+      'the shelf of Kator is 9. | the smaller of | the backup post of Zekne || and the base log of Dunka))?' -> lookup
+      'the shelf of Kator is 9. | the smaller of | the backup post of Zekne is 7. || and the base log of Dunka))?' -> split
+      'the smaller of | the backup post of Zekne is 7. | and || the base log of Dunka))?' -> drop
+      'the shelf of Kator is 9. | the smaller of | the backup post of Zekne is 7. || the base log of Dunka))?' -> split
+      'the smaller of | the backup post of Zekne is 7. | the base log of Dunka || ))?' -> lookup
+      'the smaller of | the backup post of Zekne is 7. | the base log of Dunka is 15. || ))?' -> min
+      'the difference between | the shelf of Kator is 9. | 7 || ))?' -> sub
+      'the sum of | the currency of Lotha is 26. | 2 || ))?' -> add
+      'What is | 28 || ))?' -> say
+step 6000 loss 0.013 acc 1.000 | free world: places 409, rows done 593 of 593 | lookup 30/30 | before 30/30 | coexist 30/30 | chain 30/30 | ops 30/30 | long 29/30 | 630s
