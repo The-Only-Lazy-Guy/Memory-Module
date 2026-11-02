@@ -610,6 +610,7 @@ class Translator(nn.Module):
         self.d = d
         self.K, self.c = 12, 256                       # B: what a statement says, c per token (the label only says where); K = a tool's output
         self.down = nn.Linear(D, self.c)
+        self.tokd = nn.Linear(D, self.c, bias=False)  # the token itself rides along: a word never seen still comes back
         self.up = nn.Sequential(nn.Linear(self.c, D), nn.GELU(), nn.Linear(D, D))
 
     def encode(self, texts):
@@ -638,7 +639,7 @@ class Translator(nn.Module):
             h = self.norm(self.lm(**b, position_ids=(m.cumsum(1) - 1).clamp(min=0)).last_hidden_state)
         keep = m.bool()
         keep[torch.arange(len(texts)), (m == 0).sum(1)] = False   # the first token soaks up attention in GPT-2: a dummy
-        return F.layer_norm(self.down(h), (self.c,)), keep
+        return F.layer_norm(self.down(h) + self.tokd(self.lm.wte(b["input_ids"])), (self.c,)), keep
 
     def decode_loss(self, z, zm, texts):
         """decoder: the frozen LM reads B as a prefix and writes the text back"""
@@ -833,7 +834,7 @@ def train_decoder(A):
     model = Translator().to(dev)
     if A.init:
         model.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
-    new = [p for n, p in model.named_parameters() if n.split(".")[0] in ("down", "up")]
+    new = [p for n, p in model.named_parameters() if n.split(".")[0] in ("down", "up", "tokd")]
     opt = torch.optim.AdamW(new, lr=A.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, A.steps, eta_min=A.lr / 50)
     rng = random.Random(A.seed)
