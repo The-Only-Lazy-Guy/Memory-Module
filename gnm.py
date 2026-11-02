@@ -695,7 +695,10 @@ class NeuralT:
 
     @torch.no_grad()
     def apply(self, want, ins):                        # the want's label finds a tool node by its key; nodes in, nodes out
-        t = int(self.tools.gate(self.m.encode([want])).argmax())
+        s = self.tools.gate(self.m.encode([want]))[0] if self.tools.nets else None
+        if s is None or float(s.max()) <= 1:                       # no tool is relevant: a task it has no tool for
+            return [self.node("unknown")]
+        t = int(s.argmax())
         o, many, _ = self.tools.nets[t]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
         return [z[0] for z, _ in o[:int(many.argmax()) + 1]]
 
@@ -890,7 +893,9 @@ class ToolNet(nn.Module):
 
     def __init__(self, d=128, c=256, K=12, M=2, R=8, L=96):
         super().__init__()
-        self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))
+        self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))   # the label: relevant to q when q . key > 1
+        self.register_buffer("mu", torch.tensor(5.))                     # the error it usually gets, and its spread
+        self.register_buffer("sd", torch.tensor(2.))
         self.role = nn.Parameter(torch.randn(R, c) * .02)      # which input
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.out = nn.Parameter(torch.randn(M * K, c) * .02)
@@ -918,18 +923,20 @@ class ToolBank(nn.Module):
         super().__init__()
         self.nets, self.relate, self.d, self.c, self.cap = nn.ModuleList(), Relate(c), d, c, cap
 
-    def spawn(self, key, like=None):
-        """a new tool node: its own network (started from the tool it is most like), its key = the wants that needed it"""
+    def spawn(self, key, like=None, scope=.9):
+        """a new tool node: its own network (started from the tool it is most like), its label = the want that needed
+        it, long enough that wants within cos > scope of it are relevant"""
         net = ToolNet(self.d, self.c).to(key.device)
         if like is not None:
             net.load_state_dict(self.nets[like].state_dict())
+            net.mu.fill_(5.), net.sd.fill_(2.)
         with torch.no_grad():
-            net.key.copy_(F.normalize(key, dim=0))
+            net.key.copy_(F.normalize(key, dim=0) / scope)
         self.nets.append(net)
         return len(self.nets) - 1
 
-    def gate(self, q):                                 # every want against every tool's key
-        return q @ F.normalize(torch.stack([t.key for t in self.nets]), dim=-1).T
+    def gate(self, q):                                 # every want against every tool's label: > 1 = relevant
+        return q @ torch.stack([t.key for t in self.nets]).T
 
     def save(self, path):
         torch.save({"n": len(self.nets), "state": self.state_dict()}, path)
@@ -998,9 +1005,11 @@ def tool_loss(tr, net, ins, outs):
 
 
 def learn(tr, bank, demos, st, A, spawn=True):
-    """read demos; each goes to the tool that did it best. What no tool can do (loss above --tool-tau for all) makes a new
-    tool, started from the closest one; for --cool steps it alone takes what nothing else can do, so it specializes.
-    The keys learn from where the demos went: a want finds the tool that does it. Returns the loss and what happened."""
+    """read demos. Only the label vectors decide: a tool is relevant to a want q when q . label > 1 (direction = what it
+    does, length = how broad); the most relevant one does it; when none is, the task is new and the model makes a tool
+    whose label is that want (its network started from the closest tool). What the tools then do only teaches the
+    labels: a tool that did a demo as well as it usually does is pulled toward that want; a tool that claimed a demo and
+    did it unusually badly for itself is pushed away from it. Returns the loss and where each demo went (-1: new task)."""
     q = tr.encode([d[1] for d in demos]).detach()
     groups = {}
     for i, d in enumerate(demos):
@@ -1008,37 +1017,46 @@ def learn(tr, bank, demos, st, A, spawn=True):
     nodes = {n: [tr.content([demos[i][1] for i in ix])] + [tr.content([demos[i][2][j] for i in ix]) for j in range(n)]
              for n, ix in groups.items()}
     with torch.no_grad():
-        if not bank.nets and spawn:
-            bank.spawn(q.mean(0))
-            st.update(last=st["step"], newest=0, spawned=True)
+        s = bank.gate(q) if bank.nets else q.new_zeros(len(demos), 0)
+        new = s.max(1).values <= 1 if bank.nets else torch.ones(len(demos), dtype=torch.bool, device=q.device)
+        if spawn and new.any() and st["step"] - st["last"] >= A.cool and len(bank.nets) < bank.cap:
+            b = int(new.nonzero()[0])
+            st.update(last=st["step"], newest=bank.spawn(q[b], int(s[b].argmax()) if bank.nets else None, A.scope), spawned=True)
+            s = bank.gate(q)
+        if not bank.nets:
+            return q.new_zeros((), requires_grad=True), torch.full((len(demos),), -1), s
+        route = torch.where(s.max(1).values > 1, s.argmax(1), torch.full_like(s.argmax(1), -1))
         L = torch.full((len(bank.nets), len(demos)), 1e9, device=q.device)
         for n, ix in groups.items():
             for t, net in enumerate(bank.nets):
                 L[t, ix] = tool_loss(tr, net, nodes[n], [demos[i][3] for i in ix])[0]
-        best, low = L.argmin(0), L.min(0).values
-        lost = low > A.tool_tau
-        if spawn and lost.any() and st["step"] - st["last"] >= A.cool and len(bank.nets) < bank.cap:
-            new = bank.spawn(q[lost].mean(0), int(best[lost].mode().values))
-            st.update(last=st["step"], newest=new, spawned=True)
-            L = torch.cat([L, L[int(best[lost].mode().values)][None]])
-        target = best.clone()
-        if st.get("newest") is not None and st["step"] - st["last"] < A.cool:
-            target[lost] = st["newest"]                # what nothing else can do goes to the newest tool
-    loss = F.cross_entropy(A.gate_t * bank.gate(q), target)
+        usual = torch.stack([torch.maximum(t.mu + A.kappa * t.sd, torch.tensor(A.tool_good, device=q.device)) for t in bank.nets])
+        typical = L <= usual[:, None]                                  # [tool, demo]: as well as this tool usually does
+        best = L.argmin(0)
+    S, m = bank.gate(q).T, .1                                          # [tool, demo]
+    pull = typical & (torch.arange(len(bank.nets), device=q.device)[:, None] == best[None])
+    push = ~typical & (S.detach() > 1 - m)
+    loss = (F.relu(1 + m - S) * pull).sum() / len(demos) + (F.relu(S - (1 - m)) * push).sum() / len(demos)
     for n, ix in groups.items():
         for t, net in enumerate(bank.nets):
-            sel = [k for k, i in enumerate(ix) if int(target[i]) == t]
+            sel = [k for k, i in enumerate(ix) if int(route[i]) == t]
             if sel:
-                ins = [(z[sel], m[sel]) for z, m in nodes[n]]
+                ins = [(z[sel], m_[sel]) for z, m_ in nodes[n]]
                 l, err = tool_loss(tr, net, ins, [demos[ix[k]][3] for k in sel])
                 loss = loss + (l.sum() + F.mse_loss(err, l.detach(), reduction="sum")) / len(demos)
-    return loss, target, low
+                with torch.no_grad():                                  # what this tool usually gets
+                    net.mu.mul_(.98).add_(.02 * l.mean())
+                    net.sd.mul_(.98).add_(.02 * (l - net.mu).abs().mean())
+    return loss, route, s
 
 
 @torch.no_grad()
 def apply_tool(tr, bank, want, ins):
-    """the want's label finds the tool by its key; the tool runs; it says how many nodes it means"""
-    t = int(bank.gate(tr.encode([want])).argmax())
+    """the want's label finds the tool by the labels alone (-1: no tool is relevant, a new task); it says how many nodes"""
+    s = bank.gate(tr.encode([want]))[0] if bank.nets else None
+    if s is None or float(s.max()) <= 1:
+        return -1, [], None
+    t = int(s.argmax())
     o, many, err = bank.nets[t]([tr.content([want])] + [tr.content([x]) for x in ins])
     return t, [z for z, _ in o[:int(many.argmax()) + 1]], float(err)
 
@@ -1114,17 +1132,18 @@ def bank_report(tr, bank, rng, n=96):
                 t, o, _ = apply_tool(tr, bank, w, ins)
                 used.setdefault((kind, held), {}).setdefault(t, 0)
                 used[(kind, held)][t] += 1
-                hit += [x.strip() for x in tr.decode(torch.cat(o), torch.ones(len(o), len(o[0][0]), dtype=torch.bool, device=o[0].device))] == outs \
+                hit += 0 if t < 0 else [x.strip() for x in tr.decode(torch.cat(o), torch.ones(len(o), len(o[0][0]), dtype=torch.bool, device=o[0].device))] == outs \
                     if len(o) == len(outs) else 0
             top = max(used[(kind, held)].items(), key=lambda z: z[1])
-            line.append(f"{kind}{'*' if held else ''} {hit / n:.2f} (tool {top[0]} {top[1] / n:.2f})")
+            line.append(f"{kind}{'*' if held else ''} {hit / n:.2f} (tool {top[0]} {top[1] / n:.2f}, new {used[(kind, held)].get(-1, 0) / n:.2f})")
     hit = 0
     for _ in range(n):
         a, b, c = rng.randint(1, 60), rng.randint(1, 60), rng.randint(1, 60)
         _, o, _ = apply_tool(tr, bank, "the larger of", [said(rng, a), said(rng, b)])
         say = lambda z: tr.decode(z, torch.ones(z.shape[:2], dtype=torch.bool, device=z.device))[0].strip()
-        _, o2, _ = apply_tool(tr, bank, "the sum of", [say(o[0]), said(rng, c)])
-        hit += say(o2[0]) == str(max(a, b) + c)
+        if o:
+            _, o2, _ = apply_tool(tr, bank, "the sum of", [say(o[0]), said(rng, c)])
+            hit += bool(o2) and say(o2[0]) == str(max(a, b) + c)
     return f"tools {len(bank.nets)} | " + " ".join(line) + f" | nested {hit / n:.2f}"
 
 
@@ -1138,16 +1157,22 @@ def train_tools(A):
     tr.requires_grad_(False)
     bank = ToolBank().to(dev)
     rng = random.Random(A.seed)
+    with torch.no_grad():                              # how far apart the wants start, before any label is learned
+        W = [(k, w) for k in WANTS for w in WANTS[k]]
+        C = tr.encode([w for _, w in W]) @ tr.encode([w for _, w in W]).T
+        same = [float(C[i, j]) for i in range(len(W)) for j in range(len(W)) if i != j and W[i][0] == W[j][0]]
+        diff = [float(C[i, j]) for i in range(len(W)) for j in range(len(W)) if W[i][0] != W[j][0]]
+        print(f"want cos: same kind {np.mean(same):.3f} (min {min(same):.3f}), other kinds {np.mean(diff):.3f} (max {max(diff):.3f})", flush=True)
     st, opt, t0 = {"step": 0, "last": -10 ** 9, "newest": None}, None, time.time()
     for step in range(1, A.steps + 1):
         st.update(step=step, spawned=False)
-        loss, target, low = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A)
+        loss, route, _ = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A)
         loss = (loss + F.binary_cross_entropy_with_logits(*relate_run(tr, bank.relate, relate_batch(rng, A.batch)))
                 + F.binary_cross_entropy_with_logits(*relate_run(tr, bank.relate, relate_grid(tr, rng))))
         if opt is None or st["spawned"]:
             opt = torch.optim.AdamW(bank.parameters(), lr=A.lr)
             if st["spawned"]:
-                print(f"step {step}: made tool {st['newest']} ({int((low > A.tool_tau).sum())} of {A.batch} demos nothing could do)", flush=True)
+                print(f"step {step}: made tool {st['newest']} ({int((route < 0).sum())} of {A.batch} demos no label claimed)", flush=True)
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -2022,9 +2047,10 @@ if __name__ == "__main__":
     P.add_argument("--batch", type=int, default=64)
     P.add_argument("--world", type=int, default=30, help="steps of world the free eval lives through")
     P.add_argument("--init", default="")
-    P.add_argument("--tool-tau", type=float, default=1.5, help="a demo no tool does better than this (nats per token) needs a new tool")
-    P.add_argument("--cool", type=int, default=300, help="steps a new tool alone takes what nothing else can do")
-    P.add_argument("--gate-t", type=float, default=20., help="sharpness of a want against the tools' keys")
+    P.add_argument("--scope", type=float, default=.9, help="a new tool's label: wants within this cos of it are relevant")
+    P.add_argument("--kappa", type=float, default=2., help="unusually bad for a tool = its usual error + kappa spreads")
+    P.add_argument("--tool-good", type=float, default=.3, help="an error this low is never unusual")
+    P.add_argument("--cool", type=int, default=100, help="steps between two new tools")
     P.add_argument("--toolw", default="", help="the tool nodes' weights: with --init (translator + decoder) = the whole neural path")
     P.add_argument("--save", default="")
     P.add_argument("--log", default="")
