@@ -633,8 +633,7 @@ class Translator(nn.Module):
         self.proj = nn.Sequential(nn.Linear(D, 512), nn.GELU(), nn.Linear(512, d))
         self.rel = nn.Sequential(nn.Linear(2 * d, 256), nn.GELU(), nn.Linear(256, 1))   # the relate tool: same place?
         self.ruleq = nn.Sequential(nn.Linear(d, 256), nn.GELU(), nn.Linear(256, d))     # a fact -> where its rule lives
-        self.rgate = nn.Sequential(nn.Linear(D, 256), nn.GELU(), nn.Linear(256, 1))     # relation: which tokens say what it depends on
-        self.rdir = nn.Sequential(nn.Linear(D, 512), nn.GELU(), nn.Linear(512, d))
+        self.rgate = nn.Sequential(nn.Linear(D, 256), nn.GELU(), nn.Linear(256, 1))     # relation: which tokens name what it depends on
         self.rhow = nn.Sequential(nn.Linear(D, 256), nn.GELU(), nn.Linear(256, 1))      # ... and whether it depends at all
         self.d = d
         self.K, self.c = 12, 256                       # B: what a statement says, c per token (the label only says where); K = a tool's output
@@ -660,15 +659,21 @@ class Translator(nn.Module):
     def rule_of(self, label):
         return F.normalize(self.ruleq(label), dim=-1)
 
-    def relation(self, texts, scope=.9):
-        """r: points at the place a statement depends on, long enough to claim it (r . label > 1) when it does"""
+    def relation(self, texts, scope=.9, parts=False):
+        """r: what a statement says it depends on. A token gate picks the words that name it; those words are read on
+        their own, so they land exactly where that thing's label is; long enough to claim the place (r . label > 1)
+        when the statement depends on anything at all"""
         dev = next(self.proj.parameters()).device
-        b = self.tok(texts, return_tensors="pt", padding=True).to(dev)
+        b = self.tok(texts, return_tensors="pt", padding=True, return_offsets_mapping=True).to(dev)
+        off = b.pop("offset_mapping")
         h = self.read(b)
-        m = b["attention_mask"][..., None]
-        w = torch.sigmoid(self.rgate(h)) * m
-        d = F.normalize(self.rdir((w * h).sum(1) / w.sum(1).clamp(min=1e-6)), dim=-1)
-        return d * torch.sigmoid(self.rhow((h * m).sum(1) / m.sum(1)).squeeze(-1))[:, None] / scope
+        m = b["attention_mask"]
+        a = self.rgate(h).squeeze(-1)                  # per token: does it name what this depends on?
+        g = self.rhow((h * m[..., None]).sum(1) / m.sum(1, keepdim=True)).squeeze(-1)   # does it depend at all?
+        if parts:
+            return a, g, off, m
+        spans = [self.tok.decode(b["input_ids"][i][(a[i] > 0) & (m[i] > 0)]).strip() for i in range(len(texts))]
+        return self.encode([x or "-" for x in spans]) * torch.sigmoid(g)[:, None] / scope
 
     def content(self, texts):
         """encoder, second head: B, one latent per token, so a name never seen keeps its own vectors and comes back
@@ -823,10 +828,14 @@ def label_loss(model, rng, vocab, n=8):
     said = [f"{leaf(nm, k)} is {rng.randint(1, 60)} (same as {leaf(*sf)})." for (nm, k), sf in zip(rng.sample(facts, n), src)]
     plain = [rng.choice([f"{leaf(*f)} is {rng.randint(1, 60)}.", f"Correction: {leaf(*f)} is now {rng.randint(1, 60)}.", rv(f[1])])
              for f in rng.sample(facts, n)]
-    R = model.relation(said + plain)
-    tgt = model.encode([leaf(*sf) for sf in src]).detach()
-    loss = (loss + F.cross_entropy(F.normalize(R[:n], dim=-1) @ tgt.T / .07, torch.arange(n, device=sim.device))
-            + F.relu(1.05 - (R[:n] * tgt).sum(-1)).mean() + F.relu(R[n:] @ x[:N].detach().T - .5).mean())
+    ra, rg, roff, rmk = model.relation(said + plain, parts=True)
+    names = torch.zeros_like(ra)                       # the tokens that name the source: inside "(same as ...)"
+    for i, (t, sf) in enumerate(zip(said, src)):
+        lo = t.index("(same as ") + len("(same as ")
+        hi = lo + len(leaf(*sf))
+        names[i] = ((roff[i, :, 1] > lo) & (roff[i, :, 0] < hi)).float()
+    loss = (loss + (F.binary_cross_entropy_with_logits(ra, names, reduction="none") * rmk).sum() / rmk.sum()
+            + F.binary_cross_entropy_with_logits(rg, torch.cat([torch.ones(n), torch.zeros(n)]).to(rg.device)))   # depends at all?
     q = model.rule_of(model.encode([views(rng, rng.choice(names), k) for k in keys]))   # a fact asks for its key's rule
     t = torch.arange(n, device=sim.device)
     return (loss + F.cross_entropy(b @ a.T / .07, t) + relate_loss(model, b, a[:n], b @ a[:n].T)
