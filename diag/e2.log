@@ -1,0 +1,11 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4110.92it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+before: places 415 | lookup 42/50 | before 43/50 | coexist 49/50 | chain 7/50 | ops 29/50
+/marimo/frozen/e2/gnm.py:1680: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  moved = float(sum((p - q).norm() ** 2 for p, q in zip(tr.parameters(), old.m.parameters())) ** .5)
+episode: 1000 steps, loss 1.823, translator moved 5.49 | 148s
+stale graph, new translator: lookup 42/50 | before 43/50 | coexist 44/50 | chain 20/50 | ops 26/50
+re-transcribed: places 415 | lookup 42/50 | before 43/50 | coexist 36/50 | chain 17/50 | ops 23/50
