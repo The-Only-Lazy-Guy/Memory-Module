@@ -1,0 +1,80 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2685.16it/s]
+demonstrations: 18 ways, 652 rows, 4938 steps; [6, 7, 13, 14, 16, 18, 38, 40, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+   per function: split 1.000 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 0.951 nip 0.333 join 1.000 add 0.806 sub 0.571 max 0.400 min 0.500 insert 0.953 derive 1.000 say 0.960 | split end 0.990
+/marimo/frozen/rd10/gnm.py:1222: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} of {rows} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
+      ' || What is the sum of (the larger of the guest of Zekmer and the company of Lotha) and (the l' -> split
+      'What is || the sum of (the larger of the guest of Zekmer and the company of Lotha) and (the larger of' -> split
+      'What is | the sum of ( || the larger of the guest of Zekmer and the company of Lotha) and (the larger of the l' -> split
+      'What is | the sum of ( | the larger of || the guest of Zekmer and the company of Lotha) and (the larger of the' -> split
+      'What is | the sum of ( | the larger of | the guest of Zekmer || and the company of Lotha) and (the larger of t' -> lookup
+      'What is | the sum of ( | the larger of | the guest of Zekmer is 16. || and the company of Lotha) and (the larg' -> split
+      'What is | the sum of ( | the larger of | the guest of Zekmer is 16. | and || the company of Lotha) and (the la' -> drop
+      'What is | the sum of ( | the larger of | the guest of Zekmer is 16. || the company of Lotha) and (the larger o' -> split
+      'What is | the sum of ( | the larger of | the guest of Zekmer is 16. | the company of Lotha || ) and (the large' -> lookup
+      'What is | the sum of ( | the larger of | the guest of Zekmer is 16. | the company of Lotha is 21. || ) and (th' -> lookup
+step 1500 loss 0.174 acc 0.969 | free world: places 406, rows done 617 of 617 | lookup 28/30 | before 29/30 | coexist 28/30 | chain 25/30 | ops 10/30 | long 0/30 | 171s
+   per function: split 1.000 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 0.968 sub 1.000 max 0.538 min 0.273 insert 0.966 derive 1.000 say 1.000 | split end 1.000
+      ' || What is the larger of (the sum of the area of Lomer and the page of Bapel) and the main po' -> split
+      'What is || the larger of (the sum of the area of Lomer and the page of Bapel) and the main point of P' -> split
+      'What is | the larger of ( || the sum of the area of Lomer and the page of Bapel) and the main point of Pelril?' -> split
+      'What is | the larger of ( | the sum of || the area of Lomer and the page of Bapel) and the main point of Pelri' -> split
+      'What is | the larger of ( | the sum of | the area of Lomer || and the page of Bapel) and the main point of Pel' -> lookup
+      'What is | the larger of ( | the sum of | the area of Lomer is 3. || and the page of Bapel) and the main point ' -> split
+      'What is | the larger of ( | the sum of | the area of Lomer is 3. | and || the page of Bapel) and the main poin' -> drop
+      'What is | the larger of ( | the sum of | the area of Lomer is 3. || the page of Bapel) and the main point of P' -> split
+      'What is | the larger of ( | the sum of | the area of Lomer is 3. | the page of Bapel || ) and the main point o' -> lookup
+      'What is | the larger of ( | the sum of | the area of Lomer is 3. | the page of Bapel is 17. || ) and the main ' -> add
+      'What is | the larger of ( | 20 || ) and the main point of Pelril?' -> split
+      'What is | the larger of ( | 20 | ) and || the main point of Pelril?' -> drop
+      'What is | the larger of ( | 20 || the main point of Pelril?' -> split
+      'What is | the larger of ( | 20 | the main point of Pelril || ?' -> lookup
+      'What is | the larger of ( | 20 | the main point of Pelril is 16. || ?' -> add
+      'What is | 36 || ?' -> say
+step 3000 loss 0.168 acc 0.992 | free world: places 430, rows done 648 of 648 | lookup 29/30 | before 28/30 | coexist 29/30 | chain 29/30 | ops 13/30 | long 3/30 | 343s
+   per function: split 1.000 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 0.900 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 0.913 derive 1.000 say 0.975 | split end 1.000
+      ' || What is the smaller of (the larger of the fee of Thalo and the student of Dunor) and the r' -> split
+      'What is || the smaller of (the larger of the fee of Thalo and the student of Dunor) and the report of' -> split
+      'What is | the smaller of ( || the larger of the fee of Thalo and the student of Dunor) and the report of Mergo' -> split
+      'What is | the smaller of ( | the larger of || the fee of Thalo and the student of Dunor) and the report of Mer' -> split
+      'What is | the smaller of ( | the larger of | the fee of Thalo || and the student of Dunor) and the report of M' -> lookup
+      'What is | the smaller of ( | the larger of | the fee of Thalo is 18. || and the student of Dunor) and the repo' -> split
+      'What is | the smaller of ( | the larger of | the fee of Thalo is 18. | and || the student of Dunor) and the re' -> drop
+      'What is | the smaller of ( | the larger of | the fee of Thalo is 18. || the student of Dunor) and the report o' -> split
+      'What is | the smaller of ( | the larger of | the fee of Thalo is 18. | the student of Dunor || ) and the repor' -> lookup
+      'What is | the smaller of ( | the larger of | the fee of Thalo is 18. | the student of Dunor is 1. || ) and the' -> max
+      'What is | the smaller of ( | 18 || ) and the report of Mergor?' -> split
+      'What is | the smaller of ( | 18 | ) and || the report of Mergor?' -> drop
+      'What is | the smaller of ( | 18 || the report of Mergor?' -> split
+      'What is | the smaller of ( | 18 | the report of Mergor || ?' -> lookup
+      'What is | the smaller of ( | 18 | the report of Mergor is 2. || ?' -> min
+      'What is | 2 || ?' -> say
+step 4500 loss 0.049 acc 0.977 | free world: places 407, rows done 625 of 625 | lookup 27/30 | before 26/30 | coexist 23/30 | chain 27/30 | ops 18/30 | long 3/30 | 508s
+   per function: split 1.000 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 0.943 sub 0.900 max 1.000 min 1.000 insert 0.973 derive 1.000 say 1.000 | split end 1.000
+      ' || What is the smaller of (the larger of the market of Thagor and the next worker of Rilsa) a' -> split
+      'What is || the smaller of (the larger of the market of Thagor and the next worker of Rilsa) and (the ' -> split
+      'What is | the smaller of ( || the larger of the market of Thagor and the next worker of Rilsa) and (the differ' -> split
+      'What is | the smaller of ( | the larger of || the market of Thagor and the next worker of Rilsa) and (the diff' -> split
+      'What is | the smaller of ( | the larger of | the market of Thagor || and the next worker of Rilsa) and (the di' -> lookup
+      'What is | the smaller of ( | the larger of | Correction: the market of Thagor is now 3. || and the next worker' -> split
+      'What is | the smaller of ( | the larger of | Correction: the market of Thagor is now 3. | and || the next work' -> drop
+      'What is | the smaller of ( | the larger of | Correction: the market of Thagor is now 3. || the next worker of ' -> split
+      'What is | the smaller of ( | the larger of | Correction: the market of Thagor is now 3. | the next worker of R' -> lookup
+      'What is | the smaller of ( | the larger of | Correction: the market of Thagor is now 3. | the next worker of R' -> max
+      'What is | the smaller of ( | 14 || ) and (the difference between the market of Muzek and the hour of Gorsa)?' -> split
+      'What is | the smaller of ( | 14 | ) and ( || the difference between the market of Muzek and the hour of Gorsa)' -> drop
+      'What is | the smaller of ( | 14 || the difference between the market of Muzek and the hour of Gorsa)?' -> split
+      'What is | the smaller of ( | 14 | the difference between || the market of Muzek and the hour of Gorsa)?' -> split
+      'What is | the smaller of ( | 14 | the difference between | the market of Muzek || and the hour of Gorsa)?' -> lookup
+      'What is | the smaller of ( | 14 | the difference between | Correction: the market of Muzek is now 15. || and t' -> split
+      'the smaller of ( | 14 | the difference between | Correction: the market of Muzek is now 15. | and || the hour ' -> drop
+      'What is | the smaller of ( | 14 | the difference between | Correction: the market of Muzek is now 15. || the h' -> split
+      'the smaller of ( | 14 | the difference between | Correction: the market of Muzek is now 15. | the hour of Gors' -> lookup
+      'the smaller of ( | 14 | the difference between | Correction: the market of Muzek is now 15. | Correction: the ' -> sub
+      'What is | the smaller of ( | 14 | -15 || )?' -> min
+      'What is | -15 || )?' -> say
+step 6000 loss 0.062 acc 0.992 | free world: places 445, rows done 651 of 651 | lookup 29/30 | before 30/30 | coexist 30/30 | chain 29/30 | ops 25/30 | long 5/30 | 610s

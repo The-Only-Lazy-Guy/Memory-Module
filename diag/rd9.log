@@ -1,0 +1,53 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2734.32it/s]
+demonstrations: 18 ways, 668 rows, 5236 steps; [1, 4, 11, 16, 19, 28, 42, 47, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+   per function: split 0.990 lookup 1.000 rule 0.923 prev 1.000 open 1.000 drop 1.000 nip 0.000 join 1.000 add 1.000 sub 1.000 max 0.857 min 0.091 insert 0.946 derive 1.000 say 1.000 | split end 0.990
+/marimo/frozen/rd9/gnm.py:1222: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} of {rows} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
+      ' || What is the difference between the doctor of Thadun and the screen of Sapel?' -> split
+      'What is || the difference between the doctor of Thadun and the screen of Sapel?' -> split
+      'What is | the difference between || the doctor of Thadun and the screen of Sapel?' -> split
+      'What is | the difference between | the doctor of Thadun || and the screen of Sapel?' -> lookup
+      'What is | the difference between | the doctor of Thadun is 30. || and the screen of Sapel?' -> split
+      'What is | the difference between | the doctor of Thadun is 30. | and || the screen of Sapel?' -> drop
+      'What is | the difference between | the doctor of Thadun is 30. || the screen of Sapel?' -> split
+      'What is | the difference between | the doctor of Thadun is 30. | the screen of Sapel || ?' -> lookup
+      'What is | the difference between | the doctor of Thadun is 30. | the screen of Sapel is 23. || ?' -> sub
+      'What is | 7 || ?' -> say
+step 1500 loss 0.176 acc 0.977 | free world: places 419, rows done 641 of 641 | lookup 27/30 | before 26/30 | coexist 25/30 | chain 27/30 | ops 6/30 | long 0/30 | 174s
+   per function: split 1.000 lookup 1.000 rule 1.000 prev 1.000 open 0.974 drop 1.000 nip 0.000 join 1.000 add 0.951 sub 0.900 max 0.833 min 0.900 insert 0.889 derive 1.000 say 1.000 | split end 1.000
+      ' || What is the sum of the zone of Sane and the report of Vinka?' -> split
+      'What is || the sum of the zone of Sane and the report of Vinka?' -> split
+      'What is | the sum of || the zone of Sane and the report of Vinka?' -> split
+      'What is | the sum of | the zone of Sane || and the report of Vinka?' -> lookup
+      'What is | the sum of | the zone of Sane is 7. || and the report of Vinka?' -> split
+      'What is | the sum of | the zone of Sane is 7. | and || the report of Vinka?' -> drop
+      'What is | the sum of | the zone of Sane is 7. || the report of Vinka?' -> split
+      'What is | the sum of | the zone of Sane is 7. | the report of Vinka || ?' -> lookup
+      'What is | the sum of | the zone of Sane is 7. | the report of Vinka is 17. || ?' -> add
+      'What is | 24 || ?' -> say
+step 3000 loss 0.104 acc 0.992 | free world: places 454, rows done 683 of 683 | lookup 28/30 | before 29/30 | coexist 29/30 | chain 29/30 | ops 13/30 | long 1/30 | 349s
+   per function: split 1.000 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 0.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 0.946 derive 1.000 say 0.973 | split end 1.000
+Traceback (most recent call last):
+  File "/marimo/frozen/rd9/gnm.py", line 1459, in <module>
+    diag(A) if A.diag else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+                           ~~~~~~~~~~~~^^^
+  File "/marimo/frozen/rd9/gnm.py", line 1221, in train_reader
+    placed += run_free(m, rd, Row(s), ("insert", "derive"))
+              ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/frozen/rd9/gnm.py", line 1126, in run_free
+    m.do(r, name)
+    ~~~~^^^^^^^^^
+  File "/marimo/frozen/rd9/gnm.py", line 741, in do
+    return getattr(self, "f_" + name)(r, *a)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/marimo/frozen/rd9/gnm.py", line 794, in f_rule
+    r.stack.append(self.entry_item(p) if p >= 0 else Item("no rule"))
+                   ~~~~~~~~~~~~~~~^^^
+  File "/marimo/frozen/rd9/gnm.py", line 753, in entry_item
+    idx = idx % len(ch)
+          ~~~~^~~~~~~~~
+ZeroDivisionError: integer modulo by zero

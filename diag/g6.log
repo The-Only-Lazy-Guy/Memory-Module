@@ -1,0 +1,16 @@
+   MISS chain ('What is the first locale of the service of Sane?', 21, 16)
+   MISS ops ('What is the smaller of the zone of Merba and the first locale of Pelmu?', 21, 16)
+   MISS ops ('What is the larger of (the sum of the first locale of Pelmu and (the larger of the list of Merpel and the old age of Pelmer)) and the route of Saril?', 50, 45)
+   MISS long ('What is the sum of (the larger of (the larger of the grade of Merlo and the category of Tordun) and (the smaller of (the sum of the worker of Pelsa and the term of Zekdun) and the first locale of Pelmu)) and the bid of Torgor?', 32, 27)
+   MISS long ('What is the smaller of (the sum of (the difference between (the sum of the category of Nepel and the series of Lozek) and the guest of Dunka) and (the difference between the old door of Dunsa and the first locale of Pelmu)) and the main seat of Sane?', 15, 20)
+step 60 | places 1204 | lookup 100/100 (5p) | before 100/100 (7p) | coexist 100/100 (6p) | chain 99/100 (8p) | ops 98/100 (19p) | long 96/100 (39p) | walk = flat 200/200, cost 599 of 1204, edges 29.8 / 70 | 10s
+   MISS before ('What was the first locale of Pelmu before?', 21, 15)
+   MISS before ('What was the bid of Neba before?', 20, 11)
+   MISS ops ('What is the larger of the host of Logor and the bid of Neba?', 30, 20)
+   MISS long ('What is the larger of the day of Thadun and (the sum of (the sum of (the smaller of the bid of Neba and the schedule of Muor) and (the sum of the salary of Peltha and the quota of Neka)) and the list of Vinlo)?', 75, 65)
+   MISS long ('What is the sum of (the smaller of (the larger of the old door of Gorgor and the old currency of Pello) and the license of Lomu) and (the sum of the bid of Neba and (the larger of the last device of Rilba and the worker of Ortor))?', 83, 73)
+step 120 | places 2284 | lookup 100/100 (5p) | before 98/100 (7p) | coexist 100/100 (6p) | chain 100/100 (8p) | ops 99/100 (17p) | long 98/100 (38p) | walk = flat 200/200, cost 817 of 2284, edges 36.0 / 89 | 26s
+   MISS ops ('What is the difference between the birth of Thamer and (the larger of the old currency of Sazek and the salary of Merba)?', -15, 4)
+   MISS ops ('What is the sum of (the smaller of the term of Tortha and the old currency of Sazek) and the salary of Vintha?', 33, 29)
+   MISS long ('What is the smaller of (the difference between the license of Kamer and (the sum of the daily worker of Basa and the old locale of Zekzek)) and (the difference between (the smaller of the old door of Vinril and the first locale of Torzek) and the old currency of Sazek)?', -38, -19)
+step 180 | places 3322 | lookup 100/100 (4p) | before 100/100 (6p) | coexist 100/100 (6p) | chain 100/100 (7p) | ops 97/100 (18p) | long 99/100 (37p) | walk = flat 200/200, cost 959 of 3322, edges 40.1 / 107 | 47s
