@@ -1,0 +1,47 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4095.19it/s]
+/marimo/frozen/dec3/gnm.py:799: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} | round trip, train keys: {tr} | held keys: {he} | {time.time() - t0:.0f}s", flush=True)
+step 1000 loss 1.628 | round trip, train keys: copy 0.000 fact 0.007 rule 0.061 value 0.081 all 0.027 | held keys: copy 0.000 fact 0.000 rule 0.000 value 0.000 all 0.000 | 55s
+     'Correction: the primary degree of Mermer is now 36.' -> 'Correction: the primary primary primary primary primary primary primary of Mermer is now is now is now is now is now of the the "I.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n'
+     'rule: old station' -> 'rule: old ship'
+     'the primary job of Rilpel' -> 'the primary of Rililililililkan'
+     'the draft of Pello' -> 'the schedule of Pel'
+     'the cost of Vinsa is Thane.' -> 'the rate of Notha.'
+     'the base height of Nepel is 5.' -> 'the width of Pelopl is 5.'
+step 2000 loss 1.995 | round trip, train keys: copy 0.000 fact 0.050 rule 0.196 value 0.279 all 0.113 | held keys: copy 0.000 fact 0.007 rule 0.038 value 0.447 all 0.078 | 101s
+     'the flight of Oror' -> 'the Oror of Oror'
+     'the last doctor of Rilril is 56.' -> 'the last of Rilril is 36.'
+     'the host of Rilka is Vinril.' -> 'the guest of Rilil is Rilil.'
+     'the next package of Neka' -> 'the container of Neka'
+     'the backup load of Zekzek is Mervin.' -> 'the backup backup backup backup backup backup backup is Zzek.'
+     'the daily phone of Kavin is 1 (same as the page of Loba).' -> 'the page of Tavin is 6 (note: the same page of the same person is the same as the page of the same person).'
+step 3000 loss 1.263 | round trip, train keys: copy 0.000 fact 0.220 rule 0.357 value 0.854 all 0.328 | held keys: copy 0.000 fact 0.025 rule 0.062 value 0.880 all 0.199 | 148s
+     'the budget of Mune is 15.' -> 'the budget of Mune is 28.'
+     'the vessel of Vintha is 24.' -> 'the vessel of Vintha is 28.'
+     'incoming token numbers are amounts to add to the current token' -> 'in the current token token token amounts to $ token token amounts to the token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token token'
+     'rule: any further city count as increments to the city' -> 'rule: any further increments count as increments'
+     'the wallet of Bamu is 17.' -> 'the Bamu is 28.'
+     'Correction: the primary parent of Pelsa is now 25.' -> 'Correction: the primary primary primary primary primary primary primary primary primary primary candidate of Pelsa is now Pelsa.'
+step 4000 loss 1.059 | round trip, train keys: copy 0.000 fact 0.429 rule 0.375 value 1.000 all 0.469 | held keys: copy 0.000 fact 0.071 rule 0.046 value 1.000 all 0.191 | 194s
+     'the daily hour of Rilsa is 22.' -> 'the daily daily daily daily daily daily daily is 24.'
+     'the term of Peltor is Loba.' -> 'the term of Peltor is Peltor.'
+     'the voucher of Pelpel is 52 (same as the locale of Thasa).' -> 'the pelpel of Pelpel is 52 (same as the pelpel of Pelpel).'
+     'note: later rent values join the rent values already known' -> 'note: values already known values join the values already known'
+     'Correction: the order of Zekba is now 31.' -> 'Correction: the revised version of Zekba is now 31.'
+     'the daily load of Nemer' -> 'the daily daily daily daily daily daily daily feed of Nemer'
+step 5000 loss 0.860 | round trip, train keys: copy 0.000 fact 0.632 rule 0.579 value 1.000 all 0.633 | held keys: copy 0.000 fact 0.060 rule 0.047 value 1.000 all 0.176 | 240s
+     'the rate of Mermu is Torgor.' -> 'the rate of Meror is Meror.'
+     'the event of Muril is Lomer.' -> 'the event of Muril is Muril.'
+     'the point of Gorgor is 1.' -> 'the point of Gorgor is 3.'
+     'the base alias of Tordun' -> 'the base base base base base base of Tordun'
+     'each new link are extra link values; keep the old ones too' -> 'each new extra packet are extra extra packets; keep the old ones too'
+     'rule: base month' -> 'rule: base period'
+step 6000 loss 0.908 | round trip, train keys: copy 0.000 fact 0.580 rule 0.403 value 1.000 all 0.535 | held keys: copy 0.000 fact 0.118 rule 0.094 value 1.000 all 0.207 | 287s
+     'the next band of Orlo is Loor.' -> 'the band of Orlo is Orlo.'
+     'the step of Vinpel is 26.' -> 'the step of Vinpel is 18.'
+     'the release of Orne is 15 (same as the bundle of Muril).' -> 'the bundle of Silne is 15 (same as the bundle of Silne).'
+     'the goal of Riltor' -> 'the point of Riltor'
+     'the time of Ordun' -> 'the date of Ordun'
+     'each new reason overwrite the previous reason' -> 'each new overwrite overwrite overwrite the previous overwrite'

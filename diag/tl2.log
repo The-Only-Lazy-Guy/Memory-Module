@@ -1,0 +1,11 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3711.53it/s]
+/marimo/frozen/tl2/gnm.py:893: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} | exact: " + " ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+step 1000 loss 1.833 | exact: depth 1 0.516 depth 2 0.344 depth 3 0.328 depth 4 0.289 | 97s
+step 2000 loss 0.629 | exact: depth 1 0.617 depth 2 0.422 depth 3 0.383 depth 4 0.352 | 191s
+step 3000 loss 0.362 | exact: depth 1 0.742 depth 2 0.578 depth 3 0.391 depth 4 0.391 | 286s
+step 4000 loss 0.282 | exact: depth 1 0.797 depth 2 0.672 depth 3 0.523 depth 4 0.539 | 381s
+step 5000 loss 0.680 | exact: depth 1 0.883 depth 2 0.711 depth 3 0.617 depth 4 0.578 | 448s
+step 6000 loss 0.170 | exact: depth 1 0.938 depth 2 0.742 depth 3 0.633 depth 4 0.633 | 500s
