@@ -1907,7 +1907,7 @@ class Ledger:
     """what the rules said: per rule, how many checks and how many went wrong, with the first few cases"""
 
     def __init__(self):
-        self.n, self.bad, self.cases = {}, {}, {}
+        self.n, self.bad, self.cases, self.why = {}, {}, {}, {}
 
     def add(self, j):
         self.n[j.rule] = self.n.get(j.rule, 0) + 1
@@ -1918,7 +1918,8 @@ class Ledger:
                 self.cases[j.rule].append(f"{j.ev['src'][:70]!r}: {j.note}" if j.ev else j.note)
 
     def line(self):
-        return "rules " + ", ".join(f"{r} {self.bad.get(r, 0)}/{n} wrong" for r, n in sorted(self.n.items()))
+        why = ", ".join(f"{k} {v}" for k, v in sorted(self.why.items(), key=lambda z: -z[1]))
+        return "rules " + ", ".join(f"{r} {self.bad.get(r, 0)}/{n} wrong" for r, n in sorted(self.n.items())) + (f" | wrong answers, first failure on the row: {why}" if why else "")
 
 
 def judge(m, ledger, row=None, truth=None):
@@ -1935,8 +1936,11 @@ def judge(m, ledger, row=None, truth=None):
                 out.append(j)
     if row is not None and truth is not None:
         got = next((it.value for it in reversed(row.stack) if it.value is not None), None)
-        j = Judgment("outcome", got == truth, "path", truth, {"src": row.src}, f"said {got}, truth {truth}")
+        first = next((j.rule for j in out if j.ev and j.ev.get("row") is row and not j.ok), "no rule fired")
+        j = Judgment("outcome", got == truth, "path", truth, {"src": row.src}, f"said {got}, truth {truth}, first failure: {first}")
         ledger.add(j)
+        if not j.ok:
+            ledger.why[first] = ledger.why.get(first, 0) + 1
         out.append(j)
     if m.events is not None:
         m.events.clear()
@@ -1956,7 +1960,9 @@ def lessons(tr, bank, m, js, cap=64):
     teaches: relate learns same / not same, the relation learns which words name a statement's source and whether it
     has one. (Labels and B stay as they are online: changing them would move what is already stored.)"""
     dev, loss = next(bank.parameters()).device, None
-    rel = [j.target for j in js if j.blame in ("relate", "walk") and j.target and j.target[1] is not None][:cap]
+    pairs = [j for j in js if j.blame in ("relate", "walk") and j.target and j.target[1] is not None]
+    wrong, right = [j for j in pairs if not j.ok], [j for j in pairs if j.ok]
+    rel = [j.target for j in wrong[:cap // 2] + random.sample(right, min(len(right), len(wrong[:cap // 2])))]   # learn from mistakes
     if rel:
         za, ma = tr.content([t for t, _, _ in rel])
         zb, mb = nodes_of([m.g.chain[p][0][0].detach() for _, p, _ in rel], dev)
