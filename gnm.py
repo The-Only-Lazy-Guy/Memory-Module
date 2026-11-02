@@ -347,6 +347,8 @@ class World:
                 rec[k] = v
                 if e.get(k) != v:
                     self.set(nm, k, v)
+                else:
+                    self.deps.pop((nm, k), None)               # restated directly: no longer a copy either
             if rng.random() < p_noise:
                 rec[rng.choice(self.noise)] = _value(rng, "code")
             recs.append(rec)
@@ -552,9 +554,11 @@ class Oracle:
         if m:
             return ("fact", m.group(1).lower(), m.group(2))
         w = self.world
-        for k in sorted((words(x) for x in w.num_keys + w.multi_keys + w.ent_keys + w.held_keys), key=len, reverse=True):
-            if not text.startswith("the ") and re.search(rf"\b{re.escape(k)}\b", text.lower()):
-                return ("rule", k)
+        if not text.startswith("the "):                # the key a rule is about comes first: "... replace the old offer" is about offer
+            hits = [(x.start(), -len(k), k) for k in {words(y) for y in w.num_keys + w.multi_keys + w.ent_keys + w.held_keys}
+                    for x in [re.search(rf"\b{re.escape(k)}\b", text.lower())] if x]
+            if hits:
+                return ("rule", min(hits)[2])
         return ("state", text.split(" is ")[0])
 
     def label(self, text):
