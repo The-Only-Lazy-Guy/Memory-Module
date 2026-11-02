@@ -998,7 +998,8 @@ def view(r):
 
 
 class Reader(nn.Module):
-    """reads the view, states a want; the want matches a function node. A split also points at where the chunk ends."""
+    """reads the view, states a want; the want matches a function node. A split ends at the first token boundary,
+    judged from the text up to the next token only: what lies further on cannot move it, so depth cannot either."""
 
     def __init__(self, tr, d=256):
         super().__init__()
@@ -1008,7 +1009,7 @@ class Reader(nn.Module):
         self.want = nn.Linear(D, d)
         self.fn = nn.Parameter(F.normalize(torch.randn(len(FUNCS), d), dim=-1))
         self.tau = nn.Parameter(torch.tensor(20.))
-        self.end = nn.Linear(D, 1)
+        self.end = nn.Sequential(nn.Linear(2 * D, d), nn.GELU(), nn.Linear(d, 1))
 
     def forward(self, views):
         dev = self.end.weight.device
@@ -1016,12 +1017,21 @@ class Reader(nn.Module):
         off = b.pop("offset_mapping")
         b = b.to(dev)
         with torch.no_grad():
-            h = self.tr.lm(**b).last_hidden_state
-        h = self.enc(h, src_key_padding_mask=b["attention_mask"] == 0)
+            g = self.tr.lm(**b).last_hidden_state          # causal: token i has seen only what comes before it
+        nxt = torch.cat([g[:, 1:] * b["attention_mask"][:, 1:, None], torch.zeros_like(g[:, :1])], 1)
+        h = self.enc(g, src_key_padding_mask=b["attention_mask"] == 0)
         last = b["attention_mask"].sum(1) - 1
         s = h[torch.arange(len(views), device=dev), last]
         logits = self.tau * F.normalize(self.want(s), dim=-1) @ F.normalize(self.fn, dim=-1).T
-        return logits, self.end(h).squeeze(-1), off, b["attention_mask"]
+        return logits, self.end(torch.cat([g, nxt], -1)).squeeze(-1), off, b["attention_mask"]
+
+
+def first_end(e, o, base):
+    """the first token of the focus the chunk ends after (the likeliest one if none says so)"""
+    ok = [j for j, (a, b) in enumerate(o) if b > base]
+    if not ok:
+        return None
+    return next((j for j in ok if e[j] > 0), max(ok, key=lambda j: e[j]))
 
 
 def step_targets(views, names, chars, off):
@@ -1065,8 +1075,11 @@ def reader_loss(rd, batch):
     loss = F.cross_entropy(logits, y)
     t = step_targets(views, names, chars, off).to(dev)
     k = t >= 0
-    if k.any():
-        loss = loss + F.cross_entropy(ends[k].masked_fill(mask[k] == 0, -1e4), t[k])
+    if k.any():                                        # the tokens before the end say "not yet", the end says "here"
+        first = torch.tensor([next((i for i, (a, e) in enumerate(o) if e > v[1]), 0) for v, o in zip(views, off.tolist())], device=dev)
+        pos = torch.arange(ends.shape[1], device=dev)[None]
+        on = (pos >= first[:, None]) & (pos <= t[:, None]) & k[:, None]
+        loss = loss + F.binary_cross_entropy_with_logits(ends[on], (pos == t[:, None]).float().expand_as(ends)[on])
     return loss, float((logits.argmax(1) == y).float().mean())
 
 
@@ -1079,14 +1092,13 @@ def step_report(rd, bank, rng, keys, n=1024):
         b = S[i:i + 128]
         views, names, chars = zip(*b)
         logits, ends, off, mask = rd(views)
-        t = step_targets(views, names, chars, off).to(logits.device)
-        e = ends.masked_fill(mask == 0, -1e4).argmax(1)
+        t = step_targets(views, names, chars, off).tolist()
         for j, name in enumerate(names):
             tot[name] = tot.get(name, 0) + 1
             hit[name] = hit.get(name, 0) + int(FUNCS[int(logits[j].argmax())] == name)
             if t[j] >= 0:
                 et += 1
-                eh += int(e[j] == t[j])
+                eh += int(first_end(ends[j].tolist(), off[j].tolist(), views[j][1]) == t[j])
     return " ".join(f"{k} {hit[k] / tot[k]:.3f}" for k in FUNCS if k in tot) + f" | split end {eh / max(1, et):.3f}"
 
 
@@ -1099,7 +1111,8 @@ def pick(rd, vs):
     for i, (v, base) in enumerate(vs):
         o, e = off[i].tolist(), ends[i].tolist()
         ok = [j for j, (a, b) in enumerate(o) if b > base]
-        n = o[max(ok, key=lambda j: e[j])][1] - base if ok else None
+        j = first_end(e, o, base)
+        n = o[j][1] - base if j is not None else None
         out.append((FUNCS[int(fn[i, 0])], n, float(p[i, 0]), float(p[i, 0] - p[i, 1]), [o[j][1] - base for j in ok]))
     return out
 
@@ -1202,10 +1215,14 @@ def train_reader(A):
     keys = key_re(w0)
     opt = torch.optim.AdamW([p for n, p in rd.named_parameters() if not n.startswith("tr.")], lr=A.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, A.steps, eta_min=A.lr / 50)
+    n = {}
+    for x in bank:
+        n[x[1]] = n.get(x[1], 0) + 1
+    weight = [n[x[1]] ** -.5 for x in bank]             # a function seen in few steps (nip, join) is not drowned by splits
     t0 = time.time()
     for step in range(1, A.steps + 1):
         rd.train()
-        loss, acc = reader_loss(rd, [fresh(rng, x, keys) for x in rng.sample(bank, min(A.batch, len(bank)))])
+        loss, acc = reader_loss(rd, [fresh(rng, x, keys) for x in rng.choices(bank, weight, k=A.batch)])
         opt.zero_grad()
         loss.backward()
         opt.step()
