@@ -1,0 +1,91 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2791.52it/s]
+reader: []
+demonstrations: 20 ways, 732 rows, 5084 steps; [5, 6, 15, 16, 22, 23, 25, 36, 39, 45, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
+demonstrated views: 5084 steps, 1595 shapes
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+[gold writes, exact] world 20 | {'places': 157, 'keys': 157, 'mixed': 0, 'split': 0, 'fact_hit': 111, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 111, 'false_accept': 0, 'absent': 200, 'rule_hit': 9, 'rules': 9, 'walk_flat': 111, 'cost': 139.48648648648648} | rows with a wrong call copy 0/13 fact 0/205 note 0/15 rule 0/10 | 3s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 449/449 = 1.0000 | first wrong call:  | 8s
+   before   gold 100/100 free 96/100 | all calls right 96/100, steps 665/669 = 0.9940 | first wrong call: nip>say 4 | 14s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 600/600 = 1.0000 | first wrong call:  | 19s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 707/707 = 1.0000 | first wrong call:  | 25s
+   ops      gold 100/100 free 96/100 | all calls right 95/100, steps 1730/1736 = 0.9965 | first wrong call: split end 5 | 39s
+   long     gold 100/100 free 49/100 | all calls right 40/100, steps 3623/3726 = 0.9724 | first wrong call: split end 21, min>max 14, min>split 4, sub>split 4, add>split 3 | 68s
+[gold writes, exact] world 60 | {'places': 444, 'keys': 442, 'mixed': 0, 'split': 1, 'fact_hit': 200, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 200, 'false_accept': 0, 'absent': 200, 'rule_hit': 28, 'rules': 28, 'walk_flat': 200, 'cost': 288.94} | rows with a wrong call copy 0/18 delta 0/4 fact 0/336 note 0/32 rule 0/20 | 73s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 463/463 = 1.0000 | first wrong call:  | 77s
+   before   gold 100/100 free 100/100 | all calls right 100/100, steps 643/643 = 1.0000 | first wrong call:  | 83s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 622/622 = 1.0000 | first wrong call:  | 89s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 728/728 = 1.0000 | first wrong call:  | 96s
+   ops      gold 100/100 free 96/100 | all calls right 94/100, steps 1843/1849 = 0.9968 | first wrong call: max>min 3, split end 2, min>max 1 | 111s
+   long     gold 100/100 free 39/100 | all calls right 30/100, steps 3771/3893 = 0.9687 | first wrong call: split end 34, min>max 11, sub>split 7, sub>add 5, max>min 3 | 140s
+[gold writes, exact] world 180 | {'places': 962, 'keys': 959, 'mixed': 0, 'split': 1, 'fact_hit': 200, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 200, 'false_accept': 0, 'absent': 200, 'rule_hit': 40, 'rules': 40, 'walk_flat': 200, 'cost': 416.24} | rows with a wrong call copy 8/44 delta 13/188 fact 1/916 note 0/92 rule 0/69 | 159s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 435/435 = 1.0000 | first wrong call:  | 163s
+   before   gold 100/100 free 98/100 | all calls right 98/100, steps 596/598 = 0.9967 | first wrong call: say>nip 2 | 169s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 626/626 = 1.0000 | first wrong call:  | 175s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 756/756 = 1.0000 | first wrong call:  | 182s
+   ops      gold 100/100 free 97/100 | all calls right 96/100, steps 1776/1780 = 0.9978 | first wrong call: max>min 2, max>add 1, split end 1 | 197s
+   long     gold 100/100 free 43/100 | all calls right 33/100, steps 3447/3563 = 0.9674 | first wrong call: split end 41, min>max 8, max>split 4, min>split 3, add>split 3 | 223s
+[gold writes, neural] world 20 | {'places': 155, 'keys': 157, 'mixed': 2, 'split': 0, 'fact_hit': 111, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 111, 'false_accept': 1, 'absent': 200, 'rule_hit': 9, 'rules': 9, 'walk_flat': 111, 'cost': 137.95495495495496} | rows with a wrong call copy 0/13 fact 0/205 note 0/15 rule 0/10 | 228s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 449/449 = 1.0000 | first wrong call:  | 233s
+   before   gold 100/100 free 96/100 | all calls right 96/100, steps 665/669 = 0.9940 | first wrong call: nip>say 4 | 239s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 600/600 = 1.0000 | first wrong call:  | 245s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 707/707 = 1.0000 | first wrong call:  | 251s
+   ops      gold 100/100 free 95/100 | all calls right 95/100, steps 1730/1736 = 0.9965 | first wrong call: split end 5 | 266s
+   long     gold 100/100 free 49/100 | all calls right 40/100, steps 3623/3726 = 0.9724 | first wrong call: split end 21, min>max 14, min>split 4, sub>split 4, add>split 3 | 294s
+[gold writes, neural] world 60 | {'places': 441, 'keys': 443, 'mixed': 3, 'split': 1, 'fact_hit': 200, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 200, 'false_accept': 1, 'absent': 200, 'rule_hit': 28, 'rules': 28, 'walk_flat': 200, 'cost': 284.46} | rows with a wrong call copy 0/18 delta 0/4 fact 0/336 note 0/32 rule 0/20 | 303s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 463/463 = 1.0000 | first wrong call:  | 307s
+   before   gold 100/100 free 100/100 | all calls right 100/100, steps 643/643 = 1.0000 | first wrong call:  | 314s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 622/622 = 1.0000 | first wrong call:  | 319s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 728/728 = 1.0000 | first wrong call:  | 326s
+   ops      gold 100/100 free 95/100 | all calls right 94/100, steps 1843/1849 = 0.9968 | first wrong call: max>min 3, split end 2, min>max 1 | 342s
+   long     gold 100/100 free 40/100 | all calls right 30/100, steps 3771/3893 = 0.9687 | first wrong call: split end 34, min>max 11, sub>split 7, sub>add 5, max>min 3 | 372s
+[gold writes, neural] world 180 | {'places': 940, 'keys': 959, 'mixed': 9, 'split': 1, 'fact_hit': 200, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 200, 'false_accept': 4, 'absent': 200, 'rule_hit': 40, 'rules': 40, 'walk_flat': 200, 'cost': 411.4} | rows with a wrong call copy 8/44 delta 13/188 fact 1/916 note 0/92 rule 0/69 | 396s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 435/435 = 1.0000 | first wrong call:  | 401s
+   before   gold 100/100 free 98/100 | all calls right 98/100, steps 596/598 = 0.9967 | first wrong call: say>nip 2 | 407s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 626/626 = 1.0000 | first wrong call:  | 413s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 756/756 = 1.0000 | first wrong call:  | 420s
+   ops      gold 100/100 free 97/100 | all calls right 96/100, steps 1776/1780 = 0.9978 | first wrong call: max>min 2, max>add 1, split end 1 | 435s
+   long     gold 100/100 free 43/100 | all calls right 33/100, steps 3447/3563 = 0.9674 | first wrong call: split end 41, min>max 8, max>split 4, min>split 3, add>split 3 | 463s
+[reader writes, exact] world 20 | {'places': 157, 'keys': 157, 'mixed': 0, 'split': 0, 'fact_hit': 111, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 111, 'false_accept': 0, 'absent': 200, 'rule_hit': 9, 'rules': 9, 'walk_flat': 111, 'cost': 139.48648648648648} | rows with a wrong call copy 0/13 fact 0/205 note 0/15 rule 0/10 | 469s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 449/449 = 1.0000 | first wrong call:  | 473s
+   before   gold 100/100 free 96/100 | all calls right 96/100, steps 665/669 = 0.9940 | first wrong call: nip>say 4 | 479s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 600/600 = 1.0000 | first wrong call:  | 484s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 707/707 = 1.0000 | first wrong call:  | 491s
+   ops      gold 100/100 free 96/100 | all calls right 95/100, steps 1730/1736 = 0.9965 | first wrong call: split end 5 | 505s
+   long     gold 100/100 free 49/100 | all calls right 40/100, steps 3623/3726 = 0.9724 | first wrong call: split end 21, min>max 14, min>split 4, sub>split 4, add>split 3 | 533s
+[reader writes, exact] world 60 | {'places': 444, 'keys': 442, 'mixed': 0, 'split': 1, 'fact_hit': 200, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 200, 'false_accept': 0, 'absent': 200, 'rule_hit': 28, 'rules': 28, 'walk_flat': 200, 'cost': 288.94} | rows with a wrong call copy 0/18 delta 0/4 fact 0/336 note 0/32 rule 0/20 | 544s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 463/463 = 1.0000 | first wrong call:  | 549s
+   before   gold 100/100 free 100/100 | all calls right 100/100, steps 643/643 = 1.0000 | first wrong call:  | 555s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 622/622 = 1.0000 | first wrong call:  | 561s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 728/728 = 1.0000 | first wrong call:  | 567s
+   ops      gold 100/100 free 96/100 | all calls right 94/100, steps 1843/1849 = 0.9968 | first wrong call: max>min 3, split end 2, min>max 1 | 582s
+   long     gold 100/100 free 39/100 | all calls right 30/100, steps 3771/3893 = 0.9687 | first wrong call: split end 34, min>max 11, sub>split 7, sub>add 5, max>min 3 | 612s
+[reader writes, exact] world 180 | {'places': 962, 'keys': 959, 'mixed': 0, 'split': 1, 'fact_hit': 200, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 200, 'false_accept': 0, 'absent': 200, 'rule_hit': 40, 'rules': 40, 'walk_flat': 200, 'cost': 416.24} | rows with a wrong call copy 8/44 delta 13/188 fact 1/916 note 0/92 rule 0/69 | 655s
+   lookup   gold 97/100 free 97/100 | all calls right 100/100, steps 428/428 = 1.0000 | first wrong call:  | 659s
+   before   gold 95/100 free 94/100 | all calls right 95/100, steps 581/586 = 0.9915 | first wrong call: say>open 2, say>nip 2, nip>say 1 | 665s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 626/626 = 1.0000 | first wrong call:  | 670s
+   chain    gold 98/100 free 98/100 | all calls right 100/100, steps 742/742 = 1.0000 | first wrong call:  | 677s
+   ops      gold 82/100 free 79/100 | all calls right 94/100, steps 1733/1745 = 0.9931 | first wrong call: max>min 2, split end 2, max>add 1, split>insert 1 | 692s
+   long     gold 77/100 free 30/100 | all calls right 28/100, steps 3320/3472 = 0.9562 | first wrong call: split end 43, min>max 7, max>split 5, add>split 3, add>max 2 | 718s
+[reader writes, neural] world 20 | {'places': 155, 'keys': 157, 'mixed': 2, 'split': 0, 'fact_hit': 111, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 111, 'false_accept': 1, 'absent': 200, 'rule_hit': 9, 'rules': 9, 'walk_flat': 111, 'cost': 137.95495495495496} | rows with a wrong call copy 0/13 fact 0/205 note 0/15 rule 0/10 | 726s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 449/449 = 1.0000 | first wrong call:  | 731s
+   before   gold 100/100 free 96/100 | all calls right 96/100, steps 665/669 = 0.9940 | first wrong call: nip>say 4 | 737s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 600/600 = 1.0000 | first wrong call:  | 742s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 707/707 = 1.0000 | first wrong call:  | 749s
+   ops      gold 100/100 free 95/100 | all calls right 95/100, steps 1730/1736 = 0.9965 | first wrong call: split end 5 | 764s
+   long     gold 100/100 free 49/100 | all calls right 40/100, steps 3623/3726 = 0.9724 | first wrong call: split end 21, min>max 14, min>split 4, sub>split 4, add>split 3 | 792s
+[reader writes, neural] world 60 | {'places': 441, 'keys': 443, 'mixed': 3, 'split': 1, 'fact_hit': 200, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 200, 'false_accept': 1, 'absent': 200, 'rule_hit': 28, 'rules': 28, 'walk_flat': 200, 'cost': 284.46} | rows with a wrong call copy 0/18 delta 0/4 fact 0/336 note 0/32 rule 0/20 | 807s
+   lookup   gold 100/100 free 100/100 | all calls right 100/100, steps 463/463 = 1.0000 | first wrong call:  | 811s
+   before   gold 100/100 free 100/100 | all calls right 100/100, steps 643/643 = 1.0000 | first wrong call:  | 817s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 622/622 = 1.0000 | first wrong call:  | 823s
+   chain    gold 100/100 free 100/100 | all calls right 100/100, steps 728/728 = 1.0000 | first wrong call:  | 830s
+   ops      gold 100/100 free 95/100 | all calls right 94/100, steps 1843/1849 = 0.9968 | first wrong call: max>min 3, split end 2, min>max 1 | 846s
+   long     gold 100/100 free 40/100 | all calls right 30/100, steps 3771/3893 = 0.9687 | first wrong call: split end 34, min>max 11, sub>split 7, sub>add 5, max>min 3 | 876s
+[reader writes, neural] world 180 | {'places': 940, 'keys': 959, 'mixed': 9, 'split': 1, 'fact_hit': 200, 'fact_miss': 0, 'fact_wrong': 0, 'facts': 200, 'false_accept': 4, 'absent': 200, 'rule_hit': 40, 'rules': 40, 'walk_flat': 200, 'cost': 411.4} | rows with a wrong call copy 8/44 delta 13/188 fact 1/916 note 0/92 rule 0/69 | 925s
+   lookup   gold 97/100 free 97/100 | all calls right 100/100, steps 428/428 = 1.0000 | first wrong call:  | 929s
+   before   gold 95/100 free 94/100 | all calls right 95/100, steps 581/586 = 0.9915 | first wrong call: say>open 2, say>nip 2, nip>say 1 | 935s
+   coexist  gold 100/100 free 100/100 | all calls right 100/100, steps 626/626 = 1.0000 | first wrong call:  | 941s
+   chain    gold 98/100 free 98/100 | all calls right 100/100, steps 742/742 = 1.0000 | first wrong call:  | 948s
+   ops      gold 82/100 free 79/100 | all calls right 94/100, steps 1733/1745 = 0.9931 | first wrong call: max>min 2, split end 2, max>add 1, split>insert 1 | 963s
+   long     gold 77/100 free 30/100 | all calls right 28/100, steps 3320/3472 = 0.9562 | first wrong call: split end 43, min>max 7, max>split 5, add>split 3, add>max 2 | 985s

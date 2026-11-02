@@ -1,0 +1,88 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2858.44it/s]
+demonstrations: 20 ways, 728 rows, 5198 steps; [2, 8, 13, 13, 15, 16, 29, 33, 49, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+   per function: split 0.992 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 0.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 0.923 insert 0.980 derive 1.000 say 1.000 | split end 0.987
+/marimo/frozen/rd12/gnm.py:1227: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} of {rows} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
+      ' || What is the sum of the priority of Rildun and the doctor of Loor?' -> split
+      'What is || the sum of the priority of Rildun and the doctor of Loor?' -> split
+      'What is | the sum of || the priority of Rildun and the doctor of Loor?' -> split
+      'What is | the sum of | the priority of Rildun || and the doctor of Loor?' -> lookup
+      'What is | the sum of | the priority of Rildun is 5. || and the doctor of Loor?' -> split
+      'the sum of | the priority of Rildun is 5. | and || the doctor of Loor?' -> drop
+      'What is | the sum of | the priority of Rildun is 5. || the doctor of Loor?' -> split
+      'the sum of | the priority of Rildun is 5. | the doctor of Loor || ?' -> lookup
+      'the sum of | the priority of Rildun is 5. | the doctor of Loor is 2. || ?' -> add
+      'What is | 7 || ?' -> say
+step 1500 loss 0.300 acc 0.977 | free world: places 463, rows done 674 of 680 | lookup 29/30 | before 26/30 | coexist 30/30 | chain 24/30 | ops 22/30 | long 5/30 | 154s
+   per function: split 0.992 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 0.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 0.982 derive 1.000 say 1.000 | split end 1.000
+      ' || What is the larger of (the difference between the daily charge of Lovin and the list of Th' -> split
+      'What is || the larger of (the difference between the daily charge of Lovin and the list of Thasa) and' -> split
+      'What is | the larger of ( || the difference between the daily charge of Lovin and the list of Thasa) and (the ' -> split
+      'What is | the larger of ( | the difference between || the daily charge of Lovin and the list of Thasa) and (th' -> split
+      'the larger of ( | the difference between | the daily charge of Lovin || and the list of Thasa) and (the sum of' -> lookup
+      'the larger of ( | the difference between | the daily charge of Lovin is 16. || and the list of Thasa) and (the' -> split
+      'the difference between | the daily charge of Lovin is 16. | and the list of Thasa) and ( || the sum of the shi' -> drop
+      'the larger of ( | the difference between | the daily charge of Lovin is 16. || the sum of the ship of Thaor an' -> split
+      'the difference between | the daily charge of Lovin is 16. | the sum of || the ship of Thaor and the bundle of ' -> split
+      'the daily charge of Lovin is 16. | the sum of | the ship of Thaor || and the bundle of Gorril)?' -> lookup
+      'the daily charge of Lovin is 16. | the sum of | the ship of Thaor is 10. || and the bundle of Gorril)?' -> split
+      'the sum of | the ship of Thaor is 10. | and || the bundle of Gorril)?' -> drop
+      'the daily charge of Lovin is 16. | the sum of | the ship of Thaor is 10. || the bundle of Gorril)?' -> split
+      'the sum of | the ship of Thaor is 10. | the bundle of Gorril || )?' -> lookup
+      'the sum of | the ship of Thaor is 10. | the bundle of Gorril is 11. || )?' -> add
+      'the difference between | the daily charge of Lovin is 16. | 21 || )?' -> sub
+      'What is | the larger of ( | -5 || )?' -> say
+step 3000 loss 0.090 acc 1.000 | free world: places 424, rows done 668 of 668 | lookup 30/30 | before 24/30 | coexist 27/30 | chain 30/30 | ops 28/30 | long 14/30 | 306s
+   per function: split 0.998 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 0.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 1.000
+      ' || What is the smaller of the first line of Bamu and (the sum of the daily trade of Gorka and' -> split
+      'What is || the smaller of the first line of Bamu and (the sum of the daily trade of Gorka and the mai' -> split
+      'What is | the smaller of || the first line of Bamu and (the sum of the daily trade of Gorka and the main tier ' -> split
+      'What is | the smaller of | the first line of Bamu || and (the sum of the daily trade of Gorka and the main tie' -> lookup
+      'What is | the smaller of | the first line of Bamu is 15 (same as the daily trade of Kagor). || and (the sum of' -> open
+      'What is | the smaller of || the first line of Bamu is 15 (same as the daily trade of Kagor).' -> split
+      'What is | the smaller of | the first line of Bamu is 15 (same as || the daily trade of Kagor).' -> drop
+      'What is | the smaller of || the daily trade of Kagor).' -> split
+      'What is | the smaller of | the daily trade of Kagor || ).' -> lookup
+      'What is | the smaller of | the daily trade of Kagor is 5. || ).' -> split
+      'the smaller of | the daily trade of Kagor is 5. | ). || and (the sum of the daily trade of Gorka and the main ' -> drop
+      'What is | the smaller of | the daily trade of Kagor is 5. || and (the sum of the daily trade of Gorka and the ' -> split
+      'the smaller of | the daily trade of Kagor is 5. | and ( || the sum of the daily trade of Gorka and the main ti' -> drop
+      'What is | the smaller of | the daily trade of Kagor is 5. || the sum of the daily trade of Gorka and the main ' -> split
+      'the smaller of | the daily trade of Kagor is 5. | the sum of || the daily trade of Gorka and the main tier of ' -> split
+      'the daily trade of Kagor is 5. | the sum of | the daily trade of Gorka || and the main tier of Vingor)?' -> lookup
+      'the daily trade of Kagor is 5. | the sum of | the daily trade of Gorka is 18. || and the main tier of Vingor)?' -> split
+      'the sum of | the daily trade of Gorka is 18. | and || the main tier of Vingor)?' -> drop
+      'the daily trade of Kagor is 5. | the sum of | the daily trade of Gorka is 18. || the main tier of Vingor)?' -> split
+      'the sum of | the daily trade of Gorka is 18. | the main tier of Vingor || )?' -> lookup
+      'the sum of | the daily trade of Gorka is 18. | the main tier of Vingor is 23. || )?' -> add
+      'the smaller of | the daily trade of Kagor is 5. | 41 || )?' -> min
+      'What is | 5 || )?' -> say
+step 4500 loss 0.032 acc 0.984 | free world: places 450, rows done 669 of 669 | lookup 28/30 | before 29/30 | coexist 29/30 | chain 29/30 | ops 28/30 | long 18/30 | 459s
+   per function: split 0.998 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 0.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 0.998
+      ' || What is the larger of (the sum of the node of Goror and the fleet of Dunmer) and (the smal' -> split
+      'What is || the larger of (the sum of the node of Goror and the fleet of Dunmer) and (the smaller of t' -> split
+      'What is | the larger of ( || the sum of the node of Goror and the fleet of Dunmer) and (the smaller of the med' -> split
+      'What is | the larger of ( | the sum of || the node of Goror and the fleet of Dunmer) and (the smaller of the m' -> split
+      'the larger of ( | the sum of | the node of Goror || and the fleet of Dunmer) and (the smaller of the medal of ' -> lookup
+      'the larger of ( | the sum of | the node of Goror is 25. || and the fleet of Dunmer) and (the smaller of the me' -> split
+      'the sum of | the node of Goror is 25. | and || the fleet of Dunmer) and (the smaller of the medal of Mune and ' -> drop
+      'the larger of ( | the sum of | the node of Goror is 25. || the fleet of Dunmer) and (the smaller of the medal ' -> split
+      'the sum of | the node of Goror is 25. | the fleet of Dunmer || ) and (the smaller of the medal of Mune and the' -> lookup
+      'the sum of | the node of Goror is 25. | the fleet of Dunmer is 27. || ) and (the smaller of the medal of Mune ' -> add
+      'What is | the larger of ( | 52 || ) and (the smaller of the medal of Mune and the slot of Torril)?' -> split
+      'the larger of ( | 52 | ) and ( || the smaller of the medal of Mune and the slot of Torril)?' -> drop
+      'What is | the larger of ( | 52 || the smaller of the medal of Mune and the slot of Torril)?' -> split
+      'the larger of ( | 52 | the smaller of || the medal of Mune and the slot of Torril)?' -> split
+      '52 | the smaller of | the medal of Mune || and the slot of Torril)?' -> lookup
+      '52 | the smaller of | the medal of Mune is 26. || and the slot of Torril)?' -> split
+      'the smaller of | the medal of Mune is 26. | and || the slot of Torril)?' -> drop
+      '52 | the smaller of | the medal of Mune is 26. || the slot of Torril)?' -> split
+      'the smaller of | the medal of Mune is 26. | the slot of Torril || )?' -> lookup
+      'the smaller of | the medal of Mune is 26. | the slot of Torril is None. || )?' -> min
+      'the larger of ( | 52 | unknown || )?' -> max
+      'unknown || )?' -> say
+step 6000 loss 0.069 acc 0.977 | free world: places 444, rows done 690 of 690 | lookup 29/30 | before 25/30 | coexist 25/30 | chain 28/30 | ops 27/30 | long 18/30 | 611s

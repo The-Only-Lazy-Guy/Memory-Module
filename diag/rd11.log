@@ -1,0 +1,96 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2852.39it/s]
+demonstrations: 20 ways, 738 rows, 5164 steps; [4, 9, 18, 18, 19, 20, 29, 36, 38, 47, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+   per function: split 0.987 lookup 1.000 rule 1.000 prev 1.000 open 0.962 drop 0.990 nip 1.000 join 1.000 add 0.707 sub 1.000 max 0.125 min 1.000 insert 0.930 derive 1.000 say 1.000 | split end 0.990
+/marimo/frozen/rd11/gnm.py:1227: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} of {rows} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
+      ' || What is the larger of (the smaller of (the smaller of the base country of Torvin and the n' -> split
+      'What is || the larger of (the smaller of (the smaller of the base country of Torvin and the net amoun' -> split
+      'What is | the larger of ( || the smaller of (the smaller of the base country of Torvin and the net amount of M' -> split
+      'What is | the larger of ( | the smaller of || (the smaller of the base country of Torvin and the net amount of' -> split
+      'the larger of ( | the smaller of | (the smaller of the base country of Torvin || and the net amount of Mervin)' -> lookup
+      'the larger of ( | the smaller of | the base country of Torvin is 16. || and the net amount of Mervin) and the ' -> split
+      'the smaller of | the base country of Torvin is 16. | and || the net amount of Mervin) and the daily priority o' -> drop
+      'the larger of ( | the smaller of | the base country of Torvin is 16. || the net amount of Mervin) and the dail' -> split
+      'the smaller of | the base country of Torvin is 16. | the net amount of Mervin || ) and the daily priority of R' -> lookup
+      'the smaller of | the base country of Torvin is 16. | the net amount of Mervin is 13. || ) and the daily priori' -> min
+      'What is | the larger of ( | 13 || ) and the daily priority of Rillo) and the motor of Merril?' -> split
+      'the larger of ( | 13 | ) and || the daily priority of Rillo) and the motor of Merril?' -> drop
+      'What is | the larger of ( | 13 || the daily priority of Rillo) and the motor of Merril?' -> split
+      'the larger of ( | 13 | the daily priority of Rillo || ) and the motor of Merril?' -> lookup
+      'the larger of ( | 13 | the daily priority of Rillo is 26. || ) and the motor of Merril?' -> max
+      'What is | 26 || ) and the motor of Merril?' -> split
+      'What is | 26 | ) and the motor of Merril || ?' -> join
+      'What is | 26 None || ?' -> say
+step 1500 loss 0.235 acc 0.945 | free world: places 480, rows done 671 of 672 | lookup 29/30 | before 29/30 | coexist 1/30 | chain 30/30 | ops 17/30 | long 5/30 | 155s
+   per function: split 0.990 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 0.975 | split end 0.997
+      ' || What is the difference between the first amount of Kagor and the first amount of Rildun?' -> split
+      'What is || the difference between the first amount of Kagor and the first amount of Rildun?' -> split
+      'What is | the difference between || the first amount of Kagor and the first amount of Rildun?' -> split
+      'What is | the difference between | the first amount of Kagor || and the first amount of Rildun?' -> lookup
+      'What is | the difference between | the first amount of Kagor is 17. || and the first amount of Rildun?' -> split
+      'the difference between | the first amount of Kagor is 17. | and || the first amount of Rildun?' -> drop
+      'What is | the difference between | the first amount of Kagor is 17. || the first amount of Rildun?' -> split
+      'the difference between | the first amount of Kagor is 17. | the first amount of Rildun || ?' -> lookup
+      'the difference between | the first amount of Kagor is 17. | Correction: the first amount of Rildun is now 1. |' -> sub
+      'What is | 16 || ?' -> say
+step 3000 loss 0.247 acc 0.977 | free world: places 457, rows done 662 of 662 | lookup 30/30 | before 29/30 | coexist 23/30 | chain 30/30 | ops 24/30 | long 10/30 | 310s
+   per function: split 1.000 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 0.951 sub 1.000 max 1.000 min 1.000 insert 0.983 derive 1.000 say 1.000 | split end 0.995
+      ' || What is the larger of (the larger of (the sum of the base country of Orba and the profile ' -> split
+      'What is || the larger of (the larger of (the sum of the base country of Orba and the profile of Nedun' -> split
+      'What is | the larger of ( || the larger of (the sum of the base country of Orba and the profile of Nedun) and ' -> split
+      'What is | the larger of ( | the larger of ( || the sum of the base country of Orba and the profile of Nedun) a' -> split
+      'the larger of ( | the larger of ( | the sum of || the base country of Orba and the profile of Nedun) and the p' -> split
+      'the larger of ( | the sum of | the base country of Orba || and the profile of Nedun) and the primary flight of' -> lookup
+      'the larger of ( | the sum of | the base country of Orba is 10. || and the profile of Nedun) and the primary fl' -> split
+      'the sum of | the base country of Orba is 10. | and || the profile of Nedun) and the primary flight of Pelsa) a' -> drop
+      'the larger of ( | the sum of | the base country of Orba is 10. || the profile of Nedun) and the primary flight' -> split
+      'the sum of | the base country of Orba is 10. | the profile of Nedun || ) and the primary flight of Pelsa) and ' -> lookup
+      'the sum of | the base country of Orba is 10. | the profile of Nedun is 8. || ) and the primary flight of Pelsa' -> add
+      'the larger of ( | the larger of ( | 18 || ) and the primary flight of Pelsa) and the backup profile of Zekgor?' -> split
+      'the larger of ( | 18 | ) and || the primary flight of Pelsa) and the backup profile of Zekgor?' -> drop
+      'the larger of ( | the larger of ( | 18 || the primary flight of Pelsa) and the backup profile of Zekgor?' -> split
+      'the larger of ( | 18 | the primary flight of Pelsa || ) and the backup profile of Zekgor?' -> lookup
+      'the larger of ( | 18 | the primary flight of Pelsa is 9. || ) and the backup profile of Zekgor?' -> max
+      'What is | the larger of ( | 18 || ) and the backup profile of Zekgor?' -> split
+      'the larger of ( | 18 | ) and || the backup profile of Zekgor?' -> drop
+      'What is | the larger of ( | 18 || the backup profile of Zekgor?' -> split
+      'the larger of ( | 18 | the backup profile of Zekgor || ?' -> lookup
+      'the larger of ( | 18 | the backup profile of Zekgor is 5 (same as the locale of Mumer). || ?' -> open
+      'What is | the larger of ( | 18 || the backup profile of Zekgor is 5 (same as the locale of Mumer).' -> split
+      'the larger of ( | 18 | the backup profile of Zekgor is 5 (same as || the locale of Mumer).' -> drop
+      'What is | the larger of ( | 18 || the locale of Mumer).' -> split
+      'the larger of ( | 18 | the locale of Mumer || ).' -> lookup
+      'the larger of ( | 18 | the locale of Mumer is 5. || ).' -> split
+      '18 | the locale of Mumer is 5. | ). || ?' -> drop
+      'the larger of ( | 18 | the locale of Mumer is 5. || ?' -> max
+      'What is | 18 || ?' -> say
+step 4500 loss 0.173 acc 1.000 | free world: places 459, rows done 673 of 673 | lookup 30/30 | before 30/30 | coexist 28/30 | chain 29/30 | ops 27/30 | long 7/30 | 462s
+   per function: split 0.995 lookup 1.000 rule 1.000 prev 1.000 open 1.000 drop 1.000 nip 1.000 join 1.000 add 1.000 sub 1.000 max 1.000 min 1.000 insert 1.000 derive 1.000 say 1.000 | split end 1.000
+      ' || What is the smaller of the primary pool of Ortha and (the smaller of the primary pool of T' -> split
+      'What is || the smaller of the primary pool of Ortha and (the smaller of the primary pool of Tormer an' -> split
+      'What is | the smaller of || the primary pool of Ortha and (the smaller of the primary pool of Tormer and the n' -> split
+      'What is | the smaller of | the primary pool of Ortha || and (the smaller of the primary pool of Tormer and the' -> lookup
+      'What is | the smaller of | the primary pool of Ortha is 1. || and (the smaller of the primary pool of Tormer a' -> split
+      'the smaller of | the primary pool of Ortha is 1. | and ( || the smaller of the primary pool of Tormer and the ' -> drop
+      'What is | the smaller of | the primary pool of Ortha is 1. || the smaller of the primary pool of Tormer and th' -> split
+      'the smaller of | the primary pool of Ortha is 1. | the smaller of || the primary pool of Tormer and the next c' -> split
+      'the primary pool of Ortha is 1. | the smaller of | the primary pool of Tormer || and the next category of Gorz' -> lookup
+      'the primary pool of Ortha is 1. | the smaller of | the primary pool of Tormer is 11. || and the next category ' -> split
+      'the smaller of | the primary pool of Tormer is 11. | and || the next category of Gorzek)?' -> drop
+      'the primary pool of Ortha is 1. | the smaller of | the primary pool of Tormer is 11. || the next category of G' -> split
+      'the smaller of | the primary pool of Tormer is 11. | the next category of Gorzek || )?' -> lookup
+      'the smaller of | the primary pool of Tormer is 11. | the next category of Gorzek is 21 (same as the base bonus' -> open
+      'the primary pool of Ortha is 1. | the smaller of | the primary pool of Tormer is 11. || the next category of G' -> split
+      'the smaller of | the primary pool of Tormer is 11. | the next category of Gorzek is 21 (same as || the base bo' -> drop
+      'the primary pool of Ortha is 1. | the smaller of | the primary pool of Tormer is 11. || the base bonus of Dunt' -> split
+      'the smaller of | the primary pool of Tormer is 11. | the base bonus of Duntha || ).' -> lookup
+      'the smaller of | the primary pool of Tormer is 11. | Correction: the base bonus of Duntha is now 13. || ).' -> split
+      'the primary pool of Tormer is 11. | Correction: the base bonus of Duntha is now 13. | ). || )?' -> drop
+      'the smaller of | the primary pool of Tormer is 11. | Correction: the base bonus of Duntha is now 13. || )?' -> min
+      'the smaller of | the primary pool of Ortha is 1. | 11 || )?' -> min
+      'What is | 1 || )?' -> say
+step 6000 loss 0.030 acc 0.992 | free world: places 442, rows done 657 of 657 | lookup 27/30 | before 25/30 | coexist 30/30 | chain 29/30 | ops 23/30 | long 11/30 | 614s
