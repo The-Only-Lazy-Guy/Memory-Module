@@ -1698,6 +1698,7 @@ class Machine:
     def __init__(self, translator, d=64, budget=400):
         self.T, self.g, self.t, self.budget, self.flat, self.trace, self.made = translator, Graph(d), 0, budget, False, None, {}
         self.events, self.at, self.subj = None, {}, {}     # watched: every call is an event the rules judge
+        self.wrote, self.latest = {}, {}                   # the rules' record: each entry's statement, each subject's last place
 
     def do(self, r, name, *a):
         r.passes += 1
@@ -1808,7 +1809,8 @@ class Machine:
                 self.t += 1
                 self.g.chain[j].append((self.g.chain[p][-1][0], self.t))
                 if self.events is not None:
-                    self.events.append({"row": None, "name": "trigger", "place": int(j), "source": p})
+                    self.events.append({"row": None, "name": "trigger", "place": int(j), "source": p,
+                                        "index": len(self.g.chain[j]) - 1, "from": len(self.g.chain[p]) - 1})
                 self.changed(int(j), depth + 1)
 
 
@@ -1900,7 +1902,39 @@ def rule_tool(m, ev):
         yield Judgment("tool", bool(re.fullmatch(r"the .+ of \S.*", said)), "tool", None, ev, f"entry in, {said[:40]!r} out")
 
 
-RULES = [rule_merge, rule_found, rule_copy, rule_roundtrip, rule_tool]
+OPS = [(re.compile(r"\bsum\b|\badd"), lambda a, b: a + b), (re.compile(r"\bdifference\b"), lambda a, b: a - b),
+       (re.compile(r"\blarger\b"), max), (re.compile(r"\bsmaller\b"), min)]
+
+
+def rule_arith(m, ev):
+    """a tool asked for a sum / difference / larger / smaller of two numbers gives exactly that (the teacher checks the
+    arithmetic; it names the tool's mistake on the step where it happens)"""
+    if ev["name"] != "apply" or ev["args"][0] != 2:
+        return
+    want, ins, out = ev["before"][-3].text, ev["before"][-2:], ev["after"][len(ev["before"]) - 3:]
+    f = next((f for r, f in OPS if r.search(want.lower()) or any(x.search(want) for x in ADD_RE) and f is OPS[0][1]), None)
+    x, y = (value_in(i.text) for i in ins)
+    if f and isinstance(x, int) and isinstance(y, int) and out:
+        yield Judgment("arith", number(out[0].text.strip()) == f(x, y), "tool", str(f(x, y)), ev, f"{want[:30]}: {x}, {y} -> {out[0].text.strip()[:20]}, should be {f(x, y)}")
+
+
+def rule_read(m, ev):
+    """an entry read back says the statement it was written from"""
+    if ev["name"] == "lookup" and ev["place"] >= 0:
+        it = ev["after"][-1]
+        src = m.wrote.get((it.place, it.idx))
+        if src:
+            yield Judgment("read", it.text.strip() == src.strip(), "decoder", src, ev, f"read {it.text[:50]!r}")
+
+
+def rule_stale(m, ev):
+    """a lookup reaches the place where its subject was said last (not an older copy of it elsewhere)"""
+    if ev["name"] == "lookup" and ev["place"] >= 0 and subject(ev["asked"]) in m.latest:
+        q = m.latest[subject(ev["asked"])]
+        yield Judgment("stale", ev["place"] == q, "relate", (ev["asked"], q, 1.), ev, f"reached place {ev['place']}, last said at {q}")
+
+
+RULES = [rule_merge, rule_found, rule_copy, rule_roundtrip, rule_tool, rule_arith, rule_read, rule_stale]
 
 
 class Ledger:
@@ -1930,6 +1964,10 @@ def judge(m, ledger, row=None, truth=None):
             ev["known"] = m.subj.get(subject(ev["src"])) if ev.get("new") else None
             if ev.get("new"):
                 m.subj.setdefault(subject(ev["src"]), ev["place"])
+            m.wrote[(ev["place"], ev["index"])] = ev["src"]
+            m.latest[subject(ev["src"])] = ev["place"]
+        if ev["name"] == "trigger" and (ev["source"], ev["from"]) in m.wrote:
+            m.wrote[(ev["place"], ev["index"])] = m.wrote[(ev["source"], ev["from"])]
         for rule in RULES:
             for j in rule(m, ev):
                 ledger.add(j)
