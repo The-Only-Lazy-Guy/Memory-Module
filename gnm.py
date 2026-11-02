@@ -1646,6 +1646,7 @@ class Machine:
 
     def __init__(self, translator, d=64, budget=400):
         self.T, self.g, self.t, self.budget, self.flat, self.trace, self.made = translator, Graph(d), 0, budget, False, None, {}
+        self.events, self.at, self.subj = None, {}, {}     # watched: every call is an event the rules judge
 
     def do(self, r, name, *a):
         r.passes += 1
@@ -1654,7 +1655,13 @@ class Machine:
         if self.trace is not None:
             f = f"apply{a[0]}" if name == "apply" else "derive" if name == "insert" and a else name
             self.trace.append((view(r), f, a[0] if name == "split" else None))
-        return getattr(self, "f_" + name)(r, *a)
+        if self.events is None:
+            return getattr(self, "f_" + name)(r, *a)
+        ev, self.at = {"row": r, "name": name, "args": a, "src": r.src, "before": list(r.stack)}, {}
+        out = getattr(self, "f_" + name)(r, *a)
+        ev.update(after=list(r.stack), **self.at)
+        self.events.append(ev)
+        return out
 
     def find(self, label, q=None, task="same"):
         """the walk finds the nearest place by label; relate says whether it is the one (q: the asking node)"""
@@ -1691,6 +1698,7 @@ class Machine:
     def f_lookup(self, r):                             # phrase -> newest entry of its place
         it = r.stack.pop()
         p = self.find(self.T.label(it.text), it.node)
+        self.at = {"place": p, "asked": it.text}
         r.stack.append(self.entry_item(p) if p >= 0 else self.item("unknown"))
 
     def f_rule(self, r):                               # statement -> the rule that governs it
@@ -1716,11 +1724,14 @@ class Machine:
         node = r.stack[-1].node if derived else said   # derived: the tool's output node itself
         label = self.T.label(r.src)                    # a statement lands where its phrase does: the labels are trained so
         p = self.find(label, said)
+        self.at = {"place": p if p >= 0 else self.g.n, "new": p < 0, "derived": derived}
         p = p if p >= 0 else self.g.add_place(label)
         self.g.chain[p].append((node, self.t))
         if derived and r.stack[-1].made and r.stack[-1].made[0] is not None:
             self.made[(p, len(self.g.chain[p]) - 1)] = r.stack[-1].made   # (tool, want, inputs): to run again if the tool changes
         self.g.R[p] = self.T.relation(r.src)           # what it depends on now (said directly: nothing)
+        if self.events is not None:
+            self.at.update(index=len(self.g.chain[p]) - 1, claims=set(np.nonzero(self.g.L[:self.g.n] @ self.g.R[p] > 1)[0].tolist()) - {p})
         mv = self.g.L[p] + .5 * (label - self.g.L[p])  # the label follows how it is said
         self.g.move(p, mv / max(np.linalg.norm(mv), 1e-6))
         self.changed(p)
@@ -1745,7 +1756,129 @@ class Machine:
             if j != p:
                 self.t += 1
                 self.g.chain[j].append((self.g.chain[p][-1][0], self.t))
+                if self.events is not None:
+                    self.events.append({"row": None, "name": "trigger", "place": int(j), "source": p})
                 self.changed(int(j), depth + 1)
+
+
+# ====================================================================== the rules: local judgments that drive everything
+# The only hand-written judgment in GNM. Every call the machine makes is an event; each rule looks at one event (or a
+# row's path) and says whether it went as it should, which part is to blame, and - when it knows - what should have
+# happened. Learning takes these judgments and nothing else; when the model misbehaves, a rule or the node design is
+# what changes. Rules read clear statements, so a statement's subject is plain to see.
+def subject(text):
+    """what a clear statement (or phrase) is about; None when it does not say"""
+    t = text.strip()
+    m = re.match(r"(?:Correction: )?(the .+?) is (?:now )?\S", t)
+    if m:
+        return m.group(1).lower()
+    m = re.match(r"rule: later (.+?) values ", t)
+    if m:
+        return f"rule {m.group(1)}"
+    return t.lower() if re.fullmatch(r"the .+ of .+", t) else None
+
+
+class Judgment:
+    def __init__(self, rule, ok, blame, target=None, ev=None, note=""):
+        self.rule, self.ok, self.blame, self.target, self.ev, self.note = rule, ok, blame, target, ev, note
+
+
+def rule_merge(m, ev):
+    """confusion: a statement put into a place that holds another subject (the relate node let it in)"""
+    if ev["name"] == "insert" and not ev.get("derived"):
+        a, b = subject(m.T.say(m.g.chain[ev["place"]][0][0])), subject(ev["src"])
+        if a and b:
+            yield Judgment("merge", ev.get("new") or a == b, "relate", (ev["src"], ev["place"]), ev, f"{b} into {a}")
+
+
+def rule_found(m, ev):
+    """a lookup answers about what was asked; it says unknown only when nothing about it was stored"""
+    if ev["name"] != "lookup" or not subject(ev["asked"]):
+        return
+    want = subject(ev["asked"])
+    if ev["place"] >= 0:
+        got = subject(m.T.say(m.g.chain[ev["place"]][0][0]))
+        if got:
+            yield Judgment("found", got == want, "relate", (ev["asked"], ev["place"]), ev, f"asked {want}, got {got}")
+    else:
+        yield Judgment("found", want not in m.subj, "walk", (ev["asked"], m.subj.get(want)), ev, f"asked {want}, unknown")
+
+
+def rule_copy(m, ev):
+    """a statement that says it is a copy of Y must have a relation that claims Y's place, and nothing else"""
+    if ev["name"] != "insert" or ev.get("derived"):
+        return
+    y = re.search(r"\(same as (the .+?)\)", ev["src"])
+    claims = ev["claims"]                              # as the insert left it (a later restatement resets it)
+    if y and y.group(1).lower() in m.subj:
+        q = m.subj[y.group(1).lower()]
+        yield Judgment("copy", claims == {q}, "relation", (ev["src"], q), ev, f"claims {sorted(claims)[:3]}, source {q}")
+    elif not y:
+        yield Judgment("copy", not claims, "relation", (ev["src"], None), ev, f"claims {sorted(claims)[:3]}, says nothing")
+
+
+def rule_roundtrip(m, ev):
+    """a node made from a statement says that statement back"""
+    if ev["name"] == "insert" and not ev.get("derived"):
+        got = m.T.say(m.g.chain[ev["place"]][ev["index"]][0])   # the entry this insert wrote
+        yield Judgment("roundtrip", got.strip() == ev["src"].strip(), "decoder", ev["src"], ev, f"said back {got[:60]!r}")
+
+
+def rule_tool(m, ev):
+    """a tool gives the kind of node its inputs promise: numbers in, a number out; an entry naming something, a phrase"""
+    if ev["name"] != "apply":
+        return
+    k = ev["args"][0]
+    ins, out = ev["before"][-k:], ev["after"][len(ev["before"]) - k - 1:]
+    if not out:
+        yield Judgment("tool", False, "tool", None, ev, "nothing out")
+        return
+    said = out[0].text.strip()
+    if all(isinstance(x.value, int) for x in ins):
+        yield Judgment("tool", number(said) is not None, "tool", None, ev, f"numbers in, {said[:40]!r} out")
+    elif k == 1:
+        yield Judgment("tool", bool(re.fullmatch(r"the .+ of \S.*", said)), "tool", None, ev, f"entry in, {said[:40]!r} out")
+
+
+RULES = [rule_merge, rule_found, rule_copy, rule_roundtrip, rule_tool]
+
+
+class Ledger:
+    """what the rules said: per rule, how many checks and how many went wrong, with the first few cases"""
+
+    def __init__(self):
+        self.n, self.bad, self.cases = {}, {}, {}
+
+    def add(self, j):
+        self.n[j.rule] = self.n.get(j.rule, 0) + 1
+        if not j.ok:
+            self.bad[j.rule] = self.bad.get(j.rule, 0) + 1
+            self.cases.setdefault(j.rule, [])
+            if len(self.cases[j.rule]) < 3:
+                self.cases[j.rule].append(f"{j.ev['src'][:70]!r}: {j.note}" if j.ev else j.note)
+
+    def line(self):
+        return "rules " + ", ".join(f"{r} {self.bad.get(r, 0)}/{n} wrong" for r, n in sorted(self.n.items()))
+
+
+def judge(m, ledger, row=None, truth=None):
+    """run every rule on the events so far (and the row's outcome when its truth is known); keeps the subject index"""
+    out = []
+    for ev in m.events or []:
+        if ev["name"] == "insert" and not ev.get("derived") and subject(ev["src"]) and ev.get("new"):
+            m.subj.setdefault(subject(ev["src"]), ev["place"])
+        for rule in RULES:
+            for j in rule(m, ev):
+                ledger.add(j)
+                out.append(j)
+    if row is not None and truth is not None:
+        got = next((it.value for it in reversed(row.stack) if it.value is not None), None)
+        j = Judgment("outcome", got == truth, "path", truth, {"src": row.src}, f"said {got}, truth {truth}")
+        ledger.add(j)
+        out.append(j)
+    if m.events is not None:
+        m.events.clear()
+    return out
 
 
 # ====================================================================== --gold: the correct calls, written by hand
@@ -2473,6 +2606,7 @@ def gold(A):
         T = NeuralT(model, T, A.tau, load_tools(A, model))
     m = Machine(T, T.d)
     m.flat, m.g.beam = A.flat, A.beam
+    m.events, ledger = [], Ledger()
     t0 = time.time()
     for step in range(1, A.steps + 1):
         for _ in range(2):
@@ -2483,6 +2617,7 @@ def gold(A):
             o = draw()
             for s in statements(o) if o else []:
                 arrive(m, s)
+        judge(m, ledger)
         if step % A.every == 0:
             g, line = m.g, []
             for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6))):
@@ -2498,6 +2633,11 @@ def gold(A):
             deg = [len(a) for a in g.adj]
             print(f"step {step} | places {g.n} | " + " | ".join(line) + f" | walk = flat {agree}/200, cost {(g.cost - c0) / 200:.0f} "
                   f"of {g.n}, edges {np.mean(deg):.1f} / {max(deg)} | {time.time() - t0:.0f}s", flush=True)
+            judge(m, ledger)
+            print("   " + ledger.line(), flush=True)
+            for r_, cs in ledger.cases.items():
+                for c in cs:
+                    print(f"     {r_}: {c}", flush=True)
 
 
 if __name__ == "__main__":
