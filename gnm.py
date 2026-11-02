@@ -645,10 +645,14 @@ class Translator(nn.Module):
     def encode(self, texts):
         dev = next(self.proj.parameters()).device
         b = self.tok(texts, return_tensors="pt", padding=True).to(dev)
-        with torch.no_grad():
-            h = self.norm(self.lm(**b).last_hidden_state)
+        h = self.read(b)
         w = torch.sigmoid(self.gate(h)) * b["attention_mask"][..., None]
         return F.normalize(self.proj((w * h).sum(1) / w.sum(1).clamp(min=1e-6)), dim=-1)
+
+    def read(self, b):
+        """the LM's states (the encoder meets clear statements only: the normalizer reads the language)"""
+        with torch.no_grad():
+            return self.norm(self.lm(**b).last_hidden_state)
 
     def relate(self, a, b):
         return self.rel(torch.cat([(a - b).abs(), a * b], -1)).squeeze(-1)
@@ -660,8 +664,7 @@ class Translator(nn.Module):
         """r: points at the place a statement depends on, long enough to claim it (r . label > 1) when it does"""
         dev = next(self.proj.parameters()).device
         b = self.tok(texts, return_tensors="pt", padding=True).to(dev)
-        with torch.no_grad():
-            h = self.norm(self.lm(**b).last_hidden_state)
+        h = self.read(b)
         m = b["attention_mask"][..., None]
         w = torch.sigmoid(self.rgate(h)) * m
         d = F.normalize(self.rdir((w * h).sum(1) / w.sum(1).clamp(min=1e-6)), dim=-1)
@@ -765,6 +768,25 @@ class NeuralT:
         return float(self.m.relate(torch.tensor(a, device=dev), torch.tensor(b, device=dev))) > 0
 
 
+# how things get said: (forms trained on, forms never trained on). A translator that learned templates fails the held
+# forms; one that reads language does not.
+PHRASE = (["the {k} of {n}", "{n}'s {k}", "{k} of {n}", "the {k} for {n}", "{n} {k}"], ["{n}'s current {k}", "what {n} has as {k}"])
+FACT = (["the {k} of {n} is {v}.", "{n}'s {k} is {v}.", "{n} has a {k} of {v}.", "the {k} for {n} is {v}.", "{k} of {n}: {v}",
+         "{n}: {k} = {v}", "for {n}, the {k} is {v}.", "{n}'s {k} stands at {v}.", '{{"name": "{n}", "{k}": "{v}"}}',
+         "we know {n}'s {k} is {v}.", "{n} -- {k} {v}", "The {k} of {n} is {v}"],
+        ["it turns out {n}'s {k} is {v}.", "{k} ({n}): {v}", "as for {n}, its {k} is {v}.", "{v} is the {k} of {n}."])
+CHANGE = (["Correction: the {k} of {n} is now {v}.", "Update: {n}'s {k} is {v}.", "{n}'s {k} is now {v}.",
+           "the {k} of {n} changed to {v}.", "actually, {n}'s {k} is {v}."], ["{n}'s {k} went to {v}.", "scratch that: the {k} of {n} is {v}."])
+COPY = (["the {k} of {n} is {v} (same as {s}).", "{n}'s {k} equals {s}, which is {v}.", "{n}'s {k} matches {s}: {v}.",
+         "{n}'s {k} is the same as {s} ({v})."], ["{n}'s {k} is copied from {s} ({v}).", "{v}, like {s}, is the {k} of {n}."])
+
+
+def say(rng, form, held=False, **kw):
+    """one way of saying it, sometimes untidy (lower case, a doubled space)"""
+    t, r = rng.choice(form[held]).format(**kw), rng.random()
+    return t.lower() if r < .1 else t.replace(" ", "  ", 1) if r < .15 else t
+
+
 def views(rng, nm, k):
     """one fact, said in the ways the input says it"""
     v, ph = rng.randint(1, 60), leaf(nm, k)
@@ -819,7 +841,7 @@ def label_eval(model, rng, vocab, n=40):
     keys = [" ".join(_key(rng, vocab, ku)) for _ in range(n)]
     facts = [(a, b) for a in names for b in keys]
     enc = lambda T: torch.cat([model.encode(T[i:i + 256]) for i in range(0, len(T), 256)])
-    S = enc([f"{leaf(*f)} is {rng.randint(1, 60)}." for f in facts])
+    S = Sf = enc([f"{leaf(*f)} is {rng.randint(1, 60)}." for f in facts])
     out = {}
     for name, T in (("phrase", [leaf(*f) for f in facts]), ("correction", [f"Correction: {leaf(*f)} is now {rng.randint(1, 60)}." for f in facts]),
                     ("copy", [f"{leaf(*f)} is {rng.randint(1, 60)} (same as {leaf(rng.choice(names), rng.choice(keys))})." for f in facts])):
@@ -841,11 +863,11 @@ def label_eval(model, rng, vocab, n=40):
     src = [(rng.choice(names), rng.choice(keys)) for _ in range(n)]
     Rl = model.relation([f"{leaf(rng.choice(names), rng.choice(keys))} is 5 (same as {leaf(*sf)})." for sf in src]
                         + [f"{leaf(rng.choice(names), rng.choice(keys))} is {rng.randint(1, 60)}." for _ in range(n)])
-    C = Rl[:n] @ S.T                                   # against every fact statement: the source's is the only one > 1
+    C = Rl[:n] @ Sf.T                                  # against every fact statement: the source's is the only one > 1
     ix = torch.tensor([names.index(a) * len(keys) + keys.index(b) for a, b in src], device=C.device)
     out["rel_claims_source"] = float((C.gather(1, ix[:, None]).squeeze(1) > 1).float().mean())
     out["rel_claims_other"] = float(((C > 1).sum(1) - (C.gather(1, ix[:, None]).squeeze(1) > 1).long()).float().mean() / C.shape[1])
-    out["plain_claims_any"] = float(((Rl[n:] @ S.T) > 1).any(1).float().mean())
+    out["plain_claims_any"] = float(((Rl[n:] @ Sf.T) > 1).any(1).float().mean())
     return out
 
 
@@ -1273,6 +1295,321 @@ def train_tools(A):
             bank.train()
             if A.save:
                 bank.save(A.save)
+
+
+# ====================================================================== the normalizer: any text -> clear statements
+# The translator's language side. Any text (sentences, paragraphs, JSON, tables, chat, questions) is rewritten by a
+# language model into clear statements, one per line; everything after it (labels, B, relations, the reader) works on
+# those. Trained on clear forms; judged on forms it never saw (E1), on hand-written texts sealed from training (E2), and
+# end to end: the memory fed only held-out forms must answer as well as fed clear statements (E4).
+NOTHING = "(nothing)"
+CANON_RULE = {"add": "are amounts to add to the current {k}", "set": "replace the old {k}", "keep": "are kept alongside the earlier {k}"}
+RULE_SAID = ({"add": ["whenever a new {k} comes in, add it to the old one", "add each new {k} onto the running {k}"],
+              "set": ["a new {k} simply takes the place of the old one", "only the latest {k} counts"],
+              "keep": ["remember every {k} value, old ones included", "a new {k} does not erase the earlier ones"]},
+             {"add": ["new {k} numbers pile up on top of the {k} we have"], "set": ["throw away the old {k} once a new one arrives"],
+              "keep": ["hold on to all the {k} values that come in"]})
+CHATTER = (["Thanks for the update!", "Morning everyone.", "Let me know if anything else changes.", "OK, noted.", "Have a good weekend.",
+            "Sorry for the delay.", "See the notes below.", "That is all for today.", "Hope you are well.", "Quick update:"],
+           ["Cheers, talk soon.", "Nothing new on my side.", "Coffee is in the kitchen.", "Weather looks nice today."])
+Q_FORMS = ({"lookup": ["What is {x}?", "what is {x}?", "Tell me {x}.", "{x}?"],
+            "before": ["What was {x} before?", "what was {x} before the last change?"],
+            "both": ["What is the sum of both values of {x}?", "add both values of {x}"]},
+           {"lookup": ["What's {x}?", "Do you know {x}?", "I need {x}."],
+            "before": ["What did {x} used to be?", "{x}, before it changed?"],
+            "both": ["What do the two values of {x} add up to?"]})
+OP_SAID = ({"sum": ["the sum of", "the total of"], "difference between": ["the difference between"], "larger": ["the larger of", "the bigger of"],
+            "smaller": ["the smaller of", "the lesser of"]},
+           {"sum": ["the combined value of"], "difference between": ["the gap between"], "larger": ["the maximum of"], "smaller": ["the minimum of"]})
+LEAF = re.compile(r"\bthe ([a-z]+(?: [a-z]+)?) of ([A-Z][a-z]+)\b")
+
+
+def show(rng, v, held):
+    """a value as written: a copy of another fact said some way"""
+    m = re.match(r"(\S+) \(same as the (.+) of ([A-Z][a-z]+)\)$", str(v))
+    if not m:
+        return str(v)
+    x, k, n = m.groups()
+    src = say(rng, PHRASE, held, n=n, k=k)
+    return rng.choice([f"{x} (same as {src})", f"{x}, same as {src}"] if not held else [f"{x}, copied from {src}", f"{x} (taken from {src})"])
+
+
+def say_record(rng, rec, held):
+    """one record ({name, key: value, ...}) written some way; and its clear statements in the order they were written"""
+    nm, kv = rec["name"], [(k, show(rng, v, held)) for k, v in rec.items() if k != "name"]
+    rng.shuffle(kv)
+    lines = [f"{leaf(nm, k)} is {rec[k]}." for k, _ in kv]
+    kw = lambda k: rng.choice([words(k), k]) if not held else words(k)
+    if not held:
+        f = rng.randrange(5)
+        if f == 0:
+            return json.dumps({"name": nm, **dict(kv)}), lines
+        if f == 1:
+            return f"{nm}: " + ", ".join(f"{kw(k)} {v}" for k, v in kv) + ".", lines
+        if f == 2:
+            return " ".join(say(rng, FACT, n=nm, k=words(k), v=v) for k, v in kv), lines
+        if f == 3:
+            return f"{nm} has " + " and ".join(f"{kw(k)} {v}" for k, v in kv) + ".", lines
+        return nm + "\n" + "\n".join(f"- {kw(k)}: {v}" for k, v in kv), lines
+    f = rng.randrange(4)
+    if f == 0:
+        return "| name | " + " | ".join(words(k) for k, _ in kv) + " |\n|" + "---|" * (len(kv) + 1) + f"\n| {nm} | " + " | ".join(v for _, v in kv) + " |", lines
+    if f == 1:
+        body = ", and ".join(f"its {words(k)} is {v}" for k, v in kv)
+        return f"We looked at {nm}. {body[0].upper()}{body[1:]}.", lines
+    if f == 2:
+        return "; ".join(f"{words(k)}={v}" for k, v in kv) + f" (for {nm})", lines
+    return f"{nm}:\n" + "\n".join(f"  {words(k)}: {v}" for k, v in kv), lines
+
+
+def say_state(rng, obj, held, ind=0):
+    """a JSON state written as JSON, or (held) as an indented outline"""
+    if not held:
+        return json.dumps(obj)
+    if isinstance(obj, dict):
+        return "\n".join(f"{'  ' * ind}{words(k)}:" + ("\n" + say_state(rng, v, held, ind + 1) if isinstance(v, (dict, list)) else f" {v}")
+                         for k, v in obj.items())
+    if isinstance(obj, list):
+        return "\n".join(f"{'  ' * ind}- " + (say_state(rng, v, held, ind + 1).strip() if isinstance(v, (dict, list)) else str(v)) for v in obj)
+    return f"{'  ' * ind}{obj}"
+
+
+def say_question(rng, q, held):
+    """a question written some way: its frame, its operator words, its leaf phrases"""
+    def leafs(t):
+        return LEAF.sub(lambda m: say(rng, PHRASE, held, n=m.group(2), k=m.group(1)), t)
+
+    def ops(t):
+        for op, ways in OP_SAID[held].items():
+            t = re.sub(rf"\bthe {op}(?: of)?\b", lambda _: rng.choice(ways), t)
+        return t
+    if q.startswith("What was ") and q.endswith(" before?"):
+        kind, x = "before", q[9:-8]
+    elif q.startswith("What is the sum of both values of "):
+        kind, x = "both", q[len("What is the sum of both values of "):-1]
+    else:
+        kind, x = "lookup", ops(q[8:-1])
+    return rng.choice(Q_FORMS[held][kind]).format(x=leafs(x))
+
+
+def text_and_lines(rng, world, held=False):
+    """one piece of input as it might be written, and the clear statements it says (from the world: the truth)"""
+    c = rng.random()
+    if c < .08:
+        return rng.choice(CHATTER[held]), [NOTHING]
+    if c < .2:
+        x = question(rng.choice(("lookup", "before", "coexist", "chain", "ops")), world, rng)
+        if x:
+            return say_question(rng, x[0], held), [x[0]]
+    if c < .32:
+        k = rng.choice(world.num_keys + world.multi_keys)
+        kind = rng.choice(("add", "set")) if k in world.num_keys else "keep"
+        w = (rule_text(rng, kind, k, held) if rng.random() < .5 else rng.choice(RULE_SAID[held][kind]).format(k=words(k)))
+        return w, [f"rule: later {words(k)} values {CANON_RULE[kind].format(k=words(k))}"]
+    if c < .42 and world.ents:
+        nm = rng.choice(sorted(n for n in world.ents if world.ents[n]))
+        k = rng.choice(sorted(world.ents[nm]))
+        v = rng.randint(1, 60)
+        return say(rng, CHANGE, held, n=nm, k=words(k), v=v), [f"Correction: {leaf(nm, k)} is now {v}."]
+    if c < .5:
+        o = state_frame(rng)
+        return say_state(rng, o, held), state_statements(o)
+    obj = world.component(rng)
+    if not held and rng.random() < .3:                 # the whole frame as JSON: written in its own order
+        body, lines = json.dumps(obj), statements(obj)
+    else:
+        said = [say_record(rng, r, held) for v in obj.values() for r in v]
+        body, lines = "\n".join(t for t, _ in said), [x for _, ls in said for x in ls]
+    if rng.random() < .2:
+        body = rng.choice(CHATTER[held]) + " " + body
+    return body, lines
+
+
+# E2: hand-written, sealed from training and from tuning. Real names, other domains, other phrasings.
+SEALED = [
+    ("Maria's salary is 5200 a month.", ["the salary of Maria is 5200 a month."]),
+    ("The capital of Japan is Tokyo.", ["the capital of Japan is Tokyo."]),
+    ('{"city": "Lyon", "population": 516092, "mayor": "Gregory Doucet"}', ["the population of Lyon is 516092.", "the mayor of Lyon is Gregory Doucet."]),
+    ("| product | price | stock |\n|---|---|---|\n| Lamp | 25 | 140 |", ["the price of Lamp is 25.", "the stock of Lamp is 140."]),
+    ("Sorry, typo earlier: Ben's age is actually 35.", ["Correction: the age of Ben is now 35."]),
+    ("Anna's team is the same as Leo's team, which is Red.", ["the team of Anna is Red (same as the team of Leo)."]),
+    ("Going forward, new step counts should be added to the existing step count.", ["rule: later step count values are amounts to add to the current step count"]),
+    ("Do you remember what Ben's age is?", ["What is the age of Ben?"]),
+    ("What was Maria's salary before?", ["What was the salary of Maria before?"]),
+    ("Thanks, have a great weekend!", [NOTHING]),
+    ("The derivative of x^2 is 2x.", ["the derivative of x^2 is 2x."]),
+    ("In circuit B, R1 has a resistance of 220 ohms.", ["the resistance of R1 is 220 ohms."]),
+    ("server:\n  port: 8080\n  host: example.org", ["the server port is 8080.", "the server host is example.org."]),
+    ("Quick note: Lena's score is now 88, and Omar's score is 91.", ["Correction: the score of Lena is now 88.", "the score of Omar is 91."]),
+    ("Kofi's phone number is 555-0199 and his email is kofi@mail.com.", ["the phone number of Kofi is 555-0199.", "the email of Kofi is kofi@mail.com."]),
+    ("Room 12's temperature reads 21.5.", ["the temperature of Room 12 is 21.5."]),
+    ("From now on only the latest password counts.", ["rule: later password values replace the old password"]),
+    ("Tell me the sum of Lena's score and Omar's score.", ["What is the sum of the score of Lena and the score of Omar?"]),
+    ("Which is larger, Lamp's price or Desk's price?", ["What is the larger of the price of Lamp and the price of Desk?"]),
+    ("Hamlet was written by Shakespeare.", ["the author of Hamlet is Shakespeare."]),
+    ("The speed of light is about 300000 km/s.", ["the speed of light is about 300000 km/s."]),
+    ("Pelé's nationality: Brazilian; position: forward.", ["the nationality of Pelé is Brazilian.", "the position of Pelé is forward."]),
+    ("We met Ines. Her role is designer and her office is B4.", ["the role of Ines is designer.", "the office of Ines is B4."]),
+    ("Update - the deadline of Project X moved to 2026-12-01.", ["Correction: the deadline of Project X is now 2026-12-01."]),
+    ("What's the boiling point of ethanol?", ["What is the boiling point of ethanol?"]),
+    ('[{"name": "Ada", "rank": 2}, {"name": "Bo", "rank": 7}]', ["the rank of Ada is 2.", "the rank of Bo is 7."]),
+    ("The meeting is on Friday. Bring snacks.", ["the day of the meeting is Friday."]),
+    ("I think it might rain later, not sure.", [NOTHING]),
+    ("Each new reading for the meter should be kept along with the earlier readings.", ["rule: later reading values are kept alongside the earlier reading"]),
+    ("Tom's manager is whoever manages Sara, namely Paul.", ["the manager of Tom is Paul (same as the manager of Sara)."]),
+]
+
+
+def canon_set(lines):
+    return {re.sub(r"\s+", " ", x.strip().lower().rstrip(".")) for x in lines if x.strip()}
+
+
+class Normalizer(nn.Module):
+    """a language model that rewrites any text into clear statements, one per line"""
+
+    def __init__(self, hf="gpt2"):
+        super().__init__()
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        self.tok = AutoTokenizer.from_pretrained(hf)
+        self.tok.pad_token = self.tok.eos_token
+        self.lm = AutoModelForCausalLM.from_pretrained(hf)
+
+    def loss(self, texts, lines):
+        dev = self.lm.device
+        src = [self.tok(t[:1500] + "\n###\n")["input_ids"][-400:] for t in texts]
+        tgt = [self.tok("\n".join(x))["input_ids"][:300] + [self.tok.eos_token_id] for x in lines]
+        L = max(len(a) + len(b) for a, b in zip(src, tgt))
+        ids = torch.full((len(texts), L), self.tok.eos_token_id, dtype=torch.long)
+        lab = torch.full((len(texts), L), -100, dtype=torch.long)
+        att = torch.zeros(len(texts), L, dtype=torch.long)
+        for i, (a, b) in enumerate(zip(src, tgt)):
+            ids[i, :len(a) + len(b)] = torch.tensor(a + b)
+            lab[i, len(a):len(a) + len(b)] = torch.tensor(b)
+            att[i, :len(a) + len(b)] = 1
+        return self.lm(input_ids=ids.to(dev), attention_mask=att.to(dev), labels=lab.to(dev)).loss
+
+    @torch.no_grad()
+    def read(self, texts, n=200):
+        out = []
+        self.tok.padding_side = "left"
+        for i in range(0, len(texts), 16):
+            b = self.tok([t[:1500] + "\n###\n" for t in texts[i:i + 16]], return_tensors="pt", padding=True).to(self.lm.device)
+            g = self.lm.generate(**b, max_new_tokens=n, do_sample=False, pad_token_id=self.tok.eos_token_id)
+            out += [[x for x in self.tok.decode(r[b["input_ids"].shape[1]:], skip_special_tokens=True).split("\n") if x.strip()] for r in g]
+        self.tok.padding_side = "right"
+        return out
+
+
+def norm_report(nz, rng, n=120):
+    """E1: forms never trained on (and trained ones, for comparison); E2: the sealed hand-written texts"""
+    nz.eval()
+    line = []
+    for held in (False, True):
+        w = new_world(rng)
+        for _ in range(30):
+            for draw in world_step(w, rng):
+                draw()
+        T = [text_and_lines(rng, w, held) for _ in range(n)]
+        got = nz.read([t for t, _ in T])
+        ok = [canon_set(g) == canon_set(x) for g, (_, x) in zip(got, T)]
+        line.append(f"{'E1 held forms' if held else 'trained forms'} {sum(ok) / n:.3f}")
+        if held:
+            bad = [(t, x, g) for (t, x), g, o in zip(T, got, ok) if not o][:4]
+    got = nz.read([t for t, _ in SEALED])
+    ok = [canon_set(g) == canon_set(x) for g, (_, x) in zip(got, SEALED)]
+    rec = [len(canon_set(g) & canon_set(x)) / len(canon_set(x)) for g, (_, x) in zip(got, SEALED)]
+    line.append(f"E2 sealed {sum(ok)}/{len(SEALED)} exact, statements recovered {sum(rec) / len(rec):.3f}")
+    nz.train()
+    return " | ".join(line), bad, [(t, x, g) for (t, x), g, o in zip(SEALED, got, ok) if not o]
+
+
+def train_normalizer(A):
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    nz = Normalizer().to(dev)
+    if A.init:
+        nz.load_state_dict(torch.load(A.init, map_location=dev))
+    opt = torch.optim.AdamW(nz.parameters(), lr=A.lr)
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(1, (i + 1) / 200) * max(.02, 1 - i / A.steps))
+    rng = random.Random(A.seed)
+    w, t0 = new_world(rng), time.time()
+    for step in range(1, A.steps + 1):
+        if step % 200 == 0:                                # a fresh world now and then: names and keys never repeat for long
+            w = new_world(rng)
+        for draw in world_step(w, rng):
+            draw()
+        B = [text_and_lines(rng, w) for _ in range(A.batch)]
+        loss = nz.loss([t for t, _ in B], [x for _, x in B])
+        opt.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(nz.parameters(), 1.0)
+        opt.step()
+        sched.step()
+        if step % A.every == 0:
+            rep, bad, sealed_bad = norm_report(nz, rng)
+            print(f"step {step} loss {float(loss):.3f} | {rep} | {time.time() - t0:.0f}s", flush=True)
+            for t, x, g in bad + sealed_bad[:6]:
+                print(f"     {t[:150]!r}\n       want {x[:3]}\n       got  {g[:3]}", flush=True)
+            if A.save:
+                torch.save(nz.state_dict(), A.save)
+
+
+def norm_e2e(A):
+    """E4: the memory (exact stand-in) fed held-out forms only, through the normalizer; against the same world fed
+    clear statements. Same seed, same questions."""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    nz = Normalizer().to(dev).eval()
+    nz.load_state_dict(torch.load(A.normw, map_location=dev))
+    for fed in ("clear", "held forms"):
+        rng = random.Random(A.seed)
+        w = new_world(rng)
+        m = Machine(Oracle(w), 64)
+        m.g.beam = A.beam
+        said = right = 0
+        for step in range(1, A.steps + 1):
+            for draw in world_step(w, rng):
+                o = draw()
+                if not o:
+                    continue
+                truth = statements(o)
+                if fed == "clear":
+                    lines = truth
+                else:
+                    text = "\n".join(say_record(rng, r, True)[0] for v in o.values() for r in v) if "rules" not in o and "note" not in o else \
+                        (rng.choice(RULE_SAID[True][w.policy[next(iter(o["rules"]))]]).format(k=words(next(iter(o["rules"])))) if "rules" in o
+                         else say(rng, CHANGE, True, **dict(zip(("k", "n", "v"), re.match(r"Correction: the (.+) of (\w+) is now (\S+)\.", o["note"]).groups()))))
+                    lines = nz.read([text])[0]
+                    if "rules" in o:
+                        k = next(iter(o["rules"]))
+                        truth = [f"rule: later {words(k)} values {CANON_RULE[w.policy[k]].format(k=words(k))}"]
+                said += len(truth)
+                right += len(canon_set(lines) & canon_set(truth))
+                for x in lines:
+                    if x != NOTHING:
+                        try:
+                            arrive(m, x)
+                        except FAIL:
+                            pass
+            if step % A.every == 0:
+                line = []
+                for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3))):
+                    hit = n = 0
+                    for _ in range(A.q):
+                        x = question(kind, w, rng, ops or (1, 3))
+                        if not x:
+                            continue
+                        n += 1
+                        q = [x[0]] if fed == "clear" else nz.read([say_question(rng, x[0], True)])[0]
+                        if (q[0] if q else "") != x[0]:
+                            continue                   # the question was not read back exactly: the correct calls cannot run
+                        r = Row(x[0])
+                        try:
+                            x[2](m, r)
+                            m.do(r, "say")
+                            hit += next((it.value for it in reversed(r.stack) if it.value is not None), None) == x[1]
+                        except FAIL:
+                            pass
+                    line.append(f"{kind} {hit}/{n}")
+                print(f"{fed}: step {step} | statements read right {right}/{said} | " + " | ".join(line), flush=True)
 
 
 # ====================================================================== function nodes
@@ -2176,6 +2513,9 @@ if __name__ == "__main__":
     P.add_argument("--train", action="store_true", help="train the translator's labels")
     P.add_argument("--decode", action="store_true", help="train the translator's decoder: text -> B -> text (--init = the translator)")
     P.add_argument("--tools", action="store_true", help="train the tool nodes on B (--init = translator with decoder)")
+    P.add_argument("--norm", action="store_true", help="train the normalizer: any text -> clear statements")
+    P.add_argument("--norm-e2e", action="store_true", help="E4: the memory fed held-out forms through the normalizer (--normw)")
+    P.add_argument("--normw", default="")
     P.add_argument("--online", action="store_true", help="the model lives in the world: reads, is told, answers, learns, all at once")
     P.add_argument("--rerun", type=int, default=10, help="--online: every this many ticks, what changed tools made is made again")
     P.add_argument("--episode", action="store_true", help="build a memory, unfreeze the translator for --steps, re-transcribe the graph")
@@ -2198,4 +2538,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    diag(A) if A.diag else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_normalizer(A) if A.norm else norm_e2e(A) if A.norm_e2e else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
