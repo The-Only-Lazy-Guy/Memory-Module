@@ -579,14 +579,22 @@ class Oracle:
 
     node = say = staticmethod(lambda x: x)            # exact: a node is its text
 
-    def tool(self, name, a, b):
-        x, y = value_in(a), value_in(b)
-        if not (isinstance(x, int) and isinstance(y, int)):
-            return "unknown"
-        return str(next(t for t in TOOLS if t[0] == name)[1](x, y))
-
-    def join(self, a, b):                              # (phrase, entry about an entity) -> phrase about that entity
-        return f"{a.strip()} {value_in(b)}"
+    def apply(self, want, ins):
+        """exact: the want's words say what is done (the stand-in that tests the design around the tools)"""
+        if len(ins) == 1:                              # (phrase, entry about an entity) -> phrase about that entity
+            return [f"{want.strip()} {value_in(ins[0])}"]
+        v, w = [value_in(x) for x in ins], want.lower()
+        if not all(isinstance(x, int) for x in v):
+            return ["unknown"]
+        if any(x.search(want) for x in ADD_RE) or re.search(r"sum|total|add", w):
+            return [str(v[0] + v[1])]
+        if re.search(r"difference|gap|take away", w):
+            return [str(v[0] - v[1])]
+        if re.search(r"larger|bigger|maximum", w):
+            return [str(max(v))]
+        if re.search(r"smaller|lesser|minimum", w):
+            return [str(min(v))]
+        return [str(v[0] // v[1]), str(v[0] % v[1])] if v[1] else ["unknown"]
 
 
 # ====================================================================== the translator
@@ -641,8 +649,8 @@ class Translator(nn.Module):
         keep[torch.arange(len(texts)), (m == 0).sum(1)] = False   # the first token soaks up attention in GPT-2: a dummy
         return F.layer_norm(self.down(h) + self.tokd(self.lm.wte(b["input_ids"])), (self.c,)), keep
 
-    def decode_loss(self, z, zm, texts):
-        """decoder: the frozen LM reads B as a prefix and writes the text back"""
+    def decode_loss(self, z, zm, texts, each=False):
+        """decoder: the frozen LM reads B as a prefix and writes the text back (each: one loss per text)"""
         t = self.tok([x + self.tok.eos_token for x in texts], return_tensors="pt", padding=True).to(z.device)
         ids, mask = t["input_ids"], t["attention_mask"]
         m = torch.cat([zm.long(), mask], 1)
@@ -650,7 +658,7 @@ class Translator(nn.Module):
         h = self.lm(inputs_embeds=x, attention_mask=m, position_ids=(m.cumsum(1) - 1).clamp(min=0)).last_hidden_state
         h = h[:, z.shape[1] - 1:-1]
         nll = F.cross_entropy((h @ self.lm.wte.weight.T).transpose(1, 2), ids, reduction="none")
-        return (nll * mask).sum() / mask.sum()
+        return (nll * mask).sum(1) / mask.sum(1) if each else (nll * mask).sum() / mask.sum()
 
     @torch.no_grad()
     def decode(self, z, zm, n=48):
@@ -686,13 +694,10 @@ class NeuralT:
         return self.m.decode(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device))[0].strip()
 
     @torch.no_grad()
-    def tool(self, name, a, b):                        # f(node, node) -> node, on B
-        L = max(len(a), len(b))
-        one = lambda z: lpad(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device), L)
-        return self.tools([name], *one(a), *one(b))[0][0]
-
-    def join(self, a, b):
-        return self.tool("join", a, b)
+    def apply(self, want, ins):                        # the want's label finds a tool node by its key; nodes in, nodes out
+        t = int(self.tools.gate(self.m.encode([want])).argmax())
+        o, many, _ = self.tools.nets[t]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
+        return [z[0] for z, _ in o[:int(many.argmax()) + 1]]
 
     @torch.no_grad()
     def _l(self, text):
@@ -712,7 +717,7 @@ class NeuralT:
         """is the place the walk found the one asked for? read off both nodes' B (q, the place's first entry)"""
         if self.tools is not None and q is not None and anchor is not None:
             one = lambda z: (z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device))
-            return float(self.tools.relate([task], *one(q), *one(anchor))[0]) > 0
+            return float(self.tools.relate([task], *one(q), *one(anchor))[0]) > 0   # the relate node
         dev = next(self.m.proj.parameters()).device
         return float(self.m.relate(torch.tensor(a, device=dev), torch.tensor(b, device=dev))) > 0
 
@@ -858,42 +863,85 @@ def train_decoder(A):
                 torch.save({k: v for k, v in model.state_dict().items() if not k.startswith("lm.")}, A.save)
 
 
-class Tools(nn.Module):
-    """tool nodes: f(node, node) -> node, on what the nodes say (B), never on parsed text. One body, one token per tool."""
+class Relate(nn.Module):
+    """the relate node: reads two nodes' B token by token, a logit. same: the same place? rule: the rule for this fact?"""
 
-    def __init__(self, K=12, c=256, L=96):
+    def __init__(self, c=256, L=96):
         super().__init__()
-        self.names = [t[0] for t in TOOLS[:N_ARITH]] + ["join"]
-        self.emb = nn.Parameter(torch.randn(len(self.names), c) * .02)
-        self.out = nn.Parameter(torch.randn(K, c) * .02)       # the output node's K latents are read off these
-        self.side = nn.Parameter(torch.randn(2, c) * .02)      # first input, second input
-        self.pos = nn.Parameter(torch.randn(L, c) * .02)
-        self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 4)
-        self.K = K
-        self.tasks = ["same", "rule"]                  # relate: the same place? / the rule for this fact?
+        self.tasks = ["same", "rule"]
         self.task = nn.Parameter(torch.randn(len(self.tasks), c) * .02)
-        self.rf = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 2)
-        self.ro = nn.Linear(c, 1)
+        self.side = nn.Parameter(torch.randn(2, c) * .02)
+        self.pos = nn.Parameter(torch.randn(L, c) * .02)
+        self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 2)
+        self.o = nn.Linear(c, 1)
 
-    def at(self, z, m, k):
-        return z + self.side[k] + self.pos[(m.long().cumsum(1) - 1).clamp(0, len(self.pos) - 1)]   # a long node shares the last
-
-    def relate(self, task, a, am, b, bm):
-        """the relate node: reads both nodes token by token, a logit"""
+    def forward(self, task, a, am, b, bm):
         n = len(task)
         i = torch.tensor([self.tasks.index(t) for t in task], device=a.device)
-        x = torch.cat([self.task[i][:, None], self.at(a, am, 0), self.at(b, bm, 1)], 1)
+        at = lambda z, m, k: z + self.side[k] + self.pos[(m.long().cumsum(1) - 1).clamp(0, len(self.pos) - 1)]   # a long node shares the last
+        x = torch.cat([self.task[i][:, None], at(a, am, 0), at(b, bm, 1)], 1)
         keep = torch.cat([torch.ones(n, 1, dtype=torch.bool, device=a.device), am, bm], 1)
-        return self.ro(self.rf(x, src_key_padding_mask=~keep)[:, 0]).squeeze(-1)
+        return self.o(self.f(x, src_key_padding_mask=~keep)[:, 0]).squeeze(-1)
 
-    def forward(self, name, a, am, b, bm):
-        n, dev = len(name), a.device
-        i = torch.tensor([self.names.index(x) for x in name], device=dev)
-        at = self.at
-        x = torch.cat([self.emb[i][:, None], self.out[None].expand(n, -1, -1), at(a, am, 0), at(b, bm, 1)], 1)
-        keep = torch.cat([torch.ones(n, 1 + self.K, dtype=torch.bool, device=dev), am, bm], 1)
-        y = self.f(x, src_key_padding_mask=~keep)[:, 1:1 + self.K]
-        return F.layer_norm(y, (y.shape[-1],)), torch.ones(n, self.K, dtype=torch.bool, device=dev)
+
+class ToolNet(nn.Module):
+    """one tool node's own network. In: the want, then any number of nodes (B each). Out: up to M nodes (K latents each),
+    how many of them it means, and its own guess of how wrong it is (the score). Its key is its label: what it answers to."""
+
+    def __init__(self, d=128, c=256, K=12, M=2, R=8, L=96):
+        super().__init__()
+        self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))
+        self.role = nn.Parameter(torch.randn(R, c) * .02)      # which input
+        self.pos = nn.Parameter(torch.randn(L, c) * .02)
+        self.out = nn.Parameter(torch.randn(M * K, c) * .02)
+        self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 512, batch_first=True, activation="gelu"), 2)
+        self.many = nn.Linear(c, M)
+        self.err = nn.Linear(c, 1)
+        self.K, self.M = K, M
+
+    def forward(self, ins):
+        n, dev = ins[0][0].shape[0], self.out.device
+        parts, keep = [self.out[None].expand(n, -1, -1)], [torch.ones(n, len(self.out), dtype=torch.bool, device=dev)]
+        for r, (z, m) in enumerate(ins):
+            parts.append(z + self.role[r] + self.pos[(m.long().cumsum(1) - 1).clamp(0, len(self.pos) - 1)])
+            keep.append(m)
+        y = self.f(torch.cat(parts, 1), src_key_padding_mask=~torch.cat(keep, 1))[:, :len(self.out)]
+        y = F.layer_norm(y, (y.shape[-1],))
+        g, one = y.mean(1), torch.ones(n, self.K, dtype=torch.bool, device=dev)
+        return [(y[:, j * self.K:(j + 1) * self.K], one) for j in range(self.M)], self.many(g), self.err(g).squeeze(-1)
+
+
+class ToolBank(nn.Module):
+    """the tool nodes the model has made so far (none at first), and the relate node"""
+
+    def __init__(self, d=128, c=256, cap=16):
+        super().__init__()
+        self.nets, self.relate, self.d, self.c, self.cap = nn.ModuleList(), Relate(c), d, c, cap
+
+    def spawn(self, key, like=None):
+        """a new tool node: its own network (started from the tool it is most like), its key = the wants that needed it"""
+        net = ToolNet(self.d, self.c).to(key.device)
+        if like is not None:
+            net.load_state_dict(self.nets[like].state_dict())
+        with torch.no_grad():
+            net.key.copy_(F.normalize(key, dim=0))
+        self.nets.append(net)
+        return len(self.nets) - 1
+
+    def gate(self, q):                                 # every want against every tool's key
+        return q @ F.normalize(torch.stack([t.key for t in self.nets]), dim=-1).T
+
+    def save(self, path):
+        torch.save({"n": len(self.nets), "state": self.state_dict()}, path)
+
+    @staticmethod
+    def load(path, dev):
+        s = torch.load(path, map_location=dev)
+        b = ToolBank().to(dev)
+        for _ in range(s["n"]):
+            b.nets.append(ToolNet().to(dev))
+        b.load_state_dict(s["state"])
+        return b
 
 
 def lpad(z, m, L):
@@ -905,31 +953,94 @@ def lpad(z, m, L):
 def said(rng, v):
     """a node holding the value v, as the memory might hold it"""
     nm, k = _name(rng, 2), " ".join(_key(rng, KEYS_TRAIN, set()))
-    return rng.choice([str(v), f"{leaf(nm, k)} is {v}.", f"Correction: {leaf(nm, k)} is now {v}."])
-
-
-def tool_batch(rng, n, depth):
-    """trees of tool calls, the leaves as nodes say them; returns leaves, and per level (tool, which inputs, the value)"""
-    ops = [t for t in TOOLS[:N_ARITH]]
-    vals = [rng.randint(1, 60) for _ in range(n)]
-    leaves, levels = [[said(rng, v) for v in vals]], []
-    for _ in range(depth):
-        w = [rng.randint(1, 60) for _ in range(n)]
-        o = [rng.choice(ops) for _ in range(n)]
-        flip = [rng.random() < .5 for _ in range(n)]           # the running result comes left or right
-        vals = [f(y, x) if fl else f(x, y) for (_, f, _), x, y, fl in zip(o, vals, w, flip)]
-        leaves.append([said(rng, x) for x in w])
-        levels.append(([x[0] for x in o], flip, vals))
-    return leaves, levels
+    return rng.choice([str(v), f"{leaf(nm, k)} is {v}.", f"Correction: {leaf(nm, k)} is now {v}.", f"is {v}."])
 
 
 def load_tools(A, tr):
-    """the tool nodes (--toolw), or None: the neural path needs them"""
-    if not A.toolw:
-        return None
-    t = Tools(tr.K, tr.c).to(next(tr.proj.parameters()).device).eval()
-    t.load_state_dict(torch.load(A.toolw, map_location=next(tr.proj.parameters()).device))
-    return t
+    """the tool nodes and the relate node (--toolw), or None"""
+    return ToolBank.load(A.toolw, next(tr.proj.parameters()).device).eval() if A.toolw else None
+
+
+# the light supervision: what kinds of thing the model reads being done. No tool is named, nor how many there are.
+WANTS = {"add": ["the sum of", "the total of", "add up"], "sub": ["the difference between", "the gap between", "take away"],
+         "max": ["the larger of", "the bigger of", "the maximum of"], "min": ["the smaller of", "the lesser of", "the minimum of"],
+         "divmod": ["the quotient and remainder of", "share out in groups of"]}
+HELD_WANTS = {"the total of", "the maximum of", "the lesser of", "share out in groups of"}   # never read: routed by itself?
+KINDS = ("add", "sub", "max", "min", "divmod", "rule", "both", "join")
+
+
+def read_demo(rng, kind, held=False, vocab=KEYS_TRAIN):
+    """one thing being done, as read: (kind, the want, the input nodes, what came out)"""
+    if kind in WANTS:
+        w = rng.choice([x for x in WANTS[kind] if (x in HELD_WANTS) == held] or WANTS[kind])
+        if kind == "divmod":
+            a, b = rng.randint(10, 120), rng.randint(2, 12)
+            return kind, w, [said(rng, a), said(rng, b)], [str(a // b), str(a % b)]
+        a, b = rng.randint(1, 60), rng.randint(1, 60)
+        return kind, w, [said(rng, a), said(rng, b)], [str(next(t for t in TOOLS if t[0] == kind)[1](a, b))]
+    nm, k, v, x = _name(rng, 2), " ".join(_key(rng, vocab, set())), rng.randint(1, 60), rng.randint(1, 60)
+    if kind == "rule":                                 # a rule being applied to what arrived
+        return kind, rule_text(rng, "add", k), [f"{leaf(nm, k)} is {v}.", f"is {x}."], [str(v + x)]
+    if kind == "both":
+        return kind, f"What is the sum of both values of {leaf(nm, k)}?", [f"{leaf(nm, k)} is {v}.", f"{leaf(nm, k)} is {x}."], [str(v + x)]
+    k2, e = " ".join(_key(rng, vocab, set())), _name(rng, 2)
+    return kind, f"the {k2} of", [rng.choice([f"{leaf(nm, k)} is {e}.", f"Correction: {leaf(nm, k)} is now {e}."])], [f"the {k2} of {e}"]
+
+
+def tool_loss(tr, net, ins, outs):
+    """per demo: how wrong this tool is (each output it should say, and how many)"""
+    o, many, err = net(ins)
+    n = torch.tensor([len(x) for x in outs], device=many.device)
+    L = F.cross_entropy(many, n - 1, reduction="none")
+    for j, (z, zm) in enumerate(o):
+        L = L + tr.decode_loss(z, zm, [x[j] if j < len(x) else "" for x in outs], each=True) * (n > j) / n
+    return L, err
+
+
+def learn(tr, bank, demos, st, A, spawn=True):
+    """read demos; each goes to the tool that did it best. What no tool can do (loss above --tool-tau for all) makes a new
+    tool, started from the closest one; for --cool steps it alone takes what nothing else can do, so it specializes.
+    The keys learn from where the demos went: a want finds the tool that does it. Returns the loss and what happened."""
+    q = tr.encode([d[1] for d in demos]).detach()
+    groups = {}
+    for i, d in enumerate(demos):
+        groups.setdefault(len(d[2]), []).append(i)
+    nodes = {n: [tr.content([demos[i][1] for i in ix])] + [tr.content([demos[i][2][j] for i in ix]) for j in range(n)]
+             for n, ix in groups.items()}
+    with torch.no_grad():
+        if not bank.nets and spawn:
+            bank.spawn(q.mean(0))
+            st.update(last=st["step"], newest=0, spawned=True)
+        L = torch.full((len(bank.nets), len(demos)), 1e9, device=q.device)
+        for n, ix in groups.items():
+            for t, net in enumerate(bank.nets):
+                L[t, ix] = tool_loss(tr, net, nodes[n], [demos[i][3] for i in ix])[0]
+        best, low = L.argmin(0), L.min(0).values
+        lost = low > A.tool_tau
+        if spawn and lost.any() and st["step"] - st["last"] >= A.cool and len(bank.nets) < bank.cap:
+            new = bank.spawn(q[lost].mean(0), int(best[lost].mode().values))
+            st.update(last=st["step"], newest=new, spawned=True)
+            L = torch.cat([L, L[int(best[lost].mode().values)][None]])
+        target = best.clone()
+        if st.get("newest") is not None and st["step"] - st["last"] < A.cool:
+            target[lost] = st["newest"]                # what nothing else can do goes to the newest tool
+    loss = F.cross_entropy(A.gate_t * bank.gate(q), target)
+    for n, ix in groups.items():
+        for t, net in enumerate(bank.nets):
+            sel = [k for k, i in enumerate(ix) if int(target[i]) == t]
+            if sel:
+                ins = [(z[sel], m[sel]) for z, m in nodes[n]]
+                l, err = tool_loss(tr, net, ins, [demos[ix[k]][3] for k in sel])
+                loss = loss + (l.sum() + F.mse_loss(err, l.detach(), reduction="sum")) / len(demos)
+    return loss, target, low
+
+
+@torch.no_grad()
+def apply_tool(tr, bank, want, ins):
+    """the want's label finds the tool by its key; the tool runs; it says how many nodes it means"""
+    t = int(bank.gate(tr.encode([want])).argmax())
+    o, many, err = bank.nets[t]([tr.content([want])] + [tr.content([x]) for x in ins])
+    return t, [z for z, _ in o[:int(many.argmax()) + 1]], float(err)
 
 
 def near(rng, nm):
@@ -983,91 +1094,80 @@ def relate_grid(tr, rng, n=8, vocab=KEYS_TRAIN):
     return [("same", a, b, 1) for a, b in zip(q, other)] + [("same", a, other[j], 0) for a, j in zip(q, near)]
 
 
-def relate_run(tr, tools, batch):
+def relate_run(tr, relate, batch):
     task, a, b, y = zip(*batch)
-    dev = next(tools.parameters()).device
-    return tools.relate(list(task), *tr.content(list(a)), *tr.content(list(b))), torch.tensor(y, dtype=torch.float, device=dev)
+    dev = next(relate.parameters()).device
+    return relate(list(task), *tr.content(list(a)), *tr.content(list(b))), torch.tensor(y, dtype=torch.float, device=dev)
 
 
-def join_batch(rng, n, vocab=KEYS_TRAIN):
-    """join: (the phrase, an entry naming an entity) -> the phrase about that entity"""
-    a, b, t = [], [], []
+def bank_report(tr, bank, rng, n=96):
+    """per kind of demo, values never seen: which tool its want finds, and whether that tool says the right thing;
+    the held wants (never read) the same way; a nested use (a tool's output into another tool)"""
+    line, used = [], {}
+    for held in (False, True):
+        for kind in KINDS:
+            if held and not any(x in HELD_WANTS for x in WANTS.get(kind, [])):
+                continue
+            D = [read_demo(rng, kind, held) for _ in range(n)]
+            hit = 0
+            for _, w, ins, outs in D:
+                t, o, _ = apply_tool(tr, bank, w, ins)
+                used.setdefault((kind, held), {}).setdefault(t, 0)
+                used[(kind, held)][t] += 1
+                hit += [x.strip() for x in tr.decode(torch.cat(o), torch.ones(len(o), len(o[0][0]), dtype=torch.bool, device=o[0].device))] == outs \
+                    if len(o) == len(outs) else 0
+            top = max(used[(kind, held)].items(), key=lambda z: z[1])
+            line.append(f"{kind}{'*' if held else ''} {hit / n:.2f} (tool {top[0]} {top[1] / n:.2f})")
+    hit = 0
     for _ in range(n):
-        k2, k, e, nm = " ".join(_key(rng, vocab, set())), " ".join(_key(rng, vocab, set())), _name(rng, 2), _name(rng, 2)
-        a.append(f"the {k2} of")
-        b.append(rng.choice([f"{leaf(nm, k)} is {e}.", f"Correction: {leaf(nm, k)} is now {e}."]))
-        t.append(f"the {k2} of {e}")
-    return a, b, t
-
-
-def join_run(tr, tools, a, b):
-    (x, xm), (y, ym) = tr.content(a), tr.content(b)
-    L = max(x.shape[1], y.shape[1])
-    return tools(["join"] * len(a), *lpad(x, xm, L), *lpad(y, ym, L))
-
-
-def tool_run(tr, tools, leaves, levels):
-    """the nodes flow through the tool nodes; per level, the output B and the text it should say"""
-    (z, zm), outs = tr.content(leaves[0]), []
-    for side, (name, flip, vals) in zip(leaves[1:], levels):
-        w, wm = tr.content(side)
-        L = max(z.shape[1], w.shape[1])
-        (z, zm), (w, wm) = lpad(z, zm, L), lpad(w, wm, L)
-        fl = torch.tensor(flip, device=z.device)[:, None]
-        z, zm = tools(name, torch.where(fl[..., None], w, z), torch.where(fl, wm, zm), torch.where(fl[..., None], z, w), torch.where(fl, zm, wm))
-        outs.append((z, zm, [str(v) for v in vals]))
-    return outs
+        a, b, c = rng.randint(1, 60), rng.randint(1, 60), rng.randint(1, 60)
+        _, o, _ = apply_tool(tr, bank, "the larger of", [said(rng, a), said(rng, b)])
+        say = lambda z: tr.decode(z, torch.ones(z.shape[:2], dtype=torch.bool, device=z.device))[0].strip()
+        _, o2, _ = apply_tool(tr, bank, "the sum of", [say(o[0]), said(rng, c)])
+        hit += say(o2[0]) == str(max(a, b) + c)
+    return f"tools {len(bank.nets)} | " + " ".join(line) + f" | nested {hit / n:.2f}"
 
 
 def train_tools(A):
-    """--init = a translator with its decoder; the translator stays frozen, so B keeps its meaning"""
+    """--init = a translator with its decoder (frozen, so B keeps its meaning). The model reads demos and makes its own
+    tool nodes; the relate node learns alongside."""
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     tr = Translator().to(dev).eval()
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     tr.requires_grad_(False)
-    tools = Tools(tr.K, tr.c).to(dev)
-    opt = torch.optim.AdamW(tools.parameters(), lr=A.lr)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, A.steps, eta_min=A.lr / 50)
+    bank = ToolBank().to(dev)
     rng = random.Random(A.seed)
-    t0 = time.time()
+    st, opt, t0 = {"step": 0, "last": -10 ** 9, "newest": None}, None, time.time()
     for step in range(1, A.steps + 1):
-        outs = tool_run(tr, tools, *tool_batch(rng, A.batch, rng.choice((1, 1, 2))))
-        a, b, t = join_batch(rng, A.batch // 2)
-        loss = (sum(tr.decode_loss(z, zm, t) for z, zm, t in outs) + tr.decode_loss(*join_run(tr, tools, a, b), t)
-                + F.binary_cross_entropy_with_logits(*relate_run(tr, tools, relate_batch(rng, A.batch)))
-                + F.binary_cross_entropy_with_logits(*relate_run(tr, tools, relate_grid(tr, rng))))
+        st.update(step=step, spawned=False)
+        loss, target, low = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A)
+        loss = (loss + F.binary_cross_entropy_with_logits(*relate_run(tr, bank.relate, relate_batch(rng, A.batch)))
+                + F.binary_cross_entropy_with_logits(*relate_run(tr, bank.relate, relate_grid(tr, rng))))
+        if opt is None or st["spawned"]:
+            opt = torch.optim.AdamW(bank.parameters(), lr=A.lr)
+            if st["spawned"]:
+                print(f"step {step}: made tool {st['newest']} ({int((low > A.tool_tau).sum())} of {A.batch} demos nothing could do)", flush=True)
         opt.zero_grad()
         loss.backward()
         opt.step()
-        sched.step()
         if step % A.every == 0:
-            tools.eval()
-            line = []
+            bank.eval()
             with torch.no_grad():
-                for depth in (1, 2, 3, 4):                     # trained on 1-2: 3 and 4 say whether B drifts as tools nest
-                    outs = tool_run(tr, tools, *tool_batch(rng, 128, depth))
-                    got = tr.decode(*outs[-1][:2])
-                    line.append(f"depth {depth} {sum(g.strip() == t for g, t in zip(got, outs[-1][2])) / 128:.3f}")
-                for nm, voc in (("train", KEYS_TRAIN), ("held", KEYS_EVAL)):
-                    a, b, t = join_batch(rng, 128, voc)
-                    got = tr.decode(*join_run(tr, tools, a, b))
-                    line.append(f"join {nm} keys {sum(g.strip() == x for g, x in zip(got, t)) / 128:.3f}")
-                    B = relate_batch(rng, 512, voc)
-                    lg, y = relate_run(tr, tools, B)
-                    ok = ((lg > 0).float() == y).tolist()
-                    for task in ("same", "rule"):
-                        for v in (1, 0):
-                            sel = [o for o, x in zip(ok, B) if x[0] == task and x[3] == v]
-                            line.append(f"{task}{'+' if v else '-'} {sum(sel) / max(1, len(sel)):.3f}")
-                    G = relate_grid(tr, rng, 12, voc)
-                    lg, y = relate_run(tr, tools, G)
-                    ok = ((lg > 0).float() == y).tolist()
-                    line.append(f"nearest: yes {sum(ok[:len(ok) // 2]) / (len(ok) // 2):.3f} no {sum(ok[len(ok) // 2:]) / (len(ok) // 2):.3f}")
-            print(f"step {step} loss {float(loss):.3f} | exact: " + " ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
-            tools.train()
+                rep = bank_report(tr, bank, rng)
+                B = relate_batch(rng, 256)
+                lg, y = relate_run(tr, bank.relate, B)
+                ok = ((lg > 0).float() == y).tolist()
+                rel = " ".join(f"{task}{'+' if v else '-'} {sum(o for o, x in zip(ok, B) if x[0] == task and x[3] == v) / max(1, sum(x[0] == task and x[3] == v for x in B)):.2f}"
+                               for task in ("same", "rule") for v in (1, 0))
+                G = relate_grid(tr, rng, 12)
+                lg, y = relate_run(tr, bank.relate, G)
+                ok = ((lg > 0).float() == y).tolist()
+            print(f"step {step} loss {float(loss):.3f} | {rep} | relate {rel} nearest yes {sum(ok[:len(ok) // 2]) / (len(ok) // 2):.2f} "
+                  f"no {sum(ok[len(ok) // 2:]) / (len(ok) // 2):.2f} | {time.time() - t0:.0f}s", flush=True)
+            bank.train()
             if A.save:
-                torch.save(tools.state_dict(), A.save)
+                bank.save(A.save)
 
 
 # ====================================================================== function nodes
@@ -1110,7 +1210,7 @@ class Machine:
         if r.passes > self.budget:
             raise Budget()
         if self.trace is not None:
-            f = a[0] if name == "tool" else "derive" if name == "insert" and a else name
+            f = f"apply{a[0]}" if name == "apply" else "derive" if name == "insert" and a else name
             self.trace.append((view(r), f, a[0] if name == "split" else None))
         return getattr(self, "f_" + name)(r, *a)
 
@@ -1149,10 +1249,6 @@ class Machine:
     def f_nip(self, r):
         del r.stack[-2]
 
-    def f_join(self, r):                               # (phrase, entity) -> phrase about that entity
-        b, a = r.stack.pop(), r.stack.pop()
-        r.stack.append(Item(self.T.join(a.node, b.node), self.T))
-
     def f_say(self, r):                                # the row is done; its answer is what it holds
         pass
 
@@ -1175,10 +1271,12 @@ class Machine:
         it = r.stack[-1]
         r.stack.append(self.entry_item(it.place, it.idx - 1) if it.place >= 0 and it.idx > 0 else self.item("unknown"))
 
-    def f_tool(self, r, name):                         # [word, a, b] -> f(a, b): the word has done its job
-        b, a = r.stack.pop(), r.stack.pop()
-        r.stack.pop()
-        r.stack.append(Item(self.T.tool(name, a.node, b.node), self.T))
+    def f_apply(self, r, k):                           # [want, k nodes] -> what the tool node the want finds gives back
+        want, ins = r.stack[-k - 1], r.stack[-k:]
+        del r.stack[-k - 1:]
+        node = (lambda it: it.text) if isinstance(self.T, Oracle) else (lambda it: it.node)
+        for z in self.T.apply(want.text, [node(x) for x in ins]):
+            r.stack.append(Item(z, self.T))
 
     def f_insert(self, r, derived=False):              # A to be B: a new entry where the statement belongs
         self.t += 1
@@ -1242,7 +1340,7 @@ def gold_tree(m, r, t):
     m.do(r, "split", re.match(r"[)\s]*and( \()?", r.focus[-1]).end())   # ") and (": closes the left, opens the right
     m.do(r, "drop")                                    # it has done its job; the word stays until the tool
     gold_tree(m, r, b)
-    m.do(r, "tool", t[1])                              # closing brackets are never read: the stack says what is left
+    m.do(r, "apply", 2)                                # closing brackets are never read: the stack says what is left
 
 
 def arrive(m, text):
@@ -1255,7 +1353,7 @@ def arrive(m, text):
         gold_read(m, r, phrase_of(text))
         if r.stack[-1].text != "unknown":
             m.do(r, "split", len(r.focus[-1]))
-            m.do(r, "tool", "add")
+            m.do(r, "apply", 2)
             return m.do(r, "insert", True)
     m.do(r, "insert")
 
@@ -1296,7 +1394,7 @@ def question(kind, world, rng, ops=(1, 3)):
             m.do(r, "split", len("What is the sum of both values of "))
             gold_read(m, r, q)
             gold_older(m, r)
-            m.do(r, "tool", "add")
+            m.do(r, "apply", 2)
         return f"What is the sum of both values of {q}?", sum(world.multi[(nm, k)]), calls
     if kind == "chain":
         c = [(nm, k, k2) for nm, e in sorted(world.ents.items()) for k in sorted(e) if k in world.ent_keys
@@ -1310,7 +1408,7 @@ def question(kind, world, rng, ops=(1, 3)):
             m.do(r, "split", len("What is "))
             m.do(r, "split", len(a_))
             gold_read(m, r, b_)
-            m.do(r, "join")
+            m.do(r, "apply", 1)
             m.do(r, "lookup")
             gold_follow(m, r)
         return f"What is {a_}{b_}?", world.ents[world.ents[nm][k]][k2], calls
@@ -1352,7 +1450,7 @@ def world_step(world, rng):
 
 
 # ====================================================================== the reader: what do I want next?
-FUNCS = ["split", "lookup", "rule", "prev", "open", "drop", "nip", "join", "add", "sub", "max", "min", "insert", "derive", "say"]
+FUNCS = ["split", "lookup", "rule", "prev", "open", "drop", "nip", "apply1", "apply2", "apply3", "insert", "derive", "say"]
 
 
 def view(r):
@@ -1500,8 +1598,8 @@ def run_free(m, rd, r, stop, max_pass=90, show=False):
                 if n is None:
                     return False
                 m.do(r, "split", n)
-            elif name in ("add", "sub", "max", "min"):
-                m.do(r, "tool", name)
+            elif name.startswith("apply"):
+                m.do(r, "apply", int(name[5:]))
             elif name == "derive":
                 m.do(r, "insert", True)
             else:
@@ -1515,7 +1613,7 @@ def run_free(m, rd, r, stop, max_pass=90, show=False):
 
 def branch(trace):
     """which way a row went: the functions it called, whether a rule was there, whether it was a copy"""
-    return (tuple(sorted({"tool" if x[1] in ("add", "sub", "max", "min") else x[1] for x in trace})),
+    return (tuple(sorted({x[1] for x in trace})),
             any("no rule" in x[0][0] for x in trace), any("(same as" in x[0][0] for x in trace))
 
 
@@ -1626,17 +1724,19 @@ def retranscribe(m, old, new):
     return out
 
 
+def safe_ask(m, kind, w, rng, ops):
+    """ask, and count calls that could not finish on this memory as a wrong answer"""
+    try:
+        return ask(m, kind, w, rng, ops)
+    except FAIL:
+        return (None, 1, None, 0)
+
+
 def asked(m, w, rng, q):
     """the correct calls on this memory: right answers per kind"""
     line = []
     for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3))):
-        res = []
-        for _ in range(q):
-            try:
-                x = ask(m, kind, w, rng, ops or (1, 3))
-            except FAIL:                               # the calls could not finish on this memory: wrong
-                x = (None, 1, None)
-            res += [x] if x else []
+        res = [x for x in (safe_ask(m, kind, w, rng, ops or (1, 3)) for _ in range(q)) if x]
         line.append(f"{kind} {sum(x[1] == x[2] for x in res)}/{len(res)}")
     return " | ".join(line)
 
@@ -1648,7 +1748,7 @@ def episode(A):
     tr = Translator().to(dev).eval()
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
-    tools = load_tools(A, tr) or Tools(tr.K, tr.c).to(dev).eval()
+    tools = load_tools(A, tr) or ToolBank().to(dev).eval()
     rng = random.Random(A.seed)
     w = new_world(rng)
     T1 = NeuralT(tr, Oracle(w), A.tau, tools)
@@ -1670,10 +1770,9 @@ def episode(A):
     t0 = time.time()
     for step in range(1, A.steps + 1):
         T = [sentence(rng, KEYS_TRAIN) for _ in range(A.batch)]
-        a, b, t = join_batch(rng, A.batch // 2)
+        st = {"step": step, "last": -10 ** 9, "newest": None}
         loss = (label_loss(tr, rng, KEYS_TRAIN, A.grid) + tr.decode_loss(*tr.content(T), T)
-                + sum(tr.decode_loss(z, zm, x) for z, zm, x in tool_run(tr, tools, *tool_batch(rng, A.batch, rng.choice((1, 2)))))
-                + tr.decode_loss(*join_run(tr, tools, a, b), t))
+                + learn(tr, tools, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A, spawn=False)[0])
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -1688,7 +1787,7 @@ def episode(A):
     print(f"re-transcribed: places {new.g.n} | {asked(new, w, random.Random(qs), A.q)}", flush=True)
     if A.save:
         torch.save({k: v for k, v in tr.state_dict().items() if not k.startswith("lm.")}, A.save)
-        torch.save(tools.state_dict(), A.save.replace(".pt", "_tools.pt"))
+        tools.save(A.save.replace(".pt", "_tools.pt"))
 
 
 # ====================================================================== --diag: where does a free row go wrong?
@@ -1887,7 +1986,7 @@ def gold(A):
         if step % A.every == 0:
             g, line = m.g, []
             for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6))):
-                res = [x for x in (ask(m, "ops" if kind == "long" else kind, world, rng, ops or (1, 3)) for _ in range(A.q)) if x]
+                res = [x for x in (safe_ask(m, "ops" if kind == "long" else kind, world, rng, ops or (1, 3)) for _ in range(A.q)) if x]
                 ok = [x for x in res if x[1] == x[2]]
                 line.append(f"{kind} {len(ok)}/{len(res)} ({sum(x[3] for x in res) / max(1, len(res)):.0f}p)")
                 for x in [y for y in res if y[1] != y[2]][:A.show]:
@@ -1923,6 +2022,9 @@ if __name__ == "__main__":
     P.add_argument("--batch", type=int, default=64)
     P.add_argument("--world", type=int, default=30, help="steps of world the free eval lives through")
     P.add_argument("--init", default="")
+    P.add_argument("--tool-tau", type=float, default=1.5, help="a demo no tool does better than this (nats per token) needs a new tool")
+    P.add_argument("--cool", type=int, default=300, help="steps a new tool alone takes what nothing else can do")
+    P.add_argument("--gate-t", type=float, default=20., help="sharpness of a want against the tools' keys")
     P.add_argument("--toolw", default="", help="the tool nodes' weights: with --init (translator + decoder) = the whole neural path")
     P.add_argument("--save", default="")
     P.add_argument("--log", default="")
