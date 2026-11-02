@@ -4,6 +4,7 @@ The model only states what it wants: A to be B.
   python gnm.py --gold      # the correct functions plugged in, no model: does the design solve each task?
 """
 import argparse
+import json
 import random
 import re
 import time
@@ -1090,23 +1091,32 @@ def step_report(rd, bank, rng, keys, n=1024):
     return " ".join(f"{k} {hit[k] / tot[k]:.3f}" for k in FUNCS if k in tot) + f" | split end {eh / max(1, et):.3f}"
 
 
+@torch.no_grad()
+def pick(rd, vs):
+    """the reader's call on each view: (function, where a split ends, confidence, margin, every end it could point at)"""
+    logits, ends, off, mask = rd(vs)
+    p, fn = logits.softmax(1).topk(2, 1)
+    out = []
+    for i, (v, base) in enumerate(vs):
+        o, e = off[i].tolist(), ends[i].tolist()
+        ok = [j for j, (a, b) in enumerate(o) if a >= base and b > a]
+        n = o[max(ok, key=lambda j: e[j])][1] - base if ok else None
+        out.append((FUNCS[int(fn[i, 0])], n, float(p[i, 0]), float(p[i, 0] - p[i, 1]), [o[j][1] - base for j in ok]))
+    return out
+
+
 def run_free(m, rd, r, stop, max_pass=90, show=False):
     """the reader drives the row; returns False when it asks for something impossible"""
     try:
         while r.passes < max_pass:
             v = view(r)
-            with torch.no_grad():
-                logits, ends, off, mask = rd([v])
-            name = FUNCS[int(logits.argmax(1))]
+            name, n = pick(rd, [v])[0][:2]
             if show:
                 print("     ", repr(v[0][:110]), "->", name, flush=True)
             if name == "split":
-                o = off[0].tolist()
-                ok = [i for i, (a, e) in enumerate(o) if a >= v[1] and e > a]
-                if not ok:
+                if n is None:
                     return False
-                j = max(ok, key=lambda i: float(ends[0, i]))
-                m.do(r, "split", o[j][1] - v[1])
+                m.do(r, "split", n)
             elif name in ("add", "sub", "max", "min"):
                 m.do(r, "tool", name)
             elif name == "derive":
@@ -1166,6 +1176,11 @@ def free_eval(world, m, rd, rng, q):
     return " | ".join(out)
 
 
+def key_re(w):
+    ks = sorted({words(k) for k in w.num_keys + w.multi_keys + w.ent_keys}, key=len, reverse=True)
+    return r"\b(?:" + "|".join(re.escape(k) for k in ks) + r")\b"
+
+
 def train_reader(A):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     tr = Translator().to(dev).eval()
@@ -1174,8 +1189,7 @@ def train_reader(A):
     rng = random.Random(A.seed)
     w0 = new_world(rng)
     bank = collect(w0, Machine(Oracle(w0)), rng, A.demos)
-    ks = sorted({words(k) for k in w0.num_keys + w0.multi_keys + w0.ent_keys}, key=len, reverse=True)
-    keys = r"\b(?:" + "|".join(re.escape(k) for k in ks) + r")\b"
+    keys = key_re(w0)
     opt = torch.optim.AdamW([p for n, p in rd.named_parameters() if not n.startswith("tr.")], lr=A.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, A.steps, eta_min=A.lr / 50)
     t0 = time.time()
@@ -1203,6 +1217,176 @@ def train_reader(A):
             print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} of {rows} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
             if A.save:
                 torch.save({k: v for k, v in rd.state_dict().items() if not k.startswith("tr.")}, A.save)
+
+
+# ====================================================================== --diag: where does a free row go wrong?
+FAIL = (IndexError, AttributeError, Budget, TypeError, ValueError, StopIteration, KeyError)
+ASKED = (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6)))
+
+
+def held(r):
+    return next((it.value for it in reversed(r.stack) if it.value is not None), None)
+
+
+def shape(text, keys):
+    """a view with names, keys and numbers as first-seen placeholders: all any reader could tell apart"""
+    seen = {}
+
+    def sub(m):
+        w = m.group()
+        if w in ("What", "Correction", "The"):
+            return w
+        k = "#" if w.isdigit() else "N" if w[0].isupper() else "K"
+        return seen.setdefault(w, f"{k}{sum(x[0] == k for x in seen.values())}")
+    return re.sub(keys + r"|\b(?:[A-Z][a-z]{2,}|\d+)\b", sub, text)
+
+
+def gold_trace(m, run):
+    """the correct calls on what this memory holds now, nothing written"""
+    m.trace, m.f_insert = [], lambda r, derived=False: None
+    try:
+        x = run()
+    except FAIL:
+        x = None
+    del m.f_insert
+    t, m.trace = m.trace, None
+    return t, x
+
+
+def lockstep(rd, t, keys, seen):
+    """the reader's call at every correct step. Same state until its first wrong call, so that call is where it left."""
+    out, first = [], None
+    for i in range(0, len(t), 64):
+        for j, ((v, f, n), (pf, pn, conf, margin, ends)) in enumerate(zip(t[i:i + 64], pick(rd, [x[0] for x in t[i:i + 64]]))):
+            text, base = v
+            cut = lambda c: text[base:base + c].strip()
+            can = None if n is None else n <= len(text) - base and any(cut(e) == cut(n) for e in ends)
+            good = pf == f and (n is None or (pn is not None and n <= len(text) - base and cut(pn) == cut(n)))
+            sh = shape(text, keys)
+            out.append([f, pf, n, pn, round(conf, 3), round(margin, 3), can, sh in seen, good, sh])
+            if not good and first is None:
+                first = i + j
+    return out, first
+
+
+def health(m, w, rng, n=200):
+    """what the memory holds, against the truth"""
+    g, O = m.g, m.T.o if isinstance(m.T, NeuralT) else m.T
+    where = {}
+    for p, ch in enumerate(g.chain):
+        for k in {O.key(e[0]) for e in ch}:
+            where.setdefault(k, set()).add(p)
+    mixed = sum(len({O.key(e[0]) for e in ch}) > 1 for ch in g.chain)
+    facts = sorted(f for f in w.hist if f[0] in w.ents)
+    S = rng.sample(facts, min(n, len(facts)))
+    hit = miss = bad = 0
+    for nm, k in S:
+        p = m.find(m.T.label(leaf(nm, k)))
+        hit += p >= 0 and p in where.get(("fact", words(k), nm), ())
+        miss += p < 0
+        bad += p >= 0 and p not in where.get(("fact", words(k), nm), ())
+    absent = [(nm, k) for nm in sorted(w.ents) for k in w.num_keys if k not in w.ents[nm]]
+    A_ = rng.sample(absent, min(n, len(absent)))
+    false = sum(m.find(m.T.label(leaf(nm, k))) >= 0 for nm, k in A_)
+    ru = [(k, m.find(m.T.rule_query(leaf(sorted(w.ents)[0], k) + " is 1."))) for k in sorted(w.policy)]
+    rule = sum(p >= 0 and p in where.get(("rule", words(k)), ()) for k, p in ru)
+    c0, agree = g.cost, 0
+    for nm, k in S:
+        q = m.T.label(leaf(nm, k))
+        agree += bool(g.n) and g.search(q)[0][1] == g.flat(q)
+    return dict(places=g.n, keys=len(where), mixed=mixed, split=sum(len(v) > 1 for v in where.values()), fact_hit=hit, fact_miss=miss,
+                fact_wrong=bad, facts=len(S), false_accept=false, absent=len(A_), rule_hit=rule, rules=len(ru), walk_flat=agree,
+                cost=(g.cost - c0) / max(1, len(S)))
+
+
+def diag(A):
+    """one ckpt, no training. Who writes (gold / reader) x translator (exact / neural), at growing memory; every row run by
+    the correct calls and by the reader in lockstep. Prints a summary; every step goes to --log for slicing afterwards."""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    rd = Reader(tr).to(dev).eval()
+    if A.reader:
+        print("reader:", rd.load_state_dict(torch.load(A.reader, map_location=dev), strict=False).unexpected_keys, flush=True)
+    r0 = random.Random(A.seed)
+    w0 = new_world(r0)
+    bank = collect(w0, Machine(Oracle(w0)), r0, A.demos)
+    k0 = key_re(w0)
+    seen = {shape(x[0][0], k0) for x in bank}
+    print(f"demonstrated views: {len(bank)} steps, {len(seen)} shapes", flush=True)
+    log = open(A.log, "w") if A.log else None
+    t0 = time.time()
+    for who, tname in (("gold", "exact"), ("gold", "neural"), ("reader", "exact"), ("reader", "neural")):
+        rng = random.Random(A.seed + 100)
+        w = new_world(rng)
+        O = Oracle(w)
+        T = O if tname == "exact" else NeuralT(tr, O, A.tau)
+        m = Machine(T, T.d)
+        m.g.beam = A.beam
+        keys, done = key_re(w), 0
+        for size in (int(x) for x in A.sizes.split(",")):
+            wrote, wrong = {}, {}
+            while done < size:
+                done += 1
+                for draw in world_step(w, rng):
+                    o = draw()
+                    for s in statements(o) if o else []:
+                        t, _ = gold_trace(m, lambda: arrive(m, s))
+                        names = [x[1] for x in t]
+                        kind = ("delta" if "derive" in names else "rule" if O.key(s)[0] == "rule" else "note" if s.startswith("Correction")
+                                else "copy" if "(same as" in s else "fact")
+                        steps, first = lockstep(rd, t, keys, seen)
+                        wrote[kind], wrong[kind] = wrote.get(kind, 0) + 1, wrong.get(kind, 0) + (first is not None)
+                        fin = None
+                        if who == "gold":
+                            arrive(m, s)
+                        else:
+                            m.trace = []
+                            fin = run_free(m, rd, Row(s), ("insert", "derive"))
+                            m.trace = None
+                        if log:
+                            log.write(json.dumps(dict(who=who, tr=tname, size=size, part="write", kind=kind, text=s, first=first, fin=fin, steps=steps)) + "\n")
+            h = health(m, w, random.Random(A.seed + size))
+            print(f"[{who} writes, {tname}] world {size} | {h} | rows with a wrong call "
+                  + " ".join(f"{k} {wrong[k]}/{wrote[k]}" for k in sorted(wrote)) + f" | {time.time() - t0:.0f}s", flush=True)
+            if log:
+                log.write(json.dumps(dict(who=who, tr=tname, size=size, part="health", **h)) + "\n")
+            qr = random.Random(A.seed * 1000 + size)
+            for kind, ops in ASKED:
+                n = g_ok = f_ok = clean = hit = tot = 0
+                left = {}
+                for _ in range(A.q):
+                    x = question(kind, w, qr, ops or (1, 3))
+                    if not x:
+                        continue
+
+                    def run():
+                        r = Row(x[0])
+                        x[2](m, r)
+                        m.do(r, "say")
+                        return held(r)
+                    t, ans = gold_trace(m, run)
+                    steps, first = lockstep(rd, t, keys, seen)
+                    r, m.trace = Row(x[0]), []
+                    said = run_free(m, rd, r, ("say",))
+                    ft, m.trace = m.trace, None
+                    ok = said and held(r) == x[1]
+                    n, g_ok, f_ok = n + 1, g_ok + (ans == x[1]), f_ok + ok
+                    clean += first is None
+                    hit, tot = hit + sum(y[8] for y in steps), tot + len(steps)
+                    if first is not None:
+                        y = steps[first]
+                        e = f"{y[0]}>{y[1]}" if y[0] != y[1] else "split end" if y[6] else "split end (cannot point)"
+                        left[e] = left.get(e, 0) + 1
+                    if log:
+                        log.write(json.dumps(dict(who=who, tr=tname, size=size, part="ask", kind=kind, text=x[0], truth=x[1], gold=ans, said=said,
+                                                  got=held(r), ok=ok, first=first, steps=steps, passes=r.passes, held=[it.text[:60] for it in r.stack[-5:]],
+                                                  free=[(v[0][:160], f, c) for v, f, c in ft[:45]] if not ok else None), default=str) + "\n")
+                print(f"   {kind:8s} gold {g_ok}/{n} free {f_ok}/{n} | all calls right {clean}/{n}, steps {hit}/{tot} = {hit / max(1, tot):.4f} | first wrong call: "
+                      + ", ".join(f"{a} {b}" for a, b in sorted(left.items(), key=lambda z: -z[1])[:5]) + f" | {time.time() - t0:.0f}s", flush=True)
+            if log:
+                log.flush()
 
 
 def gold(A):
@@ -1254,6 +1438,9 @@ if __name__ == "__main__":
     P.add_argument("--seed", type=int, default=1)
     P.add_argument("--train", action="store_true", help="train the translator's labels")
     P.add_argument("--read", action="store_true", help="train the reader on demonstrations (--init = the translator)")
+    P.add_argument("--diag", action="store_true", help="no training: every row by the correct calls and by the reader in lockstep")
+    P.add_argument("--reader", default="", help="--diag: the reader's weights")
+    P.add_argument("--sizes", default="20,60,180", help="--diag: steps of world at which to stop and ask")
     P.add_argument("--demos", type=int, default=50)
     P.add_argument("--batch", type=int, default=64)
     P.add_argument("--world", type=int, default=30, help="steps of world the free eval lives through")
@@ -1264,4 +1451,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
