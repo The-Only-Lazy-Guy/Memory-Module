@@ -979,15 +979,22 @@ class ToolBank(nn.Module):
         super().__init__()
         self.nets, self.relate, self.d, self.c, self.cap = nn.ModuleList(), Relate(c), d, c, cap
         self.want = nn.Sequential(nn.Linear(768, 512), nn.GELU(), nn.Linear(512, d))   # a want, in the space the labels live in
+        self.register_buffer("center", torch.zeros(768))     # GPT-2's mean states all point one way: taken out, wants start apart
+        self.register_buffer("scale", torch.ones(768))
 
-    def query(self, tr, texts):
+    def query(self, tr, texts, track=False):
         """a want as a point: learned from what the tools did, so wants one tool answers come together"""
         dev = next(self.want.parameters()).device
         b = tr.tok(texts, return_tensors="pt", padding=True).to(dev)
         with torch.no_grad():
             h = tr.norm(tr.lm(**b).last_hidden_state)
-        m = b["attention_mask"][..., None]
-        return F.normalize(self.want((h * m).sum(1) / m.sum(1)), dim=-1)
+            m = b["attention_mask"][..., None]
+            x = (h * m).sum(1) / m.sum(1)
+            if track and len(texts) > 1:               # running mean and spread of what wants look like
+                first = not self.center.any()
+                self.center.mul_(0 if first else .99).add_((1 if first else .01) * x.mean(0))
+                self.scale.mul_(0 if first else .99).add_((1 if first else .01) * x.std(0).clamp(min=1e-3))
+        return F.normalize(self.want((x - self.center) / self.scale), dim=-1)
 
     def spawn(self, key, like=None, scope=.9):
         """a new tool node: its own network (started from the tool it is most like), its label = the want that needed
@@ -1076,7 +1083,7 @@ def learn(tr, bank, demos, st, A, spawn=True):
     whose label is that want (its network started from the closest tool). What the tools then do only teaches the
     labels: a tool that did a demo as well as it usually does is pulled toward that want; a tool that claimed a demo and
     did it unusually badly for itself is pushed away from it. Returns the loss and where each demo went (-1: new task)."""
-    q = bank.query(tr, [d[1] for d in demos])                  # learns with the labels
+    q = bank.query(tr, [d[1] for d in demos], track=True)      # learns with the labels
     groups = {}
     for i, d in enumerate(demos):
         groups.setdefault(len(d[2]), []).append(i)
@@ -1234,6 +1241,7 @@ def train_tools(A):
     tr.requires_grad_(False)
     bank = ToolBank().to(dev)
     rng = random.Random(A.seed)
+    bank.query(tr, [read_demo(rng, k)[1] for k in KINDS for _ in range(16)], track=True)
     print("before learning:", want_spread(tr, bank), flush=True)
     st, opt, t0 = {"step": 0, "last": -10 ** 9, "newest": None}, None, time.time()
     for step in range(1, A.steps + 1):
