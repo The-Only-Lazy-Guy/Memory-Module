@@ -490,12 +490,14 @@ def phrase_of(text):
 
 # ====================================================================== the graph
 class Graph:
-    """Places, each a label and a chain of entries (A to be B appends B, A stays). Edges start as "everything to
-    everything": i -> j is cut for good when a kept neighbour k of i is closer to j than i is (i reaches j through k)."""
+    """Places, each a label, a relation and a chain of entries (A to be B appends B, A stays). Edges start as "everything
+    to everything": i -> j is cut for good when a kept neighbour k of i is closer to j than i is (i reaches j through k).
+    A relation R[i] claims place j when R[i] . L[j] > 1: i depends on j."""
 
     def __init__(self, d, beam=8, cap=1024):
         self.d, self.beam = d, beam
         self.L = np.zeros((cap, d), dtype=np.float32)
+        self.R = np.zeros((cap, d), dtype=np.float32)
         self.n, self.adj, self.chain, self.cost = 0, [], [], 0
 
     def search(self, q):
@@ -529,7 +531,7 @@ class Graph:
 
     def add_place(self, label):
         if self.n == len(self.L):
-            self.L = np.vstack([self.L, np.zeros_like(self.L)])
+            self.L, self.R = np.vstack([self.L, np.zeros_like(self.L)]), np.vstack([self.R, np.zeros_like(self.R)])
         cands = self.search(label)
         i, self.n = self.n, self.n + 1
         self.L[i] = label
@@ -538,6 +540,18 @@ class Graph:
         for j in self.adj[i]:                          # the way back (cutting here left new places with no way in)
             self.adj[j].append(i)
         return i
+
+    def move(self, i, label):
+        """a place's label changed: it leaves its edges and is linked again where it now is"""
+        if np.linalg.norm(self.L[i] - label) < 1e-6:
+            return
+        for j in range(self.n):
+            if i in self.adj[j]:
+                self.adj[j].remove(i)
+        self.L[i] = label
+        self.adj[i] = self.cut([(d, j) for d, j in self.search(label) if j != i])
+        for j in self.adj[i]:
+            self.adj[j].append(i)
 
 
 # ====================================================================== the translator (exact stand-in for --gold)
@@ -579,6 +593,10 @@ class Oracle:
 
     node = say = staticmethod(lambda x: x)            # exact: a node is its text
 
+    def relation(self, text):                          # exact: "(same as Y)" claims Y's place, nothing else does
+        m = re.search(r"\(same as (.+?)\)", text)
+        return self.label(m.group(1)) / .99 if m else np.zeros(self.d, dtype=np.float32)
+
     def apply(self, want, ins):
         """exact: the want's words say what is done (the stand-in that tests the design around the tools)"""
         if len(ins) == 1:                              # (phrase, entry about an entity) -> phrase about that entity
@@ -615,6 +633,9 @@ class Translator(nn.Module):
         self.proj = nn.Sequential(nn.Linear(D, 512), nn.GELU(), nn.Linear(512, d))
         self.rel = nn.Sequential(nn.Linear(2 * d, 256), nn.GELU(), nn.Linear(256, 1))   # the relate tool: same place?
         self.ruleq = nn.Sequential(nn.Linear(d, 256), nn.GELU(), nn.Linear(256, d))     # a fact -> where its rule lives
+        self.rgate = nn.Sequential(nn.Linear(D, 256), nn.GELU(), nn.Linear(256, 1))     # relation: which tokens say what it depends on
+        self.rdir = nn.Sequential(nn.Linear(D, 512), nn.GELU(), nn.Linear(512, d))
+        self.rhow = nn.Sequential(nn.Linear(D, 256), nn.GELU(), nn.Linear(256, 1))      # ... and whether it depends at all
         self.d = d
         self.K, self.c = 12, 256                       # B: what a statement says, c per token (the label only says where); K = a tool's output
         self.down = nn.Linear(D, self.c)
@@ -634,6 +655,17 @@ class Translator(nn.Module):
 
     def rule_of(self, label):
         return F.normalize(self.ruleq(label), dim=-1)
+
+    def relation(self, texts, scope=.9):
+        """r: points at the place a statement depends on, long enough to claim it (r . label > 1) when it does"""
+        dev = next(self.proj.parameters()).device
+        b = self.tok(texts, return_tensors="pt", padding=True).to(dev)
+        with torch.no_grad():
+            h = self.norm(self.lm(**b).last_hidden_state)
+        m = b["attention_mask"][..., None]
+        w = torch.sigmoid(self.rgate(h)) * m
+        d = F.normalize(self.rdir((w * h).sum(1) / w.sum(1).clamp(min=1e-6)), dim=-1)
+        return d * torch.sigmoid(self.rhow((h * m).sum(1) / m.sum(1)).squeeze(-1))[:, None] / scope
 
     def content(self, texts):
         """encoder, second head: B, one latent per token, so a name never seen keeps its own vectors and comes back
@@ -681,7 +713,7 @@ class NeuralT:
     """the translator as the machine sees it. key is the teacher's routing (gold rows only); no function calls it"""
 
     def __init__(self, model, oracle, tau, tools=None):
-        self.m, self.o, self.tau, self.c, self.d, self.tools = model, oracle, tau, {}, model.d, tools
+        self.m, self.o, self.tau, self.c, self.d, self.tools, self.learning, self.last = model, oracle, tau, {}, model.d, tools, False, None
         self.key = oracle.key
 
     @torch.no_grad()
@@ -693,12 +725,16 @@ class NeuralT:
     def say(self, z):                                  # B -> text
         return self.m.decode(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device))[0].strip()
 
-    @torch.no_grad()
-    def apply(self, want, ins):                        # the want's label finds a tool node by its key; nodes in, nodes out
+    def apply(self, want, ins, tool=None):             # the want's label finds a tool node by its key; nodes in, nodes out
+        with torch.set_grad_enabled(self.learning):    # learning: the answer's truth reaches the tools through this
+            return self._apply(want, ins, tool)
+
+    def _apply(self, want, ins, tool):
+        self.last = None
         s = self.tools.gate(self.m.encode([want]))[0] if self.tools.nets else None
-        if s is None or float(s.max()) <= 1:                       # no tool is relevant: a task it has no tool for
+        if tool is None and (s is None or float(s.max()) <= 1):    # no tool is relevant: a task it has no tool for
             return [self.node("unknown")]
-        t = int(s.argmax())
+        t = self.last = int(s.argmax()) if tool is None else tool
         o, many, _ = self.tools.nets[t]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
         return [z[0] for z, _ in o[:int(many.argmax()) + 1]]
 
@@ -710,6 +746,10 @@ class NeuralT:
 
     def label(self, text):
         return self._l(text)[0].cpu().numpy().astype(np.float32)
+
+    @torch.no_grad()
+    def relation(self, text):                          # what this statement says its node depends on (zero: nothing)
+        return self.m.relation([text])[0].cpu().numpy().astype(np.float32)
 
     @torch.no_grad()
     def rule_query(self, text):
@@ -757,6 +797,14 @@ def label_loss(model, rng, vocab, n=8):
     rv = lambda k: rng.choice([f"rule: {k}", rule_text(rng, rng.choice(("add", "set", "keep")), k)])
     a = model.encode([rv(k) for k in keys] + [f"the {k} is {rng.randint(1, 60)}." for k in keys] + [leaf(rng.choice(names), k) for k in keys])
     b = model.encode([rv(k) for k in keys])
+    src = [(rng.choice(names), rng.choice(keys)) for _ in range(n)]           # a copy depends on its source; nothing else does
+    said = [f"{leaf(nm, k)} is {rng.randint(1, 60)} (same as {leaf(*sf)})." for (nm, k), sf in zip(rng.sample(facts, n), src)]
+    plain = [rng.choice([f"{leaf(*f)} is {rng.randint(1, 60)}.", f"Correction: {leaf(*f)} is now {rng.randint(1, 60)}.", rv(f[1])])
+             for f in rng.sample(facts, n)]
+    R = model.relation(said + plain)
+    tgt = model.encode([leaf(*sf) for sf in src]).detach()
+    loss = (loss + F.cross_entropy(F.normalize(R[:n], dim=-1) @ tgt.T / .07, torch.arange(n, device=sim.device))
+            + F.relu(1.05 - (R[:n] * tgt).sum(-1)).mean() + F.relu(R[n:] @ x[:N].detach().T - .5).mean())
     q = model.rule_of(model.encode([views(rng, rng.choice(names), k) for k in keys]))   # a fact asks for its key's rule
     t = torch.arange(n, device=sim.device)
     return (loss + F.cross_entropy(b @ a.T / .07, t) + relate_loss(model, b, a[:n], b @ a[:n].T)
@@ -790,6 +838,14 @@ def label_eval(model, rng, vocab, n=40):
     C = Q @ R[:n].T
     out["ruleq"] = float((C.argmax(1) == torch.arange(n, device=C.device)).float().mean())
     out["ruleq_rel+"] = float((model.relate(Q, R[:n]) > 0).float().mean())
+    src = [(rng.choice(names), rng.choice(keys)) for _ in range(n)]
+    Rl = model.relation([f"{leaf(rng.choice(names), rng.choice(keys))} is 5 (same as {leaf(*sf)})." for sf in src]
+                        + [f"{leaf(rng.choice(names), rng.choice(keys))} is {rng.randint(1, 60)}." for _ in range(n)])
+    C = Rl[:n] @ S.T                                   # against every fact statement: the source's is the only one > 1
+    ix = torch.tensor([names.index(a) * len(keys) + keys.index(b) for a, b in src], device=C.device)
+    out["rel_claims_source"] = float((C.gather(1, ix[:, None]).squeeze(1) > 1).float().mean())
+    out["rel_claims_other"] = float(((C > 1).sum(1) - (C.gather(1, ix[:, None]).squeeze(1) > 1).long()).float().mean() / C.shape[1])
+    out["plain_claims_any"] = float(((Rl[n:] @ S.T) > 1).any(1).float().mean())
     return out
 
 
@@ -1203,8 +1259,8 @@ class Budget(Exception):
 class Item:
     """a node on the stack: what it is (B, or the text itself for the exact stand-in), where it came from"""
 
-    def __init__(self, node, T, place=-1, idx=-1, until=None):
-        self.node, self.T, self.place, self.idx, self.until, self._t = node, T, place, idx, until, None
+    def __init__(self, node, T, place=-1, idx=-1, made=None):
+        self.node, self.T, self.place, self.idx, self.made, self._t = node, T, place, idx, made, None
 
     @property
     def text(self):                                    # what the node says: decoded once
@@ -1221,14 +1277,14 @@ class Row:
     """one thought: what it is reading (focus) and what it holds (stack)"""
 
     def __init__(self, text):
-        self.src, self.focus, self.stack, self.passes, self.until, self.stuck = text, [text], [], 0, None, False
+        self.src, self.focus, self.stack, self.passes, self.stuck = text, [text], [], 0, False
 
 
 class Machine:
     """f(nodes) -> nodes. Every step of every row is one call of one function."""
 
     def __init__(self, translator, d=64, budget=400):
-        self.T, self.g, self.t, self.budget, self.flat, self.trace = translator, Graph(d), 0, budget, False, None
+        self.T, self.g, self.t, self.budget, self.flat, self.trace, self.made = translator, Graph(d), 0, budget, False, None, {}
 
     def do(self, r, name, *a):
         r.passes += 1
@@ -1254,19 +1310,13 @@ class Machine:
     def entry_item(self, p, idx=-1):
         ch = self.g.chain[p]
         idx = idx % len(ch)
-        return Item(ch[idx][0], self.T, p, idx, ch[idx + 1][1] if idx + 1 < len(ch) else None)
+        return Item(ch[idx][0], self.T, p, idx)
 
     def f_split(self, r, n):                           # text -> chunk, rest
         c, r.focus[-1] = r.focus[-1][:n].strip(), r.focus[-1][n:].lstrip()   # no stray spaces: a chunk ends on a token
         if not r.focus[-1]:
             r.focus.pop()
-            r.until = None
         r.stack.append(self.item(c))
-
-    def f_open(self, r):                               # a node's text -> what the row reads next
-        it = r.stack.pop()
-        r.focus.append(it.text)
-        r.until = it.until                             # an old copy is read as it was then
 
     def f_drop(self, r):
         r.stack.pop()
@@ -1277,15 +1327,10 @@ class Machine:
     def f_say(self, r):                                # the row is done; its answer is what it holds
         pass
 
-    def f_lookup(self, r):                             # phrase -> newest entry of its place (as of the row's time)
+    def f_lookup(self, r):                             # phrase -> newest entry of its place
         it = r.stack.pop()
         p = self.find(self.T.label(it.text), it.node)
-        idx = -1
-        if p >= 0 and r.until is not None:
-            idx = sum(t < r.until for _, t in self.g.chain[p]) - 1
-            if idx < 0:
-                p = -1
-        r.stack.append(self.entry_item(p, idx) if p >= 0 else self.item("unknown"))
+        r.stack.append(self.entry_item(p) if p >= 0 else self.item("unknown"))
 
     def f_rule(self, r):                               # statement -> the rule that governs it
         q = self.T.rule_query(r.src)
@@ -1300,8 +1345,9 @@ class Machine:
         want, ins = r.stack[-k - 1], r.stack[-k:]
         del r.stack[-k - 1:]
         node = (lambda it: it.text) if isinstance(self.T, Oracle) else (lambda it: it.node)
-        for z in self.T.apply(want.text, [node(x) for x in ins]):
-            r.stack.append(Item(z, self.T))
+        args = [node(x) for x in ins]
+        for z in self.T.apply(want.text, args):
+            r.stack.append(Item(z, self.T, made=(getattr(self.T, "last", None), want.text, args)))
 
     def f_insert(self, r, derived=False):              # A to be B: a new entry where the statement belongs
         self.t += 1
@@ -1311,45 +1357,50 @@ class Machine:
         p = self.find(label, said)
         p = p if p >= 0 else self.g.add_place(label)
         self.g.chain[p].append((node, self.t))
+        if derived and r.stack[-1].made and r.stack[-1].made[0] is not None:
+            self.made[(p, len(self.g.chain[p]) - 1)] = r.stack[-1].made   # (tool, want, inputs): to run again if the tool changes
+        self.g.R[p] = self.T.relation(r.src)           # what it depends on now (said directly: nothing)
+        mv = self.g.L[p] + .5 * (label - self.g.L[p])  # the label follows how it is said
+        self.g.move(p, mv / max(np.linalg.norm(mv), 1e-6))
+        self.changed(p)
+
+    def rerun(self, tools):
+        """these tool nodes changed: every entry one of them made is made again; a newest entry that changes is a change"""
+        n = 0
+        for (p, i), (t, want, args) in self.made.items():
+            if t in tools:
+                self.g.chain[p][i] = (self.T.apply(want, args, tool=t)[0], self.g.chain[p][i][1])
+                n += 1
+                if i == len(self.g.chain[p]) - 1:
+                    self.changed(p)
+        return n
+
+    def changed(self, p, depth=0):
+        """a node changed: every node whose relation claims it runs again what made it; for a copy that is taking the
+        new value. That is a change too, so it goes on (a cycle stops at depth 8)."""
+        if depth >= 8:
+            return
+        for j in np.nonzero(self.g.R[:self.g.n] @ self.g.L[p] > 1)[0]:
+            if j != p:
+                self.t += 1
+                self.g.chain[j].append((self.g.chain[p][-1][0], self.t))
+                self.changed(int(j), depth + 1)
 
 
 # ====================================================================== --gold: the correct calls, written by hand
 ADD_RE = [re.compile(v.format(k=".*")) for v in RULE_PARTS["add"]]
 
 
-def gold_follow(m, r):
-    """the top entry may say it is a copy of another fact: follow it"""
-    seen = set()
-    while "(same as" in r.stack[-1].text:
-        t = r.stack[-1].text
-        if r.stack[-1].place in seen:                  # a cycle: nothing here holds a value
-            r.stack[-1] = m.item("unknown")
-            return
-        seen.add(r.stack[-1].place)
-        src = re.search(r"\(same as (.+?)\)", t).group(1)
-        m.do(r, "open")
-        m.do(r, "split", t.index(src))
-        m.do(r, "drop")
-        m.do(r, "split", len(src))
-        m.do(r, "lookup")
-        m.do(r, "split", len(t) - t.index(src) - len(src))
-        m.do(r, "drop")
-
-
 def gold_read(m, r, phrase):
     m.do(r, "split", len(phrase))
-    m.do(r, "lookup")
-    gold_follow(m, r)
+    m.do(r, "lookup")                                  # a copy is already current: its relation keeps it so
 
 
 def gold_older(m, r):
     """step back until the value differs (a restated value is not a change)"""
     cur = r.stack[-1].value
     while True:
-        it = r.stack[-1]
         m.do(r, "prev")
-        if it.place >= 0 and it.idx > 0:
-            gold_follow(m, r)
         if r.stack[-1].value != cur or r.stack[-1].text == "unknown":
             return
         m.do(r, "nip")
@@ -1435,7 +1486,6 @@ def question(kind, world, rng, ops=(1, 3)):
             gold_read(m, r, b_)
             m.do(r, "apply", 1)
             m.do(r, "lookup")
-            gold_follow(m, r)
         return f"What is {a_}{b_}?", world.ents[world.ents[nm][k]][k2], calls
     t = rand_tree(rng, num, rng.randint(*ops), "any")
     truth = (lambda f: f(f, t))(lambda f, x: world.ents[x[1]][x[2]] if x[0] == "leaf" else
@@ -1475,7 +1525,7 @@ def world_step(world, rng):
 
 
 # ====================================================================== the reader: what do I want next?
-FUNCS = ["split", "lookup", "rule", "prev", "open", "drop", "nip", "apply1", "apply2", "apply3", "insert", "derive", "say"]
+FUNCS = ["split", "lookup", "rule", "prev", "drop", "nip", "apply1", "apply2", "apply3", "insert", "derive", "say"]
 
 
 def view(r):
@@ -1733,6 +1783,70 @@ def train_reader(A):
             print(f"step {step} loss {float(loss):.3f} acc {acc:.3f} | free world: places {m.g.n}, rows done {placed} of {rows} | {free_eval(w, m, rd, rng, A.q)} | {time.time() - t0:.0f}s", flush=True)
             if A.save:
                 torch.save({k: v for k, v in rd.state_dict().items() if not k.startswith("tr.")}, A.save)
+
+
+# ====================================================================== --online: everything at once, as it happens
+def online(A):
+    """the world goes on and the model lives in it. Each tick it reads a few demos (its tool nodes learn, and it makes new
+    ones), is told what happened (stored by the correct calls: relations set, changes trigger what depends on them),
+    answers questions and learns from each answer's truth at once. A tool node that changed runs again what it made."""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    tr.requires_grad_(False)
+    bank = load_tools(A, tr) or ToolBank().to(dev)
+    bank.train()
+    rng = random.Random(A.seed)
+    w = new_world(rng)
+    T = NeuralT(tr, Oracle(w), A.tau, bank)
+    m = Machine(T, T.d)
+    m.g.beam = A.beam
+    st, opt, t0, rerun, said = {"step": 0, "last": -10 ** 9, "newest": None}, None, time.time(), 0, 0
+    for tick in range(1, A.steps + 1):
+        st.update(step=tick, spawned=False)
+        loss, route, _ = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A)
+        used = {int(x) for x in route if x >= 0}
+        T.learning, truth = True, []
+        for kind in ("coexist", "ops"):                # asked, answered, then told the truth
+            x = question(kind, w, rng)
+            if not x:
+                continue
+            r = Row(x[0])
+            try:
+                x[2](m, r)
+            except FAIL:
+                continue
+            if r.stack and r.stack[-1].node.requires_grad:
+                z = r.stack[-1].node
+                truth.append(tr.decode_loss(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device), [str(x[1])]))
+                used |= {t for t in range(len(bank.nets))}
+        T.learning = False
+        if truth:
+            loss = loss + torch.stack(truth).mean()
+        if opt is None or st["spawned"]:
+            opt = torch.optim.AdamW(bank.parameters(), lr=A.lr)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        if tick % A.rerun == 0:
+            rerun += m.rerun(used)                     # the tools changed: what they made is made again
+        for draw in world_step(w, rng):
+            o = draw()
+            for s_ in statements(o) if o else []:
+                try:
+                    arrive(m, s_)
+                    said += 1
+                except FAIL:
+                    pass
+        if tick % A.every == 0:
+            bank.eval()
+            with torch.no_grad():
+                line = asked(m, w, rng, A.q)
+            bank.train()
+            print(f"tick {tick} | places {m.g.n}, statements {said}, tools {len(bank.nets)}, entries made again {rerun} | {line} | {time.time() - t0:.0f}s", flush=True)
+            if A.save:
+                bank.save(A.save)
 
 
 # ====================================================================== --episode: the translator moves, the graph is re-transcribed
@@ -2038,6 +2152,8 @@ if __name__ == "__main__":
     P.add_argument("--train", action="store_true", help="train the translator's labels")
     P.add_argument("--decode", action="store_true", help="train the translator's decoder: text -> B -> text (--init = the translator)")
     P.add_argument("--tools", action="store_true", help="train the tool nodes on B (--init = translator with decoder)")
+    P.add_argument("--online", action="store_true", help="the model lives in the world: reads, is told, answers, learns, all at once")
+    P.add_argument("--rerun", type=int, default=10, help="--online: every this many ticks, what changed tools made is made again")
     P.add_argument("--episode", action="store_true", help="build a memory, unfreeze the translator for --steps, re-transcribe the graph")
     P.add_argument("--read", action="store_true", help="train the reader on demonstrations (--init = the translator)")
     P.add_argument("--diag", action="store_true", help="no training: every row by the correct calls and by the reader in lockstep")
@@ -2058,4 +2174,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    diag(A) if A.diag else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
