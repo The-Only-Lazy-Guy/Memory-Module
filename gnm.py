@@ -4,6 +4,7 @@ The model only states what it wants: A to be B.
   python gnm.py --gold      # the correct functions plugged in, no model: does the design solve each task?
 """
 import argparse
+import copy
 import json
 import random
 import re
@@ -573,7 +574,7 @@ class Oracle:
         k = self.key(text)
         return self._vec(("rule", k[1])) if k[0] == "fact" else None
 
-    def same(self, a, b):
+    def same(self, a, b, *_):
         return np.linalg.norm(a - b) < self.tau
 
     node = say = staticmethod(lambda x: x)            # exact: a node is its text
@@ -706,7 +707,11 @@ class NeuralT:
         return self.m.rule_of(self._l(text))[0].cpu().numpy().astype(np.float32)
 
     @torch.no_grad()
-    def same(self, a, b):
+    def same(self, a, b, q=None, anchor=None, task="same"):
+        """is the place the walk found the one asked for? read off both nodes' B (q, the place's first entry)"""
+        if self.tools is not None and q is not None and anchor is not None:
+            one = lambda z: (z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device))
+            return float(self.tools.relate([task], *one(q), *one(anchor))[0]) > 0
         dev = next(self.m.proj.parameters()).device
         return float(self.m.relate(torch.tensor(a, device=dev), torch.tensor(b, device=dev))) > 0
 
@@ -864,11 +869,26 @@ class Tools(nn.Module):
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 4)
         self.K = K
+        self.tasks = ["same", "rule"]                  # relate: the same place? / the rule for this fact?
+        self.task = nn.Parameter(torch.randn(len(self.tasks), c) * .02)
+        self.rf = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 2)
+        self.ro = nn.Linear(c, 1)
+
+    def at(self, z, m, k):
+        return z + self.side[k] + self.pos[(m.long().cumsum(1) - 1).clamp(min=0)]
+
+    def relate(self, task, a, am, b, bm):
+        """the relate node: reads both nodes token by token, a logit"""
+        n = len(task)
+        i = torch.tensor([self.tasks.index(t) for t in task], device=a.device)
+        x = torch.cat([self.task[i][:, None], self.at(a, am, 0), self.at(b, bm, 1)], 1)
+        keep = torch.cat([torch.ones(n, 1, dtype=torch.bool, device=a.device), am, bm], 1)
+        return self.ro(self.rf(x, src_key_padding_mask=~keep)[:, 0]).squeeze(-1)
 
     def forward(self, name, a, am, b, bm):
         n, dev = len(name), a.device
         i = torch.tensor([self.names.index(x) for x in name], device=dev)
-        at = lambda z, m, k: z + self.side[k] + self.pos[(m.long().cumsum(1) - 1).clamp(min=0)]
+        at = self.at
         x = torch.cat([self.emb[i][:, None], self.out[None].expand(n, -1, -1), at(a, am, 0), at(b, bm, 1)], 1)
         keep = torch.cat([torch.ones(n, 1 + self.K, dtype=torch.bool, device=dev), am, bm], 1)
         y = self.f(x, src_key_padding_mask=~keep)[:, 1:1 + self.K]
@@ -909,6 +929,47 @@ def load_tools(A, tr):
     t = Tools(tr.K, tr.c).to(next(tr.proj.parameters()).device).eval()
     t.load_state_dict(torch.load(A.toolw, map_location=next(tr.proj.parameters()).device))
     return t
+
+
+def near(rng, nm):
+    """a name one syllable off"""
+    for _ in range(50):
+        x = _name(rng, 2)
+        if x != nm and (x[:2].lower() == nm[:2].lower() or x[-2:] == nm[-2:]):
+            return x
+    return _name(rng, 2)
+
+
+def relate_batch(rng, n, vocab=KEYS_TRAIN):
+    """(task, a, b, same?): two sayings of one fact or rule, and the near misses: a name one syllable off, the same name
+    with another key, a key with or without an adjective ("old offer" / "offer"); and a fact with its rule or another"""
+    out = []
+    for _ in range(n):
+        nm, k = _name(rng, 2), " ".join(_key(rng, vocab, set()))
+        k2 = rng.choice([" ".join(_key(rng, vocab, set())), f"{rng.choice(_ADJ)} {k}"])
+        rt = lambda key: rng.choice([f"rule: {key}", rule_text(rng, rng.choice(("add", "set", "keep")), key)])
+        c = rng.random()
+        if c < .3:
+            out.append(("same", views(rng, nm, k), views(rng, nm, k), 1))
+        elif c < .4:
+            out.append(("same", views(rng, nm, k), views(rng, near(rng, nm), k), 0))
+        elif c < .55:
+            out.append(("same", views(rng, nm, k), views(rng, nm, k2), 0))
+        elif c < .65:
+            out.append(("same", rt(k), rt(k), 1))
+        elif c < .7:
+            out.append(("same", rt(k), rt(k2), 0))
+        elif c < .85:
+            out.append(("rule", views(rng, nm, k), rt(k), 1))
+        else:
+            out.append(("rule", views(rng, nm, k), rt(k2), 0))
+    return out
+
+
+def relate_run(tr, tools, batch):
+    task, a, b, y = zip(*batch)
+    dev = next(tools.parameters()).device
+    return tools.relate(list(task), *tr.content(list(a)), *tr.content(list(b))), torch.tensor(y, dtype=torch.float, device=dev)
 
 
 def join_batch(rng, n, vocab=KEYS_TRAIN):
@@ -956,7 +1017,8 @@ def train_tools(A):
     for step in range(1, A.steps + 1):
         outs = tool_run(tr, tools, *tool_batch(rng, A.batch, rng.choice((1, 1, 2))))
         a, b, t = join_batch(rng, A.batch // 2)
-        loss = sum(tr.decode_loss(z, zm, t) for z, zm, t in outs) + tr.decode_loss(*join_run(tr, tools, a, b), t)
+        loss = (sum(tr.decode_loss(z, zm, t) for z, zm, t in outs) + tr.decode_loss(*join_run(tr, tools, a, b), t)
+                + F.binary_cross_entropy_with_logits(*relate_run(tr, tools, relate_batch(rng, A.batch))))
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -973,6 +1035,13 @@ def train_tools(A):
                     a, b, t = join_batch(rng, 128, voc)
                     got = tr.decode(*join_run(tr, tools, a, b))
                     line.append(f"join {nm} keys {sum(g.strip() == x for g, x in zip(got, t)) / 128:.3f}")
+                    B = relate_batch(rng, 512, voc)
+                    lg, y = relate_run(tr, tools, B)
+                    ok = ((lg > 0).float() == y).tolist()
+                    for task in ("same", "rule"):
+                        for v in (1, 0):
+                            sel = [o for o, x in zip(ok, B) if x[0] == task and x[3] == v]
+                            line.append(f"{task}{'+' if v else '-'} {sum(sel) / max(1, len(sel)):.3f}")
             print(f"step {step} loss {float(loss):.3f} | exact: " + " ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
             tools.train()
             if A.save:
@@ -1023,13 +1092,14 @@ class Machine:
             self.trace.append((view(r), f, a[0] if name == "split" else None))
         return getattr(self, "f_" + name)(r, *a)
 
-    def find(self, label):
+    def find(self, label, q=None, task="same"):
+        """the walk finds the nearest place by label; relate says whether it is the one (q: the asking node)"""
         if self.flat:
             j = self.g.flat(label)
         else:
             c = self.g.search(label)
             j = c[0][1] if c else -1
-        return j if j >= 0 and self.T.same(label, self.g.L[j]) else -1
+        return j if j >= 0 and self.T.same(label, self.g.L[j], q, self.g.chain[j][0][0], task) else -1
 
     def item(self, text):
         return Item(self.T.node(text), self.T)
@@ -1065,7 +1135,8 @@ class Machine:
         pass
 
     def f_lookup(self, r):                             # phrase -> newest entry of its place (as of the row's time)
-        p = self.find(self.T.label(r.stack.pop().text))
+        it = r.stack.pop()
+        p = self.find(self.T.label(it.text), it.node)
         idx = -1
         if p >= 0 and r.until is not None:
             idx = sum(t < r.until for _, t in self.g.chain[p]) - 1
@@ -1075,7 +1146,7 @@ class Machine:
 
     def f_rule(self, r):                               # statement -> the rule that governs it
         q = self.T.rule_query(r.src)
-        p = self.find(q) if q is not None else -1
+        p = self.find(q, self.T.node(r.src), "rule") if q is not None else -1
         r.stack.append(self.entry_item(p) if p >= 0 else self.item("no rule"))
 
     def f_prev(self, r):                               # entry -> the entry it came from
@@ -1089,9 +1160,10 @@ class Machine:
 
     def f_insert(self, r, derived=False):              # A to be B: a new entry where the statement belongs
         self.t += 1
-        node = r.stack[-1].node if derived else self.T.node(r.src)   # derived: the tool's output node itself
+        said = self.T.node(r.src)
+        node = r.stack[-1].node if derived else said   # derived: the tool's output node itself
         label = self.T.label(r.src)                    # a statement lands where its phrase does: the labels are trained so
-        p = self.find(label)
+        p = self.find(label, said)
         p = p if p >= 0 else self.g.add_place(label)
         self.g.chain[p].append((node, self.t))
 
@@ -1518,6 +1590,85 @@ def train_reader(A):
                 torch.save({k: v for k, v in rd.state_dict().items() if not k.startswith("tr.")}, A.save)
 
 
+# ====================================================================== --episode: the translator moves, the graph is re-transcribed
+def retranscribe(m, old, new):
+    """the translator changed: the old one reads every node out, the new one writes it back. Places keep their entries
+    and times; a place's label comes from its first entry (a statement: derived entries only follow one)."""
+    g = Graph(m.g.d, m.g.beam)
+    out = Machine(new, new.d, m.budget)
+    out.g, out.t = g, m.t
+    for ch in m.g.chain:
+        said = [old.say(e[0]) for e in ch]
+        p = g.add_place(new.label(said[0]))
+        g.chain[p] = [(new.node(t), e[1]) for t, e in zip(said, ch)]
+    return out
+
+
+def asked(m, w, rng, q):
+    """the correct calls on this memory: right answers per kind"""
+    line = []
+    for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3))):
+        res = []
+        for _ in range(q):
+            try:
+                x = ask(m, kind, w, rng, ops or (1, 3))
+            except FAIL:                               # the calls could not finish on this memory: wrong
+                x = (None, 1, None)
+            res += [x] if x else []
+        line.append(f"{kind} {sum(x[1] == x[2] for x in res)}/{len(res)}")
+    return " | ".join(line)
+
+
+def episode(A):
+    """build a memory, then unfreeze the translator (its heads, the decoder, the tool nodes) and train them together for
+    a while; ask on the stale graph and on the re-transcribed one. Same world, same questions (seeded)."""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    tools = load_tools(A, tr) or Tools(tr.K, tr.c).to(dev).eval()
+    rng = random.Random(A.seed)
+    w = new_world(rng)
+    T1 = NeuralT(tr, Oracle(w), A.tau, tools)
+    m = Machine(T1, T1.d)
+    m.g.beam = A.beam
+    for _ in range(A.world):
+        for draw in world_step(w, rng):
+            o = draw()
+            for s in statements(o) if o else []:
+                arrive(m, s)
+    qs = rng.randrange(1 << 30)
+    print(f"before: places {m.g.n} | {asked(m, w, random.Random(qs), A.q)}", flush=True)
+    old = NeuralT(copy.deepcopy(tr).eval(), Oracle(w), A.tau, copy.deepcopy(tools).eval())
+    for n, p in tr.named_parameters():
+        p.requires_grad = not n.startswith("lm.")
+    tools.requires_grad_(True)
+    opt = torch.optim.AdamW([p for p in tr.parameters() if p.requires_grad] + list(tools.parameters()), lr=A.lr)
+    tr.train(), tools.train()
+    t0 = time.time()
+    for step in range(1, A.steps + 1):
+        T = [sentence(rng, KEYS_TRAIN) for _ in range(A.batch)]
+        a, b, t = join_batch(rng, A.batch // 2)
+        loss = (label_loss(tr, rng, KEYS_TRAIN, A.grid) + tr.decode_loss(*tr.content(T), T)
+                + sum(tr.decode_loss(z, zm, x) for z, zm, x in tool_run(tr, tools, *tool_batch(rng, A.batch, rng.choice((1, 2)))))
+                + tr.decode_loss(*join_run(tr, tools, a, b), t))
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+    tr.eval(), tools.eval()
+    moved = float(sum((p - q).norm() ** 2 for p, q in zip(tr.parameters(), old.m.parameters())) ** .5)
+    print(f"episode: {A.steps} steps, loss {float(loss):.3f}, translator moved {moved:.2f} | {time.time() - t0:.0f}s", flush=True)
+    T2 = NeuralT(tr, Oracle(w), A.tau, tools)
+    stale = Machine(T2, T2.d)
+    stale.g, stale.t = m.g, m.t
+    print(f"stale graph, new translator: {asked(stale, w, random.Random(qs), A.q)}", flush=True)
+    new = retranscribe(m, old, T2)
+    print(f"re-transcribed: places {new.g.n} | {asked(new, w, random.Random(qs), A.q)}", flush=True)
+    if A.save:
+        torch.save({k: v for k, v in tr.state_dict().items() if not k.startswith("lm.")}, A.save)
+        torch.save(tools.state_dict(), A.save.replace(".pt", "_tools.pt"))
+
+
 # ====================================================================== --diag: where does a free row go wrong?
 FAIL = (IndexError, AttributeError, Budget, TypeError, ValueError, StopIteration, KeyError)
 ASKED = (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6)))
@@ -1581,14 +1732,15 @@ def health(m, w, rng, n=200):
     S = rng.sample(facts, min(n, len(facts)))
     hit = miss = bad = 0
     for nm, k in S:
-        p = m.find(m.T.label(leaf(nm, k)))
+        p = m.find(m.T.label(leaf(nm, k)), m.T.node(leaf(nm, k)))
         hit += p >= 0 and p in where.get(("fact", words(k), nm), ())
         miss += p < 0
         bad += p >= 0 and p not in where.get(("fact", words(k), nm), ())
     absent = [(nm, k) for nm in sorted(w.ents) for k in w.num_keys if k not in w.ents[nm]]
     A_ = rng.sample(absent, min(n, len(absent)))
-    false = sum(m.find(m.T.label(leaf(nm, k))) >= 0 for nm, k in A_)
-    ru = [(k, m.find(m.T.rule_query(leaf(sorted(w.ents)[0], k) + " is 1."))) for k in sorted(w.policy)]
+    false = sum(m.find(m.T.label(leaf(nm, k)), m.T.node(leaf(nm, k))) >= 0 for nm, k in A_)
+    ru = [(k, m.find(m.T.rule_query(leaf(sorted(w.ents)[0], k) + " is 1."), m.T.node(leaf(sorted(w.ents)[0], k) + " is 1."), "rule"))
+          for k in sorted(w.policy)]
     rule = sum(p >= 0 and p in where.get(("rule", words(k)), ()) for k, p in ru)
     c0, agree = g.cost, 0
     for nm, k in S:
@@ -1740,6 +1892,7 @@ if __name__ == "__main__":
     P.add_argument("--train", action="store_true", help="train the translator's labels")
     P.add_argument("--decode", action="store_true", help="train the translator's decoder: text -> B -> text (--init = the translator)")
     P.add_argument("--tools", action="store_true", help="train the tool nodes on B (--init = translator with decoder)")
+    P.add_argument("--episode", action="store_true", help="build a memory, unfreeze the translator for --steps, re-transcribe the graph")
     P.add_argument("--read", action="store_true", help="train the reader on demonstrations (--init = the translator)")
     P.add_argument("--diag", action="store_true", help="no training: every row by the correct calls and by the reader in lockstep")
     P.add_argument("--reader", default="", help="--diag: the reader's weights")
@@ -1755,4 +1908,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    diag(A) if A.diag else train_decoder(A) if A.decode else train_tools(A) if A.tools else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
