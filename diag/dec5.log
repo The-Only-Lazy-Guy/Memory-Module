@@ -1,39 +1,39 @@
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4333.99it/s]
-/marimo/frozen/dec5/gnm.py:853: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3494.41it/s]
+/marimo/frozen/dec5/gnm.py:858: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
 Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
   print(f"step {step} loss {float(loss):.3f} | round trip, train keys: {tr} | held keys: {he} | {time.time() - t0:.0f}s", flush=True)
-step 1000 loss 0.020 | round trip, train keys: copy 1.000 fact 0.986 rule 0.878 value 1.000 all 0.969 | held keys: copy 0.591 fact 0.356 rule 0.254 value 1.000 all 0.449 | 94s
-     'last department figures that arrive later are kept alongside the earlier last department' -> "in the last department figure that's extra last department figure that's extra last department figure onwards"
-     'from now on, user figures that arrive later do not remove the previous user' -> 'from now on, user figures do not remove the previous user'
-     'later student values replace the old student' -> 'or old student values replace the old one'
-     'the draft of Pello' -> 'the mission of Pello'
+step 1000 loss 0.041 | round trip, train keys: copy 0.913 fact 1.000 rule 0.735 value 0.757 all 0.906 | held keys: copy 0.227 fact 0.159 rule 0.127 value 0.744 all 0.246 | 91s
+     'last department figures that arrive later are kept alongside the earlier last department' -> 'incoming season figures that arrive later are kept alongside'
+     '220' -> '219'
+     'every reported backup number replace the old backup number' -> 'every reported backup number replace the old backup'
+     'the draft of Pello' -> 'the version of Pello'
      'the cost of Vinsa is Thane.' -> 'the budget of Vinsa is Thane.'
      'the base height of Nepel is 5.' -> 'the base of Nepel is 5.'
-step 2000 loss 0.092 | round trip, train keys: copy 1.000 fact 1.000 rule 0.961 value 1.000 all 0.992 | held keys: copy 0.929 fact 0.803 rule 0.792 value 1.000 all 0.844 | 190s
+step 2000 loss 0.140 | round trip, train keys: copy 1.000 fact 1.000 rule 0.922 value 1.000 all 0.984 | held keys: copy 0.929 fact 0.869 rule 0.774 value 1.000 all 0.875 | 184s
+     'each new primary contact are the new primary contact; discard the old one' -> 'each new primary contact are the new primary contact; discard the old one; discard the old one; discard the old one; discard the old one; discard the old one; discard the old one; discard the old one; discard the old'
+     'old module figures that arrive later are the new old module; discard the old one' -> 'from old module figures that arrive later are the new old module; discard the old one; discard the old one; discard the old one; discard the old one; discard the old one; discard the old one; discard the old one;'
      'later old event values replace the old old event' -> 'later old event values replace the old event'
-     'temperature figures that arrive later replace the old temperature' -> 'rule figures that arrive later replace the old temperature'
-     'Correction: the next sport of Merne is now 16.' -> 'Correction: the next style of Merne is now 16.'
-     'rule: incoming primary payment numbers are amounts to add to the current primary payment' -> 'rule: incoming primary fee numbers are amounts to add to the current primary fee'
-     'the language of Gorzek is 58.' -> 'the genre of Gorzek is 58.'
-step 3000 loss 0.028 | round trip, train keys: copy 1.000 fact 0.992 rule 0.964 value 1.000 all 0.988 | held keys: copy 0.905 fact 0.893 rule 0.844 value 1.000 all 0.902 | 285s
-     'later hour values become the current hour' -> 'value become the current hour'
+     'the reason of Vingor' -> 'the first of Vingor'
+     'note: every reported daily scene are amounts to add to the current daily scene' -> 'note: every reported daily scene are amounts to add to the current daily image'
+     'Correction: the next sport of Merne is now 16.' -> 'Correction: the next country of Merne is now 16.'
+step 3000 loss 0.109 | round trip, train keys: copy 1.000 fact 0.992 rule 0.982 value 1.000 all 0.992 | held keys: copy 0.905 fact 0.926 rule 0.844 value 1.000 all 0.918 | 275s
      'rule: backup bonus' -> 'rule: backup bonus bonus'
      'the income of Thazek is Zekka.' -> 'the income of Thazekka is Zekka.'
-     'the rent of Saka' -> 'the salary of Saka'
-     'the player of Tormer is 55.' -> 'the user of Tormer is 55.'
-     'Correction: the main rent of Thaor is now 33.' -> 'Correction: the main salary of Thaor is now 33.'
-step 4000 loss 0.024 | round trip, train keys: copy 1.000 fact 1.000 rule 0.986 value 1.000 all 0.996 | held keys: copy 0.926 fact 0.921 rule 0.877 value 1.000 all 0.922 | 380s
-     'door figures that arrive later are the new door; discard the old one' -> 'picture figures that arrive later are the new door; discard the old one'
-     'note: later rent values join the rent values already known' -> 'note: later lease values join the lease values already known'
-     'the backup session of Sagor is 55 (same as the base route of Nesa).' -> 'the backup thread of Sagor is 55 (same as the base route of Nesa).'
-     'rule: every reported base sample do not remove the previous base sample' -> 'rule: every reported base sample do not remove the previous base judge'
-step 5000 loss 0.043 | round trip, train keys: copy 1.000 fact 1.000 rule 1.000 value 1.000 all 1.000 | held keys: copy 0.917 fact 0.925 rule 0.875 value 1.000 all 0.922 | 475s
-     'note: later chapter values do not remove the previous chapter' -> 'note: later page values do not remove the previous chapter'
-     'the main rule of Vinmer is 33 (same as the pilot of Pelba).' -> 'the main of Vinmer is 33 (same as the pilot of Pelba).'
-     'the test of Loril is 40 (same as the base list of Sazek).' -> 'the stage of Loril is 40 (same as the base list of Sazek).'
-step 6000 loss 0.012 | round trip, train keys: copy 1.000 fact 1.000 rule 0.985 value 1.000 all 0.996 | held keys: copy 0.960 fact 0.949 rule 0.828 value 1.000 all 0.926 | 570s
-     'age figures that arrive later join the age values already known' -> 'rule figures that arrive later join the age values already known'
-     'each new reason overwrite the previous reason' -> 'each new reason overwrite the previous one'
-     'the backup config of Nene is 26.' -> 'the backup module of Nene is 26.'
-     'the method of Bamu' -> 'the subject of Bamu'
+     'rule: incoming engine numbers count as increments to the engine' -> 'rule: incoming engine numbers count as increments to the motor'
+     'note: base kind figures that arrive later should be added to the existing base kind' -> 'note: base form figures that arrive later should be added to the existing base model'
+     'later volume values count as increments to the volume' -> 'later volume values count as increments to the space'
+step 4000 loss 0.008 | round trip, train keys: copy 1.000 fact 1.000 rule 0.986 value 1.000 all 0.996 | held keys: copy 0.889 fact 0.898 rule 0.923 value 1.000 all 0.918 | 366s
+     'door figures that arrive later are the new door; discard the old one' -> 'image figures that arrive later are the new door; discard the old one'
+     'the backup session of Sagor is 55 (same as the base route of Nesa).' -> 'the backup programme of Sagor is 55 (same as the base route of Nesa).'
+     'the backup alias of Merril is 19.' -> 'the backup edition of Merril is 19.'
+     'the last alias of Satha' -> 'the last edition of Satha'
+step 5000 loss 0.031 | round trip, train keys: copy 1.000 fact 1.000 rule 0.982 value 1.000 all 0.996 | held keys: copy 0.917 fact 0.903 rule 0.859 value 1.000 all 0.906 | 456s
+     'board figures that arrive later join the board values already known' -> 'last updated version'
+     'the base alias of Tordun' -> 'the base edition of Tordun'
+     'the session of Pelpel' -> 'the mission of Pelpel'
+     'the test of Loril is 40 (same as the base list of Sazek).' -> 'the track of Loril is 40 (same as the base list of Sazek).'
+step 6000 loss 0.014 | round trip, train keys: copy 1.000 fact 1.000 rule 1.000 value 1.000 all 1.000 | held keys: copy 0.920 fact 0.926 rule 0.812 value 1.000 all 0.906 | 547s
+     'each new reason overwrite the previous reason' -> 'each new rule overwrite the previous one'
+     'the project of Dungor is Rilmu.' -> 'the program of Dungor is Rilmu.'
+     'the session of Orzek is 35 (same as the cycle of Kalo).' -> 'the mission of Orzek is 35 (same as the cycle of Kalo).'
