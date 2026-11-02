@@ -1474,38 +1474,80 @@ def canon_set(lines):
 
 
 class Normalizer(nn.Module):
-    """a language model that rewrites any text into clear statements, one per line"""
+    """a language model that rewrites any text into clear statements, one per line. Each token it writes is either
+    generated or copied from the text it reads (a learned gate mixes the two), so names, keys and values it never saw
+    pass through as written"""
 
-    def __init__(self, hf="gpt2"):
+    def __init__(self, hf="gpt2", c=256):
         super().__init__()
         from transformers import AutoModelForCausalLM, AutoTokenizer
         self.tok = AutoTokenizer.from_pretrained(hf)
         self.tok.pad_token = self.tok.eos_token
         self.lm = AutoModelForCausalLM.from_pretrained(hf)
+        D, self.c = self.lm.config.n_embd, c
+        self.cq, self.ck, self.cg = nn.Linear(D, c), nn.Linear(D, c), nn.Linear(D, 1)   # copy: where to look, and how much
+
+    def src(self, t):
+        return self.tok(t[:1500] + "\n###\n")["input_ids"][-400:]
 
     def loss(self, texts, lines):
-        dev = self.lm.device
-        src = [self.tok(t[:1500] + "\n###\n")["input_ids"][-400:] for t in texts]
-        tgt = [self.tok("\n".join(x))["input_ids"][:300] + [self.tok.eos_token_id] for x in lines]
+        """-log p(target), p = gate * generated + (1 - gate) * copied (attention over the source tokens)"""
+        dev, eos = self.lm.device, self.tok.eos_token_id
+        src = [self.src(t) for t in texts]
+        tgt = [self.tok("\n".join(x))["input_ids"][:300] + [eos] for x in lines]
         L = max(len(a) + len(b) for a, b in zip(src, tgt))
-        ids = torch.full((len(texts), L), self.tok.eos_token_id, dtype=torch.long)
-        lab = torch.full((len(texts), L), -100, dtype=torch.long)
+        ids = torch.full((len(texts), L), eos, dtype=torch.long)
         att = torch.zeros(len(texts), L, dtype=torch.long)
+        is_src = torch.zeros(len(texts), L, dtype=torch.bool)
+        lab = torch.full((len(texts), L), -100, dtype=torch.long)
         for i, (a, b) in enumerate(zip(src, tgt)):
             ids[i, :len(a) + len(b)] = torch.tensor(a + b)
-            lab[i, len(a):len(a) + len(b)] = torch.tensor(b)
             att[i, :len(a) + len(b)] = 1
-        return self.lm(input_ids=ids.to(dev), attention_mask=att.to(dev), labels=lab.to(dev)).loss
+            is_src[i, :len(a)] = True
+            lab[i, len(a):len(a) + len(b)] = torch.tensor(b)
+        ids, att, is_src, lab = ids.to(dev), att.to(dev), is_src.to(dev), lab.to(dev)
+        o = self.lm(input_ids=ids, attention_mask=att, output_hidden_states=True)
+        H, gold = o.hidden_states[-1], lab[:, 1:]
+        h, use = H[:, :-1], gold != -100
+        g = torch.sigmoid(self.cg(h)).squeeze(-1)
+        p_gen = torch.exp(-F.cross_entropy(o.logits[:, :-1].transpose(1, 2), gold.clamp(min=0), reduction="none"))
+        sc = (self.cq(h) @ self.ck(H).transpose(1, 2)) / self.c ** .5
+        a = torch.softmax(sc.masked_fill(~is_src[:, None, :], -1e4), -1)
+        p_copy = (a * ((ids[:, None, :] == gold[..., None]) & is_src[:, None, :])).sum(-1)
+        p = g * p_gen + (1 - g) * p_copy
+        return -(torch.log(p + 1e-9) * use).sum() / use.sum()
+
+    def _next(self, h, logits, K, ids, ok):
+        """the next token's distribution: generated, or copied from the source"""
+        a = torch.softmax(((K @ self.cq(h)[..., None]).squeeze(-1) / self.c ** .5).masked_fill(~ok, -1e4), -1)
+        g = torch.sigmoid(self.cg(h))
+        return g * torch.softmax(logits, -1) + (1 - g) * torch.zeros_like(logits).scatter_add_(1, ids, a)
 
     @torch.no_grad()
     def read(self, texts, n=200):
-        out = []
-        self.tok.padding_side = "left"
+        dev, eos, out = self.lm.device, self.tok.eos_token_id, []
         for i in range(0, len(texts), 16):
-            b = self.tok([t[:1500] + "\n###\n" for t in texts[i:i + 16]], return_tensors="pt", padding=True).to(self.lm.device)
-            g = self.lm.generate(**b, max_new_tokens=n, do_sample=False, pad_token_id=self.tok.eos_token_id)
-            out += [[x for x in self.tok.decode(r[b["input_ids"].shape[1]:], skip_special_tokens=True).split("\n") if x.strip()] for r in g]
-        self.tok.padding_side = "right"
+            src = [self.src(t) for t in texts[i:i + 16]]
+            S = max(map(len, src))
+            ids = torch.tensor([[eos] * (S - len(x)) + x for x in src], device=dev)   # left-padded
+            att = torch.tensor([[0] * (S - len(x)) + [1] * len(x) for x in src], device=dev)
+            pos = (att.cumsum(1) - 1).clamp(min=0)
+            o = self.lm(input_ids=ids, attention_mask=att, position_ids=pos, use_cache=True, output_hidden_states=True)
+            K, ok, past = self.ck(o.hidden_states[-1]), att.bool(), o.past_key_values
+            h, lg, at, done, said = o.hidden_states[-1][:, -1], o.logits[:, -1], pos[:, -1] + 1, torch.zeros(len(src), dtype=torch.bool, device=dev), []
+            for _ in range(n):
+                t = self._next(h, lg, K, ids, ok).argmax(-1).masked_fill(done, eos)
+                said.append(t)
+                done |= t == eos
+                if done.all():
+                    break
+                att = torch.cat([att, torch.ones_like(att[:, :1])], 1)
+                o = self.lm(input_ids=t[:, None], attention_mask=att, position_ids=at[:, None], past_key_values=past,
+                            use_cache=True, output_hidden_states=True)
+                past, h, lg, at = o.past_key_values, o.hidden_states[-1][:, -1], o.logits[:, -1], at + 1
+            for r in torch.stack(said, 1).tolist():
+                r = r[:r.index(eos)] if eos in r else r
+                out.append([x for x in self.tok.decode(r).split("\n") if x.strip()])
         return out
 
 
@@ -1536,7 +1578,7 @@ def train_normalizer(A):
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     nz = Normalizer().to(dev)
     if A.init:
-        nz.load_state_dict(torch.load(A.init, map_location=dev))
+        print("normalizer from", A.init, nz.load_state_dict(torch.load(A.init, map_location=dev), strict=False).missing_keys, flush=True)
     opt = torch.optim.AdamW(nz.parameters(), lr=A.lr)
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(1, (i + 1) / 200) * max(.02, 1 - i / A.steps))
     rng = random.Random(A.seed)
