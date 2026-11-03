@@ -756,7 +756,7 @@ class NeuralT:
         if tool is None and (s is None or float(s.max()) <= 1):    # no tool is relevant: a task it has no tool for
             return ["unknown"]
         t = self.last = int(s.argmax()) if tool is None else tool
-        o, many, _ = self.tools.nets[t]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
+        o, many, _, _ = self.tools.nets[t]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
         return [self.say(z[0], self.tools.nets[t].mouth) or NOTHING for z, _ in o[:int(many.argmax()) + 1]]   # its result is what it says, read like any
         # text (a raw output node as a next input: 11 / 25 right; read back: 25 / 25); saying nothing is the node (nothing)
 
@@ -1161,8 +1161,11 @@ class Relate(nn.Module):
 
 
 class ToolNet(nn.Module):
-    """one tool node's own network. In: the want, then any number of nodes (B each). Out: up to M nodes (K latents each),
-    how many of them it means, and its own guess of how wrong it is (the score). Its key is its label: what it answers to."""
+    """one function node: its label (key: what wants it answers), its code (K latents in the node space: the function as a
+    node, so another function can read it, take it in and give it back changed) and its own network, which runs as
+    net(code, inputs). In: the want, then any number of nodes (B each; a function's code is a node like any other).
+    Out: up to M nodes (K latents each), how many of them it means, where each goes (a new node, or in place of input r:
+    the node's inner value changed) and its own guess of how wrong it is (the score)."""
 
     def __init__(self, d=128, c=256, K=12, M=2, R=8, L=96, D=768):
         super().__init__()
@@ -1172,24 +1175,31 @@ class ToolNet(nn.Module):
         self.role = nn.Parameter(torch.randn(R, c) * .02)      # which input
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.out = nn.Parameter(torch.randn(M * K, c) * .02)
+        self.code = nn.Parameter(torch.randn(K, c) * .02)     # the function as a node
+        self.me = nn.Parameter(torch.randn(c) * .02)          # marks its own code among what it reads
         self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 512, batch_first=True, activation="gelu"), 2)
         self.many = nn.Linear(c, M)
         self.err = nn.Linear(c, 1)
+        self.where = nn.Linear(c, 1 + R)                       # per output: 0 a new node, 1 + r in place of input r
         self.K, self.M = K, M
         self.mouth = nn.Sequential(nn.Linear(c, D), nn.GELU(), nn.Linear(D, D))   # how it says its results: its own, so
         # the decoder learning to say stored nodes never moves what a tool says (a shared one did: arithmetic 155 -> 110 / 160)
         self.register_buffer("voiced", torch.tensor(0.))    # 0: not yet given the decoder's mouth to start from
 
-    def forward(self, ins):
+    def forward(self, ins, code=None):
+        """code: run with this code in place of its own (what an edit of this function would make it)"""
         n, dev = ins[0][0].shape[0], self.out.device
-        parts, keep = [self.out[None].expand(n, -1, -1)], [torch.ones(n, len(self.out), dtype=torch.bool, device=dev)]
+        code = self.code[None].expand(n, -1, -1) if code is None else code.expand(n, -1, -1)
+        parts = [self.out[None].expand(n, -1, -1), code + self.me]
+        keep = [torch.ones(n, len(self.out) + self.K, dtype=torch.bool, device=dev)]
         for r, (z, m) in enumerate(ins):
             parts.append(z + self.role[r] + self.pos[(m.long().cumsum(1) - 1).clamp(0, len(self.pos) - 1)])
             keep.append(m)
         y = self.f(torch.cat(parts, 1), src_key_padding_mask=~torch.cat(keep, 1))[:, :len(self.out)]
         y = F.layer_norm(y, (y.shape[-1],))
         g, one = y.mean(1), torch.ones(n, self.K, dtype=torch.bool, device=dev)
-        return [(y[:, j * self.K:(j + 1) * self.K], one) for j in range(self.M)], self.many(g), self.err(g).squeeze(-1)
+        outs = [(y[:, j * self.K:(j + 1) * self.K], one) for j in range(self.M)]
+        return outs, self.many(g), self.err(g).squeeze(-1), torch.stack([self.where(z.mean(1)) for z, _ in outs], 1)
 
 
 class ToolBank(nn.Module):
@@ -1241,6 +1251,11 @@ class ToolBank(nn.Module):
     def gate(self, q):                                 # every want against every tool's label: > 1 = relevant
         return q @ torch.stack([t.key for t in self.nets]).T
 
+    def as_node(self, t):
+        """function t as a node: its code"""
+        c = self.nets[t].code
+        return c[None], torch.ones(1, len(c), dtype=torch.bool, device=c.device)
+
     def save(self, path):
         torch.save({"n": len(self.nets), "state": self.state_dict()}, path)
 
@@ -1251,7 +1266,7 @@ class ToolBank(nn.Module):
         for _ in range(s["n"]):
             b.nets.append(ToolNet().to(dev))
         miss = b.load_state_dict(s["state"], strict=False).missing_keys     # banks made before tools had a mouth
-        assert all(".mouth." in k or k.endswith(".voiced") or k.startswith("check.") for k in miss), miss
+        assert all(".mouth." in k or k.endswith((".voiced", ".code", ".me")) or ".where." in k or k.startswith("check.") for k in miss), miss
         return b
 
 
@@ -1334,14 +1349,37 @@ def kinds_apart(q, kinds, tau=.1):
     return -((lp * pos).sum(1)[has] / pos.sum(1)[has]).mean() if has.any() else q.sum() * 0
 
 
-def tool_loss(tr, net, ins, outs):
-    """per demo: how wrong this tool is (each output it should say, and how many)"""
-    o, many, err = net(ins)
-    n = torch.tensor([len(x) for x in outs], device=many.device)
+def tool_loss(tr, net, ins, outs, where=None, bank=None):
+    """per demo: how wrong this function is: each output it should give (a text it should say, or a function that
+    should then do something: ("run", that function, its inputs, what it should say)), how many, and where each goes"""
+    o, many, err, wh = net(ins)
+    dev = many.device
+    n = torch.tensor([len(x) for x in outs], device=dev)
     L = F.cross_entropy(many, n - 1, reduction="none")
     for j, (z, zm) in enumerate(o):
-        L = L + tr.decode_loss(z, zm, [x[j] if j < len(x) else "" for x in outs], each=True, up=net.mouth) * (n > j) / n
+        said = torch.tensor([j < len(x) and isinstance(x[j], str) for x in outs], device=dev)
+        if said.any():
+            L = L + tr.decode_loss(z, zm, [x[j] if j < len(x) and isinstance(x[j], str) else "" for x in outs], each=True, up=net.mouth) * said / n
+        for k, x in enumerate(outs):
+            if j < len(x) and not isinstance(x[j], str):   # a function given back: run it with this code
+                _, t, rins, target = x[j]
+                f = bank.nets[t]
+                o2, _, _, _ = f([tr.content([w]) for w in rins], code=z[k:k + 1])
+                L = L + F.one_hot(torch.tensor(k, device=dev), len(outs)) * tr.decode_loss(o2[0][0], o2[0][1], [target], up=f.mouth) / n[k]
+        if where is not None:
+            has = n > j
+            L = L + F.cross_entropy(wh[:, j], torch.tensor([w[j] if j < len(w) else 0 for w in where], device=dev), reduction="none") * has / n
     return L, err
+
+
+def node_batch(tr, bank, xs):
+    """input nodes of a batch: texts read by the translator; ("fn", t) is function t itself (its code)"""
+    if all(isinstance(x, str) for x in xs):
+        return tr.content(xs)
+    zs = [tr.content([x]) if isinstance(x, str) else bank.as_node(x[1]) for x in xs]
+    L = max(z.shape[1] for z, _ in zs)
+    zs = [lpad(z, m, L) for z, m in zs]
+    return torch.cat([z for z, _ in zs]), torch.cat([m for _, m in zs])
 
 
 def learn(tr, bank, demos, st, A, spawn=True, none=()):
@@ -1357,8 +1395,9 @@ def learn(tr, bank, demos, st, A, spawn=True, none=()):
     groups = {}
     for i, d in enumerate(demos):
         groups.setdefault(len(d[2]), []).append(i)
-    nodes = {n: [tr.content([demos[i][1] for i in ix])] + [tr.content([demos[i][2][j] for i in ix]) for j in range(n)]
+    nodes = {n: [tr.content([demos[i][1] for i in ix])] + [node_batch(tr, bank, [demos[i][2][j] for i in ix]) for j in range(n)]
              for n, ix in groups.items()}
+    where = lambda ix: [demos[i][4] if len(demos[i]) > 4 else [0] * len(demos[i][3]) for i in ix]
     with torch.no_grad():
         s = bank.gate(q) if bank.nets else q.new_zeros(len(demos), 0)
         new = s.max(1).values <= 1 if bank.nets else torch.ones(len(demos), dtype=torch.bool, device=q.device)
@@ -1373,7 +1412,7 @@ def learn(tr, bank, demos, st, A, spawn=True, none=()):
         L = torch.full((len(bank.nets), len(demos)), 1e9, device=q.device)
         for n, ix in groups.items():
             for t, net in enumerate(bank.nets):
-                L[t, ix] = tool_loss(tr, net, nodes[n], [demos[i][3] for i in ix])[0]
+                L[t, ix] = tool_loss(tr, net, nodes[n], [demos[i][3] for i in ix], where(ix), bank)[0]
         usual = torch.stack([torch.maximum(t.mu + A.kappa * t.sd, torch.tensor(A.tool_good, device=q.device)) for t in bank.nets])
         typical = L <= usual[:, None]                                  # [tool, demo]: as well as this tool usually does
         best = L.argmin(0)
@@ -1388,7 +1427,7 @@ def learn(tr, bank, demos, st, A, spawn=True, none=()):
             sel = [k for k, i in enumerate(ix) if int(route[i]) == t]
             if sel:
                 ins = [(z[sel], m_[sel]) for z, m_ in nodes[n]]
-                l, err = tool_loss(tr, net, ins, [demos[ix[k]][3] for k in sel])
+                l, err = tool_loss(tr, net, ins, [demos[ix[k]][3] for k in sel], where([ix[k] for k in sel]), bank)
                 loss = loss + (l.sum() + F.mse_loss(err, l.detach(), reduction="sum")) / len(demos)
                 with torch.no_grad():                                  # what this tool usually gets
                     net.mu.mul_(.98).add_(.02 * l.mean())
@@ -1403,7 +1442,7 @@ def apply_tool(tr, bank, want, ins):
     if s is None or float(s.max()) <= 1:
         return -1, [], None
     t = int(s.argmax())
-    o, many, err = bank.nets[t]([tr.content([want])] + [tr.content([x]) for x in ins])
+    o, many, err, _ = bank.nets[t]([tr.content([want])] + [tr.content([x]) for x in ins])
     return t, [z for z, _ in o[:int(many.argmax()) + 1]], float(err)
 
 
@@ -1509,6 +1548,105 @@ def bank_report(tr, bank, rng, n=96):
     novel = bank.gate(bank.query(tr, NOVEL + [asks_nothing(rng, True) for _ in range(n)])).max(1).values > 1
     return (f"tools {len(bank.nets)} | " + " ".join(line) + f" | nested {hit / n:.2f} | {want_spread(tr, bank)} | relevant to some"
             f" label: asks nothing {float(nothing.float().mean()):.2f}, novel tasks {float(novel.float().mean()):.2f}")
+
+
+INC_WANTS, HELD_INC = ["add one to", "increase by one", "one more than"], "bump up by one"
+EDIT_WANTS, HELD_K = ["make it add {k} instead", "change it to add {k}"], 6
+
+
+def fn_demo(rng, tr, bank, kind, held=False):
+    """(kind, want, inputs, outputs, where each output goes). inc: a node's value goes up by one, in place (the node
+    stays what it is about); fedit: the function that adds one, taken in and given back changed to add k (judged by
+    what it then does). None when the model has no function for adding one yet"""
+    nm, k = _name(rng, 2), " ".join(_key(rng, KEYS_TRAIN, set()))
+    forms = [lambda v: str(v), lambda v: f"{leaf(nm, k)} is {v}.", lambda v: f"Correction: {leaf(nm, k)} is now {v}.", lambda v: f"is {v}."]
+    if kind == "inc":
+        f, v = rng.choice(forms), amount(rng)
+        return kind, HELD_INC if held else rng.choice(INC_WANTS), [f(v)], [f(v + 1)], [2]
+    with torch.no_grad():
+        s = bank.gate(bank.query(tr, INC_WANTS))
+    if not len(bank.nets) or float(s.max()) <= 1:
+        return None
+    t, n = int(s.max(0).values.argmax()), HELD_K if held else rng.choice([2, 3, 4, 5])
+    x = amount(rng)
+    return kind, rng.choice(EDIT_WANTS).format(k=n), [("fn", t)], [("run", t, [rng.choice(INC_WANTS), str(x)], str(x + n))], [2]
+
+
+@torch.no_grad()
+def fn_report(tr, bank, rng, n=48):
+    """per purpose, values never seen: which function its want finds, what it gives, and where the output goes;
+    fedit: the edited function run on new numbers (k = 6 never read); the function itself unchanged afterwards"""
+    say = lambda z, t: tr.decode(z, torch.ones(z.shape[:2], dtype=torch.bool, device=z.device), up=bank.nets[t].mouth)[0].strip()
+    line = []
+    for kind, held in (("inc", False), ("inc", True), ("fedit", False), ("fedit", True)):
+        hit = at = got = 0
+        used = {}
+        for _ in range(n):
+            d = fn_demo(rng, tr, bank, kind, held)
+            if d is None:
+                continue
+            got += 1
+            _, w, ins, outs, wh = d
+            s = bank.gate(bank.query(tr, [w]))[0]
+            t = int(s.argmax()) if float(s.max()) > 1 else -1
+            used[t] = used.get(t, 0) + 1
+            if t < 0:
+                continue
+            o, many, _, where = bank.nets[t]([tr.content([w])] + [node_batch(tr, bank, [x]) for x in ins])
+            at += int(where[0, 0].argmax()) == wh[0]
+            if kind == "inc":
+                hit += say(o[0][0], t) == outs[0]
+            else:
+                _, ti, rins, target = outs[0]
+                o2, _, _, _ = bank.nets[ti]([tr.content([x]) for x in rins], code=o[0][0])
+                hit += say(o2[0][0], ti) == target
+        top = max(used.items(), key=lambda z: z[1]) if used else (None, 0)
+        line.append(f"{kind}{'*' if held else ''} {hit / max(1, got):.2f} where {at / max(1, got):.2f} (fn {top[0]} {top[1] / max(1, got):.2f}, n {got})")
+    d = fn_demo(rng, tr, bank, "fedit")
+    if d:
+        ti, ok = d[2][0][1], 0
+        for _ in range(n):
+            x = amount(rng)
+            o, _, _, _ = bank.nets[ti]([tr.content([rng.choice(INC_WANTS)]), tr.content([str(x)])])
+            ok += say(o[0][0], ti) == str(x + 1)
+        line.append(f"adds one itself {ok / n:.2f}")
+    return " | ".join(line)
+
+
+def train_functions(A):
+    """--fn: one function-node kind (11-04 design): the model makes functions from demos; some outputs change a node's
+    inner value in place, one function takes another function in and gives it back changed. --toolw = the tools so far
+    (their arithmetic must not suffer); arithmetic demos stay in the mix"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    tr.requires_grad_(False)
+    bank = load_tools(A, tr).train() if A.toolw else ToolBank().to(dev)
+    rng = random.Random(A.seed)
+    st, opt, t0 = {"step": 0, "last": -10 ** 9, "newest": None}, None, time.time()
+    for step in range(1, A.steps + 1):
+        st.update(step=step, spawned=False)
+        demos = []
+        while len(demos) < A.batch:
+            c = rng.random()
+            d = read_demo(rng, rng.choice(KINDS)) if c < .5 else fn_demo(rng, tr, bank, "inc" if c < .75 else "fedit")
+            if d is not None:
+                demos.append(d)
+        loss, route, _ = learn(tr, bank, demos, st, A, none=[asks_nothing(rng) for _ in range(A.batch // 4)])
+        if opt is None or st["spawned"]:
+            opt = torch.optim.AdamW(bank.parameters(), lr=A.lr)
+            if st["spawned"]:
+                print(f"step {step}: made function {st['newest']} ({int((route < 0).sum())} of {A.batch} demos no label claimed)", flush=True)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        if step % A.every == 0:
+            bank.eval()
+            print(f"step {step} loss {float(loss):.3f} | {fn_report(tr, bank, rng)} | {bank_report(tr, bank, rng, 32)} | {time.time() - t0:.0f}s", flush=True)
+            bank.train()
+            if A.save:
+                bank.save(A.save)
 
 
 def train_tools(A):
@@ -1948,6 +2086,7 @@ class Machine:
         self.T, self.g, self.t, self.budget, self.flat, self.trace, self.made = translator, Graph(d), 0, budget, False, None, {}
         self.events, self.at, self.subj = None, {}, {}     # watched: every call is an event the rules judge
         self.reader = None                             # (reader node, translator): the model reads queries; None: the stand-in
+        self.actor_policy = None                       # a policy for statement rows (None: the stand-in's actions)
         self.explore, self.reads = 0., None            # sampling temperature (0: its best reading); the readings made
         self.wrote, self.latest, self.rulekey = {}, {}, {}   # the rules' record: each entry's statement, each subject's last place, each key's rule
         self.right = []                                # ... and tool sayings the rules checked right: (tool, want, inputs, what it said)
@@ -2343,7 +2482,7 @@ def lessons(tr, bank, m, js, cap=64):
         wrong = [x for x in sums if x[0] == t]         # inputs, beside as many of its own right sayings (mistakes alone,
         kept = [x for x in m.right if x[0] == t]       # mostly out of its range: probe 153 -> 118 / 160 in 20 ticks)
         for _, want, args, text in wrong + random.sample(kept, min(len(kept), len(wrong))):
-            o, _, _ = bank.nets[t]([tr.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in args])
+            o, _, _, _ = bank.nets[t]([tr.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in args])
             l4 = tr.decode_loss(o[0][0], o[0][1], [text], up=bank.nets[t].mouth) / len(sums)
             loss = l4 if loss is None else loss + l4
     back = [j.target for j in js if j.rule == "roundtrip" and not j.ok][:cap]
@@ -2416,36 +2555,110 @@ def inner_exact(S, items):
     return None
 
 
-def answer(m, r, S, items, depth=0):
-    """answer a query: the innermost answerable part is answered first and its answer node takes its place in the
-    query; that is the whole step order. Ends when no part is left to answer; the answer is the last node standing."""
-    if depth > 24:
-        raise Budget()
-    x = read_query(m, S, items) if m.reader else inner_exact(S, items)
-    if x is None:
-        k = [int(y) for y in SLOT.findall(S)]
-        return items[k[-1]] if k else None
-    a, b, f, want, slots = x
+ACTIONS = ("lookup", "apply", "before", "both", "rule", "place", "settle", "insert", "say")   # the machine's own
+# function nodes (each tool node is reached through "apply" by its own label)
+
+
+def act_exact(m, S, items, statement):
+    """the exact stand-in's next action on a row: (function, span or None, input slots). A question row is read by
+    inner_exact and said when nothing is left; a statement row (S starts as "<0>", the statement itself) asks what
+    governs it, where it goes, what a tool makes under the governing node, which state the check keeps, and stores it"""
+    if not statement:
+        x = inner_exact(S, items)
+        if x is None:
+            k = SLOT.findall(S)
+            return ("say", None, [k[-1]]) if k else None
+        return x[2], (x[0], x[1]), x[4]
+    n = len(items)
+    if n == 1:
+        return "rule", None, ["0"]
+    if n == 2:
+        return ("insert", None, ["0"]) if items[1].place < 0 else ("place", None, ["0"])
+    if n == 3:
+        return ("insert", None, ["0"]) if items[2].place < 0 else ("apply", None, ["1", "2", "0"])
+    if n == 4:
+        return "settle", None, ["1", "2", "0", "3"]
+    return "insert", None, ["4"]
+
+
+def act(m, r, S, items, statement, policy=None):
+    """one action of a row, done: returns (S, items, finished, the row's result)"""
     S = re.sub(r"\((<\d+>)\)", r"\1", S)
-    args = [items[int(k)] for k in slots]
+    x = (policy or act_exact)(m, S, items, statement)
+    if x is None:
+        return S, items, True, None
+    f, span, slots = x
+    args = [items[int(k)] for k in slots if int(k) < len(items)]
+    text = S[span[0]:span[1]] if span else ""
+    want = text.split("<")[0].strip() if SLOT.search(text) else text.strip()
+    out, done = [], False
+    if f == "say":
+        return S, items, True, args[0] if args else None
     if f == "lookup":
-        r.stack.append(m.item(want))
+        r.stack.append(m.item(want or (args[0].text if args else "")))
         m.do(r, "lookup")
         out = [r.stack[-1]]
     elif f == "apply":
-        r.stack += [m.item(want)] + args
-        m.do(r, "apply", len(args))
-        out = r.stack[-1:] if len(args) == 1 else [r.stack[-1]]
-    else:                                              # before / both: step back until the value differs
+        w, ins = (want, args) if span else (args[0].text, args[1:])   # a statement row: the governing node is the want
+        r.stack += [m.item(w)] + ins
+        m.do(r, "apply", len(ins))
+        out = [r.stack[-1]]
+    elif f in ("before", "both"):                      # step back until the value differs
         r.stack.append(args[0])
         gold_older(m, r)
         out = [r.stack[-1]] if f == "before" else [r.stack[-1], args[0]]
-    if f == "apply" and len(args) == 1:                # a new phrase is itself a query: read again as text
-        new = out[0].text
-    else:
+    elif f == "rule":
+        m.do(r, "rule")
+        out = [r.stack.pop()]
+    elif f == "place":
+        p = m.find(m.T.label(args[0].text), args[0].node)
+        out = [m.entry_item(p) if p >= 0 else m.item("unknown")]
+    elif f == "settle":                                # the check keeps the statement as said unless it fails the
+        gov, old, new, made = args                     # governing node and what the tool made passes
+        fails = check(m, gov, old, new, new) < .5 and check(m, gov, old, new, made) > .5
+        keep = made if fails else new
+        r.settled = (gov, old, new, keep, new if fails else made)
+        out = [keep]
+    elif f == "insert":
+        it = args[0]
+        if it is not items[0]:                         # what a tool made goes in as a derived entry
+            r.stack.append(it)
+            m.do(r, "insert", True)
+        else:
+            m.do(r, "insert")
+        if getattr(r, "settled", None):
+            p = m.g.n - 1 if m.at.get("new") else m.at["place"]
+            m.chose[(p, len(m.g.chain[p]) - 1)] = r.settled
+        return S, items, True, it
+    if span and not (f == "apply" and len(args) == 1):
         new = " and ".join(f"<{len(items) + i}>" for i in range(len(out)))
-        items = items + out
-    return answer(m, r, S[:a] + new + S[b:], items, depth + 1)
+        return S[:span[0]] + new + S[span[1]:], items + out, done, None
+    if span:                                           # a new phrase is itself a query: read again as text
+        return S[:span[0]] + out[0].text + S[span[1]:], items, done, None
+    return S + "".join(f" <{len(items) + i}>" for i in range(len(out))), items + out, done, None   # a statement row
+
+
+def run_row(m, r, S, items, statement=False, policy=None):
+    """a row of actions until it says or stores something; the step order is whatever the policy does"""
+    for _ in range(32):
+        S, items, done, res = act(m, r, S, items, statement, policy)
+        if done:
+            return res
+    raise Budget()
+
+
+def answer(m, r, S, items, depth=0):
+    """a question row: the innermost answerable part is answered first and its answer node takes its place"""
+    pol = (lambda m_, S_, it_, st: _reader_action(m_, S_, it_)) if m.reader else None
+    return run_row(m, r, S, items, False, pol)
+
+
+def _reader_action(m, S, items):
+    x = read_query(m, S, items)
+    if x is None:
+        k = SLOT.findall(S)
+        return ("say", None, [k[-1]]) if k else None
+    return x[2], (x[0], x[1]), x[4]
 
 
 class QueryReader(nn.Module):
@@ -2822,7 +3035,7 @@ def inspect_memory(A):
         r_ = real_apply(self, want, ins, tool)
         t_ = self.last
         if t_ is not None:
-            o_, many, err = self.tools.nets[t_]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
+            o_, many, err, _ = self.tools.nets[t_]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
             sets = [self.say(z[0], self.tools.nets[t_].mouth) for z, _ in o_]
             out(f"        tool: want {want!r} | inputs {[self.say(z)[:40] for z in ins]} | routing {[round(float(x), 2) for x in s_]} -> tool {t_} | "
                 f"output sets {sets} | count head {[round(float(x), 2) for x in many.flatten()]} | own error {float(err):.2f} | said {r_}")
@@ -2972,31 +3185,11 @@ def resettle(m, bank, dev):
 
 
 def arrive(m, text):
-    """a statement arrives; a rule is a statement like any other. The check's want looks for the node that governs
-    where this one goes; when there is one and the place already holds a value, the candidates are the statement as
-    said and what a tool makes of (old, new) under that node, and the check of each resulting state keeps one"""
+    """a statement arrives: a row of actions like a question (a rule is a statement like any other); the stand-in's
+    actions ask what governs it, where it goes, what a tool makes of (old, new) under that node, which state the check
+    keeps, and store it"""
     r = Row(text)
-    m.do(r, "rule")                                    # the check's want: what governs this (a node, or none)
-    gov = r.stack.pop()
-    if gov.place >= 0:
-        p = m.find(m.T.label(text), m.T.node(text))
-        if p >= 0:
-            old, new = m.entry_item(p), m.item(text)
-            r.stack += [m.item(gov.text), old, new]
-            m.do(r, "apply", 2)
-            made = r.stack.pop()
-            # the statement as said is the state, unless it fails the governing check and what the tool made passes
-            fails = check(m, gov, old, new, new) < .5 and check(m, gov, old, new, made) > .5
-            keep, other = (made, new) if fails else (new, made)
-            if keep is made:
-                r.stack.append(made)
-                m.do(r, "insert", True)
-            else:
-                m.do(r, "insert")
-            p = m.g.n - 1 if m.at.get("new") else m.at["place"]
-            m.chose[(p, len(m.g.chain[p]) - 1)] = (gov, old, new, keep, other)
-            return
-    m.do(r, "insert")
+    run_row(m, r, "<0>", [m.item(text)], True, m.actor_policy)
 
 
 def question(kind, world, rng, ops=(1, 3)):
@@ -3757,6 +3950,7 @@ if __name__ == "__main__":
     P.add_argument("--train", action="store_true", help="train the translator's labels")
     P.add_argument("--decode", action="store_true", help="train the translator's decoder: text -> B -> text (--init = the translator)")
     P.add_argument("--tools", action="store_true", help="train the tool nodes on B (--init = translator with decoder)")
+    P.add_argument("--fn", action="store_true", help="the function-node kind: in-place edits, a function editing a function")
     P.add_argument("--recur", action="store_true", help="train the reader node: answering by recursion (--demos questions)")
     P.add_argument("--check", action="store_true", help="train the check node (--demos situations; --toolw bank to add it to)")
     P.add_argument("--inspect", action="store_true", help="live a memory --steps ticks, then open the graph and two questions, every inner step")
@@ -3787,4 +3981,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    diag(A) if A.diag else inspect_memory(A) if A.inspect else train_check(A) if A.check else train_recursion_reader(A) if A.recur else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_normalizer(A) if A.norm else norm_e2e(A) if A.norm_e2e else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else train_functions(A) if A.fn else inspect_memory(A) if A.inspect else train_check(A) if A.check else train_recursion_reader(A) if A.recur else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_normalizer(A) if A.norm else norm_e2e(A) if A.norm_e2e else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
