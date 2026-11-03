@@ -1053,20 +1053,19 @@ class CheckNet(nn.Module):
 
 
 def check_demos(rng, n, vocab=KEYS_TRAIN, held=False):
-    """situations a check meets (rule-or-not node, old, new, candidate, pass?), as arrive meets them: what arrives is
-    a fact, a correction, a copy or a rule; what was found to govern it is the rule of its key, a rule of another key,
-    or a fact. Only the rule of its own key that adds makes old + new pass and the statement alone fail; everywhere
-    else the statement as said passes and anything a tool made fails (online: a new rule's text was overwritten by
-    '--' that the check passed; rules of other keys were obeyed)"""
+    """situations a check meets (governing node, old, new, candidate, pass?). The check judges only which kind of
+    state the node that governs calls for: the statement as said, or what the tool made of (old, new). Whether a node
+    governs at all is decided where it is found (the rule query + relate), and the sum is the tool's: neither is the
+    check's (ck4: with other keys' rules and wrong sums among its demos it learned 'as said passes' and got the adding
+    rule's own case 4 / 33). What arrives is a fact, a correction, a copy or a rule; what governs is the rule of its
+    key or a fact; only a rule that adds, over a plain fact, makes what the tool made pass and the statement fail"""
     out = []
     for _ in range(n):
-        nm, k, k2 = _name(rng, 2), " ".join(_key(rng, vocab, set())), " ".join(_key(rng, vocab, set()))
+        nm, k = _name(rng, 2), " ".join(_key(rng, vocab, set()))
         kind = rng.choice(("add", "add", "set", "keep"))
         a, b = amount(rng), amount(rng)
-        g = rng.random()
-        gov = (rule_text(rng, kind, k, held) if g < .6 else rule_text(rng, kind, k2, held) if g < .8
-               else f"{leaf(_name(rng, 2), k)} is {amount(rng)}.")
-        governs = g < .6
+        is_rule = rng.random() < .8
+        gov = rule_text(rng, kind, k, held) if is_rule else f"{leaf(_name(rng, 2), k)} is {amount(rng)}."
         w = rng.random()
         if w < .15:                                    # a rule arrives (old = the rule of its key before)
             old, new = rule_text(rng, rng.choice(("add", "set", "keep")), k, held), rule_text(rng, kind, k, held)
@@ -1076,14 +1075,9 @@ def check_demos(rng, n, vocab=KEYS_TRAIN, held=False):
             new = (f"Correction: {leaf(nm, k)} is now {b}." if w < .3 else
                    f"{leaf(nm, k)} is {b} (same as {leaf(_name(rng, 2), k)})." if w < .4 else f"{leaf(nm, k)} is {b}.")
             plain = w >= .4
-        adds = governs and kind == "add" and plain
-        made = rng.choice([str(a + b), str(a - b), str(max(a, b)), "--", str(a + b + rng.choice([-3, -1, 1, 2, 10]))])
-        if adds:
-            out += [(gov, old, new, str(a + b), 1.), (gov, old, new, new, 0.)]
-            if made != str(a + b):
-                out.append((gov, old, new, made, 0.))
-        else:
-            out += [(gov, old, new, new, 1.), (gov, old, new, made, 0.)]
+        adds = is_rule and kind == "add" and plain
+        made = str(a + b) if adds else rng.choice([str(a + b), str(a - b), str(max(a, b)), "--"])   # what a tool made
+        out += [(gov, old, new, made, float(adds)), (gov, old, new, new, float(not adds))]
     return out
 
 
