@@ -1834,6 +1834,7 @@ class Machine:
     def __init__(self, translator, d=64, budget=400):
         self.T, self.g, self.t, self.budget, self.flat, self.trace, self.made = translator, Graph(d), 0, budget, False, None, {}
         self.events, self.at, self.subj = None, {}, {}     # watched: every call is an event the rules judge
+        self.reader = None                             # (reader node, translator): the model reads queries; None: the stand-in
         self.wrote, self.latest, self.rulekey = {}, {}, {}   # the rules' record: each entry's statement, each subject's last place, each key's rule
         self.right = []                                # ... and tool sayings the rules checked right: (tool, want, inputs, what it said)
 
@@ -2231,6 +2232,248 @@ def gold_older(m, r):
         if r.stack[-1].value != cur or r.stack[-1].text == "unknown":
             return
         m.do(r, "nip")
+
+
+# ====================================================================== B2: answering is recursion (no per-question procedure)
+SLOT = re.compile(r"<(\d+)>")                          # a node sitting in a query: "What was <0> before?"
+KEYW = r"(?:(?!(?:of|the|and)\b)[a-z]+ )*?(?!(?:of|the|and)\b)[a-z]+"   # a key: words, none of them of / the / and
+OP_WANT = {t[0]: t[2].split("{0}")[0] for t in TOOLS}  # "the sum of " ...
+
+
+def inner_exact(S, items):
+    """the exact stand-in's reading of a query (S: text with node slots): the innermost part that can be answered
+    now, as (start, end, function, want, slots); None when nothing is left to answer. The model's own reading (a span
+    head + the functions' labels) replaces this; --gold uses it to test the design around it."""
+    S = re.sub(r"\((<\d+>)\)", r"\1", S)               # brackets around one node are spent
+    val = lambda k: items[int(k)].value
+    for name, w in OP_WANT.items():                    # an operation whose two inputs are both nodes already
+        for x in re.finditer(re.escape(w) + r"<(\d+)> and <(\d+)>", S):
+            return x.start(), x.end(), "apply", w.strip(), [x.group(1), x.group(2)]
+    x = re.search(r"both values of <(\d+)>", S)
+    if x:
+        return x.start(), x.end(), "both", "", [x.group(1)]
+    x = re.search(r"What was <(\d+)> before\?", S)
+    if x:
+        return x.start(), x.end(), "before", "", [x.group(1)]
+    x = re.search(rf"the ({KEYW}) of <(\d+)>", S)
+    if x and not isinstance(val(x.group(2)), int):     # the K of <an entry naming something>: a new phrase
+        return x.start(), x.end(), "apply", f"the {x.group(1)} of", [x.group(2)]
+    x = None
+    for y in re.finditer(rf"the ({KEYW}) of ([A-Z][a-z]+)", S):
+        x = y                                          # the last phrase is the innermost (its name ends it)
+    if x:
+        return x.start(), x.end(), "lookup", x.group(0), []
+    return None
+
+
+def answer(m, r, S, items, depth=0):
+    """answer a query: the innermost answerable part is answered first and its answer node takes its place in the
+    query; that is the whole step order. Ends when no part is left to answer; the answer is the last node standing."""
+    if depth > 24:
+        raise Budget()
+    x = read_query(m, S, items) if m.reader else inner_exact(S, items)
+    if x is None:
+        k = [int(y) for y in SLOT.findall(S)]
+        return items[k[-1]] if k else None
+    a, b, f, want, slots = x
+    S = re.sub(r"\((<\d+>)\)", r"\1", S)
+    args = [items[int(k)] for k in slots]
+    if f == "lookup":
+        r.stack.append(m.item(want))
+        m.do(r, "lookup")
+        out = [r.stack[-1]]
+    elif f == "apply":
+        r.stack += [m.item(want)] + args
+        m.do(r, "apply", len(args))
+        out = r.stack[-1:] if len(args) == 1 else [r.stack[-1]]
+    else:                                              # before / both: step back until the value differs
+        r.stack.append(args[0])
+        gold_older(m, r)
+        out = [r.stack[-1]] if f == "before" else [r.stack[-1], args[0]]
+    if f == "apply" and len(args) == 1:                # a new phrase is itself a query: read again as text
+        new = out[0].text
+    else:
+        new = " and ".join(f"<{len(items) + i}>" for i in range(len(out)))
+        items = items + out
+    return answer(m, r, S[:a] + new + S[b:], items, depth + 1)
+
+
+class QueryReader(nn.Module):
+    """the reader function node: reads a query as one latent sequence (its words' B, and the B of every node already
+    answered where its slot is) and says where the innermost part it can answer now starts and ends, or that nothing
+    is left (position 0); the want there picks the function by label"""
+    FN = ("lookup", "apply", "before", "both")
+
+    def __init__(self, c=256, d=128, L=512):
+        super().__init__()
+        self.none = nn.Parameter(torch.randn(c) * .02)
+        self.kind = nn.Parameter(torch.randn(2, c) * .02)                  # a word / part of a node
+        self.pos = nn.Parameter(torch.randn(L, c) * .02)
+        self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 3)
+        self.start, self.end, self.want = nn.Linear(c, 1), nn.Linear(c, 1), nn.Linear(c, d)
+        self.keys = nn.Parameter(F.normalize(torch.randn(len(self.FN), d), dim=-1) / .9)   # each function's label
+
+    def units(self, tr, S, items):
+        """the query as units: (char start, char end, B rows) per word token and per node slot"""
+        out, rows, at = [], [], 0
+        for i, piece in enumerate(re.split(r"(<\d+>)", S)):
+            if not piece:
+                continue
+            if SLOT.fullmatch(piece):
+                z = items[int(piece[1:-1])].node
+                if not torch.is_tensor(z):             # the exact stand-in holds text: read it (node <-> text)
+                    z, mk = tr.content([items[int(piece[1:-1])].text])
+                    z = z[0][mk[0]]
+                out.append((at, at + len(piece), len(rows), len(rows) + len(z) - 1, 1))
+                rows += list(z)
+            else:
+                z, m = tr.content([piece])
+                z = z[0][m[0]]
+                offs = tr.tok(piece, return_offsets_mapping=True)["offset_mapping"]
+                for (a, b), v in zip(offs, z):        # a word starts at its first letter, not its leading space
+                    a += len(piece[a:b]) - len(piece[a:b].lstrip())
+                    out.append((at + a, at + b, len(rows), len(rows), 0))
+                    rows.append(v)
+            at += len(piece)
+        return out, torch.stack(rows)
+
+    def forward(self, tr, S, items):
+        u, z = self.units(tr, S, items)
+        kind = torch.tensor(sum([[k] * (e - s_ + 1) for _, _, s_, e, k in u], []), device=z.device)
+        x = torch.cat([self.none[None], z + self.kind[kind] + self.pos[:len(z)]])[None]
+        y = self.f(x)[0]
+        first = torch.tensor([0] + [s_ + 1 for _, _, s_, _, _ in u], device=z.device)   # where a unit can start / end
+        last = torch.tensor([0] + [e + 1 for _, _, _, e, _ in u], device=z.device)
+        return u, y, self.start(y).squeeze(-1)[first], self.end(y).squeeze(-1)[last]
+
+    def fn(self, y, i, j):
+        """the want over units i..j -> relevance to each function's label"""
+        return F.normalize(self.want(y[i:j + 1].mean(0)), dim=-1) @ self.keys.T
+
+
+def reader_targets(u, x):
+    """the stand-in's reading as unit targets: (start unit, end unit, function) with 0 = nothing left"""
+    if x is None:
+        return 0, 0, -1
+    a, b, f = x[0], x[1], QueryReader.FN.index(x[2])
+    i = next(k for k, t in enumerate(u) if t[0] >= a and t[1] > a)
+    j = max(k for k, t in enumerate(u) if t[1] <= b)
+    return i + 1, j + 1, f
+
+
+def read_query(m, S, items):
+    """the model's reading of a query (in place of inner_exact): (start, end, function, want, slots) or None"""
+    rd, tr = m.reader
+    S = re.sub(r"\((<\d+>)\)", r"\1", S)
+    with torch.no_grad():
+        u, y, st, en = rd(tr, S, items)
+        i = int(st.argmax())
+        if i == 0:
+            return None
+        j = i + int(en[i:].argmax())
+        f = rd.FN[int(rd.fn(y, u[i - 1][2] + 1, u[j - 1][3] + 1).argmax())]
+    a, b = u[i - 1][0], u[j - 1][1]
+    span = S[a:b]
+    slots = SLOT.findall(span)
+    want = span.split("<")[0].strip() if slots else span.strip()
+    return a, b, f, want, slots
+
+
+def reader_demos(rng, n):
+    """the light supervision: the stand-in's readings of n questions, every step (query, its nodes' texts, reading)"""
+    w = new_world(rng)
+    m = Machine(Oracle(w), 64)
+    m.flat = True
+    out = []
+    for _ in range(60):
+        for draw in world_step(w, rng):
+            o = draw()
+            for s_ in statements(o) if o else []:
+                arrive(m, s_)
+    kinds = ["lookup", "before", "coexist", "chain", "ops", "ops"]
+    while len(out) < n:
+        k = kinds[len(out) % len(kinds)]
+        x = question(k, w, rng, (1, 3))
+        if not x:
+            continue
+        steps, real = [], answer
+
+        def take(m_, r_, S_, items_, depth=0):
+            steps.append((S_, [it.text for it in items_], inner_exact(S_, items_)))
+            return real(m_, r_, S_, items_, depth)
+        globals()["answer"] = take
+        try:
+            answer(m, Row(x[0]), x[0], [])
+        except FAIL:
+            steps = []
+        finally:
+            globals()["answer"] = real
+        if steps:
+            out.append(steps)
+    return out
+
+
+def train_recursion_reader(A):
+    """--recur: the reader node learns from ~50 questions read by the stand-in (every step), then is tested on fresh
+    worlds: answering by recursion with the model's reading (the functions themselves exact here)"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    tr.requires_grad_(False)
+    rd = QueryReader().to(dev)
+    rng = random.Random(A.seed)
+    demos = [st for q in reader_demos(rng, A.demos) for st in q]
+    print(f"{A.demos} questions read by the stand-in: {len(demos)} steps", flush=True)
+    node = lambda t: tr.content([t])[0][0][tr.content([t])[1][0]]
+    opt = torch.optim.AdamW(rd.parameters(), lr=A.lr)
+    t0 = time.time()
+    for step in range(1, A.steps + 1):
+        loss = 0
+        for S, texts, x in random.sample(demos, min(16, len(demos))):
+            items = [Item(node(t), None) for t in texts]
+            for it, t in zip(items, texts):
+                it._t = t
+            S = re.sub(r"\((<\d+>)\)", r"\1", S)
+            u, y, st, en = rd(tr, S, items)
+            i, j, f = reader_targets(u, x)
+            loss = loss + F.cross_entropy(st[None], torch.tensor([i], device=dev)) + F.cross_entropy(en[None], torch.tensor([j], device=dev))
+            if f >= 0:
+                loss = loss + F.cross_entropy(rd.fn(y, u[i - 1][2] + 1, u[j - 1][3] + 1)[None] / .1, torch.tensor([f], device=dev))
+        opt.zero_grad()
+        (loss / 16).backward()
+        opt.step()
+        if step % A.every == 0:
+            rd.eval()
+            w = new_world(random.Random(A.seed + step))
+            m = Machine(Oracle(w), 64)
+            m.flat, m.reader = True, (rd, tr)
+            for _ in range(60):
+                for draw in world_step(w, rng):
+                    o = draw()
+                    for s_ in statements(o) if o else []:
+                        arrive(m, s_)
+            line = []
+            for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6))):
+                res = [x for x in (ask_recursive(m, "ops" if kind == "long" else kind, w, rng, ops or (1, 3)) for _ in range(A.q)) if x]
+                line.append(f"{kind} {sum(x[1] == x[2] for x in res)}/{len(res)}")
+            print(f"step {step} loss {float(loss) / 16:.3f} | fresh worlds, answered by the model's reading: " + " | ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+            rd.train()
+            if A.save:
+                torch.save(rd.state_dict(), A.save)
+
+
+def ask_recursive(m, kind, world, rng, ops=(1, 3)):
+    """(question, truth, what it answered, passes): the question only, no procedure"""
+    x = question(kind, world, rng, ops)
+    if not x:
+        return None
+    r = Row(x[0])
+    try:
+        out = answer(m, r, x[0], [])
+    except FAIL:
+        out = None
+    return r.src, x[1], out.value if out is not None else None, r.passes
 
 
 def gold_tree(m, r, t):
@@ -2955,10 +3198,11 @@ def gold(A):
             g, line = m.g, []
             for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6))):
                 res = [x for x in (safe_ask(m, "ops" if kind == "long" else kind, world, rng, ops or (1, 3)) for _ in range(A.q)) if x]
-                ok = [x for x in res if x[1] == x[2]]
-                line.append(f"{kind} {len(ok)}/{len(res)} ({sum(x[3] for x in res) / max(1, len(res)):.0f}p)")
-                for x in [y for y in res if y[1] != y[2]][:A.show]:
-                    print("   MISS", kind, x[:3])
+                rec = [x for x in (ask_recursive(m, "ops" if kind == "long" else kind, world, rng, ops or (1, 3)) for _ in range(A.q)) if x]
+                ok, rok = [x for x in res if x[1] == x[2]], [x for x in rec if x[1] == x[2]]
+                line.append(f"{kind} {len(ok)}/{len(res)} recursion {len(rok)}/{len(rec)} ({sum(x[3] for x in rec) / max(1, len(rec)):.0f}p)")
+                for x in [y for y in rec if y[1] != y[2]][:A.show]:
+                    print("   MISS (recursion)", kind, x[:3])
             c0, agree = g.cost, 0
             for _ in range(200):
                 q = g.L[rng.randrange(g.n)] + .02 * np.random.standard_normal(g.d).astype(np.float32)
@@ -2986,6 +3230,7 @@ if __name__ == "__main__":
     P.add_argument("--train", action="store_true", help="train the translator's labels")
     P.add_argument("--decode", action="store_true", help="train the translator's decoder: text -> B -> text (--init = the translator)")
     P.add_argument("--tools", action="store_true", help="train the tool nodes on B (--init = translator with decoder)")
+    P.add_argument("--recur", action="store_true", help="train the reader node: answering by recursion (--demos questions)")
     P.add_argument("--norm", action="store_true", help="train the normalizer: any text -> clear statements")
     P.add_argument("--norm-e2e", action="store_true", help="E4: the memory fed held-out forms through the normalizer (--normw)")
     P.add_argument("--normw", default="")
@@ -3012,4 +3257,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    diag(A) if A.diag else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_normalizer(A) if A.norm else norm_e2e(A) if A.norm_e2e else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else train_recursion_reader(A) if A.recur else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_normalizer(A) if A.norm else norm_e2e(A) if A.norm_e2e else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
