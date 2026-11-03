@@ -1,0 +1,20 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4406.13it/s]
+/marimo/frozen/ck4/gnm.py:1122: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} | check right: " + " | ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+step 1000 loss 0.005 | check right: fresh keys 0.889 | held phrasings 0.842 | 48s
+step 2000 loss 0.006 | check right: fresh keys 0.887 | held phrasings 0.898 | 95s
+step 3000 loss 0.001 | check right: fresh keys 0.893 | held phrasings 0.857 | 141s
+     8/ 33 right  governs: rule-add | arrives: fact | candidate: a number | should pass
+     6/ 12 right  governs: rule-add | arrives: fact | candidate: as said | should pass
+    20/ 30 right  governs: rule-add | arrives: fact | candidate: a number | should fail
+    22/ 33 right  governs: rule-add | arrives: fact | candidate: as said | should fail
+     7/  8 right  governs: fact | arrives: rule | candidate: a number | should fail
+    36/ 40 right  governs: rule-other | arrives: fact | candidate: as said | should pass
+    27/ 30 right  governs: rule-other | arrives: fact | candidate: a number | should fail
+    10/ 11 right  governs: fact | arrives: rule | candidate: as said | should pass
+    10/ 10 right  governs: rule-other | arrives: fact | candidate: -- | should fail
+    15/ 15 right  governs: fact | arrives: fact | candidate: as said | should pass
+    13/ 13 right  governs: fact | arrives: fact | candidate: a number | should fail
+    13/ 13 right  governs: rule-other | arrives: copy | candidate: as said | should pass
