@@ -741,6 +741,11 @@ class NeuralT:
     def say(self, z, up=None):                         # B -> text (up: a tool's mouth)
         return self.m.decode(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device), up=up)[0].strip()
 
+    @torch.no_grad()
+    def check(self, rule, old, new, cand):             # the check node: does this resulting state pass the governing node
+        one = lambda it: (it.node[None], torch.ones(1, len(it.node), dtype=torch.bool, device=it.node.device))
+        return float(torch.sigmoid(self.tools.check([one(rule), one(old), one(new), one(cand)])[0]))
+
     def apply(self, want, ins, tool=None):             # the want's label finds a tool node by its key; nodes in, nodes out
         with torch.set_grad_enabled(self.learning):    # the tools learn from the rules' lessons, which run them again
             return self._apply(want, ins, tool)
@@ -1027,6 +1032,85 @@ def train_decoder(A):
                 torch.save({k: v for k, v in model.state_dict().items() if not k.startswith("lm.")}, A.save)
 
 
+class CheckNet(nn.Module):
+    """the check function node: check(the governing node, old, new, the resulting state) -> does the state pass it
+    (a logit). It reads the four nodes token by token; it learns from ~50 demos, then from outcome"""
+
+    def __init__(self, c=256, L=96):
+        super().__init__()
+        self.cls = nn.Parameter(torch.randn(c) * .02)
+        self.side = nn.Parameter(torch.randn(4, c) * .02)                  # rule / old / new / resulting state
+        self.pos = nn.Parameter(torch.randn(L, c) * .02)
+        self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 2)
+        self.o = nn.Linear(c, 1)
+
+    def forward(self, parts):                          # parts: 4 x (z [n, L, c], mask [n, L])
+        n = parts[0][0].shape[0]
+        x = [self.cls.expand(n, 1, -1)] + [z + self.side[k] + self.pos[(m.long().cumsum(1) - 1).clamp(0, len(self.pos) - 1)]
+                                          for k, (z, m) in enumerate(parts)]
+        keep = torch.cat([torch.ones(n, 1, dtype=torch.bool, device=x[1].device)] + [m for _, m in parts], 1)
+        return self.o(self.f(torch.cat(x, 1), src_key_padding_mask=~keep)[:, 0]).squeeze(-1)
+
+
+def check_demos(rng, n, vocab=KEYS_TRAIN, held=False):
+    """situations a check meets: (rule text, old, new, candidate, pass?): a rule that adds keeps old + new; set / keep
+    keep the statement as said; a correction or a copy is kept as said whatever the rule; wrong sums fail"""
+    out = []
+    for _ in range(n):
+        nm, k = _name(rng, 2), " ".join(_key(rng, vocab, set()))
+        kind = rng.choice(("add", "set", "keep"))
+        rule, a, b = rule_text(rng, kind, k, held), amount(rng), amount(rng)
+        old = rng.choice([f"{leaf(nm, k)} is {a}.", str(a)])
+        how = rng.random()
+        new = (f"Correction: {leaf(nm, k)} is now {b}." if how < .2 else
+               f"{leaf(nm, k)} is {b} (same as {leaf(_name(rng, 2), k)})." if how < .3 else f"{leaf(nm, k)} is {b}.")
+        plain = how >= .3
+        good = str(a + b) if kind == "add" and plain else new
+        bad = str(a + b + rng.choice([-3, -1, 1, 2, 10])) if kind == "add" and plain else str(a + b)
+        out += [(rule, old, new, good, 1.), (rule, old, new, bad, 0.)]
+        if kind == "add" and plain:
+            out.append((rule, old, new, new, 0.))      # under a rule that adds, the statement alone fails
+    return out
+
+
+def check_run(tr, net, batch):
+    rows = list(zip(*batch))
+    parts = [tr.content(list(t)) for t in rows[:4]]
+    return net(parts), torch.tensor(rows[4], device=parts[0][0].device)
+
+
+def train_check(A):
+    """--check: the check node learns from ~50 situations (A.demos), tested on fresh keys and held rule phrasings"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    tr.requires_grad_(False)
+    bank = ToolBank.load(A.toolw, dev) if A.toolw else ToolBank().to(dev)
+    rng = random.Random(A.seed)
+    demos = check_demos(rng, A.demos)
+    opt = torch.optim.AdamW(bank.check.parameters(), lr=A.lr)
+    t0 = time.time()
+    for step in range(1, A.steps + 1):
+        lg, y = check_run(tr, bank.check, random.sample(demos, min(32, len(demos))))
+        loss = F.binary_cross_entropy_with_logits(lg, y)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        if step % A.every == 0:
+            bank.check.eval()
+            with torch.no_grad():
+                line = []
+                for name, ev in (("fresh keys", check_demos(random.Random(step), 200, KEYS_EVAL)),
+                                 ("held phrasings", check_demos(random.Random(step + 1), 200, KEYS_EVAL, True))):
+                    lg, y = check_run(tr, bank.check, ev)
+                    line.append(f"{name} {float(((lg > 0).float() == y).float().mean()):.3f}")
+            print(f"step {step} loss {float(loss):.3f} | check right: " + " | ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+            bank.check.train()
+            if A.save:
+                bank.save(A.save)
+
+
 class Relate(nn.Module):
     """the relate node: reads two nodes' B token by token, a logit. same: the same place? rule: the rule for this fact?"""
 
@@ -1086,6 +1170,7 @@ class ToolBank(nn.Module):
     def __init__(self, d=128, c=256, cap=16):
         super().__init__()
         self.nets, self.relate, self.d, self.c, self.cap = nn.ModuleList(), Relate(c), d, c, cap
+        self.check = CheckNet(c)                       # the check function node
         self.want = nn.Sequential(nn.Linear(768, 512), nn.GELU(), nn.Linear(512, d))   # a want, in the space the labels live in
         self.register_buffer("center", torch.zeros(768))     # GPT-2's mean states all point one way: taken out, wants start apart
         self.register_buffer("scale", torch.ones(768))
@@ -1138,7 +1223,7 @@ class ToolBank(nn.Module):
         for _ in range(s["n"]):
             b.nets.append(ToolNet().to(dev))
         miss = b.load_state_dict(s["state"], strict=False).missing_keys     # banks made before tools had a mouth
-        assert all(".mouth." in k or k.endswith(".voiced") for k in miss), miss
+        assert all(".mouth." in k or k.endswith(".voiced") or k.startswith("check.") for k in miss), miss
         return b
 
 
@@ -1838,6 +1923,7 @@ class Machine:
         self.explore, self.reads = 0., None            # sampling temperature (0: its best reading); the readings made
         self.wrote, self.latest, self.rulekey = {}, {}, {}   # the rules' record: each entry's statement, each subject's last place, each key's rule
         self.right = []                                # ... and tool sayings the rules checked right: (tool, want, inputs, what it said)
+        self.chose = {}                                # (place, index) -> the check's decision that made it: (rule, old, new, kept, other)
 
     def do(self, r, name, *a):
         r.passes += 1
@@ -2139,7 +2225,9 @@ def judge(m, ledger, row=None, truth=None):
     if row is not None and truth is not None:
         got = next((it.value for it in reversed(row.stack) if it.value is not None), None)
         first = next((j.rule for j in out if j.ev and j.ev.get("row") is row and not j.ok), "no rule fired")
-        j = Judgment("outcome", got == truth, "path", truth, {"src": row.src}, f"said {got}, truth {truth}, first failure: {first}")
+        reads = [(ev["after"][-1].place, ev["after"][-1].idx) for ev in m.events or [] if ev.get("row") is row and ev["name"] == "lookup"]
+        j = Judgment("outcome", got == truth, "path", truth, {"src": row.src, "reads": reads},
+                     f"said {got}, truth {truth}, first failure: {first}")
         ledger.add(j)
         if not j.ok:
             ledger.why[first] = ledger.why.get(first, 0) + 1
@@ -2162,6 +2250,17 @@ def lessons(tr, bank, m, js, cap=64):
     teaches: relate learns same / not same, the relation learns which words name a statement's source and whether it
     has one. (Labels and B stay as they are online: changing them would move what is already stored.)"""
     dev, loss = next(bank.parameters()).device, None
+    seen = []                                          # the check learns from outcome: a one-read question read an entry
+    for j in js:                                       # a check decision made: right -> the decision stands; wrong while
+        if j.rule == "outcome" and len(j.ev.get("reads", [])) == 1 and j.ev["reads"][0] in m.chose:   # the other
+            g, o, n, keep, other = m.chose[j.ev["reads"][0]]                                          # candidate held
+            if j.ok:                                                                                  # the truth ->
+                seen += [(g, o, n, keep, 1.), (g, o, n, other, 0.)]                                   # the reverse
+            elif other.value == j.target:
+                seen += [(g, o, n, keep, 0.), (g, o, n, other, 1.)]
+    if seen:
+        lg = bank.check([nodes_of([x[k].node.detach() for x in seen], dev) for k in range(4)])
+        loss = F.binary_cross_entropy_with_logits(lg, torch.tensor([x[4] for x in seen], device=dev))
     teach = lambda j: [x if len(x) == 4 else (*x, "same") for x in (j.target if isinstance(j.target, list) else [j.target])
                        if x and x[1] is not None and x[1] >= 0]       # (text, place, same?, which question)
     for j in js:                                       # reach moves at once: one lesson, one step
@@ -2177,7 +2276,8 @@ def lessons(tr, bank, m, js, cap=64):
     if ruled:                                          # the rule query is pulled toward the rule's place (slow)
         q = tr.rule_of(tr.encode([t for t, _, _, _ in ruled]))
         tgt = torch.tensor(np.stack([m.g.L[p] for _, p, _, _ in ruled]), device=q.device)
-        loss = (1 - (q * tgt).sum(-1)).mean()
+        l0 = (1 - (q * tgt).sum(-1)).mean()
+        loss = l0 if loss is None else loss + l0
     pairs = [j for j in js if j.blame in ("relate", "walk") and teach(j)]
     wrong, right = [j for j in pairs if not j.ok], [j for j in pairs if j.ok]
     rel = [x for j in wrong[:cap // 2] + random.sample(right, min(len(right), len(wrong[:cap // 2]))) for x in teach(j)]   # learn from mistakes
@@ -2529,18 +2629,43 @@ def gold_tree(m, r, t):
     m.do(r, "apply", 2)                                # closing brackets are never read: the stack says what is left
 
 
+def check_exact(rule, old, new, cand):
+    """the exact stand-in's check(rule, resulting state) -> 1 pass / 0 fail: a correction or a copy is kept as said;
+    under a rule that adds, the kept value is old + new; under any other rule, the statement as said"""
+    if new.text.startswith("Correction") or "(same as" in new.text:
+        return float(cand is new)
+    if any(x.search(rule.text) for x in ADD_RE):
+        return float(cand is not new and number(cand.text.strip()) == (old.value or 0) + (new.value or 0))
+    return float(cand is new)
+
+
+def check(m, rule, old, new, cand):
+    return check_exact(rule, old, new, cand) if isinstance(m.T, Oracle) else m.T.check(rule, old, new, cand)
+
+
 def arrive(m, text):
-    """every input statement starts a row"""
+    """a statement arrives; a rule is a statement like any other. The check's want looks for the node that governs
+    where this one goes; when there is one and the place already holds a value, the candidates are the statement as
+    said and what a tool makes of (old, new) under that node, and the check of each resulting state keeps one"""
     r = Row(text)
-    if m.T.key(text)[0] != "fact" or text.startswith("Correction"):
-        return m.do(r, "insert")
-    m.do(r, "rule")
-    if any(x.search(r.stack[-1].text) for x in ADD_RE) and "(same as" not in text:
-        gold_read(m, r, phrase_of(text))
-        if r.stack[-1].text != "unknown":
-            m.do(r, "split", len(r.focus[-1]))
+    m.do(r, "rule")                                    # the check's want: what governs this (a node, or none)
+    gov = r.stack.pop()
+    if gov.place >= 0:
+        p = m.find(m.T.label(text), m.T.node(text))
+        if p >= 0:
+            old, new = m.entry_item(p), m.item(text)
+            r.stack += [m.item(gov.text), old, new]
             m.do(r, "apply", 2)
-            return m.do(r, "insert", True)
+            made = r.stack.pop()
+            keep, other = (made, new) if check(m, gov, old, new, made) > check(m, gov, old, new, new) else (new, made)
+            if keep is made:
+                r.stack.append(made)
+                m.do(r, "insert", True)
+            else:
+                m.do(r, "insert")
+            p = m.g.n - 1 if m.at.get("new") else m.at["place"]
+            m.chose[(p, len(m.g.chain[p]) - 1)] = (gov, old, new, keep, other)
+            return
     m.do(r, "insert")
 
 
@@ -3271,6 +3396,7 @@ if __name__ == "__main__":
     P.add_argument("--decode", action="store_true", help="train the translator's decoder: text -> B -> text (--init = the translator)")
     P.add_argument("--tools", action="store_true", help="train the tool nodes on B (--init = translator with decoder)")
     P.add_argument("--recur", action="store_true", help="train the reader node: answering by recursion (--demos questions)")
+    P.add_argument("--check", action="store_true", help="train the check node (--demos situations; --toolw bank to add it to)")
     P.add_argument("--norm", action="store_true", help="train the normalizer: any text -> clear statements")
     P.add_argument("--norm-e2e", action="store_true", help="E4: the memory fed held-out forms through the normalizer (--normw)")
     P.add_argument("--normw", default="")
@@ -3297,4 +3423,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    diag(A) if A.diag else train_recursion_reader(A) if A.recur else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_normalizer(A) if A.norm else norm_e2e(A) if A.norm_e2e else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else train_check(A) if A.check else train_recursion_reader(A) if A.recur else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_normalizer(A) if A.norm else norm_e2e(A) if A.norm_e2e else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
