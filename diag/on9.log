@@ -1,0 +1,49 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3920.88it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+tick 50 | places 396, statements 577 | this window: rules arith 52/103 wrong, copy 1/567 wrong, found 0/324 wrong, merge 1/538 wrong, outcome 60/148 wrong, read 0/264 wrong, roundtrip 1/567 wrong, rule 7/509 wrong, stale 0/276 wrong, tool 3/151 wrong | wrong answers, first failure on the row: arith 32, no rule fired 26, tool 2 | 78s
+     tool: 'What is the sum of (the difference between the last board of Pelba and': numbers in, '-' out
+     arith: 'What is the sum of (the difference between the last board of Pelba and': the difference between: 30, 30 -> -, should be 0
+     outcome: 'What is the sum of (the difference between the last board of Pelba and': said None, truth 30, first failure: tool
+     rule: 'the shelf of Musa is 11.': found place -1, rule for shelf is at 9
+     copy: 'the old currency of Dunvin is 23 (same as the term of Vintha).': claims [], source 85
+     roundtrip: 'the memo of Zekpel is Zekka.': said back 'the memo of Zekpel is Zekpel.'
+     merge: 'the trace id of Merpel is W271-N.': the trace id of merpel into the trace id of torpel
+tick 100 | places 672, statements 1129 | this window: rules arith 23/153 wrong, copy 2/494 wrong, found 0/399 wrong, merge 2/463 wrong, outcome 59/150 wrong, read 0/280 wrong, roundtrip 2/494 wrong, rule 8/480 wrong, stale 0/314 wrong, tool 0/203 wrong | wrong answers, first failure on the row: no rule fired 46, arith 13 | 163s
+     outcome: 'What is the daily worker of Vinor?': said 40, truth 39, first failure: no rule fired
+     arith: 'What is the larger of (the difference between the backup temperature o': the difference between: 22, 32 -> 10, should be -10
+     copy: 'the schedule of Loba is 26 (same as the guest of Zekne).': claims [], source 274
+     roundtrip: 'later old locale values overwrite the previous old locale': said back 'value overwrite the previous old locale'
+     rule: 'the old age of Basa is 8.': found place -1, rule for old age is at 208
+     merge: 'the trace id of Dunmu is M752-A.': the trace id of dunmu into the trace id of vinmu
+tick 150 | places 879, statements 1693 | this window: rules arith 16/203 wrong, copy 1/454 wrong, found 1/450 wrong, merge 3/425 wrong, outcome 52/150 wrong, read 0/282 wrong, roundtrip 2/454 wrong, rule 5/499 wrong, stale 0/369 wrong, tool 0/253 wrong | wrong answers, first failure on the row: no rule fired 42, arith 9, found 1 | 255s
+     outcome: 'What is the width of the frame of Nesa?': said 5, truth 4, first failure: no rule fired
+     arith: 'What is the sum of the salary of Rilril and (the sum of the series of ': the sum of: 28, 38 -> 56, should be 66
+     rule: 'the quota of Mudun is 9.': found place 509, rule for quota is at 103
+     merge: 'the trace id of Orgor is H507-S.': the trace id of orgor into the trace id of rilgor
+     roundtrip: 'quota figures that arrive later become the current quota': said back 'y supply point.'
+     found: 'What is the sum of the slot of Ordun and the width of Thator?': asked the slot of ordun, unknown
+     copy: 'the ship of Bane is 8 (same as the author of Rilzek).': claims [], source 247
+tick 200 | places 1034, statements 2236 | this window: rules arith 12/205 wrong, copy 0/446 wrong, found 1/427 wrong, merge 3/413 wrong, outcome 48/150 wrong, read 0/263 wrong, roundtrip 3/446 wrong, rule 5/470 wrong, stale 0/373 wrong, tool 0/255 wrong | wrong answers, first failure on the row: no rule fired 39, arith 8, found 1 | 345s
+     roundtrip: 'rule: old currency figures that arrive later replace the old old curre': said back 'rule: old currency figures that arrive later replace the old'
+     found: 'What is the worker of Thazek?': asked the worker of thazek, unknown
+     outcome: 'What is the worker of Thazek?': said None, truth 18, first failure: found
+     arith: 'What is the larger of (the sum of the quota of Lotha and the first stu': the difference between: 9, 8 -> -1, should be 1
+     rule: 'the quota of Nevin is 19.': found place 103, rule for quota is at 509
+     merge: 'Correction: the route of Mutor is now 5.': the route of mutor split from place 468
+tick 250 | places 1163, statements 2809 | this window: rules arith 6/203 wrong, copy 0/472 wrong, found 0/417 wrong, merge 4/439 wrong, outcome 45/150 wrong, read 0/246 wrong, roundtrip 3/472 wrong, rule 1/501 wrong, stale 0/369 wrong, tool 0/253 wrong | wrong answers, first failure on the row: no rule fired 42, arith 3 | 439s
+     outcome: 'What is the zone of the service of Torpel?': said None, truth 3, first failure: no rule fired
+     arith: 'What is the smaller of the list of Bane and (the sum of (the differenc': the sum of (: -16, 7 -> -1, should be -9
+     rule: 'the quota of Dungor is 4.': found place -1, rule for quota is at 509
+     roundtrip: 'from now on, later old locale values replace the old old locale': said back 'from now on, later old locale values replace the old locale'
+     merge: 'Correction: the store of Rildun is now 7.': the store of rildun split from place 1088
+tick 300 | places 1265, statements 3375 | this window: rules arith 10/214 wrong, copy 1/457 wrong, found 1/425 wrong, merge 1/433 wrong, outcome 45/150 wrong, read 0/249 wrong, roundtrip 0/457 wrong, rule 4/503 wrong, stale 3/380 wrong, tool 0/264 wrong | wrong answers, first failure on the row: no rule fired 39, arith 5, found 1 | 533s
+     outcome: 'What is the main seat of the patient of Dunvin?': said None, truth 22, first failure: no rule fired
+     rule: 'the first locale of Nedun is 22.': found place 264, rule for first locale is at 1166
+     arith: 'What is the difference between (the smaller of the list of Muril and (': the difference between (: 18, 20 -> 2, should be -2
+     stale: 'the store of Rildun is 6.': reached place 1088, last said at 1126
+     found: 'What is the ship of the service of Gorgor?': asked the service of gorgor, unknown
+     merge: 'the trace id of Mertor is V688-E.': the trace id of mertor split from place 307
+     copy: 'the slot of Mertor is 12 (same as the first student of Muril).': claims [], source 775
+all ticks: rules arith 119/1081 wrong, copy 5/2890 wrong, found 3/2442 wrong, merge 14/2711 wrong, outcome 309/898 wrong, read 0/1584 wrong, roundtrip 11/2890 wrong, rule 30/2962 wrong, stale 3/2081 wrong, tool 3/1379 wrong
