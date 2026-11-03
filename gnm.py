@@ -695,22 +695,23 @@ class Translator(nn.Module):
         keep[torch.arange(len(texts)), (m == 0).sum(1)] = False   # the first token soaks up attention in GPT-2: a dummy
         return F.layer_norm(self.down(h) + self.tokd(self.lm.wte(b["input_ids"])), (self.c,)), keep
 
-    def decode_loss(self, z, zm, texts, each=False):
-        """decoder: the frozen LM reads B as a prefix and writes the text back (each: one loss per text)"""
+    def decode_loss(self, z, zm, texts, each=False, up=None):
+        """decoder: the frozen LM reads B as a prefix and writes the text back (each: one loss per text; up: whose mouth,
+        default the decoder's own, for stored nodes; a tool says its results with its own)"""
         t = self.tok([x + self.tok.eos_token for x in texts], return_tensors="pt", padding=True).to(z.device)
         ids, mask = t["input_ids"], t["attention_mask"]
         m = torch.cat([zm.long(), mask], 1)
-        x = torch.cat([self.up(z), self.lm.wte(ids)], 1)
+        x = torch.cat([(up or self.up)(z), self.lm.wte(ids)], 1)
         h = self.lm(inputs_embeds=x, attention_mask=m, position_ids=(m.cumsum(1) - 1).clamp(min=0)).last_hidden_state
         h = h[:, z.shape[1] - 1:-1]
         nll = F.cross_entropy((h @ self.lm.wte.weight.T).transpose(1, 2), ids, reduction="none")
         return (nll * mask).sum(1) / mask.sum(1) if each else (nll * mask).sum() / mask.sum()
 
     @torch.no_grad()
-    def decode(self, z, zm, n=48):
+    def decode(self, z, zm, n=48, up=None):
         """B -> text, greedy"""
         eos, m = self.tok.eos_token_id, zm.long()
-        o = self.lm(inputs_embeds=self.up(z), attention_mask=m, position_ids=(m.cumsum(1) - 1).clamp(min=0), use_cache=True)
+        o = self.lm(inputs_embeds=(up or self.up)(z), attention_mask=m, position_ids=(m.cumsum(1) - 1).clamp(min=0), use_cache=True)
         past, h, out, at = o.past_key_values, o.last_hidden_state[:, -1], [], m.sum(1, keepdim=True)
         for _ in range(n):
             nxt = (h @ self.lm.wte.weight.T).argmax(-1)
@@ -736,8 +737,8 @@ class NeuralT:
         return z[0][m[0]]
 
     @torch.no_grad()
-    def say(self, z):                                  # B -> text
-        return self.m.decode(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device))[0].strip()
+    def say(self, z, up=None):                         # B -> text (up: a tool's mouth)
+        return self.m.decode(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device), up=up)[0].strip()
 
     def apply(self, want, ins, tool=None):             # the want's label finds a tool node by its key; nodes in, nodes out
         with torch.set_grad_enabled(self.learning):    # the tools learn from the rules' lessons, which run them again
@@ -750,7 +751,7 @@ class NeuralT:
             return ["unknown"]
         t = self.last = int(s.argmax()) if tool is None else tool
         o, many, _ = self.tools.nets[t]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
-        return [self.say(z[0]) or NOTHING for z, _ in o[:int(many.argmax()) + 1]]   # its result is what it says, read like any
+        return [self.say(z[0], self.tools.nets[t].mouth) or NOTHING for z, _ in o[:int(many.argmax()) + 1]]   # its result is what it says, read like any
         # text (a raw output node as a next input: 11 / 25 right; read back: 25 / 25); saying nothing is the node (nothing)
 
     @torch.no_grad()
@@ -985,7 +986,7 @@ class ToolNet(nn.Module):
     """one tool node's own network. In: the want, then any number of nodes (B each). Out: up to M nodes (K latents each),
     how many of them it means, and its own guess of how wrong it is (the score). Its key is its label: what it answers to."""
 
-    def __init__(self, d=128, c=256, K=12, M=2, R=8, L=96):
+    def __init__(self, d=128, c=256, K=12, M=2, R=8, L=96, D=768):
         super().__init__()
         self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))   # the label: relevant to q when q . key > 1
         self.register_buffer("mu", torch.tensor(5.))                     # the error it usually gets, and its spread
@@ -997,6 +998,9 @@ class ToolNet(nn.Module):
         self.many = nn.Linear(c, M)
         self.err = nn.Linear(c, 1)
         self.K, self.M = K, M
+        self.mouth = nn.Sequential(nn.Linear(c, D), nn.GELU(), nn.Linear(D, D))   # how it says its results: its own, so
+        # the decoder learning to say stored nodes never moves what a tool says (a shared one did: arithmetic 155 -> 110 / 160)
+        self.register_buffer("voiced", torch.tensor(0.))    # 0: not yet given the decoder's mouth to start from
 
     def forward(self, ins):
         n, dev = ins[0][0].shape[0], self.out.device
@@ -1046,6 +1050,15 @@ class ToolBank(nn.Module):
         self.nets.append(net)
         return len(self.nets) - 1
 
+    @torch.no_grad()
+    def voice(self, tr):
+        """a tool without its own mouth yet starts from the decoder's (then only its own lessons move it)"""
+        for net in self.nets:
+            if not net.voiced:
+                net.mouth.load_state_dict(tr.up.state_dict())
+                net.voiced.fill_(1.)
+        return self
+
     def gate(self, q):                                 # every want against every tool's label: > 1 = relevant
         return q @ torch.stack([t.key for t in self.nets]).T
 
@@ -1058,7 +1071,8 @@ class ToolBank(nn.Module):
         b = ToolBank().to(dev)
         for _ in range(s["n"]):
             b.nets.append(ToolNet().to(dev))
-        b.load_state_dict(s["state"])
+        miss = b.load_state_dict(s["state"], strict=False).missing_keys     # banks made before tools had a mouth
+        assert all(".mouth." in k or k.endswith(".voiced") for k in miss), miss
         return b
 
 
@@ -1076,7 +1090,7 @@ def said(rng, v):
 
 def load_tools(A, tr):
     """the tool nodes and the relate node (--toolw), or None"""
-    return ToolBank.load(A.toolw, next(tr.proj.parameters()).device).eval() if A.toolw else None
+    return ToolBank.load(A.toolw, next(tr.proj.parameters()).device).eval().voice(tr) if A.toolw else None
 
 
 # the light supervision: what kinds of thing the model reads being done. No tool is named, nor how many there are.
@@ -1087,6 +1101,14 @@ HELD_WANTS = {"the total of", "the maximum of", "the lesser of", "share out in g
 KINDS = ("add", "sub", "max", "min", "divmod", "rule", "both", "join")
 
 
+def amount(rng):
+    """a number as the machine meets it: stored values are 1-60, but one tool's result goes on to the next, so
+    differences go below zero and sums past 60 (online lessons on such numbers, never shown in demos 1-60, pulled the
+    arithmetic tool off what it knew: one lesson on 23 + -17 cost 6 / 160 of its probe)"""
+    r = rng.random()
+    return rng.randint(1, 60) if r < .6 else rng.randint(-60, 0) if r < .8 else rng.randint(61, 200)
+
+
 def read_demo(rng, kind, held=False, vocab=KEYS_TRAIN):
     """one thing being done, as read: (kind, the want, the input nodes, what came out)"""
     if kind in WANTS:
@@ -1094,9 +1116,9 @@ def read_demo(rng, kind, held=False, vocab=KEYS_TRAIN):
         if kind == "divmod":
             a, b = rng.randint(10, 120), rng.randint(2, 12)
             return kind, w, [said(rng, a), said(rng, b)], [str(a // b), str(a % b)]
-        a, b = rng.randint(1, 60), rng.randint(1, 60)
+        a, b = amount(rng), amount(rng)
         return kind, w, [said(rng, a), said(rng, b)], [str(next(t for t in TOOLS if t[0] == kind)[1](a, b))]
-    nm, k, v, x = _name(rng, 2), " ".join(_key(rng, vocab, set())), rng.randint(1, 60), rng.randint(1, 60)
+    nm, k, v, x = _name(rng, 2), " ".join(_key(rng, vocab, set())), amount(rng), amount(rng)
     if kind == "rule":                                 # a rule being applied to what arrived
         return kind, rule_text(rng, "add", k), [f"{leaf(nm, k)} is {v}.", f"is {x}."], [str(v + x)]
     if kind == "both":
@@ -1139,7 +1161,7 @@ def tool_loss(tr, net, ins, outs):
     n = torch.tensor([len(x) for x in outs], device=many.device)
     L = F.cross_entropy(many, n - 1, reduction="none")
     for j, (z, zm) in enumerate(o):
-        L = L + tr.decode_loss(z, zm, [x[j] if j < len(x) else "" for x in outs], each=True) * (n > j) / n
+        L = L + tr.decode_loss(z, zm, [x[j] if j < len(x) else "" for x in outs], each=True, up=net.mouth) * (n > j) / n
     return L, err
 
 
@@ -1164,6 +1186,7 @@ def learn(tr, bank, demos, st, A, spawn=True, none=()):
         if spawn and new.any() and st["step"] - st["last"] >= A.cool and len(bank.nets) < bank.cap:
             b = int(new.nonzero()[0])
             st.update(last=st["step"], newest=bank.spawn(q[b], int(s[b].argmax()) if bank.nets else None, A.scope), spawned=True)
+            bank.voice(tr)
             s = bank.gate(q)
         if not bank.nets:
             return apart, torch.full((len(demos),), -1), s
@@ -1291,18 +1314,18 @@ def bank_report(tr, bank, rng, n=96):
                 t, o, _ = apply_tool(tr, bank, w, ins)
                 used.setdefault((kind, held), {}).setdefault(t, 0)
                 used[(kind, held)][t] += 1
-                hit += 0 if t < 0 else [x.strip() for x in tr.decode(torch.cat(o), torch.ones(len(o), len(o[0][0]), dtype=torch.bool, device=o[0].device))] == outs \
+                hit += 0 if t < 0 else [x.strip() for x in tr.decode(torch.cat(o), torch.ones(len(o), len(o[0][0]), dtype=torch.bool, device=o[0].device), up=bank.nets[t].mouth)] == outs \
                     if len(o) == len(outs) else 0
             top = max(used[(kind, held)].items(), key=lambda z: z[1])
             line.append(f"{kind}{'*' if held else ''} {hit / n:.2f} (tool {top[0]} {top[1] / n:.2f}, new {used[(kind, held)].get(-1, 0) / n:.2f})")
     hit = 0
     for _ in range(n):
         a, b, c = rng.randint(1, 60), rng.randint(1, 60), rng.randint(1, 60)
-        _, o, _ = apply_tool(tr, bank, "the larger of", [said(rng, a), said(rng, b)])
-        say = lambda z: tr.decode(z, torch.ones(z.shape[:2], dtype=torch.bool, device=z.device))[0].strip()
+        t, o, _ = apply_tool(tr, bank, "the larger of", [said(rng, a), said(rng, b)])
+        say = lambda z, t: tr.decode(z, torch.ones(z.shape[:2], dtype=torch.bool, device=z.device), up=bank.nets[t].mouth)[0].strip()
         if o:
-            _, o2, _ = apply_tool(tr, bank, "the sum of", [say(o[0]), said(rng, c)])
-            hit += bool(o2) and say(o2[0]) == str(max(a, b) + c)
+            t2, o2, _ = apply_tool(tr, bank, "the sum of", [say(o[0], t), said(rng, c)])
+            hit += bool(o2) and say(o2[0], t2) == str(max(a, b) + c)
     nothing = bank.gate(bank.query(tr, [asks_nothing(rng) for _ in range(n)])).max(1).values > 1
     novel = bank.gate(bank.query(tr, NOVEL + [asks_nothing(rng, True) for _ in range(n)])).max(1).values > 1
     return (f"tools {len(bank.nets)} | " + " ".join(line) + f" | nested {hit / n:.2f} | {want_spread(tr, bank)} | relevant to some"
@@ -1746,6 +1769,7 @@ class Machine:
         self.T, self.g, self.t, self.budget, self.flat, self.trace, self.made = translator, Graph(d), 0, budget, False, None, {}
         self.events, self.at, self.subj = None, {}, {}     # watched: every call is an event the rules judge
         self.wrote, self.latest, self.rulekey = {}, {}, {}   # the rules' record: each entry's statement, each subject's last place, each key's rule
+        self.right = []                                # ... and tool sayings the rules checked right: (tool, want, inputs, what it said)
 
     def do(self, r, name, *a):
         r.passes += 1
@@ -2041,6 +2065,9 @@ def judge(m, ledger, row=None, truth=None):
             for j in rule(m, ev):
                 ledger.add(j)
                 out.append(j)
+                made = j.ok and j.rule == "arith" and j.ev["after"][len(j.ev["before"]) - 3].made
+                if made and made[0] is not None:
+                    m.right = (m.right + [(*made, j.target)])[-256:]
     if row is not None and truth is not None:
         got = next((it.value for it in reversed(row.stack) if it.value is not None), None)
         first = next((j.rule for j in out if j.ev and j.ev.get("row") is row and not j.ok), "no rule fired")
@@ -2092,14 +2119,16 @@ def lessons(tr, bank, m, js, cap=64):
         y = torch.tensor([v for _, _, v, _ in rel], device=dev)
         l1 = F.binary_cross_entropy_with_logits(bank.relate([q for _, _, _, q in rel], za, ma, zb, mb), y)
         loss = l1 if loss is None else loss + l1
-    sums = [j for j in js if j.rule == "arith" and not j.ok and j.ev["after"] and j.ev["after"][len(j.ev["before"]) - 3].made][:cap]
-    for j in sums:                                     # the tool that got it wrong learns the right number on these very inputs
-        t, want, args = j.ev["after"][len(j.ev["before"]) - 3].made
-        if t is None:
-            continue
-        o, _, _ = bank.nets[t]([tr.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in args])
-        l4 = tr.decode_loss(o[0][0], o[0][1], [j.target]) / len(sums)
-        loss = l4 if loss is None else loss + l4
+    sums = [(*j.ev["after"][len(j.ev["before"]) - 3].made, j.target) for j in js if j.rule == "arith" and not j.ok
+            and j.ev["after"] and j.ev["after"][len(j.ev["before"]) - 3].made][:cap]
+    sums = [x for x in sums if x[0] is not None]
+    for t in {x[0] for x in sums}:                     # the tool that got it wrong learns the right number on these very
+        wrong = [x for x in sums if x[0] == t]         # inputs, beside as many of its own right sayings (mistakes alone,
+        kept = [x for x in m.right if x[0] == t]       # mostly out of its range: probe 153 -> 118 / 160 in 20 ticks)
+        for _, want, args, text in wrong + random.sample(kept, min(len(kept), len(wrong))):
+            o, _, _ = bank.nets[t]([tr.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in args])
+            l4 = tr.decode_loss(o[0][0], o[0][1], [text], up=bank.nets[t].mouth) / len(sums)
+            loss = l4 if loss is None else loss + l4
     back = [j.target for j in js if j.rule == "roundtrip" and not j.ok][:cap]
     if back:                                           # the decoder's output side (stored B keeps its meaning)
         l3 = tr.decode_loss(*tr.content(back), back)
