@@ -1,0 +1,13 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3967.18it/s]
+50 questions read by the stand-in: 187 steps
+/marimo/frozen/rc2/gnm.py:2500: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss) / 16:.3f} | fresh worlds, answered by the model's reading: " + " | ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+step 500 loss 0.001 | fresh worlds, answered by the model's reading: lookup 50/50 | before 50/50 | coexist 44/50 | chain 50/50 | ops 20/50 | long 0/50 | 223s
+step 1000 loss 0.000 | fresh worlds, answered by the model's reading: lookup 50/50 | before 49/50 | coexist 49/50 | chain 50/50 | ops 18/50 | long 1/50 | 448s
+step 1500 loss 0.067 | fresh worlds, answered by the model's reading: lookup 50/50 | before 50/50 | coexist 50/50 | chain 50/50 | ops 20/50 | long 5/50 | 2174s
+step 2000 loss 0.415 | fresh worlds, answered by the model's reading: lookup 49/50 | before 48/50 | coexist 50/50 | chain 48/50 | ops 28/50 | long 2/50 | 3943s
+step 2500 loss 0.010 | fresh worlds, answered by the model's reading: lookup 50/50 | before 49/50 | coexist 48/50 | chain 50/50 | ops 27/50 | long 1/50 | 5996s
+step 3000 loss 0.358 | fresh worlds, answered by the model's reading: lookup 50/50 | before 50/50 | coexist 50/50 | chain 50/50 | ops 25/50 | long 2/50 | 7507s
+step 3500 loss 0.227 | fresh worlds, answered by the model's reading: lookup 50/50 | before 50/50 | coexist 50/50 | chain 50/50 | ops 26/50 | long 3/50 | 9423s
