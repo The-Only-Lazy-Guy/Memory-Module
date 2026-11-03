@@ -2460,7 +2460,9 @@ class QueryReader(nn.Module):
         self.kind = nn.Parameter(torch.randn(2, c) * .02)                  # a word / part of a node
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 3)
-        self.start, self.end, self.want = nn.Linear(c, 1), nn.Linear(c, 1), nn.Linear(c, d)
+        self.start, self.want = nn.Linear(c, 1), nn.Linear(c, d)
+        self.endq, self.endk = nn.Linear(c, c), nn.Linear(c, c)   # the end is read from where the part starts (rc2:
+        # an end chosen alone ran past the closing bracket: 'the larger of <2> and <1>) and <0>')
         self.keys = nn.Parameter(F.normalize(torch.randn(len(self.FN), d), dim=-1) / .9)   # each function's label
 
     def units(self, tr, S, items):
@@ -2494,11 +2496,59 @@ class QueryReader(nn.Module):
         y = self.f(x)[0]
         first = torch.tensor([0] + [s_ + 1 for _, _, s_, _, _ in u], device=z.device)   # where a unit can start / end
         last = torch.tensor([0] + [e + 1 for _, _, _, e, _ in u], device=z.device)
-        return u, y, self.start(y).squeeze(-1)[first], self.end(y).squeeze(-1)[last]
+        return u, y, self.start(y).squeeze(-1)[first], (first, last)
+
+    def ends(self, y, fl, i):
+        """where the part that starts at unit i ends (units before it ruled out; i = 0: nothing, ends at 0)"""
+        first, last = fl
+        if i == 0:
+            return torch.cat([y.new_zeros(1), y.new_full((len(first) - 1,), -1e9)])
+        e = (self.endq(y[last]) * self.endk(y[first[i]])).sum(-1) / y.shape[-1] ** .5
+        return e.masked_fill(torch.arange(len(e), device=e.device) < i, -1e9)
 
     def fn(self, y, i, j):
         """the want over units i..j -> relevance to each function's label"""
         return F.normalize(self.want(y[i:j + 1].mean(0)), dim=-1) @ self.keys.T
+
+
+def reading_diff(m, q):
+    """walk a question by the stand-in's reading; the first step where the model reads it otherwise: (query, the
+    stand-in's (span text, function), the model's), or None when they agree all the way"""
+    S, items, r = q, [], Row(q)
+    for _ in range(24):
+        ex = inner_exact(S, items)
+        try:
+            mo = read_query(m, S, items)
+        except FAIL:
+            mo = "fail"
+        S2 = re.sub(r"\((<\d+>)\)", r"\1", S)
+        show = lambda x: None if x is None else x if isinstance(x, str) else (S2[x[0]:x[1]], x[2])
+        if show(ex) != show(mo):
+            return S2, show(ex), show(mo)
+        if ex is None:
+            return None
+        rd, m.reader = m.reader, None                  # one step by the stand-in's reading
+        try:
+            a, b, f, want, slots = ex
+            args = [items[int(k)] for k in slots]
+            if f == "lookup":
+                r.stack.append(m.item(want)); m.do(r, "lookup"); out = [r.stack[-1]]
+            elif f == "apply":
+                r.stack += [m.item(want)] + args; m.do(r, "apply", len(args)); out = [r.stack[-1]]
+            else:
+                r.stack.append(args[0]); gold_older(m, r)
+                out = [r.stack[-1]] if f == "before" else [r.stack[-1], args[0]]
+        except FAIL:
+            return None
+        finally:
+            m.reader = rd
+        if f == "apply" and len(args) == 1:
+            new = out[0].text
+        else:
+            new = " and ".join(f"<{len(items) + i}>" for i in range(len(out)))
+            items = items + out
+        S = S2[:a] + new + S2[b:]
+    return None
 
 
 def reader_targets(u, x):
@@ -2517,9 +2567,9 @@ def read_query(m, S, items):
     S = re.sub(r"\((<\d+>)\)", r"\1", S)
     pick = (lambda v: int(torch.multinomial(F.softmax(v / m.explore, -1), 1))) if m.explore else (lambda v: int(v.argmax()))
     with torch.no_grad():                              # exploring: the reading is sampled (temperature m.explore)
-        u, y, st, en = rd(tr, S, items)
+        u, y, st, fl = rd(tr, S, items)
         i = pick(st)
-        j = i + pick(en[i:]) if i else 0
+        j = pick(rd.ends(y, fl, i)) if i else 0
         fi = pick(rd.fn(y, u[i - 1][2] + 1, u[j - 1][3] + 1) / .1) if i else -1
     if m.reads is not None:
         m.reads.append((S, list(items), i, j, fi))
@@ -2576,6 +2626,8 @@ def train_recursion_reader(A):
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     tr.requires_grad_(False)
     rd = QueryReader().to(dev)
+    if A.qreader:                                      # go on from a reader that already learned
+        rd.load_state_dict(torch.load(A.qreader, map_location=dev), strict=False)
     rng = random.Random(A.seed)
     demos = [st for q in reader_demos(rng, A.demos) for st in q]
     print(f"{A.demos} questions read by the stand-in: {len(demos)} steps", flush=True)
@@ -2615,8 +2667,8 @@ def train_recursion_reader(A):
                 got += best or []
             rd.train()
             for S, items, i, j, fi in got:             # imitate the reading that worked
-                u, y, st, en = rd(tr, S, items)
-                loss = loss + (F.cross_entropy(st[None], torch.tensor([i], device=dev)) + F.cross_entropy(en[None], torch.tensor([j], device=dev))) * 16 / max(1, len(got))
+                u, y, st, fl = rd(tr, S, items)
+                loss = loss + (F.cross_entropy(st[None], torch.tensor([i], device=dev)) + F.cross_entropy(rd.ends(y, fl, i)[None], torch.tensor([j], device=dev))) * 16 / max(1, len(got))
                 if fi >= 0:
                     loss = loss + F.cross_entropy(rd.fn(y, u[i - 1][2] + 1, u[j - 1][3] + 1)[None] / .1, torch.tensor([fi], device=dev)) * 16 / max(1, len(got))
         for S, texts, x in random.sample(demos, min(16, len(demos))):
@@ -2624,9 +2676,9 @@ def train_recursion_reader(A):
             for it, t in zip(items, texts):
                 it._t = t
             S = re.sub(r"\((<\d+>)\)", r"\1", S)
-            u, y, st, en = rd(tr, S, items)
+            u, y, st, fl = rd(tr, S, items)
             i, j, f = reader_targets(u, x)
-            loss = loss + F.cross_entropy(st[None], torch.tensor([i], device=dev)) + F.cross_entropy(en[None], torch.tensor([j], device=dev))
+            loss = loss + F.cross_entropy(st[None], torch.tensor([i], device=dev)) + F.cross_entropy(rd.ends(y, fl, i)[None], torch.tensor([j], device=dev))
             if f >= 0:
                 loss = loss + F.cross_entropy(rd.fn(y, u[i - 1][2] + 1, u[j - 1][3] + 1)[None] / .1, torch.tensor([f], device=dev))
         opt.zero_grad()
@@ -2647,6 +2699,16 @@ def train_recursion_reader(A):
                 res = [x for x in (ask_recursive(m, "ops" if kind == "long" else kind, w, rng, ops or (1, 3)) for _ in range(A.q)) if x]
                 line.append(f"{kind} {sum(x[1] == x[2] for x in res)}/{len(res)}")
             print(f"step {step} loss {float(loss) / 16:.3f} | fresh worlds, answered by the model's reading: " + " | ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+            for kind, ops in (("ops", (1, 3)), ("ops", (4, 6))):   # where the model's reading first differs
+                shown = 0
+                for _ in range(30):
+                    x = question(kind, w, rng, ops)
+                    d = x and reading_diff(m, x[0])
+                    if d:
+                        print(f"   first difference ({ops}): {d[0]!r} | stand-in {d[1]} | model {d[2]}", flush=True)
+                        shown += 1
+                    if shown == 3:
+                        break
             rd.train()
             if A.save:
                 torch.save(rd.state_dict(), A.save)
@@ -3120,7 +3182,7 @@ def online(A):
     m.g.beam, m.events = A.beam, []
     if A.qreader:                                      # the model reads the questions itself (recursion), no procedure
         rd = QueryReader().to(dev).eval()
-        rd.load_state_dict(torch.load(A.qreader, map_location=dev))
+        rd.load_state_dict(torch.load(A.qreader, map_location=dev), strict=False)
         m.reader = (rd, tr)
     st, t0, said, ledger, total = {"step": 0, "last": -10 ** 9, "newest": None}, time.time(), 0, Ledger(), Ledger()
     for tick in range(1, A.steps + 1):
