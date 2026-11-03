@@ -1,7 +1,7 @@
 #!/bin/bash
 # logs off the box (a reset wipes /marimo): bash lab/logs.sh <name> [name...] -> runs branch, diag/<name>.log + <name>.jsonl.gz
 set -e
-R=/marimo/runsrepo
+R=$HOME/runsrepo                 # not /marimo: a reset brings /marimo/* back as plain folders (clone fails)
 [ -d $R/.git ] || git clone -q --depth 1 --single-branch -b runs https://github.com/The-Only-Lazy-Guy/Memory-Module $R
 cd $R && git fetch -q --depth 1 origin runs && git reset -q --hard origin/runs
 mkdir -p diag
