@@ -1,0 +1,59 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3606.81it/s]
+/marimo/frozen/fm2/gnm.py:1389: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f}", flush=True)
+codec 100: label cos 0.292 relation err 0.0004
+codec 200: label cos 0.535 relation err 0.0003
+codec 300: label cos 0.652 relation err 0.0012
+codec 400: label cos 0.704 relation err 0.0008
+codec 500: label cos 0.760 relation err 0.0012
+codec 600: label cos 0.775 relation err 0.0006
+codec 700: label cos 0.805 relation err 0.0009
+codec 800: label cos 0.798 relation err 0.0010
+codec 900: label cos 0.836 relation err 0.0003
+codec 1000: label cos 0.840 relation err 0.0022
+codec 1100: label cos 0.859 relation err 0.0007
+codec 1200: label cos 0.869 relation err 0.0006
+codec 1300: label cos 0.863 relation err 0.0007
+codec 1400: label cos 0.861 relation err 0.0012
+codec 1500: label cos 0.872 relation err 0.0003
+step 1: no label relevant to a store want -> made function 0
+step 21: no label relevant to a store want -> made function 1
+step 41: no label relevant to a split want -> made function 2
+step 50 loss 84.53 [filter 1.89, label of what it made 3.93, functions 67.83, labels 0.00, check 8.97, apart 1.91, asks nothing 0.01] functions 3 | walked to 456/508 | 31s
+step 61: no label relevant to a split want -> made function 3
+step 81: no label relevant to a lookup want -> made function 4
+step 100 loss 106.15 [filter 0.97, label of what it made 5.06, functions 90.66, labels 0.24, check 7.60, apart 1.62, asks nothing 0.00] functions 5 | walked to 867/1154 | 79s
+step 101: no label relevant to a lookup want -> made function 5
+step 121: no label relevant to a inc want -> made function 6
+step 141: no label relevant to a store want -> made function 7
+step 150 loss 251.91 [filter 2.27, label of what it made 8.95, functions 227.91, labels 0.95, check 9.05, apart 2.67, asks nothing 0.11] functions 8 | walked to 2519/3431 | 189s
+step 162: no label relevant to a store want -> made function 8
+step 200 loss 265.48 [filter 1.68, label of what it made 13.83, functions 235.55, labels 0.22, check 10.85, apart 3.25, asks nothing 0.10] functions 9 | walked to 2775/3295 | 311s
+step 250 loss 134.65 [filter 0.78, label of what it made 6.57, functions 118.51, labels 0.00, check 6.47, apart 2.21, asks nothing 0.11] functions 9 | walked to 2915/3760 | 439s
+step 262: no label relevant to a store want -> made function 9
+step 293: no label relevant to a split want -> made function 10
+step 300 loss 546.47 [filter 0.88, label of what it made 14.85, functions 520.42, labels 1.00, check 6.21, apart 3.00, asks nothing 0.12] functions 11 | walked to 2722/3713 | 561s
+step 350: functions [0, 2] idle 300 steps -> removed
+step 350 loss 244.34 [filter 1.67, label of what it made 14.77, functions 216.62, labels 0.69, check 7.80, apart 2.68, asks nothing 0.11] functions 9 | walked to 2991/3525 | 690s
+step 361: no label relevant to a store want -> made function 9
+step 400: functions [2] idle 300 steps -> removed
+step 400 loss 246.92 [filter 0.81, label of what it made 8.88, functions 226.89, labels 0.58, check 7.49, apart 2.22, asks nothing 0.05] functions 9 | walked to 2674/3441 | 809s
+step 403: no label relevant to a split want -> made function 9
+step 428: no label relevant to a fill want -> made function 10
+step 450 loss 165.63 [filter 1.33, label of what it made 8.03, functions 146.88, labels 0.35, check 6.77, apart 2.21, asks nothing 0.07] functions 11 | walked to 2715/3667 | 930s
+step 455: no label relevant to a add want -> made function 11
+step 484: no label relevant to a add want -> made function 12
+step 500: functions [4] idle 300 steps -> removed
+step 500 loss 116.06 [filter 1.21, label of what it made 6.46, functions 103.33, labels 0.93, check 2.22, apart 1.75, asks nothing 0.16] functions 12 | walked to 2633/3195 | 1042s
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+EVAL step 500: statements 284 [fires 284, roundtrip 17] | answers: lookup 0/24 (60.0 firings) | before 0/24 (41.7 firings) | coexist 0/24 (60.0 firings) | chain 0/24 (60.0 firings) | ops 0/24 (60.0 firings) | long 0/24 (60.0 firings) | functions 12 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'fires': 9541, 'roundtrip': 18, 'budget out': 153, 'rest': 22, 'edits': 16}
+step 504: no label relevant to a store want -> made function 12
+step 550: functions [0] idle 300 steps -> removed
+step 550 loss 153.36 [filter 1.52, label of what it made 6.53, functions 128.81, labels 0.49, check 14.25, apart 1.76, asks nothing 0.00] functions 12 | walked to 2719/3561 | 1295s
+step 562: no label relevant to a lookup want -> made function 12
+step 590: no label relevant to a lookup want -> made function 13
+step 600 loss 252.46 [filter 0.77, label of what it made 13.20, functions 228.25, labels 1.07, check 6.35, apart 2.69, asks nothing 0.12] functions 14 | walked to 2713/3811 | 1430s
+step 611: no label relevant to a split want -> made function 14

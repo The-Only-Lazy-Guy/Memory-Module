@@ -1,26 +1,92 @@
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4545.14it/s]
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 5027.19it/s]
+statement: 'each new first fee become the current first fee'
 /usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
   output = torch._nested_tensor_from_mask(
-=== lived 100 ticks in 115s | rules: rules arith 0/58 wrong, copy 0/1048 wrong, merge 1/994 wrong, roundtrip 3/1048 wrong, rule 1/1021 wrong, settle 12/140 wrong, tool 0/117 wrong
+  fire 0: function 5 (gates 5:1.15, 0:1.04, 2:-0.12) | about: 'each new first fee become the current first fee' | let through 1/11: work 'each new first fee become the current first fee' | many 1, where 1, own error 5.95 (usual 5.37) | says: 'note: this is a new version of the old version.'
+statement: 'the pool of Zekne is 6.'
+  fire 1: function 0 (gates 0:1.12, 5:1.06, 8:0.04) | about: 'the pool of Zekne is 6.' | let through 1/12: work 'the pool of Zekne is 6.' | many 1, where 1, own error 3.10 (usual 3.34) | says: 'the price of Buf is 10.'
+statement: 'the page of Torka is 6 (same as the pool of Zekne).'
+  fire 2: function 0 (gates 0:1.11, 5:1.07, 8:0.02) | about: 'the page of Torka is 6 (same as the pool of Zekne).' | let through 1/13: work 'the page of Torka is 6 (same as the pool of Zekne)' | many 1, where 1, own error 3.97 (usual 3.34) | says: 'the price of the Buna is 10.'
+statement: 'the doctor of Torka is 7.'
+  fire 3: function 0 (gates 0:1.11, 5:1.06, 8:0.04) | about: 'the doctor of Torka is 7.' | let through 1/14: work 'the doctor of Torka is 7.' | many 1, where 1, own error 2.97 (usual 3.34) | says: 'the price of the Buna is 10.'
+statement: 'the lane of Torka is 22.'
+  fire 4: function 0 (gates 0:1.11, 5:1.06, 8:0.04) | about: 'the lane of Torka is 22.' | let through 1/15: work 'the lane of Torka is 22.' | many 1, where 1, own error 2.96 (usual 3.34) | says: 'the price of the Buna is 20.'
+statement: 'the pool of Zekne is 26.'
+  fire 5: function 0 (gates 0:1.11, 5:1.06, 8:0.03) | about: 'the pool of Zekne is 26.' | let through 1/16: work 'the pool of Zekne is 26.' | many 1, where 1, own error 3.04 (usual 3.34) | says: 'the price of Buna is 20.'
+memory: 92 places from 92 statements | {'fires': 92, 'check fails': 2}
 
-=== THE GRAPH
-places 646 (fact 615, rule 31) | entries 1109, per place mean 1.7 max 7 | edges per place mean 18.8 max 50 min 8 | reach mean 0.500 min 0.500 max 0.500, widened 0 narrowed 0
-relation claims (R[p] . L[j] > 1): 36; e.g. 'the quota of Dunlo is 8 (same as the gue' -> 'the guest of Baor is 30 (same '; 'the width of Rilzek is 27 (same as the l' -> 'the last band of Riltor is 3.'; 'the last board of Torsa is 1 (same as th' -> 'the list of Thator is 19 (same'
-label distances: places of one name 1.056 (n 1189), any two places 1.380, nearest other place per place: mean 0.809 min 0.380
-entries said back as written: 232/232; e.g. 
-arrive's check decisions: 140, kept what the tool made 28
-   place 396 reach 0.500 edges 14: [0] 'the last band of Neka is 27.'
-   place 621 reach 0.500 edges 14: [0] 'the checksum of Torril is W896-F.'
-   place 609 reach 0.500 edges 11: [0] 'the sync token of Rilzek is V385-M.'
-   place 17 reach 0.500 edges 50: [0] 'note: any further bid overwrite the previous ' || [1] 'please remember: any further bid count as inc' || [2] 'please remember: later bid values overwrite t' || [3] 'from now on, incoming bid numbers are amounts'
-   place 57 reach 0.500 edges 28: [0] 'please remember: every reported store should ' || [1] 'from now on, every reported store replace the' || [2] 'any further store are amounts to add to the c' || [3] 'rule: incoming store numbers replace the old '
+lookup: 'What is the doctor of Zekne?' truth '22'
+  fire 92: function 1 (gates 1:1.14, 8:1.05, 7:0.65) | about: 'What is the doctor of Zekne?' | let through 6/17: work 'What is the doctor of Zekne?'; entry 56.0 'note: this is a new version of the old version.'; entry 64.0 'note: this is a new version of the old version.'; entry 72.0 'note: this is a new version of the old version.\n\nT'; entry 33.0 'note: this is a new version of the old version.\n\nT'; entry 0.0 'note: this is a new version of the old version.' | many 1, where 0, own error 4.03 (usual 3.82) | says: 'the price of the city of Beren'
+  fire 93: function 2 (gates 2:1.11, 8:0.68, 3:0.63) | about: 'the price of the city of Beren' | let through 1/17: work 'the price of the city of Beren' | many 1, where 2, own error 2.24 (usual 2.27) | says: '3'
+  fire 94: function 3 (gates 3:1.10, 2:0.52, 7:0.50) | about: 'What is the doctor of Zekne?' + '3' | let through 2/18: work 'What is the doctor of Zekne?'; work '3' | many 1, where 2, own error 2.01 (usual 2.91) | says: '1'
+  fire 95: function 8 (gates 8:1.11, 1:0.95, 3:0.74) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 3.38 (usual 4.40) | says: '1'
+  fire 96: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 97: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  fire 98: function 8 (gates 8:1.12, 1:1.04, 3:0.72) | about: 'What is the size of the boat?' | let through 1/17: work 'What is the size of the boat?' | many 1, where 2, own error 4.00 (usual 4.40) | says: '1'
+  fire 99: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 100: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  fire 101: function 8 (gates 8:1.12, 1:1.04, 3:0.72) | about: 'What is the size of the boat?' | let through 1/17: work 'What is the size of the boat?' | many 1, where 2, own error 4.00 (usual 4.40) | says: '1'
+  fire 102: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 103: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  -> 'What is the size of the boat?' after 12 firings
 
-=== AN EASY QUESTION (1 step)
+before: 'What was the disk of Zekne before?' truth '11'
+  fire 104: function 1 (gates 1:1.14, 8:1.05, 7:0.64) | about: 'What was the disk of Zekne before?' | let through 6/17: work 'What was the disk of Zekne before?'; entry 56.0 'note: this is a new version of the old version.'; entry 64.0 'note: this is a new version of the old version.'; entry 72.0 'note: this is a new version of the old version.\n\nT'; entry 33.0 'note: this is a new version of the old version.\n\nT'; entry 0.0 'note: this is a new version of the old version.' | many 1, where 0, own error 4.06 (usual 3.82) | says: 'the price of the city of Beren'
+  fire 105: function 2 (gates 2:1.11, 8:0.68, 3:0.63) | about: 'the price of the city of Beren' | let through 1/17: work 'the price of the city of Beren' | many 1, where 2, own error 2.24 (usual 2.27) | says: '3'
+  fire 106: function 3 (gates 3:1.10, 2:0.52, 7:0.50) | about: 'What was the disk of Zekne before?' + '3' | let through 2/18: work 'What was the disk of Zekne before?'; work '3' | many 1, where 2, own error 1.99 (usual 2.91) | says: '1'
+  fire 107: function 8 (gates 8:1.11, 1:0.94, 3:0.74) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 3.34 (usual 4.40) | says: '1'
+  fire 108: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 109: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.79 (usual 2.91) | says: 'What is the size of the boat?'
+  fire 110: function 8 (gates 8:1.12, 1:1.04, 3:0.72) | about: 'What is the size of the boat?' | let through 1/17: work 'What is the size of the boat?' | many 1, where 2, own error 4.00 (usual 4.40) | says: '1'
+  fire 111: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 112: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  fire 113: function 8 (gates 8:1.12, 1:1.04, 3:0.72) | about: 'What is the size of the boat?' | let through 1/17: work 'What is the size of the boat?' | many 1, where 2, own error 4.00 (usual 4.40) | says: '1'
+  fire 114: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 115: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  -> 'What is the size of the boat?' after 12 firings
 
---- QUESTION 'What is the list of Muzek?' | truth 28
-   step 1: 'What is the list of Muzek?' | nodes []
-      stand-in reads: ('the list of Muzek', 'lookup')
-      reader: start 'the' 1.00, 'zek' 0.00, 'of' 0.00
-              end 'zek' 0.38, 'the' 0.17, 'Mu' 0.13
-              function lookup 1.01, apply -0.18, before -0.40, both -0.39
+coexist: 'What is the sum of both values of the next user of Rilvin?' truth '32'
+  fire 116: function 1 (gates 1:1.14, 8:1.06, 7:0.64) | about: 'What is the sum of both values of the next user of Rilvin?' | let through 6/17: work 'What is the sum of both values of the next user of'; entry 56.0 'note: this is a new version of the old version.'; entry 64.0 'note: this is a new version of the old version.'; entry 72.0 'note: this is a new version of the old version.\n\nT'; entry 33.0 'note: this is a new version of the old version.\n\nT'; entry 0.0 'note: this is a new version of the old version.' | many 1, where 0, own error 3.66 (usual 3.82) | says: 'the value of the first-price of the city of the city of the '
+  fire 117: function 2 (gates 2:1.11, 8:0.68, 3:0.62) | about: 'the value of the first-price of the city of the city of the ' | let through 1/17: work 'the value of the first-price of the city of the ci' | many 1, where 2, own error 2.33 (usual 2.27) | says: '3'
+  fire 118: function 3 (gates 3:1.10, 2:0.51, 7:0.50) | about: 'What is the sum of both values of the next user of Rilvin?' + '3' | let through 2/18: work 'What is the sum of both values of the next user of'; work '3' | many 1, where 2, own error 2.83 (usual 2.91) | says: 'What is the most recent day of the month?'
+  fire 119: function 8 (gates 8:1.10, 1:1.09, 3:0.71) | about: 'What is the most recent day of the month?' | let through 1/17: work 'What is the most recent day of the month?' | many 1, where 0, own error 3.97 (usual 4.40) | says: 'the price of the city of the city of the city of the city of'
+  fire 120: function 2 (gates 2:1.13, 8:0.72, 3:0.68) | about: 'the price of the city of the city of the city of the city of' | let through 1/17: work 'the price of the city of the city of the city of t' | many 1, where 2, own error 2.27 (usual 2.27) | says: '1'
+  fire 121: function 3 (gates 3:1.12, 2:0.56, 7:0.52) | about: 'What is the most recent day of the month?' + '1' | let through 2/18: work 'What is the most recent day of the month?'; work '1' | many 1, where 2, own error 2.81 (usual 2.91) | says: 'What is the difference between the size of the card and the '
+  fire 122: function 8 (gates 8:1.11, 1:1.06, 3:0.72) | about: 'What is the difference between the size of the card and the ' | let through 1/17: work 'What is the difference between the size of the car' | many 1, where 2, own error 4.08 (usual 4.40) | says: '1'
+  fire 123: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 124: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  fire 125: function 8 (gates 8:1.12, 1:1.04, 3:0.72) | about: 'What is the size of the boat?' | let through 1/17: work 'What is the size of the boat?' | many 1, where 2, own error 4.00 (usual 4.40) | says: '1'
+  fire 126: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 127: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  -> 'What is the size of the boat?' after 12 firings
+
+chain: 'What is the disk of the next flight of Nedun?' truth '14'
+  fire 128: function 1 (gates 1:1.13, 8:1.05, 7:0.64) | about: 'What is the disk of the next flight of Nedun?' | let through 6/17: work 'What is the disk of the next flight of Nedun?'; entry 56.0 'note: this is a new version of the old version.'; entry 64.0 'note: this is a new version of the old version.'; entry 72.0 'note: this is a new version of the old version.\n\nT'; entry 33.0 'note: this is a new version of the old version.\n\nT'; entry 0.0 'note: this is a new version of the old version.' | many 1, where 0, own error 4.10 (usual 3.82) | says: 'the price of the city of Beren'
+  fire 129: function 2 (gates 2:1.11, 8:0.68, 3:0.63) | about: 'the price of the city of Beren' | let through 1/17: work 'the price of the city of Beren' | many 1, where 2, own error 2.24 (usual 2.27) | says: '3'
+  fire 130: function 3 (gates 3:1.10, 2:0.52, 7:0.50) | about: 'What is the disk of the next flight of Nedun?' + '3' | let through 2/18: work 'What is the disk of the next flight of Nedun?'; work '3' | many 1, where 2, own error 2.42 (usual 2.91) | says: '12'
+  fire 131: function 8 (gates 8:1.11, 1:1.05, 3:0.72) | about: '12' | let through 1/17: work '12' | many 1, where 2, own error 3.64 (usual 4.40) | says: '1'
+  fire 132: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 133: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  fire 134: function 8 (gates 8:1.12, 1:1.04, 3:0.72) | about: 'What is the size of the boat?' | let through 1/17: work 'What is the size of the boat?' | many 1, where 2, own error 4.00 (usual 4.40) | says: '1'
+  fire 135: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 136: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  fire 137: function 8 (gates 8:1.12, 1:1.04, 3:0.72) | about: 'What is the size of the boat?' | let through 1/17: work 'What is the size of the boat?' | many 1, where 2, own error 4.00 (usual 4.40) | says: '1'
+  fire 138: function 2 (gates 2:1.13, 8:0.72, 3:0.69) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 139: function 3 (gates 3:1.11, 2:0.61, 7:0.46) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.78 (usual 2.91) | says: 'What is the size of the boat?'
+  -> 'What is the size of the boat?' after 12 firings
+
+ops: 'What is the smaller of (the larger of the screen of Torka and the device of Torka) and the primary cart of Negor?' truth '4'
+  fire 140: function 1 (gates 1:1.14, 8:1.06, 7:0.65) | about: 'What is the smaller of (the larger of the screen of Torka an' | let through 6/17: work 'What is the smaller of (the larger of the screen o'; entry 56.0 'note: this is a new version of the old version.'; entry 64.0 'note: this is a new version of the old version.'; entry 72.0 'note: this is a new version of the old version.\n\nT'; entry 33.0 'note: this is a new version of the old version.\n\nT'; entry 0.0 'note: this is a new version of the old version.' | many 1, where 0, own error 4.00 (usual 3.82) | says: 'the price of the city of Beren'
+  fire 141: function 2 (gates 2:1.11, 8:0.68, 3:0.63) | about: 'the price of the city of Beren' | let through 1/17: work 'the price of the city of Beren' | many 1, where 2, own error 2.24 (usual 2.27) | says: '1'
+  fire 142: function 3 (gates 3:1.10, 7:0.51, 2:0.50) | about: 'What is the smaller of (the larger of the screen of Torka an' + '1' | let through 2/18: work 'What is the smaller of (the larger of the screen o'; work '1' | many 1, where 2, own error 4.72 (usual 2.91) | says: 'What is the size of the house?'
+  fire 143: function 1 (gates 1:1.12, 8:1.08, 3:0.68) | about: 'What is the size of the house?' | let through 2/17: work 'What is the size of the house?'; entry 56.0 'note: this is a new version of the old version.' | many 1, where 0, own error 4.17 (usual 3.82) | says: 'the price of the city of Beren'
+  fire 144: function 2 (gates 2:1.11, 8:0.69, 3:0.63) | about: 'the price of the city of Beren' | let through 1/17: work 'the price of the city of Beren' | many 1, where 2, own error 2.26 (usual 2.27) | says: '3'
+  fire 145: function 3 (gates 3:1.12, 2:0.53, 7:0.52) | about: 'What is the size of the house?' + '3' | let through 2/18: work 'What is the size of the house?'; work '3' | many 1, where 2, own error 3.28 (usual 2.91) | says: 'What is the difference between the two?'
+  fire 146: function 8 (gates 8:1.10, 1:1.09, 3:0.71) | about: 'What is the difference between the two?' | let through 1/17: work 'What is the difference between the two?' | many 1, where 0, own error 4.30 (usual 4.40) | says: 'the first-day of the first-day of the first-day of the first'
+  fire 147: function 2 (gates 2:1.12, 8:0.72, 3:0.68) | about: 'the first-day of the first-day of the first-day of the first' | let through 1/17: work 'the first-day of the first-day of the first-day of' | many 1, where 2, own error 2.27 (usual 2.27) | says: '1'
+  fire 148: function 3 (gates 3:1.13, 2:0.57, 7:0.52) | about: 'What is the difference between the two?' + '1' | let through 2/18: work 'What is the difference between the two?'; work '1' | many 1, where 2, own error 2.95 (usual 2.91) | says: 'What is the difference between the 2 and the 3?'
+  fire 149: function 8 (gates 8:1.11, 1:1.07, 3:0.72) | about: 'What is the difference between the 2 and the 3?' | let through 1/17: work 'What is the difference between the 2 and the 3?' | many 1, where 0, own error 4.16 (usual 4.40) | says: '1'
+  fire 150: function 2 (gates 2:1.13, 8:0.72, 3:0.68) | about: '1' | let through 1/17: work '1' | many 1, where 2, own error 2.26 (usual 2.27) | says: '1'
+  fire 151: function 3 (gates 3:1.13, 2:0.58, 7:0.52) | about: 'What is the difference between the 2 and the 3?' + '1' | let through 2/18: work 'What is the difference between the 2 and the 3?'; work '1' | many 1, where 2, own error 3.00 (usual 2.91) | says: 'What is the difference between the 2 and 4 of the 3?'
+  -> 'What is the difference between the 2 and 4 of the 3?' after 12 firings
