@@ -3070,6 +3070,10 @@ def online(A):
     T = NeuralT(tr, Oracle(w), A.tau, bank)
     m = Machine(T, T.d)
     m.g.beam, m.events = A.beam, []
+    if A.qreader:                                      # the model reads the questions itself (recursion), no procedure
+        rd = QueryReader().to(dev).eval()
+        rd.load_state_dict(torch.load(A.qreader, map_location=dev))
+        m.reader = (rd, tr)
     st, t0, said, ledger, total = {"step": 0, "last": -10 ** 9, "newest": None}, time.time(), 0, Ledger(), Ledger()
     for tick in range(1, A.steps + 1):
         st.update(step=tick, spawned=False)
@@ -3088,7 +3092,11 @@ def online(A):
                 continue
             r = Row(x[0])
             try:
-                x[2](m, r)
+                if m.reader:
+                    out = answer(m, r, x[0], [])
+                    r.stack.append(out) if out is not None else None
+                else:
+                    x[2](m, r)
                 m.do(r, "say")
             except FAIL:
                 pass
@@ -3439,6 +3447,7 @@ if __name__ == "__main__":
     P.add_argument("--read", action="store_true", help="train the reader on demonstrations (--init = the translator)")
     P.add_argument("--diag", action="store_true", help="no training: every row by the correct calls and by the reader in lockstep")
     P.add_argument("--reader", default="", help="--diag: the reader's weights")
+    P.add_argument("--qreader", default="", help="--online: the reader node's weights: questions answered by recursion")
     P.add_argument("--sizes", default="20,60,180", help="--diag: steps of world at which to stop and ask")
     P.add_argument("--demos", type=int, default=50)
     P.add_argument("--batch", type=int, default=64)
