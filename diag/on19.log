@@ -1,0 +1,65 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2968.88it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+tick 50 | places 398, statements 577 | this window: rules arith 3/47 wrong, copy 1/569 wrong, found 5/284 wrong, merge 1/540 wrong, outcome 28/148 wrong, read 0/268 wrong, roundtrip 1/569 wrong, rule 2/547 wrong, settle 3/33 wrong, stale 0/274 wrong, tool 1/136 wrong | wrong answers, first failure on the row: no rule fired 21, arith 3, found 3, tool 1 | re-settled 0 | 114s
+     outcome: 'What is the sum of (the difference between the last board of Pelba and': said -48, truth 30, first failure: no rule fired
+     arith: 'What is the difference between (the larger of the last board of Pelba ': the difference between (30 and: 8, 11 -> -21, should be -3
+     tool: 'What is the larger of the last band of Balo and (the smaller of the la': numbers in, 'unknown' out
+     copy: 'the old currency of Dunvin is 23 (same as the term of Vintha).': claims [], source 85
+     roundtrip: 'the memo of Zekpel is Zekka.': said back 'the memo of Zekpel is Zekpel.'
+     found: 'What is the list of the patient of Lone?': asked the patient of lone?, got the patient of lone
+     settle: 'the guest of Zekne is 6.': kept as said ('the guest of Zekne i') for 'the guest of Zekne is 6.' under 'rule: incoming guest numbers count as in'
+     rule: 'the old age of Thapel is 23.': found place -1, rule for old age is at 208
+     merge: 'Correction: the offer of Bazek is now 4.': the offer of bazek split from place 245
+tick 100 | places 675, statements 1129 | this window: rules arith 0/113 wrong, copy 2/505 wrong, found 4/284 wrong, merge 3/474 wrong, outcome 30/150 wrong, read 0/250 wrong, roundtrip 2/505 wrong, rule 9/521 wrong, settle 12/138 wrong, stale 1/274 wrong, tool 2/241 wrong | wrong answers, first failure on the row: no rule fired 27, found 2, stale 1 | re-settled 0 | 245s
+     outcome: 'What is the sum of the day of Basa and the schedule of Batha?': said 9, truth 27, first failure: no rule fired
+     settle: 'the old age of Rilba is 4.': kept as said ('the old age of Rilba') for 'the old age of Rilba is 4.' under 'from now on, incoming old age numbers sh'
+     copy: 'the schedule of Loba is 26 (same as the guest of Zekne).': claims [], source 275
+     roundtrip: 'later old locale values overwrite the previous old locale': said back 'value overwrite the previous old locale'
+     rule: 'the last band of Mertor is 8.': found place -1, rule for last band is at 229
+     found: 'What is the larger of (the smaller of the category of Baka and the dai': asked the daily worker of mutor) and, got the daily worker of mutor
+     merge: 'the last band of Bagor is 8.': the last band of bagor split from place 279
+     tool: 'What is the larger of the old locale of Kapel and (the difference betw': numbers in, 'unknown' out
+     stale: 'What is the smaller of (the difference between the first student of Lo': reached place 99, last said at 659
+tick 150 | places 881, statements 1693 | this window: rules arith 1/160 wrong, copy 1/473 wrong, found 2/284 wrong, merge 0/444 wrong, outcome 39/150 wrong, read 2/237 wrong, roundtrip 2/473 wrong, rule 4/535 wrong, settle 19/232 wrong, stale 0/278 wrong, tool 3/313 wrong | wrong answers, first failure on the row: no rule fired 34, tool 3, found 2 | re-settled 31 | 399s
+     outcome: 'What is the last band of Balo?': said 6, truth 28, first failure: no rule fired
+     settle: 'the grade of Kaba is 5.': kept as said ('the grade of Kaba is') for 'the grade of Kaba is 5.' under 'note: incoming grade numbers are amounts'
+     rule: 'the quota of Mudun is 9.': found place 512, rule for quota is at 103
+     arith: 'the birth of Katha is 3.': from now on, every reported bi: 10, 3 -> 12, should be 13
+     roundtrip: 'quota figures that arrive later become the current quota': said back 'y supply point.'
+     tool: 'What is the smaller of (the smaller of the first student of Lone and t': numbers in, 'unknown' out
+     read: 'What is the zone of the patient of Nepel?': read '22'
+     found: 'What is the font of the memo of Ortha?': asked the memo of ortha, unknown
+     copy: 'the ship of Bane is 8 (same as the author of Rilzek).': claims [], source 247
+tick 200 | places 1035, statements 2236 | this window: rules arith 0/144 wrong, copy 0/468 wrong, found 3/288 wrong, merge 1/435 wrong, outcome 40/150 wrong, read 5/207 wrong, roundtrip 3/468 wrong, rule 5/510 wrong, settle 22/254 wrong, stale 0/275 wrong, tool 6/334 wrong | wrong answers, first failure on the row: no rule fired 34, found 3, tool 2, read 1 | re-settled 63 | 596s
+     roundtrip: 'rule: old currency figures that arrive later replace the old old curre': said back 'rule: old currency figures that arrive later replace the old'
+     settle: 'the author of Kadun is 6.': kept as said ('the author of Kadun ') for 'the author of Kadun is 6.' under 'please remember: every reported author s'
+     found: 'What is the difference between (the difference between the license of ': asked the offer of torba) and (the larger of the shelf of muvin, got the offer of torba
+     outcome: 'What is the difference between (the difference between the license of ': said -25, truth -22, first failure: found
+     tool: 'What is the larger of (the sum of the quota of Lotha and the first stu': numbers in, '-' out
+     rule: 'the quota of Nevin is 19.': found place 103, rule for quota is at 512
+     read: 'What is the quota of Muka?': read '9'
+     merge: 'the trace id of Lovin is A815-T.': the trace id of lovin into the trace id of savin
+tick 250 | places 1165, statements 2809 | this window: rules arith 1/150 wrong, copy 0/484 wrong, found 3/290 wrong, merge 3/451 wrong, outcome 37/150 wrong, read 5/208 wrong, roundtrip 3/484 wrong, rule 1/540 wrong, settle 12/276 wrong, stale 0/280 wrong, tool 1/353 wrong | wrong answers, first failure on the row: no rule fired 32, read 2, found 1, tool 1, arith 1 | re-settled 0 | 800s
+     outcome: 'What is the smaller of the list of Bane and (the sum of (the differenc': said 44, truth -9, first failure: no rule fired
+     settle: 'the shelf of Thapel is 3.': kept as said ('the shelf of Thapel ') for 'the shelf of Thapel is 3.' under 'note: each new shelf increase the shelf '
+     found: 'What is the sum of the host of Balo and (the difference between (the s': asked the birth of katha) and the font of thaba, got the birth of katha
+     read: 'What is the difference between the grade of Kaba and (the larger of th': read '13'
+     rule: 'the quota of Dungor is 4.': found place -1, rule for quota is at 512
+     roundtrip: 'from now on, later old locale values replace the old old locale': said back 'from now on, later old locale values replace the old locale'
+     tool: 'What is the sum of (the difference between the birth of Rillo and (the': entry in, '21' out
+     merge: 'the memo of Zekpel is Zekka.': the memo of zekpel into the memo of zekka
+     arith: 'What is the smaller of (the difference between the guest of Mutha and ': the smaller of (0 and: 18, 26 -> -0, should be 18
+tick 300 | places 1266, statements 3375 | this window: rules arith 2/153 wrong, copy 1/475 wrong, found 4/289 wrong, merge 5/451 wrong, outcome 46/150 wrong, read 1/207 wrong, roundtrip 0/475 wrong, rule 9/542 wrong, settle 16/282 wrong, stale 1/275 wrong, tool 2/370 wrong | wrong answers, first failure on the row: no rule fired 38, arith 2, found 2, tool 2, read 1, stale 1 | re-settled 0 | 993s
+     settle: 'the birth of Vinsa is 3.': kept as said ('the birth of Vinsa i') for 'the birth of Vinsa is 3.' under 'please remember: each new birth should b'
+     outcome: 'What is the main seat of the patient of Dunvin?': said 8, truth 22, first failure: no rule fired
+     arith: 'What is the difference between (the larger of the font of Loka and the': the larger of: 25, 26 -> 25, should be 26
+     rule: 'the first locale of Nedun is 22.': found place 265, rule for first locale is at 1168
+     found: 'What is the difference between (the smaller of the list of Muril and (': asked the list of muril and (25, got the list of muril
+     read: 'What is the sum of (the difference between (the larger of the main sea': read '27'
+     merge: 'the trace id of Kamu is B775-T.': the trace id of kamu into the trace id of bamu
+     copy: 'the slot of Mertor is 12 (same as the first student of Muril).': claims [], source 779
+     tool: 'What is the sum of (the difference between the term of Vintha and the ': entry in, '29' out
+     stale: 'What is the sum of the term of Mugor and the birth of Mugor?': reached place 257, last said at 1243
+all ticks: rules arith 7/767 wrong, copy 5/2974 wrong, found 21/1719 wrong, merge 13/2795 wrong, outcome 220/898 wrong, read 13/1377 wrong, roundtrip 11/2974 wrong, rule 30/3195 wrong, settle 84/1215 wrong, stale 2/1656 wrong, tool 15/1747 wrong
