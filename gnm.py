@@ -2714,6 +2714,179 @@ def train_recursion_reader(A):
                 torch.save(rd.state_dict(), A.save)
 
 
+def inspect_memory(A):
+    """--inspect: live a memory for --steps ticks (the current nets, no lessons), then open it: the graph, and an easy
+    and a hard question with every inner step of every call (the reader, the walk, relate, reach, the tools, the entries
+    read and how arrive settled them)"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    bank = load_tools(A, tr)
+    rng = random.Random(A.seed)
+    w = new_world(rng)
+    T = NeuralT(tr, Oracle(w), A.tau, bank)
+    m = Machine(T, T.d)
+    m.g.beam, m.events, ledger = A.beam, [], Ledger()
+    if A.qreader:
+        rd = QueryReader().to(dev).eval()
+        rd.load_state_dict(torch.load(A.qreader, map_location=dev), strict=False)
+        m.reader = (rd, tr)
+    t0 = time.time()
+    for tick in range(A.steps):
+        for draw in world_step(w, rng):
+            o = draw()
+            for s_ in statements(o) if o else []:
+                try:
+                    arrive(m, s_)
+                except FAIL:
+                    pass
+        judge(m, ledger)
+    g, t = m.g, teacher(m)
+    print(f"=== lived {A.steps} ticks in {time.time() - t0:.0f}s | rules: {ledger.line()}", flush=True)
+
+    # ---------------------------------------------------------------- the graph
+    print("\n=== THE GRAPH", flush=True)
+    made_by = {p: m.wrote.get((p, 0)) or T.say(g.chain[p][0][0]) for p in range(g.n)}
+    kinds = {}
+    for p in range(g.n):
+        kinds.setdefault(t.key(made_by[p])[0], []).append(p)
+    lens = [len(c) for c in g.chain[:g.n]]
+    deg = [len(a) for a in g.adj[:g.n]]
+    print(f"places {g.n} ({', '.join(f'{k} {len(v)}' for k, v in kinds.items())}) | entries {sum(lens)}, per place mean {np.mean(lens):.1f} "
+          f"max {max(lens)} | edges per place mean {np.mean(deg):.1f} max {max(deg)} min {min(deg)} | reach mean {g.S[:g.n].mean():.3f} "
+          f"min {g.S[:g.n].min():.3f} max {g.S[:g.n].max():.3f}, widened {(g.S[:g.n] > REACH + 1e-6).sum()} narrowed {(g.S[:g.n] < REACH - 1e-6).sum()}", flush=True)
+    claims = [(p, j) for p in range(g.n) for j in np.nonzero(g.L[:g.n] @ g.R[p] > 1)[0] if j != p]
+    print(f"relation claims (R[p] . L[j] > 1): {len(claims)}; e.g. " + "; ".join(f"{made_by[p][:40]!r} -> {made_by[j][:30]!r}" for p, j in claims[:3]), flush=True)
+    subj = {}
+    for p in kinds.get("fact", []):
+        k = t.key(made_by[p])
+        subj.setdefault(k[2], []).append(p)
+    D = np.linalg.norm(g.L[:g.n, None] - g.L[None, :g.n], axis=-1)
+    same = [D[a, b] for ps in subj.values() for a in ps for b in ps if a < b]
+    print(f"label distances: places of one name {np.mean(same) if same else 0:.3f} (n {len(same)}), any two places {D[np.triu_indices(g.n, 1)].mean():.3f}, "
+          f"nearest other place per place: mean {np.sort(D + np.eye(g.n) * 9, 1)[:, 0].mean():.3f} min {np.sort(D + np.eye(g.n) * 9, 1)[:, 0].min():.3f}", flush=True)
+    ok, n_, bad = 0, 0, []
+    for p in rng.sample(range(g.n), min(150, g.n)):
+        for i, (z, _) in enumerate(g.chain[p]):
+            src = m.wrote.get((p, i))
+            if src:
+                d = T.say(z)
+                n_ += 1
+                ok += d == src
+                if d != src and len(bad) < 4:
+                    bad.append((src, d))
+    print(f"entries said back as written: {ok}/{n_}; e.g. " + "; ".join(f"{a[:45]!r} -> {b[:45]!r}" for a, b in bad), flush=True)
+    kept = [d for d in m.chose.values()]
+    print(f"arrive's check decisions: {len(kept)}, kept what the tool made {sum(d[3] is not d[2] for d in kept)}", flush=True)
+    for p in rng.sample(kinds.get("fact", [0]), 3) + kinds.get("rule", [])[:2]:
+        print(f"   place {p} reach {g.S[p]:.3f} edges {len(g.adj[p])}: " + " || ".join(
+            f"[{i}] {T.say(z)[:45]!r}" + (f" (written {m.wrote.get((p, i))[:30]!r})" if m.wrote.get((p, i)) and m.wrote.get((p, i)) != T.say(z) else "")
+            for i, (z, _) in enumerate(g.chain[p][:4])), flush=True)
+
+    # ---------------------------------------------------------------- the inner steps, watched
+    out = lambda *a: print(*a, flush=True)
+    real_find, real_apply, real_read = Machine.find, NeuralT._apply, globals()["read_query"]
+
+    def walk(q):
+        dist = lambda ids: np.linalg.norm(g.L[ids] - q, axis=-1)
+        seen, opened = {0: float(dist([0])[0])}, []
+        while True:
+            top = sorted(seen, key=seen.get)[:g.beam]
+            u = next((i for i in top if i not in opened), None)
+            if u is None:
+                return opened
+            opened.append((u, round(seen[u], 3)))
+            new = [v for v in g.adj[u] if v not in seen]
+            if new:
+                seen.update(zip(new, dist(new).tolist()))
+
+    def find(self, label, q=None, task="same", look=8):
+        got = real_find(self, label, q, task, look)
+        op = walk(label)
+        out(f"        walk ({task}): opened {len(op)} places: " + " ".join(f"{u}:{d}" for u, d in op[:14]) + (" ..." if len(op) > 14 else ""))
+        for d, j in g.search(label)[:5]:
+            one = lambda x: (x[None], torch.ones(1, len(x), dtype=torch.bool, device=x.device))
+            with torch.no_grad():
+                rel = float(bank.relate([task], *one(q), *one(g.chain[j][0][0]))[0]) if q is not None else float("nan")
+            out(f"          cand {j}: dist {d:.3f} reach {g.S[j]:.3f} {'IN' if d < g.S[j] else 'out'} relate {rel:+.2f} | made by {made_by.get(j, '?')[:45]!r} | newest {T.say(g.chain[j][-1][0])[:40]!r}")
+        out(f"        -> place {got}")
+        return got
+
+    def apply_(self, want, ins, tool):
+        s_ = self.tools.gate(self.tools.query(self.m, [want]))[0]
+        r_ = real_apply(self, want, ins, tool)
+        t_ = self.last
+        if t_ is not None:
+            o_, many, err = self.tools.nets[t_]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
+            sets = [self.say(z[0], self.tools.nets[t_].mouth) for z, _ in o_]
+            out(f"        tool: want {want!r} | inputs {[self.say(z)[:40] for z in ins]} | routing {[round(float(x), 2) for x in s_]} -> tool {t_} | "
+                f"output sets {sets} | count head {[round(float(x), 2) for x in many.flatten()]} | own error {float(err):.2f} | said {r_}")
+        else:
+            out(f"        tool: want {want!r}: no label relevant (routing {[round(float(x), 2) for x in s_]}) -> {r_}")
+        return r_
+
+    def read(m_, S, items):
+        rd_, tr_ = m_.reader
+        S2 = re.sub(r"\((<\d+>)\)", r"\1", S)
+        with torch.no_grad():
+            u, y, st, fl = rd_(tr_, S2, items)
+            ps = F.softmax(st, -1)
+            top = ps.topk(min(3, len(ps)))
+            words = lambda i: "nothing left" if i == 0 else repr(S2[u[i - 1][0]:u[i - 1][1]])
+            out(f"      reader: start {', '.join(f'{words(int(i))} {float(p):.2f}' for p, i in zip(top.values, top.indices))}")
+            i = int(st.argmax())
+            if i:
+                pe = F.softmax(rd_.ends(y, fl, i), -1)
+                te = pe.topk(min(3, len(pe)))
+                out(f"              end {', '.join(f'{words(int(j))} {float(p):.2f}' for p, j in zip(te.values, te.indices))}")
+                j = int(pe.argmax())
+                fs = rd_.fn(y, u[i - 1][2] + 1, u[j - 1][3] + 1)
+                out(f"              function " + ", ".join(f"{f} {float(v):.2f}" for f, v in zip(rd_.FN, fs)))
+        return real_read(m_, S, items)
+
+    def asked(q, truth):
+        out(f"\n--- QUESTION {q!r} | truth {truth}")
+        steps = [0]
+        real_answer = globals()["answer"]
+
+        def ans(m_, r_, S, items, depth=0):
+            steps[0] += 1
+            ex = inner_exact(S, items)
+            out(f"   step {steps[0]}: {re.sub(chr(40) + r'(<\d+>)' + chr(41), r'\1', S)!r} | nodes {[(k, it.text[:30]) for k, it in enumerate(items)]}")
+            out(f"      stand-in reads: {None if ex is None else (S[ex[0]:ex[1]], ex[2])}")
+            for k, it in enumerate(items):
+                if it.place >= 0 and (it.place, it.idx) in m.chose:
+                    gv, o_, nw, kp, ot = m.chose[(it.place, it.idx)]
+                    out(f"      node <{k}> was settled by the check: under {gv.text[:40]!r}, old {o_.text[:30]!r}, new {nw.text[:35]!r} -> kept {kp.text[:25]!r}")
+            return real_answer(m_, r_, S, items, depth)
+        Machine.find, NeuralT._apply, globals()["read_query"], globals()["answer"] = find, apply_, read, ans
+        try:
+            r = Row(q)
+            got = answer(m, r, q, [])
+        except FAIL as e:
+            got = None
+            out(f"   FAILED: {type(e).__name__} {e}")
+        finally:
+            Machine.find, NeuralT._apply, globals()["read_query"], globals()["answer"] = real_find, real_apply, real_read, real_answer
+        out(f"   ANSWER {got.text if got is not None else None!r} -> {got.value if got is not None else None} | truth {truth} | "
+            f"{'RIGHT' if got is not None and got.value == truth else 'WRONG'} | {steps[0]} steps")
+
+    print("\n=== AN EASY QUESTION (1 step)", flush=True)
+    x = question("lookup", w, rng)
+    asked(x[0], x[1])
+    print("\n=== A HARD QUESTION (~10 steps)", flush=True)
+    for _ in range(200):
+        x = question("ops", w, rng, (4, 5))
+        if x and len(re.findall(r"the [a-z ]+ of [A-Z]", x[0])) >= 5:
+            break
+    asked(x[0], x[1])
+    print("\n=== A CHAIN QUESTION", flush=True)
+    x = question("chain", w, rng)
+    if x:
+        asked(x[0], x[1])
+
+
 def ask_recursive(m, kind, world, rng, ops=(1, 3)):
     """(question, truth, what it answered, passes): the question only, no procedure"""
     x = question(kind, world, rng, ops)
@@ -3571,6 +3744,7 @@ if __name__ == "__main__":
     P.add_argument("--tools", action="store_true", help="train the tool nodes on B (--init = translator with decoder)")
     P.add_argument("--recur", action="store_true", help="train the reader node: answering by recursion (--demos questions)")
     P.add_argument("--check", action="store_true", help="train the check node (--demos situations; --toolw bank to add it to)")
+    P.add_argument("--inspect", action="store_true", help="live a memory --steps ticks, then open the graph and two questions, every inner step")
     P.add_argument("--norm", action="store_true", help="train the normalizer: any text -> clear statements")
     P.add_argument("--norm-e2e", action="store_true", help="E4: the memory fed held-out forms through the normalizer (--normw)")
     P.add_argument("--normw", default="")
@@ -3598,4 +3772,4 @@ if __name__ == "__main__":
     P.add_argument("--grid", type=int, default=8, help="names x keys per training batch: bigger = harder near-misses")
     P.add_argument("--tau", type=float, default=.15, help="closer than this = the same place")
     A = P.parse_args()
-    diag(A) if A.diag else train_check(A) if A.check else train_recursion_reader(A) if A.recur else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_normalizer(A) if A.norm else norm_e2e(A) if A.norm_e2e else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
+    diag(A) if A.diag else inspect_memory(A) if A.inspect else train_check(A) if A.check else train_recursion_reader(A) if A.recur else train_decoder(A) if A.decode else train_tools(A) if A.tools else episode(A) if A.episode else online(A) if A.online else train_normalizer(A) if A.norm else norm_e2e(A) if A.norm_e2e else train_reader(A) if A.read else train_translator(A) if A.train else gold(A)
