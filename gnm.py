@@ -856,12 +856,12 @@ class FM:
     the function whose label its want meets; the filter picks its inputs among everything near; its outputs land; what
     changed raises new signals; nothing above the labels = rest. No step is scripted."""
 
-    def __init__(self, tr, bank, heads, filt, critic, budget=60, look=6, newest=3, kappa=2.):
+    def __init__(self, tr, bank, heads, filt, critic, budget=60, look=6, newest=4, kappa=2.):
         self.tr, self.bank, self.heads, self.filt, self.critic = tr, bank, heads, filt, critic
         self.dev = next(heads.parameters()).device
         self.g, self.signals, self.t, self.explore = Graph(bank.d), [], 0, 0.
         self.budget, self.look, self.newest, self.kappa = budget, look, newest, kappa
-        self.stats, self.firings = {}, []
+        self.stats, self.firings, self.show = {}, [], False
 
     def count(self, k, n=1):
         self.stats[k] = self.stats.get(k, 0) + n
@@ -927,6 +927,16 @@ class FM:
         outs, many, err, where, isfn = net([n.B for n in ins], q)
         rec = {"t": t, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a) for n, k, a in C], "take": take.tolist(),
                "ins": [n.B for n in ins], "sign": sg.sign}
+        if self.show:                                  # --inspect: every firing, said
+            g = self.bank.gate(q[None])[0]
+            top = sorted(range(len(g)), key=lambda i: -float(g[i]))[:3]
+            name = lambda n: {"entry": f"entry {n.place}.{n.idx}", "fn": f"function {n.fn}"}.get(n.kind, "work")
+            print(f"  fire {len(self.firings)}: function {t} (gates " + ", ".join(f"{i}:{float(g[i]):.2f}" for i in top) +
+                  ") | about: " + " + ".join(repr(self.say(n)[:60]) for n in sg.about) +
+                  f" | let through {sum(take.tolist())}/{len(C)}: " + "; ".join(f"{name(n)} {self.say(n)[:50]!r}" for n in ins) +
+                  f" | many {int(many.argmax()) + 1}, where " + ", ".join(str(int(where[j].argmax())) for j in range(int(many.argmax()) + 1)) +
+                  f", own error {float(err):.2f} (usual {float(net.mu):.2f}) | says: " +
+                  "; ".join(repr(self.say(Node(outs[j], None, None))[:60]) for j in range(int(many.argmax()) + 1)), flush=True)
         self.firings.append(rec)
         self.count("fires")
         drift = float(err) > float(net.mu + self.kappa * net.sd)
@@ -1209,7 +1219,8 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs):
     key = lambda n: ("e", n.place, n.idx) if n.kind == "entry" else ("f", n.fn) if n.kind == "fn" else id(n)
     want_in = {key(n) for n in ins}
     have = {key(n) for n, _, _ in C}
-    fm.count("inputs walked to", sum(k in have for k in want_in)), fm.count("inputs", len(want_in))
+    for n in ins:                                      # how many of the inputs the walk brings, by step kind
+        fm.count(f"{purpose} in", 1), fm.count(f"{purpose} walked", int(key(n) in have))
     for n in ins:                                      # an input the walk did not bring: given (and counted)
         if key(n) not in have:
             C.append((n, 1 if n.kind == "entry" else 2 if n.kind == "fn" else 0, 0))
@@ -1551,6 +1562,41 @@ def live(fm, A, rng, opt, params):
             tally, fm.stats = {"asked": 0, "right": 0, "fixed by a try": 0}, {}
 
 
+@torch.no_grad()
+def inspect(A):
+    """--inspect --load X: live a small world, then ask one question of each kind with every firing said"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev))
+    load_fm(fm, A.load)
+    for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
+        mod.eval()
+    rng = random.Random(A.seed + 7)
+    w = new_world(rng)
+    n = 0
+    for _ in range(A.ticks):
+        for d in world_step(w, rng):
+            o = d()
+            for text, _ in said(o, w) if o else []:
+                fm.show = n < 6                        # the first few statements said too
+                if fm.show:
+                    print(f"statement: {text!r}", flush=True)
+                fm.arrive(text)
+                n += 1
+    print(f"memory: {fm.g.n} places from {n} statements | {fm.stats}", flush=True)
+    fm.show = True
+    for kind in ("lookup", "before", "coexist", "chain", "ops"):
+        E = q_expr(kind, w, rng)
+        if E is None:
+            continue
+        print(f"\n{kind}: {ask_text(E)!r} truth {VAL(truth_of(E, w))!r}", flush=True)
+        fm.budget = 12
+        got, k = fm.ask(ask_text(E))
+        print(f"  -> {got!r} after {k} firings", flush=True)
+
+
 def save_fm(fm, path):
     torch.save({"n": len(fm.bank.nets), "bank": fm.bank.state_dict(), "heads": fm.heads.state_dict(),
                 "filt": fm.filt.state_dict(), "critic": fm.critic.state_dict()}, path)
@@ -1614,7 +1660,9 @@ def run_fm(A):
             for k, x in Ls.parts:
                 parts[k] = parts.get(k, 0) + float(x)
             print(f"step {step} loss {float(loss):.2f} [" + ", ".join(f"{k} {v:.2f}" for k, v in parts.items()) +
-                  f"] functions {len(fm.bank.nets)} | walked to {fm.stats.get('inputs walked to', 0)}/{fm.stats.get('inputs', 0)} | {time.time() - t0:.0f}s", flush=True)
+                  f"] functions {len(fm.bank.nets)} | inputs the walk brought: " + ", ".join(
+                      f"{k[:-3]} {fm.stats.get(k[:-3] + ' walked', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" in")) +
+                  f" | {time.time() - t0:.0f}s", flush=True)
             fm.stats = {}
         if step % A.every == 0 or step == A.steps:
             for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
@@ -1657,6 +1705,7 @@ def world_step(world, rng):
 if __name__ == "__main__":
     P = argparse.ArgumentParser()
     P.add_argument("--fm", action="store_true", help="the function machine: codec stage 2, demos, then a world by itself")
+    P.add_argument("--inspect", action="store_true", help="with --load: every firing of a few questions, said")
     P.add_argument("--init", default="", help="translator weights (text -> B, B -> text)")
     P.add_argument("--load", default="", help="a saved module (skips the codec stage)")
     P.add_argument("--save", default="")
@@ -1681,4 +1730,4 @@ if __name__ == "__main__":
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
-    run_fm(A)
+    inspect(A) if A.inspect else run_fm(A)
