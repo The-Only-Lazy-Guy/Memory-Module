@@ -1,0 +1,42 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3820.91it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+tick 50 | places 397, statements 577 | this window: rules arith 2/102 wrong, copy 0/569 wrong, found 0/313 wrong, merge 0/540 wrong, outcome 9/148 wrong, read 0/287 wrong, roundtrip 33/569 wrong, rule 28/509 wrong, stale 0/295 wrong, tool 0/150 wrong | wrong answers, first failure on the row: no rule fired 7, arith 2 | 80s
+     roundtrip: 'the log ref of Nedun is U228-J.': said back 'the log of Nedun is UJ.'
+     rule: 'the shelf of Musa is 11.': found place -1, rule for shelf is at 9
+     outcome: 'What is the last board of the service of Orzek?': said None, truth 30, first failure: no rule fired
+     arith: 'What is the difference between the day of Gorgor and the salary of Lon': the difference between: 4, 2 -> -2, should be 2
+tick 100 | places 668, statements 1129 | this window: rules arith 1/139 wrong, copy 2/508 wrong, found 0/374 wrong, merge 1/477 wrong, outcome 22/150 wrong, read 0/307 wrong, roundtrip 6/508 wrong, rule 27/480 wrong, stale 0/330 wrong, tool 1/189 wrong | wrong answers, first failure on the row: no rule fired 21, tool 1 | 169s
+     outcome: 'What is the daily worker of Vinor?': said 12, truth 39, first failure: no rule fired
+     roundtrip: 'the log ref of Lozek is J723-T.': said back 'the log ref of Lozek is J723T.'
+     rule: 'the license of Rilba is 9.': found place -1, rule for license is at 404
+     copy: 'the schedule of Loba is 26 (same as the guest of Zekne).': claims [], source 275
+     arith: 'What is the smaller of (the difference between the first student of Or': the difference between: 20, 21 -> 1, should be -1
+     tool: 'What is the old locale of the patient of Rilor?': entry in, 'the System Of Thator' out
+     merge: 'the trace id of Dunmu is M752-A.': the trace id of dunmu into the trace id of vinmu
+tick 150 | places 875, statements 1693 | this window: rules arith 4/203 wrong, copy 1/455 wrong, found 0/447 wrong, merge 1/426 wrong, outcome 20/150 wrong, read 0/306 wrong, roundtrip 1/455 wrong, rule 14/499 wrong, stale 0/396 wrong, tool 0/253 wrong | wrong answers, first failure on the row: no rule fired 16, arith 4 | 265s
+     rule: 'the route of Gormu is 9.': found place -1, rule for route is at 660
+     outcome: 'What is the board of the service of Neril?': said None, truth 14, first failure: no rule fired
+     arith: 'What is the difference between (the difference between the width of Ze': the difference between (: 3, 12 -> -15, should be -9
+     merge: 'the trace id of Dunmu is L217-G.': the trace id of dunmu split from place 559
+     roundtrip: 'quota figures that arrive later become the current quota': said back 'backvalid figures that arrive later become the current quota'
+     copy: 'the ship of Bane is 8 (same as the author of Rilzek).': claims [], source 247
+tick 200 | places 1030, statements 2236 | this window: rules arith 3/210 wrong, copy 0/441 wrong, found 0/432 wrong, merge 0/408 wrong, outcome 20/150 wrong, read 0/278 wrong, roundtrip 6/441 wrong, rule 7/470 wrong, stale 0/404 wrong, tool 0/260 wrong | wrong answers, first failure on the row: no rule fired 17, arith 3 | 359s
+     roundtrip: 'rule: old currency figures that arrive later replace the old old curre': said back 'rule: old currency figures that arrive later replace the old'
+     outcome: 'What is the license of the service of Merlo?': said 8, truth 38, first failure: no rule fired
+     arith: 'What is the sum of the zone of Kaor and (the difference between the wo': the difference between: 18, 38 -> -18, should be -20
+     rule: 'the store of Neril is 10.': found place -1, rule for store is at 557
+tick 250 | places 1157, statements 2809 | this window: rules arith 1/204 wrong, copy 0/471 wrong, found 0/417 wrong, merge 1/438 wrong, outcome 21/150 wrong, read 0/259 wrong, roundtrip 4/471 wrong, rule 2/501 wrong, stale 0/392 wrong, tool 0/254 wrong | wrong answers, first failure on the row: no rule fired 20, arith 1 | 456s
+     outcome: 'What is the series of the memo of Lovin?': said 26, truth 53, first failure: no rule fired
+     merge: 'the trace id of Rilzek is F307-B.': the trace id of rilzek into the trace id of rilgor
+     roundtrip: 'the log ref of Sane is X962-T.': said back 'the log ref of Sane is X96-T.'
+     rule: 'the salary of Pelvin is 10.': found place -1, rule for salary is at 459
+     arith: 'What is the smaller of (the difference between the guest of Mutha and ': the difference between: 20, 18 -> -2, should be 2
+tick 300 | places 1257, statements 3375 | this window: rules arith 3/216 wrong, copy 1/455 wrong, found 0/429 wrong, merge 0/431 wrong, outcome 19/150 wrong, read 0/268 wrong, roundtrip 3/455 wrong, rule 3/503 wrong, stale 0/408 wrong, tool 0/266 wrong | wrong answers, first failure on the row: no rule fired 17, arith 2 | 573s
+     outcome: 'What is the main seat of the patient of Dunvin?': said None, truth 22, first failure: no rule fired
+     arith: 'What is the difference between (the larger of the font of Loka and the': the larger of: 25, 26 -> 25, should be 26
+     roundtrip: 'first locale figures that arrive later replace the old first locale': said back 'here figures that arrive later replace the old first locale'
+     rule: 'the old locale of Pelzek is 28.': found place 208, rule for old locale is at 1165
+     copy: 'the slot of Mertor is 12 (same as the first student of Muril).': claims [], source 773
+all ticks: rules arith 14/1074 wrong, copy 4/2899 wrong, found 0/2412 wrong, merge 3/2720 wrong, outcome 111/898 wrong, read 0/1705 wrong, roundtrip 53/2899 wrong, rule 81/2962 wrong, stale 0/2225 wrong, tool 1/1372 wrong
