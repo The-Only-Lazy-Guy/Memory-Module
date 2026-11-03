@@ -856,11 +856,11 @@ class FM:
     the function whose label its want meets; the filter picks its inputs among everything near; its outputs land; what
     changed raises new signals; nothing above the labels = rest. No step is scripted."""
 
-    def __init__(self, tr, bank, heads, filt, critic, budget=60, look=6, newest=4, kappa=2.):
+    def __init__(self, tr, bank, heads, filt, critic, budget=60, look=6, newest=4, kappa=2., same=.1):
         self.tr, self.bank, self.heads, self.filt, self.critic = tr, bank, heads, filt, critic
         self.dev = next(heads.parameters()).device
         self.g, self.signals, self.t, self.explore = Graph(bank.d), [], 0, 0.
-        self.budget, self.look, self.newest, self.kappa = budget, look, newest, kappa
+        self.budget, self.look, self.newest, self.kappa, self.same = budget, look, newest, kappa, same
         self.stats, self.firings, self.show = {}, [], False
 
     def count(self, k, n=1):
@@ -961,7 +961,11 @@ class FM:
                 self.memorize(x.place, z, ins, rec, j)
             else:                                      # a workspace node's value changed: the node that asked for it hears
                 n = self.node(z)
+                moved = float((n.L - x.L).norm())
                 x.B, x.L, x.R = n.B, n.L, n.R
+                if moved < self.same:                  # no change, no signal: it is still the node it was
+                    self.count("no change")
+                    return
                 self.signals.append(Signal([x.parent, x] if x.parent is not None else [x], 1., self.t))
             return
         if isfn and len(self.bank.nets) < self.bank.cap:   # a new function, made from an input function's network
@@ -1569,7 +1573,7 @@ def inspect(A):
     tr = Translator().to(dev).eval()
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
-    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev))
+    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
     load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
@@ -1597,6 +1601,20 @@ def inspect(A):
         print(f"  -> {got!r} after {k} firings", flush=True)
 
 
+@torch.no_grad()
+def eval_only(A):
+    """--eval --load X: the saved module in a fresh world (the code as it is now)"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    load_fm(fm, A.load)
+    for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
+        mod.eval()
+    print(f"EVAL {A.load}: {evaluate(fm, A, A.seed + 1000)} | {fn_probe(fm, random.Random(1))}", flush=True)
+
+
 def save_fm(fm, path):
     torch.save({"n": len(fm.bank.nets), "bank": fm.bank.state_dict(), "heads": fm.heads.state_dict(),
                 "filt": fm.filt.state_dict(), "critic": fm.critic.state_dict()}, path)
@@ -1618,7 +1636,7 @@ def run_fm(A):
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     tr.requires_grad_(False)
-    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev))
+    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
     rng = random.Random(A.seed)
     if A.load:
         load_fm(fm, A.load)
@@ -1706,6 +1724,8 @@ if __name__ == "__main__":
     P = argparse.ArgumentParser()
     P.add_argument("--fm", action="store_true", help="the function machine: codec stage 2, demos, then a world by itself")
     P.add_argument("--inspect", action="store_true", help="with --load: every firing of a few questions, said")
+    P.add_argument("--eval", action="store_true", help="with --load: the saved module in a fresh world")
+    P.add_argument("--same", type=float, default=.1, help="a node whose label moved less than this did not change: no signal")
     P.add_argument("--init", default="", help="translator weights (text -> B, B -> text)")
     P.add_argument("--load", default="", help="a saved module (skips the codec stage)")
     P.add_argument("--save", default="")
@@ -1730,4 +1750,4 @@ if __name__ == "__main__":
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
-    inspect(A) if A.inspect else run_fm(A)
+    inspect(A) if A.inspect else eval_only(A) if A.eval else run_fm(A)
