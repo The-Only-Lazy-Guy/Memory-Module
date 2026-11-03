@@ -1953,6 +1953,7 @@ class Machine:
         self.right = []                                # ... and tool sayings the rules checked right: (tool, want, inputs, what it said)
         self.chose = {}                                # (place, index) -> the check's decision that made it: (rule, old, new, kept, other)
         self.check_lessons = []                        # decisions shown wrong by exploring (flipped, the truth came out)
+        self.check_moved, self.resettled = False, 0    # the check learned this tick; entries re-settled since the last report
 
     def do(self, r, name, *a):
         r.passes += 1
@@ -2305,6 +2306,7 @@ def lessons(tr, bank, m, js, cap=64):
                 seen += [(g, o, n, keep, 0.), (g, o, n, other, 1.)]
     seen += m.check_lessons
     m.check_lessons = []
+    m.check_moved = bool(seen)                         # the check learns now: what it decided before is decided again
     if seen:
         lg = bank.check([nodes_of([x[k].node.detach() for x in seen], dev) for k in range(4)])
         loss = F.binary_cross_entropy_with_logits(lg, torch.tensor([x[4] for x in seen], device=dev))
@@ -2688,6 +2690,34 @@ def check_exact(rule, old, new, cand):
 
 def check(m, rule, old, new, cand):
     return check_exact(rule, old, new, cand) if isinstance(m.T, Oracle) else m.T.check(rule, old, new, cand)
+
+
+@torch.no_grad()
+def resettle(m, bank, dev):
+    """the check changed: every decision it made is made again; an entry whose decision flips takes the other
+    candidate, and when it is the newest, what depends on it is triggered (a changed function node runs again what it
+    made; on14: the check began to learn after ~250 ticks while the entries it had stored wrong stayed wrong)"""
+    keys = [k for k in m.chose if torch.is_tensor(m.chose[k][0].node)]
+    if not keys:
+        return 0
+    D = [m.chose[k] for k in keys]
+    made = [d[3] if d[3] is not d[2] else d[4] for d in D]
+    base = [nodes_of([d[j].node for d in D], dev) for j in range(3)]
+    said = torch.sigmoid(bank.check(base + [nodes_of([d[2].node for d in D], dev)]))
+    tool = torch.sigmoid(bank.check(base + [nodes_of([x.node for x in made], dev)]))
+    n = 0
+    for k, d, mk, a, b in zip(keys, D, made, said.tolist(), tool.tolist()):
+        g, o, nw, keep, other = d
+        take = a < .5 and b > .5
+        if take != (keep is not nw):
+            p, i = k
+            new_keep = mk if take else nw
+            m.g.chain[p][i] = (new_keep.node, m.g.chain[p][i][1])
+            m.chose[k] = (g, o, nw, new_keep, nw if take else mk)
+            if i == len(m.g.chain[p]) - 1:
+                m.changed(p)
+            n += 1
+    return n
 
 
 def arrive(m, text):
@@ -3151,8 +3181,11 @@ def online(A):
             opt.zero_grad()
             loss.backward()
             opt.step()
+            if m.check_moved:
+                m.resettled += resettle(m, bank, dev)
         if tick % A.every == 0:
-            print(f"tick {tick} | places {m.g.n}, statements {said} | this window: {ledger.line()} | {time.time() - t0:.0f}s", flush=True)
+            print(f"tick {tick} | places {m.g.n}, statements {said} | this window: {ledger.line()} | re-settled {m.resettled} | {time.time() - t0:.0f}s", flush=True)
+            m.resettled = 0
             for r_, cs in ledger.cases.items():
                 print(f"     {r_}: {cs[0]}", flush=True)
             ledger = Ledger()
