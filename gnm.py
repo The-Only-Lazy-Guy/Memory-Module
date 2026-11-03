@@ -2791,12 +2791,13 @@ def inspect_memory(A):
 
     def walk(q):
         dist = lambda ids: np.linalg.norm(g.L[ids] - q, axis=-1)
-        seen, opened = {0: float(dist([0])[0])}, []
+        seen, opened, done = {0: float(dist([0])[0])}, [], set()
         while True:
             top = sorted(seen, key=seen.get)[:g.beam]
-            u = next((i for i in top if i not in opened), None)
+            u = next((i for i in top if i not in done), None)
             if u is None:
                 return opened
+            done.add(u)
             opened.append((u, round(seen[u], 3)))
             new = [v for v in g.adj[u] if v not in seen]
             if new:
