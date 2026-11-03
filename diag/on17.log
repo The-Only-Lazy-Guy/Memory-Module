@@ -1,0 +1,54 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3810.17it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+tick 50 | places 397, statements 577 | this window: rules arith 4/110 wrong, copy 1/575 wrong, found 0/290 wrong, merge 0/546 wrong, outcome 9/148 wrong, read 0/281 wrong, roundtrip 1/575 wrong, rule 2/547 wrong, settle 11/35 wrong, stale 0/290 wrong, tool 0/168 wrong | wrong answers, first failure on the row: no rule fired 5, arith 4 | re-settled 2 | 106s
+     arith: 'What is the sum of (the difference between the last board of Pelba and': the sum of (: 0, 30 -> 20, should be 30
+     outcome: 'What is the sum of (the difference between the last board of Pelba and': said 20, truth 30, first failure: arith
+     copy: 'the old currency of Dunvin is 23 (same as the term of Vintha).': claims [], source 85
+     roundtrip: 'the memo of Zekpel is Zekka.': said back 'the memo of Zekpel is Zekpel.'
+     settle: 'the daily worker of Torka is 9.': kept as said ('the daily worker of ') for 'the daily worker of Torka is 9.' under 'from now on, every reported daily worker'
+     rule: 'the old age of Thapel is 23.': found place -1, rule for old age is at 208
+tick 100 | places 671, statements 1129 | this window: rules arith 2/171 wrong, copy 2/543 wrong, found 0/295 wrong, merge 0/512 wrong, outcome 23/150 wrong, read 4/286 wrong, roundtrip 2/543 wrong, rule 8/521 wrong, settle 64/141 wrong, stale 0/295 wrong, tool 0/278 wrong | wrong answers, first failure on the row: no rule fired 22, arith 1 | re-settled 13 | 235s
+     outcome: 'What is the daily worker of Vinor?': said 12, truth 39, first failure: no rule fired
+     settle: 'the license of Rilba is 9.': kept as said ('the license of Rilba') for 'the license of Rilba is 9.' under 'rule: each new license count as incremen'
+     arith: 'What is the larger of (the difference between the backup temperature o': the difference between: 22, 32 -> 10, should be -10
+     copy: 'the schedule of Loba is 26 (same as the guest of Zekne).': claims [], source 275
+     roundtrip: 'later old locale values overwrite the previous old locale': said back 'value overwrite the previous old locale'
+     rule: 'the last band of Mertor is 8.': found place -1, rule for last band is at 229
+     read: 'What is the first course of the service of Zektor?': read '25'
+tick 150 | places 877, statements 1693 | this window: rules arith 0/226 wrong, copy 1/508 wrong, found 1/294 wrong, merge 0/479 wrong, outcome 44/150 wrong, read 28/268 wrong, roundtrip 2/508 wrong, rule 4/535 wrong, settle 98/232 wrong, stale 0/292 wrong, tool 0/350 wrong | wrong answers, first failure on the row: no rule fired 30, read 13, found 1 | re-settled 413 | 381s
+     outcome: 'What is the last band of Balo?': said 6, truth 28, first failure: no rule fired
+     settle: 'the daily worker of Lozek is 1.': kept as said ('the daily worker of ') for 'the daily worker of Lozek is 1.' under 'from now on, every reported daily worker'
+     read: 'What is the difference between the guest of Pelril and the font of Net': read '32'
+     rule: 'the quota of Mudun is 9.': found place 511, rule for quota is at 103
+     roundtrip: 'quota figures that arrive later become the current quota': said back 'y supply point.'
+     found: 'What is the font of the memo of Ortha?': asked the memo of ortha, unknown
+     copy: 'the ship of Bane is 8 (same as the author of Rilzek).': claims [], source 247
+tick 200 | places 1031, statements 2236 | this window: rules arith 1/229 wrong, copy 0/483 wrong, found 0/308 wrong, merge 1/450 wrong, outcome 55/150 wrong, read 22/267 wrong, roundtrip 3/483 wrong, rule 6/510 wrong, settle 99/253 wrong, stale 0/308 wrong, tool 1/381 wrong | wrong answers, first failure on the row: no rule fired 46, read 8, arith 1 | re-settled 476 | 536s
+     roundtrip: 'rule: old currency figures that arrive later replace the old old curre': said back 'rule: old currency figures that arrive later replace the old'
+     settle: 'the author of Kadun is 6.': kept as said ('the author of Kadun ') for 'the author of Kadun is 6.' under 'please remember: every reported author s'
+     outcome: 'What is the license of the service of Merlo?': said 2, truth 38, first failure: no rule fired
+     read: 'What is the smaller of (the difference between the board of Bagor and ': read '35'
+     rule: 'the quota of Nevin is 19.': found place 103, rule for quota is at 511
+     tool: 'the category of Rilor is 24.': numbers in, '(nothing)' out
+     merge: 'the trace id of Lovin is A815-T.': the trace id of lovin into the trace id of savin
+     arith: 'What is the sum of (the difference between (the smaller of the guest o': the sum of (: -7, 1 -> -8, should be -6
+tick 250 | places 1157, statements 2809 | this window: rules arith 4/210 wrong, copy 0/495 wrong, found 0/302 wrong, merge 3/464 wrong, outcome 69/150 wrong, read 43/246 wrong, roundtrip 3/495 wrong, rule 1/540 wrong, settle 95/278 wrong, stale 0/302 wrong, tool 2/399 wrong | wrong answers, first failure on the row: no rule fired 48, read 20, arith 1 | re-settled 1525 | 706s
+     settle: 'the backup temperature of Musa is 4.': kept as said ('the backup temperatu') for 'the backup temperature of Musa is 4.' under 'note: any further backup temperature inc'
+     outcome: 'What is the first locale of Dunba?': said 4, truth 25, first failure: no rule fired
+     read: 'What is the zone of Tortha?': read '16'
+     arith: 'What is the larger of (the larger of the offer of Torba and the author': the larger of: 9, 8 -> 8, should be 9
+     rule: 'the quota of Dungor is 4.': found place -1, rule for quota is at 511
+     roundtrip: 'from now on, later old locale values replace the old old locale': said back 'from now on, later old locale values replace the old locale'
+     merge: 'the trace id of Pelor is N857-M.': the trace id of pelor into the trace id of torgor
+     tool: 'the last device of Muba is 9.': numbers in, '-20 20 20 20 20 20 20 20 20 20 20 20 20 ' out
+tick 300 | places 1258, statements 3375 | this window: rules arith 3/236 wrong, copy 1/497 wrong, found 0/305 wrong, merge 1/473 wrong, outcome 66/150 wrong, read 22/254 wrong, roundtrip 0/497 wrong, rule 6/542 wrong, settle 108/287 wrong, stale 0/305 wrong, tool 0/424 wrong | wrong answers, first failure on the row: no rule fired 53, read 12, arith 1 | re-settled 1045 | 870s
+     settle: 'the birth of Vinsa is 3.': kept as said ('the birth of Vinsa i') for 'the birth of Vinsa is 3.' under 'please remember: each new birth should b'
+     read: 'What is the difference between (the sum of the daily worker of Meror a': read '28'
+     outcome: 'What is the difference between (the sum of the daily worker of Meror a': said -1, truth 14, first failure: read
+     arith: 'What is the difference between (the larger of the font of Loka and the': the larger of: 25, 26 -> 25, should be 26
+     rule: 'the first locale of Nedun is 22.': found place 265, rule for first locale is at 1160
+     copy: 'the slot of Mertor is 12 (same as the first student of Muril).': claims [], source 775
+     merge: 'Correction: the zone of Lotor is now 26.': the zone of lotor split from place 76
+all ticks: rules arith 14/1182 wrong, copy 5/3101 wrong, found 1/1794 wrong, merge 5/2924 wrong, outcome 266/898 wrong, read 119/1602 wrong, roundtrip 11/3101 wrong, rule 27/3195 wrong, settle 475/1226 wrong, stale 0/1792 wrong, tool 3/2000 wrong
