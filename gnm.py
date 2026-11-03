@@ -1835,6 +1835,7 @@ class Machine:
         self.T, self.g, self.t, self.budget, self.flat, self.trace, self.made = translator, Graph(d), 0, budget, False, None, {}
         self.events, self.at, self.subj = None, {}, {}     # watched: every call is an event the rules judge
         self.reader = None                             # (reader node, translator): the model reads queries; None: the stand-in
+        self.explore, self.reads = 0., None            # sampling temperature (0: its best reading); the readings made
         self.wrote, self.latest, self.rulekey = {}, {}, {}   # the rules' record: each entry's statement, each subject's last place, each key's rule
         self.right = []                                # ... and tool sayings the rules checked right: (tool, want, inputs, what it said)
 
@@ -2365,13 +2366,17 @@ def read_query(m, S, items):
     """the model's reading of a query (in place of inner_exact): (start, end, function, want, slots) or None"""
     rd, tr = m.reader
     S = re.sub(r"\((<\d+>)\)", r"\1", S)
-    with torch.no_grad():
+    pick = (lambda v: int(torch.multinomial(F.softmax(v / m.explore, -1), 1))) if m.explore else (lambda v: int(v.argmax()))
+    with torch.no_grad():                              # exploring: the reading is sampled (temperature m.explore)
         u, y, st, en = rd(tr, S, items)
-        i = int(st.argmax())
-        if i == 0:
-            return None
-        j = i + int(en[i:].argmax())
-        f = rd.FN[int(rd.fn(y, u[i - 1][2] + 1, u[j - 1][3] + 1).argmax())]
+        i = pick(st)
+        j = i + pick(en[i:]) if i else 0
+        fi = pick(rd.fn(y, u[i - 1][2] + 1, u[j - 1][3] + 1) / .1) if i else -1
+    if m.reads is not None:
+        m.reads.append((S, list(items), i, j, fi))
+    if i == 0:
+        return None
+    f = rd.FN[fi]
     a, b = u[i - 1][0], u[j - 1][1]
     span = S[a:b]
     slots = SLOT.findall(span)
@@ -2428,8 +2433,43 @@ def train_recursion_reader(A):
     node = lambda t: tr.content([t])[0][0][tr.content([t])[1][0]]
     opt = torch.optim.AdamW(rd.parameters(), lr=A.lr)
     t0 = time.time()
+    lived = None                                       # the world the outcome phase asks about (filled once)
     for step in range(1, A.steps + 1):
         loss = 0
+        if step > A.steps // 4:                        # after the ~50 demos: outcome. N readings of one fresh
+            if lived is None:                          # question, sampled; the one that answers right with the
+                w2 = new_world(random.Random(A.seed + 7))    # fewest calls is what to read next time
+                lived = Machine(Oracle(w2), 64)
+                lived.flat, lived.reader = True, (rd, tr)
+                for _ in range(60):
+                    for draw in world_step(w2, rng):
+                        o = draw()
+                        for s_ in statements(o) if o else []:
+                            arrive(lived, s_)
+            rd.eval()
+            got = []
+            for _ in range(4):
+                x = question(rng.choice(["ops", "ops", "chain", "coexist", "before"]), w2, rng, rng.choice([(1, 3), (2, 5), (4, 6)]))
+                if not x:
+                    continue
+                best = None
+                for n_ in range(8):
+                    lived.explore, lived.reads = (0. if n_ == 0 else 1.), []
+                    r = Row(x[0])
+                    try:
+                        out = answer(lived, r, x[0], [])
+                    except FAIL:
+                        out = None
+                    if out is not None and out.value == x[1] and (best is None or len(lived.reads) < len(best)):
+                        best = lived.reads
+                lived.explore, lived.reads = 0., None
+                got += best or []
+            rd.train()
+            for S, items, i, j, fi in got:             # imitate the reading that worked
+                u, y, st, en = rd(tr, S, items)
+                loss = loss + (F.cross_entropy(st[None], torch.tensor([i], device=dev)) + F.cross_entropy(en[None], torch.tensor([j], device=dev))) * 16 / max(1, len(got))
+                if fi >= 0:
+                    loss = loss + F.cross_entropy(rd.fn(y, u[i - 1][2] + 1, u[j - 1][3] + 1)[None] / .1, torch.tensor([fi], device=dev)) * 16 / max(1, len(got))
         for S, texts, x in random.sample(demos, min(16, len(demos))):
             items = [Item(node(t), None) for t in texts]
             for it, t in zip(items, texts):
