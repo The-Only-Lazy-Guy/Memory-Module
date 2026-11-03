@@ -37,3 +37,11 @@ tick 250 | places 1157, statements 2809 | this window: rules arith 2/225 wrong, 
      rule: 'the quota of Dungor is 4.': found place -1, rule for quota is at 511
      roundtrip: 'from now on, later old locale values replace the old old locale': said back 'from now on, later old locale values replace the old locale'
      merge: 'the trace id of Pelor is N857-M.': the trace id of pelor into the trace id of torgor
+tick 300 | places 1258, statements 3375 | this window: rules arith 4/236 wrong, copy 1/556 wrong, found 0/305 wrong, merge 1/532 wrong, outcome 71/150 wrong, read 0/293 wrong, roundtrip 0/556 wrong, rule 6/542 wrong, settle 105/287 wrong, stale 0/305 wrong, tool 0/424 wrong | wrong answers, first failure on the row: no rule fired 68, arith 3 | 848s
+     settle: 'the quota of Muka is 6.': kept as said ('the quota of Muka is') for 'the quota of Muka is 6.' under 'quota figures that arrive later should b'
+     outcome: 'What is the main seat of the patient of Dunvin?': said 7, truth 22, first failure: no rule fired
+     arith: 'What is the difference between (the larger of the font of Loka and the': the larger of: 25, 26 -> 25, should be 26
+     rule: 'the first locale of Nedun is 22.': found place 265, rule for first locale is at 1160
+     copy: 'the slot of Mertor is 12 (same as the first student of Muril).': claims [], source 775
+     merge: 'Correction: the zone of Lotor is now 26.': the zone of lotor split from place 76
+all ticks: rules arith 12/1197 wrong, copy 5/3324 wrong, found 1/1794 wrong, merge 5/3145 wrong, outcome 278/898 wrong, read 0/1711 wrong, roundtrip 11/3324 wrong, rule 27/3195 wrong, settle 478/1226 wrong, stale 0/1792 wrong, tool 1/2000 wrong
