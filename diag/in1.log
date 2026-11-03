@@ -1,0 +1,26 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4545.14it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+=== lived 100 ticks in 115s | rules: rules arith 0/58 wrong, copy 0/1048 wrong, merge 1/994 wrong, roundtrip 3/1048 wrong, rule 1/1021 wrong, settle 12/140 wrong, tool 0/117 wrong
+
+=== THE GRAPH
+places 646 (fact 615, rule 31) | entries 1109, per place mean 1.7 max 7 | edges per place mean 18.8 max 50 min 8 | reach mean 0.500 min 0.500 max 0.500, widened 0 narrowed 0
+relation claims (R[p] . L[j] > 1): 36; e.g. 'the quota of Dunlo is 8 (same as the gue' -> 'the guest of Baor is 30 (same '; 'the width of Rilzek is 27 (same as the l' -> 'the last band of Riltor is 3.'; 'the last board of Torsa is 1 (same as th' -> 'the list of Thator is 19 (same'
+label distances: places of one name 1.056 (n 1189), any two places 1.380, nearest other place per place: mean 0.809 min 0.380
+entries said back as written: 232/232; e.g. 
+arrive's check decisions: 140, kept what the tool made 28
+   place 396 reach 0.500 edges 14: [0] 'the last band of Neka is 27.'
+   place 621 reach 0.500 edges 14: [0] 'the checksum of Torril is W896-F.'
+   place 609 reach 0.500 edges 11: [0] 'the sync token of Rilzek is V385-M.'
+   place 17 reach 0.500 edges 50: [0] 'note: any further bid overwrite the previous ' || [1] 'please remember: any further bid count as inc' || [2] 'please remember: later bid values overwrite t' || [3] 'from now on, incoming bid numbers are amounts'
+   place 57 reach 0.500 edges 28: [0] 'please remember: every reported store should ' || [1] 'from now on, every reported store replace the' || [2] 'any further store are amounts to add to the c' || [3] 'rule: incoming store numbers replace the old '
+
+=== AN EASY QUESTION (1 step)
+
+--- QUESTION 'What is the list of Muzek?' | truth 28
+   step 1: 'What is the list of Muzek?' | nodes []
+      stand-in reads: ('the list of Muzek', 'lookup')
+      reader: start 'the' 1.00, 'zek' 0.00, 'of' 0.00
+              end 'zek' 0.38, 'the' 0.17, 'Mu' 0.13
+              function lookup 1.01, apply -0.18, before -0.40, both -0.39
