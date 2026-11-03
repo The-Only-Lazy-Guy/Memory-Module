@@ -851,7 +851,9 @@ def label_loss(model, rng, vocab, n=8):
     q, own = model.rule_of(model.encode(ask)), model.encode(ask)
     t = torch.arange(n, device=sim.device)
     return (loss + F.cross_entropy(b @ a.T / .07, t) + relate_loss(model, b, a[:n], b @ a[:n].T)
-            + F.cross_entropy(q @ torch.cat([b, a[n:], own]).T / .07, t) + relate_loss(model, q, b, q @ b.T))
+            + F.cross_entropy(q @ torch.cat([b, a[n:], own]).T / .07, t) + relate_loss(model, q, b, q @ b.T)
+            + F.relu((q - b).norm(dim=-1) - .4).mean())   # and lands as near its rule as a restatement lands on its fact
+    # (a place's first reach is .5; tr8 ranked right but sat .62-.70 away online, so each rule place failed until its reach grew)
 
 
 @torch.no_grad()
