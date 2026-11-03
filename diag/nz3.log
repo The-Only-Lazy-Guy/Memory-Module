@@ -1,0 +1,191 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  14%|█▍        | 40/290 [00:00<00:00, 389.62it/s]Loading weights:  46%|████▌     | 133/290 [00:00<00:00, 704.01it/s]Loading weights:  78%|███████▊  | 227/290 [00:00<00:00, 810.92it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 804.21it/s]
+/marimo/frozen/nz3/gnm.py:1600: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} | {rep} | {time.time() - t0:.0f}s", flush=True)
+step 500 loss 0.000 | trained forms 0.925 | E1 held forms 0.483 | E2 sealed 18/30 exact, statements recovered 0.617 | 349s
+     'amount: https://thaka.com/ril\nhost: None\nspeed:\n  - title: Vinmer Zek\n    branch: kaor@neor.net\n    capacity: 505.2\n  - title: Zekdun Tor\n    branch: '
+       want ['the amount is https://thaka.com/ril.', 'the host is None.', 'the speed title is Vinmer Zek.']
+       got  ['the amount is https://thaka.com/ril.', 'the host is None.', 'the speed title is Vinmer Zek.']
+     "Do you know the minimum of (the combined value of what Zekor has as area and Vinor's current main door) and Samer's current base student?"
+       want ['What is the smaller of (the sum of the area of Zekor and the main door of Vinor) and the base student of Samer?']
+       got  ['What is the minimum of (the sum of (the combined value of what Zekor has as area and the current main door of Vinor) and the current base student of Samer) and the current base student of Samer?']
+     'primary record:\n  voucher:\n    - name: Merne\n      backup page: gate credit list\n      net series: None\n    - name: Merne\n      backup page: category\n'
+       want ['the primary record voucher name is Merne.', 'the primary record voucher backup page is gate credit list.', 'the primary record voucher net series is None.']
+       got  ['the primary record voucher name is Merne.', 'the primary record voucher backup page is gate credit list.', 'the primary record voucher net series is None.']
+     'last part:\n  income:\n    - slot\n    - flight\n    - category weight bid\n    - volume\n    - birth release\n  edition:\n    main medal: torlo@orzek.io\n    '
+       want ['the last part income is slot.', 'the last part income is flight.', 'the last part income is category weight bid.']
+       got  ['the base station is 2017-07-07.', 'the base station is 2017-07-07.', 'the base station is 2017-07-07.']
+     "Maria's salary is 5200 a month."
+       want ['the salary of Maria is 5200 a month.']
+       got  ['the salary of Maria is 5200.', 'the month of Maria is 5200.']
+     '{"city": "Lyon", "population": 516092, "mayor": "Gregory Doucet"}'
+       want ['the population of Lyon is 516092.', 'the mayor of Lyon is Gregory Doucet.']
+       got  ['the city is Lyon.', 'the population is 516092.', 'the mayor is Gregory Doucet.']
+     '| product | price | stock |\n|---|---|---|\n| Lamp | 25 | 140 |'
+       want ['the price of Lamp is 25.', 'the stock of Lamp is 140.']
+       got  ['the product is Lamp.', 'the price is 25.', 'the stock is 140.']
+     "Anna's team is the same as Leo's team, which is Red."
+       want ['the team of Anna is Red (same as the team of Leo).']
+       got  ['the team of Anna is the same as the team of Leo is Red.']
+     'Going forward, new step counts should be added to the existing step count.'
+       want ['rule: later step count values are amounts to add to the current step count']
+       got  ['rule: later step values are amounts to add to the current step']
+     "Quick note: Lena's score is now 88, and Omar's score is 91."
+       want ['Correction: the score of Lena is now 88.', 'the score of Omar is 91.']
+       got  ['Correction: the score of Lena is now 88.', 'the score of Omar is now 91.']
+step 1000 loss 0.000 | trained forms 0.983 | E1 held forms 0.517 | E2 sealed 21/30 exact, statements recovered 0.700 | 696s
+     "Torka's bid went to 25."
+       want ['Correction: the bid of Torka is now 25.']
+       got  ['the bid of Torka is 25.']
+     "Weather looks nice today. We looked at Gorsa. Its old board is 28.\nlast flight=25; driver=15 (taken from Gorne's current base quota) (for Muor)"
+       want ['the old board of Gorsa is 28.', 'the last flight of Muor is 25.', 'the driver of Muor is 15 (same as the base quota of Gorne).']
+       got  ['the old board of Gorsa is 28.', 'the last flight of Gorsa is 25.', 'the driver of Gorsa is 15 (taken from the current base quota of Gorne).']
+     'Coffee is in the kitchen.'
+       want ['(nothing)']
+       got  ['the kitchen is coffee.']
+     "We looked at Kane. Its scale is 9, and its last service is 23 (taken from pelmu's current last country), and its last flight is 16, and its trace id i"
+       want ['the scale of Kane is 9.', 'the last service of Kane is 23 (same as the last country of Pelmu).', 'the last flight of Kane is 16.']
+       got  ['the scale of Kane is 9.', 'the last service of Kane is 23 (taken from the current last country).', 'the last flight of Kane is 16.']
+     "Maria's salary is 5200 a month."
+       want ['the salary of Maria is 5200 a month.']
+       got  ['the salary of Maria is 5200.', 'the month of Maria is A month.']
+     '{"city": "Lyon", "population": 516092, "mayor": "Gregory Doucet"}'
+       want ['the population of Lyon is 516092.', 'the mayor of Lyon is Gregory Doucet.']
+       got  ['the city is Lyon.', 'the population is 516092.', 'the mayor is Gregory Doucet.']
+     '| product | price | stock |\n|---|---|---|\n| Lamp | 25 | 140 |'
+       want ['the price of Lamp is 25.', 'the stock of Lamp is 140.']
+       got  ['the price of product is 25.', 'the stock of product is 140.']
+     "Anna's team is the same as Leo's team, which is Red."
+       want ['the team of Anna is Red (same as the team of Leo).']
+       got  ['the team of Anna is Same as the team of Leo.', 'the color of Leo is Red.']
+     'Going forward, new step counts should be added to the existing step count.'
+       want ['rule: later step count values are amounts to add to the current step count']
+       got  ['rule: later step values are amounts to add to the current step']
+     'server:\n  port: 8080\n  host: example.org'
+       want ['the server port is 8080.', 'the server host is example.org.']
+       got  ['the port is 8080.', 'the host is example.org.']
+step 1500 loss 0.000 | trained forms 0.983 | E1 held forms 0.458 | E2 sealed 19/30 exact, statements recovered 0.633 | 1042s
+     'Cheers, talk soon. Dunzek:\n  hour: 29\nWe looked at Dunmer. Its lane is Zektor, and its token is 29.'
+       want ['the hour of Dunzek is 29.', 'the lane of Dunmer is Zektor.', 'the token of Dunmer is 29.']
+       got  ['the hour of Thace is 29.', 'the lane of Dunzek is Zektor.', 'the token of Dunzek is 29.']
+     '| name | first seller |\n|---|---|\n| Bavin | 20 (taken from what tormu has as market) |'
+       want ['the first seller of Bavin is 20 (same as the market of Tormu).']
+       got  ['the first seller of Bavin is 20 (taken from the market of Tormu).']
+     'Vinba:\n  account: 17\n  market: 25\n  log ref: J261-H\nfirst author=23; old target=14; series=27 (for Saba)'
+       want ['the account of Vinba is 17.', 'the market of Vinba is 25.', 'the log ref of Vinba is J261-H.']
+       got  ['the account of Vinba is 17.', 'the market of Vinba is 25.', 'the log ref of Vinba is J261-H.']
+     'net record: 2821\ndaily medal:\n  first number: 4753\n  author: Gorgor Rilvin\n  shelf: 56.5\n  old trip: 126.1\nflight:\n  - edition\n  - term\n  - meter\ncomp'
+       want ['the net record is 2821.', 'the daily medal first number is 4753.', 'the daily medal author is Gorgor Rilvin.']
+       got  ['the net record is 2821.', 'the daily medal is first number is 4753.', 'the author is Gorgor Rilvin.']
+     "Maria's salary is 5200 a month."
+       want ['the salary of Maria is 5200 a month.']
+       got  ['the salary of Maria is 5200.', 'the month of Maria is A month.']
+     '{"city": "Lyon", "population": 516092, "mayor": "Gregory Doucet"}'
+       want ['the population of Lyon is 516092.', 'the mayor of Lyon is Gregory Doucet.']
+       got  ['the city is Lyon.', 'the population is 516092.', 'the mayor is Gregory Doucet.']
+     '| product | price | stock |\n|---|---|---|\n| Lamp | 25 | 140 |'
+       want ['the price of Lamp is 25.', 'the stock of Lamp is 140.']
+       got  ['the product is product.', 'the price is price.', 'the stock is stock.']
+     "Anna's team is the same as Leo's team, which is Red."
+       want ['the team of Anna is Red (same as the team of Leo).']
+       got  ['the team of Anna is the same as the team of Leo.', 'the color of Anna is Red.']
+     'Going forward, new step counts should be added to the existing step count.'
+       want ['rule: later step count values are amounts to add to the current step count']
+       got  ['rule: later step values are amounts to add to the current step']
+     'server:\n  port: 8080\n  host: example.org'
+       want ['the server port is 8080.', 'the server host is example.org.']
+       got  ['the port is 8080.', 'the host is example.org.']
+step 2000 loss 0.000 | trained forms 0.933 | E1 held forms 0.342 | E2 sealed 18/30 exact, statements recovered 0.600 | 1392s
+     'new main priority numbers pile up on top of the main priority we have'
+       want ['rule: later main priority values are amounts to add to the current main priority']
+       got  ['rule: later main priority values are kept alongside the earlier main priority']
+     'age=4; series=Duntor; primary list=12 (for Rilne)\n| name | currency | old flight | trace id |\n|---|---|---|---|\n| Bamer | 3 | 7 | B255-P |'
+       want ['the age of Rilne is 4.', 'the series of Rilne is Duntor.', 'the primary list of Rilne is 12.']
+       got  ['the age is 4.', 'the series is Duntor.', 'the primary list is 12 (for Rilne).']
+     "Vingor's old flight went to 32."
+       want ['Correction: the old flight of Vingor is now 32.']
+       got  ['the old flight of Vingor is 32.']
+     "Lolo's last job went to 58."
+       want ['Correction: the last job of Lolo is now 58.']
+       got  ['the last job of Lolo is 58.']
+     "Maria's salary is 5200 a month."
+       want ['the salary of Maria is 5200 a month.']
+       got  ['the salary of Mersa is 5200.', 'the month of Mersa is 5200.']
+     '{"city": "Lyon", "population": 516092, "mayor": "Gregory Doucet"}'
+       want ['the population of Lyon is 516092.', 'the mayor of Lyon is Gregory Doucet.']
+       got  ['the city is Lyon.', 'the population is 516092.', 'the mayor is Gregory Doucet.']
+     '| product | price | stock |\n|---|---|---|\n| Lamp | 25 | 140 |'
+       want ['the price of Lamp is 25.', 'the stock of Lamp is 140.']
+       got  ['the product is 25.', 'the price is 140.', 'the stock is 25.']
+     "Anna's team is the same as Leo's team, which is Red."
+       want ['the team of Anna is Red (same as the team of Leo).']
+       got  ['the team of Anna is the same as the team of Leo.', 'the color of Anna is Red.']
+     'Going forward, new step counts should be added to the existing step count.'
+       want ['rule: later step count values are amounts to add to the current step count']
+       got  ['rule: later step values are amounts to add to the current step']
+     'server:\n  port: 8080\n  host: example.org'
+       want ['the server port is 8080.', 'the server host is example.org.']
+       got  ['the main port is 8080.', 'the host is example.org.']
+step 2500 loss 0.000 | trained forms 0.992 | E1 held forms 0.433 | E2 sealed 18/30 exact, statements recovered 0.600 | 1747s
+     'tier=19 (for Gortha)'
+       want ['the tier of Gortha is 19.']
+       got  ['the tier is 19 (for Gortha).']
+     'Nothing new on my side. page=Balo; first department=Pello; amount=23; trace id=D112-S (for Sator)'
+       want ['the page of Sator is Balo.', 'the first department of Sator is Pello.', 'the amount of Sator is 23.']
+       got  ['the page is Balo.', 'the first department is Pello.', 'the amount is 23.']
+     '| name | log ref | planet |\n|---|---|---|\n| Pelor | R841-N | 30, copied from what Nezek has as primary guest |\nWe looked at Duntor. Its backup profile'
+       want ['the log ref of Pelor is R841-N.', 'the planet of Pelor is 30 (same as the primary guest of Nezek).', 'the backup profile of Duntor is 13 (same as the guest of Gorlo).']
+       got  ['the log ref of Pelor is R841-N.', 'the planet of Pelor is 30.', 'the primary guest of Pelor is Nezek.']
+     'Nothing new on my side. | name | tier | amount | checksum | step |\n|---|---|---|---|---|\n| Toror | 26, copied from what  Batha has as slot | 5 | E52-E'
+       want ['the tier of Toror is 26 (same as the slot of Batha).', 'the amount of Toror is 5.', 'the checksum of Toror is E52-E.']
+       got  ['the tier of Toror is 26.', 'the amount of Toror is 5.', 'the checksum of Toror is 10.']
+     "Maria's salary is 5200 a month."
+       want ['the salary of Maria is 5200 a month.']
+       got  ['the salary of Maria is 5200.', 'the month of Maria is 5200.']
+     '{"city": "Lyon", "population": 516092, "mayor": "Gregory Doucet"}'
+       want ['the population of Lyon is 516092.', 'the mayor of Lyon is Gregory Doucet.']
+       got  ['the city is Lyon.', 'the population is 516092.', 'the mayor is Gregory Doucet.']
+     '| product | price | stock |\n|---|---|---|\n| Lamp | 25 | 140 |'
+       want ['the price of Lamp is 25.', 'the stock of Lamp is 140.']
+       got  ['the product is 25.', 'the price is 140.', 'the stock is Lamp.']
+     "Anna's team is the same as Leo's team, which is Red."
+       want ['the team of Anna is Red (same as the team of Leo).']
+       got  ['the team of Anna is the same as the team of Leo.', 'the color of Anna is Red.']
+     'Going forward, new step counts should be added to the existing step count.'
+       want ['rule: later step count values are amounts to add to the current step count']
+       got  ['rule: later step values are amounts to add to the current step']
+     'server:\n  port: 8080\n  host: example.org'
+       want ['the server port is 8080.', 'the server host is example.org.']
+       got  ['the port is 8080.', 'the host is example.org.']
+step 3000 loss 0.000 | trained forms 0.967 | E1 held forms 0.433 | E2 sealed 18/30 exact, statements recovered 0.600 | 2091s
+     "I need the author of Pelvin's current fund."
+       want ['What is the author of the fund of Pelvin?']
+       got  ['What is the author of the current fund of Pelvin?']
+     'scratch that: the daily color of Pelor is 12.'
+       want ['Correction: the daily color of Pelor is now 12.']
+       got  ['the daily color of Pelor is 12.']
+     'daily budget: sample rent\ncamera:\n  - code: D540-P\n    mode: False\n    band: tax\n    primary number: thaka@zekgor.io\n  - code: F284-Z\n    mode: True\n '
+       want ['the daily budget is sample rent.', 'the camera code is D540-P.', 'the camera mode is False.']
+       got  ['the camera code is D540-P.', 'the camera mode is False.', 'the camera band is tax.']
+     'fund=Kaor (for Mupel)'
+       want ['the fund of Mupel is Kaor.']
+       got  ['the fund of Kaor is Kaor (for Mupel).']
+     "Maria's salary is 5200 a month."
+       want ['the salary of Maria is 5200 a month.']
+       got  ['the salary of Maria is 5200.', 'the month of Maria is.']
+     '{"city": "Lyon", "population": 516092, "mayor": "Gregory Doucet"}'
+       want ['the population of Lyon is 516092.', 'the mayor of Lyon is Gregory Doucet.']
+       got  ['the city is Lyon.', 'the population is 516092.', 'the mayor is Gregory Doucet.']
+     '| product | price | stock |\n|---|---|---|\n| Lamp | 25 | 140 |'
+       want ['the price of Lamp is 25.', 'the stock of Lamp is 140.']
+       got  ['the product is 25.', 'the price is 140.', 'the stock is Lamp.']
+     "Anna's team is the same as Leo's team, which is Red."
+       want ['the team of Anna is Red (same as the team of Leo).']
+       got  ['the team of Anna is the same as the team of Leo.', 'the color of Anna is Red.']
+     'Going forward, new step counts should be added to the existing step count.'
+       want ['rule: later step count values are amounts to add to the current step count']
+       got  ['rule: later step values are amounts to add to the current step']
+     'server:\n  port: 8080\n  host: example.org'
+       want ['the server port is 8080.', 'the server host is example.org.']
+       got  ['the port is 8080.', 'the host is example.org.']
