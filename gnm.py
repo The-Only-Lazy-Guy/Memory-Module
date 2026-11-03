@@ -2787,6 +2787,7 @@ def inspect_memory(A):
     # ---------------------------------------------------------------- the inner steps, watched
     out = lambda *a: print(*a, flush=True)
     real_find, real_apply, real_read = Machine.find, NeuralT._apply, globals()["read_query"]
+    paths = []                                         # each question's walks, for the picture
 
     def walk(q):
         dist = lambda ids: np.linalg.norm(g.L[ids] - q, axis=-1)
@@ -2811,6 +2812,8 @@ def inspect_memory(A):
                 rel = float(bank.relate([task], *one(q), *one(g.chain[j][0][0]))[0]) if q is not None else float("nan")
             out(f"          cand {j}: dist {d:.3f} reach {g.S[j]:.3f} {'IN' if d < g.S[j] else 'out'} relate {rel:+.2f} | made by {made_by.get(j, '?')[:45]!r} | newest {T.say(g.chain[j][-1][0])[:40]!r}")
         out(f"        -> place {got}")
+        if paths:
+            paths[-1]["steps"].append({"task": task, "opened": [u for u, _ in op], "found": int(got)})
         return got
 
     def apply_(self, want, ins, tool):
@@ -2846,6 +2849,7 @@ def inspect_memory(A):
         return real_read(m_, S, items)
 
     def asked(q, truth):
+        paths.append({"q": q, "truth": truth, "steps": []})
         out(f"\n--- QUESTION {q!r} | truth {truth}")
         steps = [0]
         real_answer = globals()["answer"]
@@ -2885,6 +2889,16 @@ def inspect_memory(A):
     x = question("chain", w, rng)
     if x:
         asked(x[0], x[1])
+    if A.log:                                          # the graph as data, for a picture of it
+        L = g.L[:g.n] - g.L[:g.n].mean(0)
+        xy = L @ np.linalg.svd(L, full_matrices=False)[2][:2].T
+        nodes = [{"id": p, "kind": t.key(made_by[p])[0], "made": made_by[p][:90], "n": len(g.chain[p]),
+                  "newest": T.say(g.chain[p][-1][0])[:90], "reach": round(float(g.S[p]), 3), "deg": len(g.adj[p]),
+                  "x": round(float(xy[p, 0]), 4), "y": round(float(xy[p, 1]), 4)} for p in range(g.n)]
+        edges = sorted({(min(p, j), max(p, j)) for p in range(g.n) for j in g.adj[p]})
+        json.dump({"nodes": nodes, "edges": edges, "claims": [[int(p), int(j)] for p, j in claims], "paths": paths},
+                  open(A.log, "w", encoding="utf-8"))
+        print(f"graph written: {len(nodes)} places, {len(edges)} edges, {len(claims)} claims, {len(paths)} question paths", flush=True)
 
 
 def ask_recursive(m, kind, world, rng, ops=(1, 3)):
