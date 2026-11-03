@@ -1944,6 +1944,7 @@ class Machine:
         self.wrote, self.latest, self.rulekey = {}, {}, {}   # the rules' record: each entry's statement, each subject's last place, each key's rule
         self.right = []                                # ... and tool sayings the rules checked right: (tool, want, inputs, what it said)
         self.chose = {}                                # (place, index) -> the check's decision that made it: (rule, old, new, kept, other)
+        self.check_lessons = []                        # decisions shown wrong by exploring (flipped, the truth came out)
 
     def do(self, r, name, *a):
         r.passes += 1
@@ -2294,6 +2295,8 @@ def lessons(tr, bank, m, js, cap=64):
                 seen += [(g, o, n, keep, 1.), (g, o, n, other, 0.)]                                   # the reverse
             elif other.value == j.target:
                 seen += [(g, o, n, keep, 0.), (g, o, n, other, 1.)]
+    seen += m.check_lessons
+    m.check_lessons = []
     if seen:
         lg = bank.check([nodes_of([x[k].node.detach() for x in seen], dev) for k in range(4)])
         loss = F.binary_cross_entropy_with_logits(lg, torch.tensor([x[4] for x in seen], device=dev))
@@ -3106,7 +3109,28 @@ def online(A):
                 m.do(r, "say")
             except FAIL:
                 pass
-            js += judge(m, ledger, r, x[1])
+            jq = judge(m, ledger, r, x[1])
+            js += jq
+            o_ = next((j for j in jq if j.rule == "outcome"), None)
+            if o_ is not None and not o_.ok:           # explore: the same question with each decision the check made
+                for key in [k for k in o_.ev["reads"] if k in m.chose]:      # on what it read flipped; if the
+                    g, o, n, keep, other = m.chose[key]                      # truth comes out, that decision was wrong
+                    p, i = key
+                    saved, m.g.chain[p][i] = m.g.chain[p][i], (other.node, m.g.chain[p][i][1])
+                    evs, m.events = m.events, None
+                    r2 = Row(x[0])
+                    try:
+                        if m.reader:
+                            out = answer(m, r2, x[0], [])
+                            r2.stack.append(out) if out is not None else None
+                        else:
+                            x[2](m, r2)
+                        got = next((it.value for it in reversed(r2.stack) if it.value is not None), None)
+                    except FAIL:
+                        got = None
+                    m.events, m.g.chain[p][i] = evs, saved
+                    if got == x[1]:
+                        m.check_lessons += [(g, o, n, keep, 0.), (g, o, n, other, 1.)]
         for j in js:
             total.add(j)
         loss = lessons(tr, bank, m, js)
