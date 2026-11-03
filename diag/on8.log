@@ -1,0 +1,43 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4115.66it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+tick 50 | places 398, statements 577 | this window: rules arith 2/105 wrong, copy 1/566 wrong, found 0/326 wrong, merge 1/537 wrong, outcome 5/148 wrong, read 0/286 wrong, roundtrip 33/566 wrong, rule 2/509 wrong, stale 0/298 wrong, tool 0/153 wrong | wrong answers, first failure on the row: no rule fired 3, arith 2 | 81s
+     roundtrip: 'the log ref of Nedun is U228-J.': said back 'the log of Nedun is UJ.'
+     outcome: 'What is the last board of the service of Orzek?': said None, truth 30, first failure: no rule fired
+     copy: 'the old currency of Dunvin is 23 (same as the term of Vintha).': claims [], source 85
+     merge: 'the checksum of Zekor is T401-C.': the checksum of zekor split from place 80
+     rule: 'the old age of Thapel is 23.': found place -1, rule for old age is at 208
+     arith: 'What is the difference between the day of Gorgor and the salary of Lon': the difference between: 4, 2 -> -2, should be 2
+tick 100 | places 672, statements 1129 | this window: rules arith 1/149 wrong, copy 2/498 wrong, found 0/392 wrong, merge 0/467 wrong, outcome 12/150 wrong, read 0/304 wrong, roundtrip 6/498 wrong, rule 7/480 wrong, stale 0/340 wrong, tool 1/199 wrong | wrong answers, first failure on the row: no rule fired 11, tool 1 | 172s
+     outcome: 'What is the last board of the lane of Bane?': said None, truth 20, first failure: no rule fired
+     roundtrip: 'the log ref of Lozek is J723-T.': said back 'the log ref of Lozek is J723T.'
+     copy: 'the schedule of Loba is 26 (same as the guest of Zekne).': claims [], source 276
+     arith: 'What is the smaller of (the difference between the first student of Or': the difference between: 20, 21 -> 1, should be -1
+     rule: 'the last band of Mertor is 8.': found place -1, rule for last band is at 229
+     tool: 'What is the old locale of the patient of Rilor?': entry in, 'the System Of Thator' out
+tick 150 | places 877, statements 1693 | this window: rules arith 4/204 wrong, copy 1/454 wrong, found 0/450 wrong, merge 2/425 wrong, outcome 17/150 wrong, read 0/305 wrong, roundtrip 1/454 wrong, rule 4/499 wrong, stale 0/397 wrong, tool 0/254 wrong | wrong answers, first failure on the row: no rule fired 13, arith 4 | 269s
+     outcome: 'What is the board of the service of Neril?': said None, truth 14, first failure: no rule fired
+     arith: 'What is the difference between (the difference between the width of Ze': the difference between (: 3, 12 -> -15, should be -9
+     rule: 'the quota of Mudun is 9.': found place 512, rule for quota is at 103
+     merge: 'the trace id of Orgor is H507-S.': the trace id of orgor into the trace id of rilgor
+     roundtrip: 'quota figures that arrive later become the current quota': said back 'backvalid figures that arrive later become the current quota'
+     copy: 'the ship of Bane is 8 (same as the author of Rilzek).': claims [], source 247
+tick 200 | places 1032, statements 2236 | this window: rules arith 3/205 wrong, copy 0/446 wrong, found 0/427 wrong, merge 0/413 wrong, outcome 12/150 wrong, read 0/272 wrong, roundtrip 6/446 wrong, rule 5/470 wrong, stale 0/399 wrong, tool 0/255 wrong | wrong answers, first failure on the row: no rule fired 9, arith 3 | 362s
+     roundtrip: 'rule: old currency figures that arrive later replace the old old curre': said back 'rule: old currency figures that arrive later replace the old'
+     outcome: 'What is the difference between (the difference between the license of ': said 2, truth -22, first failure: no rule fired
+     arith: 'What is the sum of the zone of Kaor and (the difference between the wo': the difference between: 18, 38 -> -18, should be -20
+     rule: 'the quota of Nevin is 19.': found place 103, rule for quota is at 512
+tick 250 | places 1161, statements 2809 | this window: rules arith 1/203 wrong, copy 0/472 wrong, found 0/417 wrong, merge 0/439 wrong, outcome 17/150 wrong, read 0/258 wrong, roundtrip 4/472 wrong, rule 2/501 wrong, stale 0/391 wrong, tool 0/253 wrong | wrong answers, first failure on the row: no rule fired 16, arith 1 | 459s
+     roundtrip: 'the log ref of Sane is X962-T.': said back 'the log ref of Sane is X96-T.'
+     rule: 'the quota of Dungor is 4.': found place -1, rule for quota is at 512
+     outcome: 'What is the daily worker of the service of Mune?': said None, truth 12, first failure: no rule fired
+     arith: 'What is the smaller of (the difference between the guest of Mutha and ': the difference between: 20, 18 -> -2, should be 2
+tick 300 | places 1263, statements 3375 | this window: rules arith 3/214 wrong, copy 1/457 wrong, found 0/425 wrong, merge 2/433 wrong, outcome 14/150 wrong, read 0/265 wrong, roundtrip 3/457 wrong, rule 5/503 wrong, stale 0/406 wrong, tool 0/264 wrong | wrong answers, first failure on the row: no rule fired 12, arith 2 | 560s
+     rule: 'the old age of Vinsa is 4.': found place -1, rule for old age is at 208
+     merge: 'the trace id of Vinsa is J129-U.': the trace id of vinsa split from place 382
+     outcome: 'What is the main seat of the patient of Dunvin?': said None, truth 22, first failure: no rule fired
+     arith: 'What is the difference between (the larger of the font of Loka and the': the larger of: 25, 26 -> 25, should be 26
+     roundtrip: 'first locale figures that arrive later replace the old first locale': said back 'here figures that arrive later replace the old first locale'
+     copy: 'the slot of Mertor is 12 (same as the first student of Muril).': claims [], source 774
+all ticks: rules arith 14/1080 wrong, copy 5/2893 wrong, found 0/2437 wrong, merge 5/2714 wrong, outcome 77/898 wrong, read 0/1690 wrong, roundtrip 53/2893 wrong, rule 25/2962 wrong, stale 0/2231 wrong, tool 1/1378 wrong
