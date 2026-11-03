@@ -945,16 +945,23 @@ def real_text(held):
         out = []
         for i, t in enumerate(paras):
             if (i % 10 == 0) == held:                  # every 10th paragraph held out
-                out += [x.strip() for x in re.split(r"(?<=[.!?])\s+", t) if 2 <= len(x.split()) <= 40]
+                out += [x.strip() for x in re.split(r"(?<=[.!?])\s+", t) if 2 <= len(x.split()) <= 40 and len(x) <= 300]
+                # characters, not words: a 40-"word" list with no spaces was 1,093 tokens, past the LM's 1,024 (nt1 crash)
         _real[held] = out
     return _real[held]
 
 
 def any_text(rng, vocab=KEYS_TRAIN, held=False):
-    """what a node may have to hold: a real sentence (half), or the memory's own kinds of text (statements, rules,
-    questions, records, codes, numbers)"""
-    if rng.random() < .5:
+    """what a node may have to hold, at any length: a real sentence (40%), a short piece (20%: a bare number, a name,
+    a phrase, the start of a real sentence; a tool's result read back is one token, and nt1 said '8' back as
+    '1818...'), or the memory's own kinds of text (statements, rules, questions, records, codes)"""
+    r = rng.random()
+    if r < .4:
         return rng.choice(real_text(held))
+    if r < .6:
+        return rng.choice([lambda: str(amount(rng)), lambda: str(rng.randint(-999, 999)), lambda: _name(rng, rng.choice((1, 2, 3))),
+                           lambda: leaf(_name(rng, 2), " ".join(_key(rng, vocab, set()))),
+                           lambda: " ".join(rng.choice(real_text(held)).split()[:rng.randint(1, 4)])])()
     return rng.choice([lambda: sentence(rng, vocab), lambda: question_text(rng, vocab),
                        lambda: f"{leaf(_name(rng, 2), rng.choice(NOISE_KEYS))} is {_value(rng, 'code')}.",
                        lambda: json.dumps({rng.choice(vocab): rng.randint(-500, 500) for _ in range(rng.randint(1, 3))})])()
