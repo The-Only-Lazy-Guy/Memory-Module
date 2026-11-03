@@ -498,6 +498,7 @@ class Graph:
         self.d, self.beam = d, beam
         self.L = np.zeros((cap, d), dtype=np.float32)
         self.R = np.zeros((cap, d), dtype=np.float32)
+        self.S = np.full(cap, REACH, dtype=np.float32)    # each place's reach: a query further from its label is not it
         self.n, self.adj, self.chain, self.cost = 0, [], [], 0
 
     def search(self, q):
@@ -532,6 +533,7 @@ class Graph:
     def add_place(self, label):
         if self.n == len(self.L):
             self.L, self.R = np.vstack([self.L, np.zeros_like(self.L)]), np.vstack([self.R, np.zeros_like(self.R)])
+            self.S = np.concatenate([self.S, np.full(len(self.S), REACH, dtype=np.float32)])
         cands = self.search(label)
         i, self.n = self.n, self.n + 1
         self.L[i] = label
@@ -552,6 +554,10 @@ class Graph:
         self.adj[i] = self.cut([(d, j) for d, j in self.search(label) if j != i])
         for j in self.adj[i]:
             self.adj[j].append(i)
+
+
+REACH = .5                      # a place's first reach: statements about one subject lie within .485 of each other, the
+                                # nearest other subject at >= .365 (p5 .675) (trace of a 402-place memory, 11-03); lessons move it
 
 
 # ====================================================================== the translator (exact stand-in for --gold)
@@ -734,17 +740,18 @@ class NeuralT:
         return self.m.decode(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device))[0].strip()
 
     def apply(self, want, ins, tool=None):             # the want's label finds a tool node by its key; nodes in, nodes out
-        with torch.set_grad_enabled(self.learning):    # learning: the answer's truth reaches the tools through this
+        with torch.set_grad_enabled(self.learning):    # the tools learn from the rules' lessons, which run them again
             return self._apply(want, ins, tool)
 
     def _apply(self, want, ins, tool):
         self.last = None
         s = self.tools.gate(self.tools.query(self.m, [want]))[0] if self.tools.nets else None
         if tool is None and (s is None or float(s.max()) <= 1):    # no tool is relevant: a task it has no tool for
-            return [self.node("unknown")]
+            return ["unknown"]
         t = self.last = int(s.argmax()) if tool is None else tool
         o, many, _ = self.tools.nets[t]([self.m.content([want])] + [(z[None], torch.ones(1, len(z), dtype=torch.bool, device=z.device)) for z in ins])
-        return [z[0] for z, _ in o[:int(many.argmax()) + 1]]
+        return [self.say(z[0]) or NOTHING for z, _ in o[:int(many.argmax()) + 1]]   # its result is what it says, read like any
+        # text (a raw output node as a next input: 11 / 25 right; read back: 25 / 25); saying nothing is the node (nothing)
 
     @torch.no_grad()
     def _l(self, text):
@@ -1715,14 +1722,14 @@ class Machine:
         self.events.append(ev)
         return out
 
-    def find(self, label, q=None, task="same"):
-        """the walk finds the nearest place by label; relate says whether it is the one (q: the asking node)"""
-        if self.flat:
-            j = self.g.flat(label)
-        else:
-            c = self.g.search(label)
-            j = c[0][1] if c else -1
-        return j if j >= 0 and self.T.same(label, self.g.L[j], q, self.g.chain[j][0][0], task) else -1
+    def find(self, label, q=None, task="same", look=8):
+        """the walk lists places nearest first; the answer is the first whose reach covers the query and that relate
+        accepts (q: the asking node), else none: a place far from the query is never it, however relate reads it"""
+        c = [(float(np.linalg.norm(self.g.L[self.g.flat(label)] - label)), self.g.flat(label))] if self.flat else self.g.search(label)
+        for d, j in c[:look]:
+            if j >= 0 and d < self.g.S[j] and self.T.same(label, self.g.L[j], q, self.g.chain[j][0][0], task):
+                return j
+        return -1
 
     def item(self, text):
         it = Item(self.T.node(text), self.T)
@@ -1770,8 +1777,10 @@ class Machine:
         del r.stack[-k - 1:]
         node = (lambda it: it.text) if isinstance(self.T, Oracle) else (lambda it: it.node)
         args = [node(x) for x in ins]
-        for z in self.T.apply(want.text, args):
-            r.stack.append(Item(z, self.T, made=(getattr(self.T, "last", None), want.text, args)))
+        for said in self.T.apply(want.text, args):     # what the tool says, held as read: no second trip through B
+            it = self.item(said)
+            it.made = (getattr(self.T, "last", None), want.text, args)
+            r.stack.append(it)
 
     def f_insert(self, r, derived=False):              # A to be B: a new entry where the statement belongs
         self.t += 1
@@ -1787,8 +1796,6 @@ class Machine:
         self.g.R[p] = self.T.relation(r.src)           # what it depends on now (said directly: nothing)
         if self.events is not None:
             self.at.update(index=len(self.g.chain[p]) - 1, claims=set(np.nonzero(self.g.L[:self.g.n] @ self.g.R[p] > 1)[0].tolist()) - {p})
-        mv = self.g.L[p] + .5 * (label - self.g.L[p])  # the label follows how it is said
-        self.g.move(p, mv / max(np.linalg.norm(mv), 1e-6))
         self.changed(p)
 
     def rerun(self, tools):
@@ -1796,7 +1803,7 @@ class Machine:
         n = 0
         for (p, i), (t, want, args) in self.made.items():
             if t in tools:
-                self.g.chain[p][i] = (self.T.apply(want, args, tool=t)[0], self.g.chain[p][i][1])
+                self.g.chain[p][i] = (self.T.node(self.T.apply(want, args, tool=t)[0]), self.g.chain[p][i][1])
                 n += 1
                 if i == len(self.g.chain[p]) - 1:
                     self.changed(p)
@@ -2022,6 +2029,20 @@ def lessons(tr, bank, m, js, cap=64):
     dev, loss = next(bank.parameters()).device, None
     teach = lambda j: [x if len(x) == 4 else (*x, "same") for x in (j.target if isinstance(j.target, list) else [j.target])
                        if x and x[1] is not None and x[1] >= 0]       # (text, place, same?, which question)
+    for j in js:                                       # reach moves at once: one lesson, one step
+        if j.blame in ("relate", "walk") and not j.ok:
+            for text, p, y, task in teach(j):
+                q = m.T.rule_query(text) if task == "rule" else m.T.label(text)
+                d = float(np.linalg.norm(m.g.L[p] - q))
+                if y and d >= m.g.S[p]:
+                    m.g.S[p] = d + .02                 # it should have been reached: reach it now
+                elif not y and d < m.g.S[p]:
+                    m.g.S[p] = max(d - .02, .05)       # it should not have been: no longer
+    ruled = [x for j in js if j.rule == "rule" and not j.ok for x in teach(j) if x[2] == 1.][:cap]
+    if ruled:                                          # the rule query is pulled toward the rule's place (slow)
+        q = tr.rule_of(tr.encode([t for t, _, _, _ in ruled]))
+        tgt = torch.tensor(np.stack([m.g.L[p] for _, p, _, _ in ruled]), device=q.device)
+        loss = (1 - (q * tgt).sum(-1)).mean()
     pairs = [j for j in js if j.blame in ("relate", "walk") and teach(j)]
     wrong, right = [j for j in pairs if not j.ok], [j for j in pairs if j.ok]
     rel = [x for j in wrong[:cap // 2] + random.sample(right, min(len(right), len(wrong[:cap // 2]))) for x in teach(j)]   # learn from mistakes
@@ -2029,7 +2050,8 @@ def lessons(tr, bank, m, js, cap=64):
         za, ma = tr.content([t for t, _, _, _ in rel])
         zb, mb = nodes_of([m.g.chain[p][0][0].detach() for _, p, _, _ in rel], dev)
         y = torch.tensor([v for _, _, v, _ in rel], device=dev)
-        loss = F.binary_cross_entropy_with_logits(bank.relate([q for _, _, _, q in rel], za, ma, zb, mb), y)
+        l1 = F.binary_cross_entropy_with_logits(bank.relate([q for _, _, _, q in rel], za, ma, zb, mb), y)
+        loss = l1 if loss is None else loss + l1
     sums = [j for j in js if j.rule == "arith" and not j.ok and j.ev["after"] and j.ev["after"][len(j.ev["before"]) - 3].made][:cap]
     for j in sums:                                     # the tool that got it wrong learns the right number on these very inputs
         t, want, args = j.ev["after"][len(j.ev["before"]) - 3].made
@@ -2466,7 +2488,7 @@ def online(A):
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     bank = load_tools(A, tr) or ToolBank().to(dev)
     for n, p in tr.named_parameters():                 # what learns online: the relation gate (and the bank: relate, tools)
-        p.requires_grad = n.split(".")[0] in ("rgate", "rhow", "up")
+        p.requires_grad = n.split(".")[0] in ("rgate", "rhow", "up", "ruleq")
     opt = torch.optim.AdamW([p for p in tr.parameters() if p.requires_grad] + list(bank.parameters()), lr=A.lr)
     rng = random.Random(A.seed)
     w = new_world(rng)
