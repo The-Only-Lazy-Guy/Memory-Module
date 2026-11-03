@@ -837,17 +837,21 @@ def label_loss(model, rng, vocab, n=8):
     plain = [rng.choice([f"{leaf(*f)} is {rng.randint(1, 60)}.", f"Correction: {leaf(*f)} is now {rng.randint(1, 60)}.", rv(f[1])])
              for f in rng.sample(facts, n)]
     ra, rg, roff, rmk = model.relation(said + plain, parts=True)
-    names = torch.zeros_like(ra)                       # the tokens that name the source: inside "(same as ...)"
+    span = torch.zeros_like(ra)                        # the tokens that name the source: inside "(same as ...)"
     for i, (t, sf) in enumerate(zip(said, src)):
         lo = t.index("(same as ") + len("(same as ")
         hi = lo + len(leaf(*sf))
-        names[i] = ((roff[i, :, 1] > lo) & (roff[i, :, 0] < hi)).float()
-    loss = (loss + (F.binary_cross_entropy_with_logits(ra, names, reduction="none") * rmk).sum() / rmk.sum()
+        span[i] = ((roff[i, :, 1] > lo) & (roff[i, :, 0] < hi)).float()
+    loss = (loss + (F.binary_cross_entropy_with_logits(ra, span, reduction="none") * rmk).sum() / rmk.sum()
             + F.binary_cross_entropy_with_logits(rg, torch.cat([torch.ones(n), torch.zeros(n)]).to(rg.device)))   # depends at all?
-    q = model.rule_of(model.encode([views(rng, rng.choice(names), k) for k in keys]))   # a fact asks for its key's rule
+    # a fact asks for its key's rule: the query lands on the rule, not on facts or phrases of that key, and not on the
+    # asking fact's own label (online it sat .70 on its own label and found its own place first). Before 11-03 this read
+    # `names` after it had become the span tensor above: every asking fact was "the {key} of tensor([0., ...]) is v."
+    ask = [views(rng, rng.choice(names), k) for k in keys]
+    q, own = model.rule_of(model.encode(ask)), model.encode(ask)
     t = torch.arange(n, device=sim.device)
     return (loss + F.cross_entropy(b @ a.T / .07, t) + relate_loss(model, b, a[:n], b @ a[:n].T)
-            + F.cross_entropy(q @ b.T / .07, t) + relate_loss(model, q, b, q @ b.T))
+            + F.cross_entropy(q @ torch.cat([b, a[n:], own]).T / .07, t) + relate_loss(model, q, b, q @ b.T))
 
 
 @torch.no_grad()
@@ -877,6 +881,10 @@ def label_eval(model, rng, vocab, n=40):
     C = Q @ R[:n].T
     out["ruleq"] = float((C.argmax(1) == torch.arange(n, device=C.device)).float().mean())
     out["ruleq_rel+"] = float((model.relate(Q, R[:n]) > 0).float().mean())
+    ask = [f"{leaf(rng.choice(names), k)} is {rng.randint(1, 60)}." for k in keys]  # nearer its rule than to its own label?
+    Q, own = model.rule_of(enc(ask)), enc(ask)
+    out["ruleq_over_own"] = float(((Q * R[:n]).sum(1) > (Q * own).sum(1)).float().mean())
+    out["ruleq_dist"] = float((Q - R[:n]).norm(dim=1).mean())
     src = [(rng.choice(names), rng.choice(keys)) for _ in range(n)]
     Rl = model.relation([f"{leaf(rng.choice(names), rng.choice(keys))} is 5 (same as {leaf(*sf)})." for sf in src]
                         + [f"{leaf(rng.choice(names), rng.choice(keys))} is {rng.randint(1, 60)}." for _ in range(n)])
