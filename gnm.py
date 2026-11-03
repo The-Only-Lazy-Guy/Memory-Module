@@ -1120,6 +1120,18 @@ def train_check(A):
                     lg, y = check_run(tr, bank.check, ev)
                     line.append(f"{name} {float(((lg > 0).float() == y).float().mean()):.3f}")
             print(f"step {step} loss {float(loss):.3f} | check right: " + " | ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+            if step == A.steps:                        # where it is wrong: by what governs, what arrives, the candidate
+                bins = {}
+                for (gov, old, new, cand, y_), l in zip(ev, lg.tolist()):
+                    nk = ("rule" if not new.startswith(("the ", "Correction")) else "correction" if new.startswith("Correction")
+                          else "copy" if "(same as" in new else "fact")
+                    key = (f"governs: {'fact' if gov.startswith('the ') else 'rule-add' if any(x.search(gov) for x in ADD_RE) else 'rule-other'}",
+                           f"arrives: {nk}", f"candidate: {'as said' if cand == new else cand if cand == '--' else 'a number'}",
+                           f"should {'pass' if y_ else 'fail'}")
+                    b = bins.setdefault(key, [0, 0])
+                    b[0], b[1] = b[0] + ((l > 0) == (y_ > .5)), b[1] + 1
+                for k, (ok, n) in sorted(bins.items(), key=lambda z: z[1][0] / z[1][1])[:12]:
+                    print(f"   {ok:3d}/{n:3d} right  {' | '.join(k)}", flush=True)
             bank.check.train()
             if A.save:
                 bank.save(A.save)
