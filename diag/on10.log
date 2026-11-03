@@ -1,0 +1,42 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3837.16it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+tick 50 | places 397, statements 577 | this window: rules arith 4/105 wrong, copy 1/566 wrong, found 0/326 wrong, merge 0/537 wrong, outcome 4/148 wrong, read 0/289 wrong, roundtrip 1/566 wrong, rule 2/509 wrong, stale 0/301 wrong, tool 0/153 wrong | wrong answers, first failure on the row: arith 4 | 78s
+     arith: 'What is the sum of (the difference between the last board of Pelba and': the sum of (: 0, 30 -> 20, should be 30
+     outcome: 'What is the sum of (the difference between the last board of Pelba and': said 20, truth 30, first failure: arith
+     copy: 'the old currency of Dunvin is 23 (same as the term of Vintha).': claims [], source 85
+     roundtrip: 'the memo of Zekpel is Zekka.': said back 'the memo of Zekpel is Zekpel.'
+     rule: 'the old age of Thapel is 23.': found place -1, rule for old age is at 208
+tick 100 | places 671, statements 1129 | this window: rules arith 2/154 wrong, copy 2/493 wrong, found 0/400 wrong, merge 0/462 wrong, outcome 1/150 wrong, read 0/312 wrong, roundtrip 2/493 wrong, rule 7/480 wrong, stale 0/354 wrong, tool 0/204 wrong | wrong answers, first failure on the row: arith 1 | 167s
+     copy: 'the schedule of Loba is 26 (same as the guest of Zekne).': claims [], source 275
+     arith: 'What is the smaller of (the difference between the first student of Or': the smaller of (: -1, -7 -> -1, should be -7
+     outcome: 'What is the smaller of (the difference between the first student of Or': said -1, truth -7, first failure: arith
+     roundtrip: 'later old locale values overwrite the previous old locale': said back 'value overwrite the previous old locale'
+     rule: 'the last band of Mertor is 8.': found place -1, rule for last band is at 229
+tick 150 | places 877, statements 1693 | this window: rules arith 1/204 wrong, copy 1/454 wrong, found 1/450 wrong, merge 0/425 wrong, outcome 7/150 wrong, read 0/305 wrong, roundtrip 2/454 wrong, rule 4/499 wrong, stale 0/402 wrong, tool 0/254 wrong | wrong answers, first failure on the row: no rule fired 5, found 1, arith 1 | 262s
+     rule: 'the quota of Mudun is 9.': found place 511, rule for quota is at 103
+     outcome: 'What is the quota of Dungor?': said 7, truth 23, first failure: no rule fired
+     roundtrip: 'quota figures that arrive later become the current quota': said back 'y supply point.'
+     found: 'What is the font of the memo of Ortha?': asked the memo of ortha, unknown
+     copy: 'the ship of Bane is 8 (same as the author of Rilzek).': claims [], source 247
+     arith: 'What is the smaller of the list of Salo and the birth of Lotha?': the smaller of: 26, 28 -> 28, should be 26
+tick 200 | places 1031, statements 2236 | this window: rules arith 3/205 wrong, copy 0/446 wrong, found 0/427 wrong, merge 1/413 wrong, outcome 5/150 wrong, read 0/276 wrong, roundtrip 3/446 wrong, rule 6/470 wrong, stale 0/405 wrong, tool 0/255 wrong | wrong answers, first failure on the row: no rule fired 4, arith 1 | 356s
+     roundtrip: 'rule: old currency figures that arrive later replace the old old curre': said back 'rule: old currency figures that arrive later replace the old'
+     outcome: 'What is the difference between (the difference between the license of ': said 2, truth -22, first failure: no rule fired
+     arith: 'What is the larger of (the sum of the quota of Lotha and the first stu': the difference between: 9, 8 -> -1, should be 1
+     rule: 'the quota of Nevin is 19.': found place 103, rule for quota is at 511
+     merge: 'the trace id of Lovin is A815-T.': the trace id of lovin into the trace id of savin
+tick 250 | places 1157, statements 2809 | this window: rules arith 2/203 wrong, copy 0/472 wrong, found 0/417 wrong, merge 3/439 wrong, outcome 6/150 wrong, read 0/261 wrong, roundtrip 3/472 wrong, rule 1/501 wrong, stale 0/403 wrong, tool 0/253 wrong | wrong answers, first failure on the row: no rule fired 5, arith 1 | 453s
+     arith: 'What is the larger of (the larger of the offer of Torba and the author': the larger of: 9, 8 -> 8, should be 9
+     rule: 'the quota of Dungor is 4.': found place -1, rule for quota is at 511
+     roundtrip: 'from now on, later old locale values replace the old old locale': said back 'from now on, later old locale values replace the old locale'
+     outcome: 'What is the smaller of the main seat of Bagor and (the larger of the o': said 5, truth 33, first failure: no rule fired
+     merge: 'the trace id of Pelor is N857-M.': the trace id of pelor into the trace id of torgor
+tick 300 | places 1258, statements 3375 | this window: rules arith 4/214 wrong, copy 1/457 wrong, found 0/425 wrong, merge 1/433 wrong, outcome 6/150 wrong, read 0/271 wrong, roundtrip 0/457 wrong, rule 5/503 wrong, stale 0/414 wrong, tool 0/264 wrong | wrong answers, first failure on the row: arith 3, no rule fired 3 | 551s
+     rule: 'the old age of Vinsa is 4.': found place -1, rule for old age is at 208
+     arith: 'What is the difference between (the larger of the font of Loka and the': the larger of: 25, 26 -> 25, should be 26
+     outcome: 'What is the difference between (the larger of the font of Loka and the': said 20, truth 21, first failure: arith
+     copy: 'the slot of Mertor is 12 (same as the first student of Muril).': claims [], source 775
+     merge: 'Correction: the zone of Lotor is now 26.': the zone of lotor split from place 76
+all ticks: rules arith 16/1085 wrong, copy 5/2888 wrong, found 1/2445 wrong, merge 5/2709 wrong, outcome 29/898 wrong, read 0/1714 wrong, roundtrip 11/2888 wrong, rule 25/2962 wrong, stale 0/2279 wrong, tool 0/1383 wrong
