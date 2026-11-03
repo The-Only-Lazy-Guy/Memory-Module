@@ -1,0 +1,183 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 5092.68it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+=== lived 100 ticks in 113s | rules: rules arith 0/58 wrong, copy 0/1048 wrong, merge 1/994 wrong, roundtrip 3/1048 wrong, rule 1/1021 wrong, settle 12/140 wrong, tool 0/117 wrong
+
+=== THE GRAPH
+places 646 (fact 615, rule 31) | entries 1109, per place mean 1.7 max 7 | edges per place mean 18.8 max 50 min 8 | reach mean 0.500 min 0.500 max 0.500, widened 0 narrowed 0
+relation claims (R[p] . L[j] > 1): 36; e.g. 'the quota of Dunlo is 8 (same as the gue' -> 'the guest of Baor is 30 (same '; 'the width of Rilzek is 27 (same as the l' -> 'the last band of Riltor is 3.'; 'the last board of Torsa is 1 (same as th' -> 'the list of Thator is 19 (same'
+label distances: places of one name 1.056 (n 1189), any two places 1.380, nearest other place per place: mean 0.809 min 0.380
+entries said back as written: 232/232; e.g. 
+arrive's check decisions: 140, kept what the tool made 28
+   place 396 reach 0.500 edges 14: [0] 'the last band of Neka is 27.'
+   place 621 reach 0.500 edges 14: [0] 'the checksum of Torril is W896-F.'
+   place 609 reach 0.500 edges 11: [0] 'the sync token of Rilzek is V385-M.'
+   place 17 reach 0.500 edges 50: [0] 'note: any further bid overwrite the previous ' || [1] 'please remember: any further bid count as inc' || [2] 'please remember: later bid values overwrite t' || [3] 'from now on, incoming bid numbers are amounts'
+   place 57 reach 0.500 edges 28: [0] 'please remember: every reported store should ' || [1] 'from now on, every reported store replace the' || [2] 'any further store are amounts to add to the c' || [3] 'rule: incoming store numbers replace the old '
+
+=== AN EASY QUESTION (1 step)
+
+--- QUESTION 'What is the list of Muzek?' | truth 28
+   step 1: 'What is the list of Muzek?' | nodes []
+      stand-in reads: ('the list of Muzek', 'lookup')
+      reader: start 'the' 1.00, 'zek' 0.00, 'of' 0.00
+              end 'the' 0.18, '?' 0.17, 'Mu' 0.17
+              function lookup 0.92, apply -0.36, before -0.23, both -0.25
+        walk (same): opened 34 places: 0:1.321 500:1.147 314:1.264 489:1.117 371:1.121 563:1.156 471:1.162 10:1.172 28:1.162 97:1.173 80:1.187 470:1.187 346:1.187 95:1.16 ...
+          cand 489: dist 1.117 reach 0.500 out relate -9.14 | made by 'the trace id of Neor is W146-B.' | newest 'the trace id of Thator is U215-P.'
+          cand 371: dist 1.121 reach 0.500 out relate -8.88 | made by 'the log ref of Dunlo is K802-X.' | newest 'the log ref of Dunlo is K802-X.'
+          cand 500: dist 1.147 reach 0.500 out relate -9.03 | made by 'the bid of Neor is 20.' | newest 'the bid of Neor is 20.'
+          cand 563: dist 1.156 reach 0.500 out relate -9.14 | made by 'the trace id of Dunmer is U771-W.' | newest 'the trace id of Dunmer is U771-W.'
+          cand 95: dist 1.160 reach 0.500 out relate -8.79 | made by 'the student of Dunlo is 4.' | newest 'the student of Dunlo is 16.'
+        -> place -1
+   step 2: 'What is <0> list of Muzek?' | nodes [(0, 'unknown')]
+      stand-in reads: None
+      reader: start nothing left 1.00, 'of' 0.00, 'zek' 0.00
+   ANSWER 'unknown' -> None | truth 28 | WRONG | 2 steps
+
+=== A HARD QUESTION (~10 steps)
+
+--- QUESTION 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between the series of Lone and (the sum of the ship of Thadun and the main seat of Torsa))?' | truth -9
+   step 1: 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between the series of Lone and (the sum of the ship of Thadun and the main seat of Torsa))?' | nodes []
+      stand-in reads: ('the main seat of Torsa', 'lookup')
+      reader: start 'the' 0.40, 'the' 0.36, 'the' 0.22
+              end 'the' 0.08, 'the' 0.08, 'main' 0.06
+              function lookup 0.92, apply -0.48, before -0.20, both -0.16
+        walk (same): opened 34 places: 0:1.321 500:1.147 314:1.264 489:1.117 371:1.121 563:1.156 471:1.162 10:1.172 28:1.162 97:1.173 80:1.187 470:1.187 346:1.187 95:1.16 ...
+          cand 489: dist 1.117 reach 0.500 out relate -9.14 | made by 'the trace id of Neor is W146-B.' | newest 'the trace id of Thator is U215-P.'
+          cand 371: dist 1.121 reach 0.500 out relate -8.88 | made by 'the log ref of Dunlo is K802-X.' | newest 'the log ref of Dunlo is K802-X.'
+          cand 500: dist 1.147 reach 0.500 out relate -9.03 | made by 'the bid of Neor is 20.' | newest 'the bid of Neor is 20.'
+          cand 563: dist 1.156 reach 0.500 out relate -9.14 | made by 'the trace id of Dunmer is U771-W.' | newest 'the trace id of Dunmer is U771-W.'
+          cand 95: dist 1.160 reach 0.500 out relate -8.79 | made by 'the student of Dunlo is 4.' | newest 'the student of Dunlo is 16.'
+        -> place -1
+   step 2: 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between the series of Lone and (the sum of <0> ship of Thadun and the main seat of Torsa))?' | nodes [(0, 'unknown')]
+      stand-in reads: ('the sum of <0>', 'apply')
+      reader: start 'the' 0.50, 'the' 0.27, 'the' 0.23
+              end 'the' 0.05, 'the' 0.05, 'the' 0.05
+              function lookup 0.92, apply -0.48, before -0.19, both -0.17
+        walk (same): opened 34 places: 0:1.321 500:1.147 314:1.264 489:1.117 371:1.121 563:1.156 471:1.162 10:1.172 28:1.162 97:1.173 80:1.187 470:1.187 346:1.187 95:1.16 ...
+          cand 489: dist 1.117 reach 0.500 out relate -9.14 | made by 'the trace id of Neor is W146-B.' | newest 'the trace id of Thator is U215-P.'
+          cand 371: dist 1.121 reach 0.500 out relate -8.88 | made by 'the log ref of Dunlo is K802-X.' | newest 'the log ref of Dunlo is K802-X.'
+          cand 500: dist 1.147 reach 0.500 out relate -9.03 | made by 'the bid of Neor is 20.' | newest 'the bid of Neor is 20.'
+          cand 563: dist 1.156 reach 0.500 out relate -9.14 | made by 'the trace id of Dunmer is U771-W.' | newest 'the trace id of Dunmer is U771-W.'
+          cand 95: dist 1.160 reach 0.500 out relate -8.79 | made by 'the student of Dunlo is 4.' | newest 'the student of Dunlo is 16.'
+        -> place -1
+   step 3: 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between <1> series of Lone and (the sum of <0> ship of Thadun and the main seat of Torsa))?' | nodes [(0, 'unknown'), (1, 'unknown')]
+      stand-in reads: ('the sum of <0>', 'apply')
+      reader: start 'the' 0.54, 'the' 0.44, 'the' 0.02
+              end 'the' 0.14, '?' 0.12, '))' 0.12
+              function lookup 0.92, apply -0.48, before -0.19, both -0.17
+        walk (same): opened 34 places: 0:1.321 500:1.147 314:1.264 489:1.117 371:1.121 563:1.156 471:1.162 10:1.172 28:1.162 97:1.173 80:1.187 470:1.187 346:1.187 95:1.16 ...
+          cand 489: dist 1.117 reach 0.500 out relate -9.14 | made by 'the trace id of Neor is W146-B.' | newest 'the trace id of Thator is U215-P.'
+          cand 371: dist 1.121 reach 0.500 out relate -8.88 | made by 'the log ref of Dunlo is K802-X.' | newest 'the log ref of Dunlo is K802-X.'
+          cand 500: dist 1.147 reach 0.500 out relate -9.03 | made by 'the bid of Neor is 20.' | newest 'the bid of Neor is 20.'
+          cand 563: dist 1.156 reach 0.500 out relate -9.14 | made by 'the trace id of Dunmer is U771-W.' | newest 'the trace id of Dunmer is U771-W.'
+          cand 95: dist 1.160 reach 0.500 out relate -8.79 | made by 'the student of Dunlo is 4.' | newest 'the student of Dunlo is 16.'
+        -> place -1
+   step 4: 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between <1> series of Lone and (the sum of <0> ship of Thadun and <2> main seat of Torsa))?' | nodes [(0, 'unknown'), (1, 'unknown'), (2, 'unknown')]
+      stand-in reads: ('the sum of <0>', 'apply')
+      reader: start 'the' 0.94, 'the' 0.06, 'the' 0.00
+              end 'the' 0.03, 'the' 0.03, 'the' 0.03
+              function lookup 0.92, apply -0.47, before -0.19, both -0.18
+        walk (same): opened 34 places: 0:1.321 500:1.147 314:1.264 489:1.117 371:1.121 563:1.156 471:1.162 10:1.172 28:1.162 97:1.173 80:1.187 470:1.187 346:1.187 95:1.16 ...
+          cand 489: dist 1.117 reach 0.500 out relate -9.14 | made by 'the trace id of Neor is W146-B.' | newest 'the trace id of Thator is U215-P.'
+          cand 371: dist 1.121 reach 0.500 out relate -8.88 | made by 'the log ref of Dunlo is K802-X.' | newest 'the log ref of Dunlo is K802-X.'
+          cand 500: dist 1.147 reach 0.500 out relate -9.03 | made by 'the bid of Neor is 20.' | newest 'the bid of Neor is 20.'
+          cand 563: dist 1.156 reach 0.500 out relate -9.14 | made by 'the trace id of Dunmer is U771-W.' | newest 'the trace id of Dunmer is U771-W.'
+          cand 95: dist 1.160 reach 0.500 out relate -8.79 | made by 'the student of Dunlo is 4.' | newest 'the student of Dunlo is 16.'
+        -> place -1
+   step 5: 'What is the smaller of (the smaller of the birth of Pelor and <3> board of Merdun) and (the difference between <1> series of Lone and (the sum of <0> ship of Thadun and <2> main seat of Torsa))?' | nodes [(0, 'unknown'), (1, 'unknown'), (2, 'unknown'), (3, 'unknown')]
+      stand-in reads: ('the sum of <0>', 'apply')
+      reader: start 'the' 0.78, 'the' 0.22, 'the' 0.00
+              end 'the' 0.06, '?' 0.05, 'main' 0.05
+              function lookup 0.93, apply -0.43, before -0.21, both -0.22
+        walk (same): opened 34 places: 0:1.321 500:1.147 314:1.264 489:1.117 371:1.121 563:1.156 471:1.162 10:1.172 28:1.162 97:1.173 80:1.187 470:1.187 346:1.187 95:1.16 ...
+          cand 489: dist 1.117 reach 0.500 out relate -9.14 | made by 'the trace id of Neor is W146-B.' | newest 'the trace id of Thator is U215-P.'
+          cand 371: dist 1.121 reach 0.500 out relate -8.88 | made by 'the log ref of Dunlo is K802-X.' | newest 'the log ref of Dunlo is K802-X.'
+          cand 500: dist 1.147 reach 0.500 out relate -9.03 | made by 'the bid of Neor is 20.' | newest 'the bid of Neor is 20.'
+          cand 563: dist 1.156 reach 0.500 out relate -9.14 | made by 'the trace id of Dunmer is U771-W.' | newest 'the trace id of Dunmer is U771-W.'
+          cand 95: dist 1.160 reach 0.500 out relate -8.79 | made by 'the student of Dunlo is 4.' | newest 'the student of Dunlo is 16.'
+        -> place -1
+   step 6: 'What is the smaller of (the smaller of the birth of Pelor and <3> board of Merdun) and (the difference between <1> series of Lone and (<4> sum of <0> ship of Thadun and <2> main seat of Torsa))?' | nodes [(0, 'unknown'), (1, 'unknown'), (2, 'unknown'), (3, 'unknown'), (4, 'unknown')]
+      stand-in reads: ('the birth of Pelor', 'lookup')
+      reader: start 'the' 1.00, 'the' 0.00, 'the' 0.00
+              end 'the' 0.03, ')' 0.02, 'the' 0.02
+              function lookup 0.93, apply -0.46, before -0.21, both -0.19
+        walk (same): opened 34 places: 0:1.321 500:1.147 314:1.264 489:1.117 371:1.121 563:1.156 471:1.162 10:1.172 28:1.162 97:1.173 80:1.187 470:1.187 346:1.187 95:1.16 ...
+          cand 489: dist 1.117 reach 0.500 out relate -9.14 | made by 'the trace id of Neor is W146-B.' | newest 'the trace id of Thator is U215-P.'
+          cand 371: dist 1.121 reach 0.500 out relate -8.88 | made by 'the log ref of Dunlo is K802-X.' | newest 'the log ref of Dunlo is K802-X.'
+          cand 500: dist 1.147 reach 0.500 out relate -9.03 | made by 'the bid of Neor is 20.' | newest 'the bid of Neor is 20.'
+          cand 563: dist 1.156 reach 0.500 out relate -9.14 | made by 'the trace id of Dunmer is U771-W.' | newest 'the trace id of Dunmer is U771-W.'
+          cand 95: dist 1.160 reach 0.500 out relate -8.79 | made by 'the student of Dunlo is 4.' | newest 'the student of Dunlo is 16.'
+        -> place -1
+   step 7: 'What is the smaller of (the smaller of <5> birth of Pelor and <3> board of Merdun) and (the difference between <1> series of Lone and (<4> sum of <0> ship of Thadun and <2> main seat of Torsa))?' | nodes [(0, 'unknown'), (1, 'unknown'), (2, 'unknown'), (3, 'unknown'), (4, 'unknown'), (5, 'unknown')]
+      stand-in reads: ('the smaller of <5>', 'apply')
+      reader: start 'the' 0.96, 'the' 0.04, 'the' 0.00
+              end 'the' 0.02, ')' 0.02, 'the' 0.02
+              function lookup 0.81, apply 0.31, before -0.61, both -0.48
+        walk (same): opened 34 places: 0:1.449 456:1.27 92:1.181 141:1.143 223:1.144 235:1.162 608:1.191 402:1.194 123:1.2 245:1.182 253:1.209 508:1.219 333:1.221 142:1.226 ...
+          cand 141: dist 1.143 reach 0.500 out relate -8.91 | made by 'the old currency of Rilsa is 12.' | newest 'the old currency of Rilsa is 12.'
+          cand 223: dist 1.144 reach 0.500 out relate -8.80 | made by 'the old locale of Lotor is 2.' | newest 'the old locale of Lotor is 2.'
+          cand 235: dist 1.162 reach 0.500 out relate -8.79 | made by 'the old locale of Thator is 13 (same as the q' | newest 'the old locale of Thator is 4.'
+          cand 92: dist 1.181 reach 0.500 out relate -8.99 | made by 'the birth of Pelor is 15.' | newest 'the birth of Pelor is 15.'
+          cand 245: dist 1.182 reach 0.500 out relate -9.10 | made by 'from now on, every reported old door increase' | newest 'rule: each new old door replace the old '
+        -> place -1
+   step 8: 'What is the smaller of (<6> difference between <1> series of Lone and (<4> sum of <0> ship of Thadun and <2> main seat of Torsa))?' | nodes [(0, 'unknown'), (1, 'unknown'), (2, 'unknown'), (3, 'unknown'), (4, 'unknown'), (5, 'unknown'), (6, 'unknown')]
+      stand-in reads: None
+      reader: start 'the' 0.94, 'a' 0.03, 'un' 0.01
+              end '<1>' 0.03, '?' 0.03, '<6>' 0.03
+              function lookup 0.65, apply 0.40, before -0.68, both -0.27
+        walk (same): opened 34 places: 0:1.493 320:1.304 21:1.151 223:1.13 297:1.087 245:1.072 235:1.101 406:1.139 509:1.159 421:1.172 141:1.177 475:1.186 608:1.189 402:1.206 ...
+          cand 245: dist 1.072 reach 0.500 out relate -9.09 | made by 'from now on, every reported old door increase' | newest 'rule: each new old door replace the old '
+          cand 297: dist 1.087 reach 0.500 out relate -9.06 | made by 'note: incoming old locale numbers become the ' | newest 'note: old locale figures that arrive lat'
+          cand 235: dist 1.101 reach 0.500 out relate -8.80 | made by 'the old locale of Thator is 13 (same as the q' | newest 'the old locale of Thator is 4.'
+          cand 223: dist 1.130 reach 0.500 out relate -8.81 | made by 'the old locale of Lotor is 2.' | newest 'the old locale of Lotor is 2.'
+          cand 406: dist 1.139 reach 0.500 out relate -8.94 | made by 'the old locale of Kapel is 15.' | newest 'the old locale of Kapel is 15.'
+        -> place -1
+   step 9: 'What is <7> series of Lone and (<4> sum of <0> ship of Thadun and <2> main seat of Torsa))?' | nodes [(0, 'unknown'), (1, 'unknown'), (2, 'unknown'), (3, 'unknown'), (4, 'unknown'), (5, 'unknown'), (6, 'unknown'), (7, 'unknown')]
+      stand-in reads: None
+      reader: start 'a' 0.41, 'un' 0.17, 'of' 0.12
+              end 'a' 0.45, '))' 0.28, '?' 0.27
+              function lookup -0.22, apply 0.39, before 0.08, both -0.56
+        tool: want 'a': no label relevant (routing [0.82, -0.06]) -> ['unknown']
+   step 10: 'What is <7> series of Lone and (<4> sum of <0> ship of Thadun and <2> main seat of Tors<8>))?' | nodes [(0, 'unknown'), (1, 'unknown'), (2, 'unknown'), (3, 'unknown'), (4, 'unknown'), (5, 'unknown'), (6, 'unknown'), (7, 'unknown'), (8, 'unknown')]
+      stand-in reads: None
+      reader: start 'un' 0.43, 'of' 0.16, 'of' 0.13
+              end 'un' 0.11, 'and' 0.10, '' 0.09
+              function lookup -0.10, apply 0.42, before -0.01, both -0.62
+   FAILED: IndexError index 8 is out of bounds for dimension 0 with size 8
+   ANSWER None -> None | truth -9 | WRONG | 10 steps
+
+=== A CHAIN QUESTION
+
+--- QUESTION 'What is the last band of the patient of Gorril?' | truth 15
+   step 1: 'What is the last band of the patient of Gorril?' | nodes []
+      stand-in reads: ('the patient of Gorril', 'lookup')
+      reader: start 'the' 1.00, 'the' 0.00, 'of' 0.00
+              end 'the' 0.21, '?' 0.17, 'of' 0.17
+              function lookup 0.92, apply -0.47, before -0.20, both -0.17
+        walk (same): opened 34 places: 0:1.321 500:1.147 314:1.264 489:1.117 371:1.121 563:1.156 471:1.162 10:1.172 28:1.162 97:1.173 80:1.187 470:1.187 346:1.187 95:1.16 ...
+          cand 489: dist 1.117 reach 0.500 out relate -9.14 | made by 'the trace id of Neor is W146-B.' | newest 'the trace id of Thator is U215-P.'
+          cand 371: dist 1.121 reach 0.500 out relate -8.88 | made by 'the log ref of Dunlo is K802-X.' | newest 'the log ref of Dunlo is K802-X.'
+          cand 500: dist 1.147 reach 0.500 out relate -9.03 | made by 'the bid of Neor is 20.' | newest 'the bid of Neor is 20.'
+          cand 563: dist 1.156 reach 0.500 out relate -9.14 | made by 'the trace id of Dunmer is U771-W.' | newest 'the trace id of Dunmer is U771-W.'
+          cand 95: dist 1.160 reach 0.500 out relate -8.79 | made by 'the student of Dunlo is 4.' | newest 'the student of Dunlo is 16.'
+        -> place -1
+   step 2: 'What is the last band of <0> patient of Gorril?' | nodes [(0, 'unknown')]
+      stand-in reads: ('the last band of <0>', 'apply')
+      reader: start 'the' 1.00, 'of' 0.00, 'ril' 0.00
+              end 'the' 0.10, '?' 0.10, 'of' 0.10
+              function lookup 0.92, apply -0.41, before -0.20, both -0.24
+        walk (same): opened 34 places: 0:1.321 500:1.147 314:1.264 489:1.117 371:1.121 563:1.156 471:1.162 10:1.172 28:1.162 97:1.173 80:1.187 470:1.187 346:1.187 95:1.16 ...
+          cand 489: dist 1.117 reach 0.500 out relate -9.14 | made by 'the trace id of Neor is W146-B.' | newest 'the trace id of Thator is U215-P.'
+          cand 371: dist 1.121 reach 0.500 out relate -8.88 | made by 'the log ref of Dunlo is K802-X.' | newest 'the log ref of Dunlo is K802-X.'
+          cand 500: dist 1.147 reach 0.500 out relate -9.03 | made by 'the bid of Neor is 20.' | newest 'the bid of Neor is 20.'
+          cand 563: dist 1.156 reach 0.500 out relate -9.14 | made by 'the trace id of Dunmer is U771-W.' | newest 'the trace id of Dunmer is U771-W.'
+          cand 95: dist 1.160 reach 0.500 out relate -8.79 | made by 'the student of Dunlo is 4.' | newest 'the student of Dunlo is 16.'
+        -> place -1
+   step 3: 'What is <1> last band of <0> patient of Gorril?' | nodes [(0, 'unknown'), (1, 'unknown')]
+      stand-in reads: None
+      reader: start nothing left 0.99, 'of' 0.01, 'ril' 0.00
+   ANSWER 'unknown' -> None | truth 15 | WRONG | 3 steps
+graph written: 646 places, 6069 edges, 36 claims, 3 question paths
