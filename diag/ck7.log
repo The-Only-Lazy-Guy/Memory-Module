@@ -1,0 +1,22 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2567.91it/s]
+rules as wants (seen phrasings): add: relevant to a tool 1.00 (mean best 1.12) | set: relevant to a tool 1.00 (mean best 1.10) | keep: relevant to a tool 1.00 (mean best 1.11)
+rules as wants (held phrasings): add: relevant to a tool 1.00 (mean best 1.11) | set: relevant to a tool 1.00 (mean best 1.10) | keep: relevant to a tool 1.00 (mean best 1.10)
+/marimo/frozen/ck7/gnm.py:1124: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"step {step} loss {float(loss):.3f} | check right: " + " | ".join(line) + f" | {time.time() - t0:.0f}s", flush=True)
+step 1000 loss 0.003 | check right: fresh keys 0.993 | held phrasings 0.852 | 49s
+step 2000 loss 0.000 | check right: fresh keys 0.993 | held phrasings 0.857 | 97s
+step 3000 loss 0.000 | check right: fresh keys 0.995 | held phrasings 0.940 | 143s
+    26/ 49 right  governs: rule-add | arrives: fact | candidate: a number | should pass
+    48/ 49 right  governs: rule-add | arrives: fact | candidate: as said | should fail
+    10/ 10 right  governs: rule-other | arrives: correction | candidate: a number | should fail
+    14/ 14 right  governs: rule-other | arrives: correction | candidate: as said | should pass
+    36/ 36 right  governs: rule-other | arrives: fact | candidate: a number | should fail
+    46/ 46 right  governs: rule-other | arrives: fact | candidate: as said | should pass
+     7/  7 right  governs: rule-add | arrives: copy | candidate: a number | should fail
+     8/  8 right  governs: rule-add | arrives: copy | candidate: as said | should pass
+    10/ 10 right  governs: rule-other | arrives: fact | candidate: -- | should fail
+     6/  6 right  governs: fact | arrives: rule | candidate: a number | should fail
+     7/  7 right  governs: fact | arrives: rule | candidate: as said | should pass
+     8/  8 right  governs: fact | arrives: correction | candidate: a number | should fail
