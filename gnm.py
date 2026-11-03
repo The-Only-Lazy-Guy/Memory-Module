@@ -6,6 +6,7 @@ The model only states what it wants: A to be B.
 import argparse
 import copy
 import json
+import os
 import random
 import re
 import time
@@ -927,6 +928,53 @@ def sentence(rng, vocab):
             else str(rng.randint(-300, 300)) if r < .9 else f"rule: {k}")
 
 
+REAL = "E:/walker_prefix_data/hotpot_cards.jsonl"     # 36,840 Wikipedia paragraphs (HotpotQA); every 10th held out
+_real = {}
+
+
+def real_text(held):
+    """real sentences (node <-> text must hold for any text, not my templates: tr9 said 0 / 120 back, tokens .02)"""
+    if held not in _real:
+        if os.path.exists(REAL):
+            paras = [json.loads(l)["memory"]["text"] for l in open(REAL, encoding="utf-8")]
+        else:                                          # the box: one public Wikipedia shard from the hub
+            import pyarrow.parquet as pq
+            from huggingface_hub import hf_hub_download
+            f = hf_hub_download("wikimedia/wikipedia", "20231101.en/train-00000-of-00041.parquet", repo_type="dataset")
+            paras = [p for t in pq.read_table(f, columns=["text"]).column("text").to_pylist()[:20000] for p in t.split("\n") if len(p) > 80]
+        out = []
+        for i, t in enumerate(paras):
+            if (i % 10 == 0) == held:                  # every 10th paragraph held out
+                out += [x.strip() for x in re.split(r"(?<=[.!?])\s+", t) if 2 <= len(x.split()) <= 40]
+        _real[held] = out
+    return _real[held]
+
+
+def any_text(rng, vocab=KEYS_TRAIN, held=False):
+    """what a node may have to hold: a real sentence (half), or the memory's own kinds of text (statements, rules,
+    questions, records, codes, numbers)"""
+    if rng.random() < .5:
+        return rng.choice(real_text(held))
+    return rng.choice([lambda: sentence(rng, vocab), lambda: question_text(rng, vocab),
+                       lambda: f"{leaf(_name(rng, 2), rng.choice(NOISE_KEYS))} is {_value(rng, 'code')}.",
+                       lambda: json.dumps({rng.choice(vocab): rng.randint(-500, 500) for _ in range(rng.randint(1, 3))})])()
+
+
+def question_text(rng, vocab):
+    nm, k = _name(rng, 2), " ".join(_key(rng, vocab, set()))
+    return rng.choice([f"What is {leaf(nm, k)}?", f"What was {leaf(nm, k)} before?",
+                       f"What is the sum of {leaf(nm, k)} and {leaf(_name(rng, 2), k)}?"])
+
+
+@torch.no_grad()
+def real_eval(model, rng, n=96):
+    """held-out real sentences: exact round trip and token accuracy"""
+    T = rng.sample(real_text(True), n)
+    D = [d.strip() for i in range(0, n, 32) for d in model.decode(*model.content(T[i:i + 32]), n=96)]
+    tok = [sum(a == b for a, b in zip(model.tok(t)["input_ids"], model.tok(d)["input_ids"])) / len(model.tok(t)["input_ids"]) for t, d in zip(T, D)]
+    return f"real exact {sum(t == d for t, d in zip(T, D)) / n:.3f} tokens {sum(tok) / n:.3f}", [(t, d) for t, d in zip(T, D) if t != d][:2]
+
+
 @torch.no_grad()
 def decode_eval(model, rng, vocab, n=256):
     """round trip text -> B -> text on fresh names (and keys), exact, by kind of sentence"""
@@ -953,7 +1001,7 @@ def train_decoder(A):
     rng = random.Random(A.seed)
     t0 = time.time()
     for step in range(1, A.steps + 1):
-        T = [sentence(rng, KEYS_TRAIN) for _ in range(A.batch)]
+        T = [any_text(rng) for _ in range(A.batch)]
         loss = model.decode_loss(*model.content(T), T)
         opt.zero_grad()
         loss.backward()
@@ -963,8 +1011,9 @@ def train_decoder(A):
             model.eval()
             tr, bad = decode_eval(model, rng, KEYS_TRAIN)
             he, bad2 = decode_eval(model, rng, KEYS_EVAL)
-            print(f"step {step} loss {float(loss):.3f} | round trip, train keys: {tr} | held keys: {he} | {time.time() - t0:.0f}s", flush=True)
-            for t, d in bad + bad2:
+            re_, bad3 = real_eval(model, rng)
+            print(f"step {step} loss {float(loss):.3f} | round trip, train keys: {tr} | held keys: {he} | {re_} | {time.time() - t0:.0f}s", flush=True)
+            for t, d in bad + bad2 + bad3:
                 print(f"     {t!r} -> {d!r}", flush=True)
             model.train()
             if A.save:
