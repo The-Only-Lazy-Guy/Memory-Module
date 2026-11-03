@@ -1053,23 +1053,37 @@ class CheckNet(nn.Module):
 
 
 def check_demos(rng, n, vocab=KEYS_TRAIN, held=False):
-    """situations a check meets: (rule text, old, new, candidate, pass?): a rule that adds keeps old + new; set / keep
-    keep the statement as said; a correction or a copy is kept as said whatever the rule; wrong sums fail"""
+    """situations a check meets (rule-or-not node, old, new, candidate, pass?), as arrive meets them: what arrives is
+    a fact, a correction, a copy or a rule; what was found to govern it is the rule of its key, a rule of another key,
+    or a fact. Only the rule of its own key that adds makes old + new pass and the statement alone fail; everywhere
+    else the statement as said passes and anything a tool made fails (online: a new rule's text was overwritten by
+    '--' that the check passed; rules of other keys were obeyed)"""
     out = []
     for _ in range(n):
-        nm, k = _name(rng, 2), " ".join(_key(rng, vocab, set()))
-        kind = rng.choice(("add", "set", "keep"))
-        rule, a, b = rule_text(rng, kind, k, held), amount(rng), amount(rng)
-        old = rng.choice([f"{leaf(nm, k)} is {a}.", str(a)])
-        how = rng.random()
-        new = (f"Correction: {leaf(nm, k)} is now {b}." if how < .2 else
-               f"{leaf(nm, k)} is {b} (same as {leaf(_name(rng, 2), k)})." if how < .3 else f"{leaf(nm, k)} is {b}.")
-        plain = how >= .3
-        good = str(a + b) if kind == "add" and plain else new
-        bad = str(a + b + rng.choice([-3, -1, 1, 2, 10])) if kind == "add" and plain else str(a + b)
-        out += [(rule, old, new, good, 1.), (rule, old, new, bad, 0.)]
-        if kind == "add" and plain:
-            out.append((rule, old, new, new, 0.))      # under a rule that adds, the statement alone fails
+        nm, k, k2 = _name(rng, 2), " ".join(_key(rng, vocab, set())), " ".join(_key(rng, vocab, set()))
+        kind = rng.choice(("add", "add", "set", "keep"))
+        a, b = amount(rng), amount(rng)
+        g = rng.random()
+        gov = (rule_text(rng, kind, k, held) if g < .6 else rule_text(rng, kind, k2, held) if g < .8
+               else f"{leaf(_name(rng, 2), k)} is {amount(rng)}.")
+        governs = g < .6
+        w = rng.random()
+        if w < .15:                                    # a rule arrives (old = the rule of its key before)
+            old, new = rule_text(rng, rng.choice(("add", "set", "keep")), k, held), rule_text(rng, kind, k, held)
+            plain = False
+        else:
+            old = rng.choice([f"{leaf(nm, k)} is {a}.", str(a)])
+            new = (f"Correction: {leaf(nm, k)} is now {b}." if w < .3 else
+                   f"{leaf(nm, k)} is {b} (same as {leaf(_name(rng, 2), k)})." if w < .4 else f"{leaf(nm, k)} is {b}.")
+            plain = w >= .4
+        adds = governs and kind == "add" and plain
+        made = rng.choice([str(a + b), str(a - b), str(max(a, b)), "--", str(a + b + rng.choice([-3, -1, 1, 2, 10]))])
+        if adds:
+            out += [(gov, old, new, str(a + b), 1.), (gov, old, new, new, 0.)]
+            if made != str(a + b):
+                out.append((gov, old, new, made, 0.))
+        else:
+            out += [(gov, old, new, new, 1.), (gov, old, new, made, 0.)]
     return out
 
 
@@ -2179,7 +2193,23 @@ def rule_rule(m, ev):
     yield Judgment("rule", ev["place"] == want, "relate", teach, ev, f"found place {ev['place']}, rule for {k[1]} is at {want}")
 
 
-RULES = [rule_merge, rule_found, rule_copy, rule_roundtrip, rule_tool, rule_arith, rule_read, rule_stale, rule_rule]
+def rule_settle(m, ev):
+    """measurement only (no lesson): the state arrive kept is the one the teacher would keep (old + new under the
+    rule of its key that adds, for a plain fact; the statement as said otherwise)"""
+    if ev["name"] != "insert" or ev.get("place") is None:
+        return
+    d = m.chose.get((ev["place"], ev.get("index")))
+    if not d:
+        return
+    g, o, n, keep, other = d
+    t = teacher(m)
+    gk, nk = t.key(g.text), t.key(n.text)
+    adds = (gk[0] == "rule" and nk[0] == "fact" and gk[1] == nk[1] and any(x.search(g.text) for x in ADD_RE)
+            and not n.text.startswith("Correction") and "(same as" not in n.text)
+    yield Judgment("settle", (keep is not n) == adds, "check", None, ev, f"kept {'made' if keep is not n else 'as said'} ({keep.text[:20]!r}) for {n.text[:40]!r} under {g.text[:40]!r}")
+
+
+RULES = [rule_merge, rule_found, rule_copy, rule_roundtrip, rule_tool, rule_arith, rule_read, rule_stale, rule_rule, rule_settle]
 
 
 class Ledger:
@@ -2657,7 +2687,9 @@ def arrive(m, text):
             r.stack += [m.item(gov.text), old, new]
             m.do(r, "apply", 2)
             made = r.stack.pop()
-            keep, other = (made, new) if check(m, gov, old, new, made) > check(m, gov, old, new, new) else (new, made)
+            # the statement as said is the state, unless it fails the governing check and what the tool made passes
+            fails = check(m, gov, old, new, new) < .5 and check(m, gov, old, new, made) > .5
+            keep, other = (made, new) if fails else (new, made)
             if keep is made:
                 r.stack.append(made)
                 m.do(r, "insert", True)
