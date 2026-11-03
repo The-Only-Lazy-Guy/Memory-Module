@@ -1096,6 +1096,14 @@ def train_check(A):
     tr.requires_grad_(False)
     bank = ToolBank.load(A.toolw, dev) if A.toolw else ToolBank().to(dev)
     rng = random.Random(A.seed)
+    if bank.nets:                                      # does a rule, read as a want, find a tool by its label alone?
+        with torch.no_grad():
+            for held in (False, True):
+                line = []
+                for kind in ("add", "set", "keep"):
+                    s_ = bank.gate(bank.query(tr, [rule_text(rng, kind, " ".join(_key(rng, KEYS_EVAL, set())), held) for _ in range(64)]))
+                    line.append(f"{kind}: relevant to a tool {float((s_.max(1).values > 1).float().mean()):.2f} (mean best {float(s_.max(1).values.mean()):.2f})")
+                print(f"rules as wants ({'held' if held else 'seen'} phrasings): " + " | ".join(line), flush=True)
     demos = check_demos(rng, A.demos)
     opt = torch.optim.AdamW(bank.check.parameters(), lr=A.lr)
     t0 = time.time()
