@@ -2708,8 +2708,9 @@ def resettle(m, bank, dev):
     n = 0
     for k, d, mk, a, b in zip(keys, D, made, said.tolist(), tool.tolist()):
         g, o, nw, keep, other = d
-        take = a < .5 and b > .5
-        if take != (keep is not nw):
+        took = keep is not nw                          # flip only when now sure the other way (on17: without this a
+        take = (a < .3 and b > .7) if not took else not (a > .7 or b < .3)   # lesson re-decided 1,525 entries back and forth)
+        if take != took:
             p, i = k
             new_keep = mk if take else nw
             m.g.chain[p][i] = (new_keep.node, m.g.chain[p][i][1])
