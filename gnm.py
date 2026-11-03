@@ -1105,6 +1105,34 @@ def read_demo(rng, kind, held=False, vocab=KEYS_TRAIN):
     return kind, f"the {k2} of", [rng.choice([f"{leaf(nm, k)} is {e}.", f"Correction: {leaf(nm, k)} is now {e}."])], [f"the {k2} of {e}"]
 
 
+OTHER_VERBS = (["translate", "sort", "reverse", "summarize", "rename", "delete", "explain", "describe", "shorten", "underline"],
+               ["count the words in", "spell out", "make a list of", "proofread", "encrypt", "capitalize", "paraphrase", "archive"])
+OTHER_OBJ = ["this sentence", "these names", "the message from {n}", "the {k} of {n}", "{n}'s notes", "the letters of {n}",
+             "everything {n} said", "the last line"]
+
+
+def asks_nothing(rng, held=False):
+    """text no tool here answers: talk, a statement, a lookup question, or a task no demo shows (open-set negatives;
+    held = the other verbs, never seen in learning)"""
+    nm, k = _name(rng, 2), " ".join(_key(rng, KEYS_TRAIN, set()))
+    other = f"{rng.choice(OTHER_VERBS[held])} {rng.choice(OTHER_OBJ).format(n=nm, k=k)}"
+    return other if held else rng.choice([rng.choice(CHATTER[0]), views(rng, nm, k), f"What is {leaf(nm, k)}?", other, other])
+
+
+def kinds_apart(q, kinds, tau=.1):
+    """contrastive want space: each want is pulled toward the wants of its own kind and away from all others (the kind
+    is the light supervision; 'none' = asks for nothing, never anyone's positive). Pull-to-label alone collapsed every
+    want onto the one general tool's label (tl10: cos .95 same kind / .93 other, chatter relevant at 1.10)"""
+    ids = {k: i for i, k in enumerate(dict.fromkeys(kinds))}
+    lab = torch.tensor([ids[k] for k in kinds], device=q.device)
+    pos = (lab[:, None] == lab[None]) & ~torch.eye(len(kinds), dtype=torch.bool, device=q.device)
+    pos &= torch.tensor([k != "none" for k in kinds], device=q.device)[:, None]
+    lg = (q @ q.T / tau).masked_fill(torch.eye(len(kinds), dtype=torch.bool, device=q.device), -1e9)
+    lp = lg - lg.logsumexp(1, keepdim=True)
+    has = pos.any(1)
+    return -((lp * pos).sum(1)[has] / pos.sum(1)[has]).mean() if has.any() else q.sum() * 0
+
+
 def tool_loss(tr, net, ins, outs):
     """per demo: how wrong this tool is (each output it should say, and how many)"""
     o, many, err = net(ins)
@@ -1115,13 +1143,16 @@ def tool_loss(tr, net, ins, outs):
     return L, err
 
 
-def learn(tr, bank, demos, st, A, spawn=True):
+def learn(tr, bank, demos, st, A, spawn=True, none=()):
     """read demos. Only the label vectors decide: a tool is relevant to a want q when q . label > 1 (direction = what it
     does, length = how broad); the most relevant one does it; when none is, the task is new and the model makes a tool
     whose label is that want (its network started from the closest tool). What the tools then do only teaches the
     labels: a tool that did a demo as well as it usually does is pulled toward that want; a tool that claimed a demo and
-    did it unusually badly for itself is pushed away from it. Returns the loss and where each demo went (-1: new task)."""
+    did it unusually badly for itself is pushed away from it. The wants themselves stay apart by kind (contrastive), and
+    text that asks for nothing (none) is relevant to no label. Returns the loss and where each demo went (-1: new task)."""
     q = bank.query(tr, [d[1] for d in demos], track=True)      # learns with the labels
+    qn = bank.query(tr, list(none)) if none else q[:0]
+    apart = kinds_apart(torch.cat([q, qn]), [d[0] for d in demos] + ["none"] * len(qn))
     groups = {}
     for i, d in enumerate(demos):
         groups.setdefault(len(d[2]), []).append(i)
@@ -1135,7 +1166,7 @@ def learn(tr, bank, demos, st, A, spawn=True):
             st.update(last=st["step"], newest=bank.spawn(q[b], int(s[b].argmax()) if bank.nets else None, A.scope), spawned=True)
             s = bank.gate(q)
         if not bank.nets:
-            return q.new_zeros((), requires_grad=True), torch.full((len(demos),), -1), s
+            return apart, torch.full((len(demos),), -1), s
         route = torch.where(s.max(1).values > 1, s.argmax(1), torch.full_like(s.argmax(1), -1))
         L = torch.full((len(bank.nets), len(demos)), 1e9, device=q.device)
         for n, ix in groups.items():
@@ -1147,7 +1178,9 @@ def learn(tr, bank, demos, st, A, spawn=True):
     S, m = bank.gate(q).T, .1                                          # [tool, demo]
     pull = typical & (torch.arange(len(bank.nets), device=q.device)[:, None] == best[None])
     push = ~typical & (S.detach() > 1 - m)
-    loss = (F.relu(1 + m - S) * pull).sum() / len(demos) + (F.relu(S - (1 - m)) * push).sum() / len(demos)
+    loss = (F.relu(1 + m - S) * pull).sum() / len(demos) + (F.relu(S - (1 - m)) * push).sum() / len(demos) + apart
+    if len(qn):                                                        # asks for nothing: below every label
+        loss = loss + F.relu(bank.gate(qn) - (1 - m)).sum() / len(demos)
     for n, ix in groups.items():
         for t, net in enumerate(bank.nets):
             sel = [k for k, i in enumerate(ix) if int(route[i]) == t]
@@ -1240,6 +1273,10 @@ def want_spread(tr, bank):
     return f"want cos same kind {np.mean(same):.2f} (min {min(same):.2f}), other kinds {np.mean(diff):.2f} (max {max(diff):.2f})"
 
 
+NOVEL = ["the square root of", "the average of", "the product of", "please water the plants", "What is the capital of France?"]
+# tasks no demo shows, beside the held verbs (OTHER_VERBS[1]); a "the X of" want reads like the join kind ("the {key} of")
+
+
 def bank_report(tr, bank, rng, n=96):
     """per kind of demo, values never seen: which tool its want finds, and whether that tool says the right thing;
     the held wants (never read) the same way; a nested use (a tool's output into another tool)"""
@@ -1266,7 +1303,10 @@ def bank_report(tr, bank, rng, n=96):
         if o:
             _, o2, _ = apply_tool(tr, bank, "the sum of", [say(o[0]), said(rng, c)])
             hit += bool(o2) and say(o2[0]) == str(max(a, b) + c)
-    return f"tools {len(bank.nets)} | " + " ".join(line) + f" | nested {hit / n:.2f} | {want_spread(tr, bank)}"
+    nothing = bank.gate(bank.query(tr, [asks_nothing(rng) for _ in range(n)])).max(1).values > 1
+    novel = bank.gate(bank.query(tr, NOVEL + [asks_nothing(rng, True) for _ in range(n)])).max(1).values > 1
+    return (f"tools {len(bank.nets)} | " + " ".join(line) + f" | nested {hit / n:.2f} | {want_spread(tr, bank)} | relevant to some"
+            f" label: asks nothing {float(nothing.float().mean()):.2f}, novel tasks {float(novel.float().mean()):.2f}")
 
 
 def train_tools(A):
@@ -1284,7 +1324,7 @@ def train_tools(A):
     st, opt, t0 = {"step": 0, "last": -10 ** 9, "newest": None}, None, time.time()
     for step in range(1, A.steps + 1):
         st.update(step=step, spawned=False)
-        loss, route, _ = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A)
+        loss, route, _ = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A, none=[asks_nothing(rng) for _ in range(A.batch // 4)])
         loss = (loss + F.binary_cross_entropy_with_logits(*relate_run(tr, bank.relate, relate_batch(rng, A.batch)))
                 + F.binary_cross_entropy_with_logits(*relate_run(tr, bank.relate, relate_grid(tr, rng))))
         if opt is None or st["spawned"]:
@@ -2522,7 +2562,7 @@ def online(A):
             total.add(j)
         loss = lessons(tr, bank, m, js)
         if A.batch:                                    # reading demos: the tool nodes learn (and are made)
-            l2 = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A)[0]
+            l2 = learn(tr, bank, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A, none=[asks_nothing(rng) for _ in range(A.batch // 4)])[0]
             loss = l2 if loss is None else loss + l2
             if st["spawned"]:
                 opt = torch.optim.AdamW([p for p in tr.parameters() if p.requires_grad] + list(bank.parameters()), lr=A.lr)
@@ -2603,7 +2643,7 @@ def episode(A):
         T = [sentence(rng, KEYS_TRAIN) for _ in range(A.batch)]
         st = {"step": step, "last": -10 ** 9, "newest": None}
         loss = (label_loss(tr, rng, KEYS_TRAIN, A.grid) + tr.decode_loss(*tr.content(T), T)
-                + learn(tr, tools, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A, spawn=False)[0])
+                + learn(tr, tools, [read_demo(rng, rng.choice(KINDS)) for _ in range(A.batch)], st, A, none=[asks_nothing(rng) for _ in range(A.batch // 4)], spawn=False)[0])
         opt.zero_grad()
         loss.backward()
         opt.step()
