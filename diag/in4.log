@@ -1,0 +1,156 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4834.48it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+=== lived 100 ticks in 114s | rules: rules arith 0/58 wrong, copy 0/1048 wrong, merge 1/994 wrong, roundtrip 3/1048 wrong, rule 1/1021 wrong, settle 12/140 wrong, tool 0/117 wrong
+
+=== THE GRAPH
+places 646 (fact 615, rule 31) | entries 1109, per place mean 1.7 max 7 | edges per place mean 18.8 max 50 min 8 | reach mean 0.500 min 0.500 max 0.500, widened 0 narrowed 0
+relation claims (R[p] . L[j] > 1): 36; e.g. 'the quota of Dunlo is 8 (same as the gue' -> 'the guest of Baor is 30 (same '; 'the width of Rilzek is 27 (same as the l' -> 'the last band of Riltor is 3.'; 'the last board of Torsa is 1 (same as th' -> 'the list of Thator is 19 (same'
+label distances: places of one name 1.056 (n 1189), any two places 1.380, nearest other place per place: mean 0.809 min 0.380
+entries said back as written: 232/232; e.g. 
+arrive's check decisions: 140, kept what the tool made 28
+   place 396 reach 0.500 edges 14: [0] 'the last band of Neka is 27.'
+   place 621 reach 0.500 edges 14: [0] 'the checksum of Torril is W896-F.'
+   place 609 reach 0.500 edges 11: [0] 'the sync token of Rilzek is V385-M.'
+   place 17 reach 0.500 edges 50: [0] 'note: any further bid overwrite the previous ' || [1] 'please remember: any further bid count as inc' || [2] 'please remember: later bid values overwrite t' || [3] 'from now on, incoming bid numbers are amounts'
+   place 57 reach 0.500 edges 28: [0] 'please remember: every reported store should ' || [1] 'from now on, every reported store replace the' || [2] 'any further store are amounts to add to the c' || [3] 'rule: incoming store numbers replace the old '
+
+=== AN EASY QUESTION (1 step)
+
+--- QUESTION 'What is the list of Muzek?' | truth 28
+   step 1: 'What is the list of Muzek?' | nodes []
+      stand-in reads: ('the list of Muzek', 'lookup')
+      reader: start 'the' 1.00, 'of' 0.00, 'list' 0.00
+              end 'zek' 1.00, 'Mu' 0.00, '?' 0.00
+              function lookup 0.99, apply -0.24, before -0.41, both -0.31
+        walk (same): opened 33 places: 0:1.318 34:0.913 554:0.012 553:0.896 185:0.965 538:0.97 200:1.028 39:1.031 242:1.08 243:1.085 552:1.094 195:1.098 484:1.137 510:1.153 ...
+          cand 554: dist 0.012 reach 0.500 IN relate +7.57 | made by 'the list of Muzek is 28.' | newest 'the list of Muzek is 28.'
+          cand 553: dist 0.896 reach 0.500 out relate -8.06 | made by 'the board of Muzek is 20.' | newest 'the board of Muzek is 20.'
+          cand 34: dist 0.913 reach 0.500 out relate -8.95 | made by 'the list of Bane is 9 (same as the series of ' | newest 'the list of Bane is 13.'
+          cand 185: dist 0.965 reach 0.500 out relate -9.10 | made by 'the list of Torsa is 9.' | newest 'the list of Torsa is 9.'
+          cand 538: dist 0.970 reach 0.500 out relate -8.93 | made by 'the list of Vingor is 20.' | newest 'the list of Vingor is 20.'
+        -> place 554
+   step 2: 'What is <0>?' | nodes [(0, 'the list of Muzek is 28.')]
+      stand-in reads: None
+      reader: start nothing left 1.00, '' 0.00, 'is' 0.00
+   ANSWER 'the list of Muzek is 28.' -> 28 | truth 28 | RIGHT | 2 steps
+
+=== A HARD QUESTION (~10 steps)
+
+--- QUESTION 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between the series of Lone and (the sum of the ship of Thadun and the main seat of Torsa))?' | truth -9
+   step 1: 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between the series of Lone and (the sum of the ship of Thadun and the main seat of Torsa))?' | nodes []
+      stand-in reads: ('the main seat of Torsa', 'lookup')
+      reader: start 'the' 0.37, 'the' 0.35, 'the' 0.26
+              end 'a' 1.00, 'the' 0.00, 'ors' 0.00
+              function lookup 1.00, apply -0.31, before -0.30, both -0.30
+        walk (same): opened 33 places: 0:1.434 9:0.951 613:0.015 147:0.833 605:0.868 144:0.914 185:0.931 571:0.942 184:0.953 100:0.979 366:0.992 148:1.025 612:1.071 356:1.107 ...
+          cand 613: dist 0.015 reach 0.500 IN relate +7.29 | made by 'the main seat of Torsa is 6.' | newest 'the main seat of Torsa is 6.'
+          cand 147: dist 0.833 reach 0.500 out relate -8.96 | made by 'the last board of Torsa is 1 (same as the lis' | newest 'the last board of Torsa is 1 (same as th'
+          cand 605: dist 0.868 reach 0.500 out relate -8.84 | made by 'the main seat of Lopel is 29.' | newest 'the main seat of Lopel is 29.'
+          cand 144: dist 0.914 reach 0.500 out relate -8.96 | made by 'the main seat of Basa is 24.' | newest 'the main seat of Basa is 24.'
+          cand 185: dist 0.931 reach 0.500 out relate -9.12 | made by 'the list of Torsa is 9.' | newest 'the list of Torsa is 9.'
+        -> place 613
+   step 2: 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between the series of Lone and (the sum of the ship of Thadun and <0>))?' | nodes [(0, 'the main seat of Torsa is 6.')]
+      stand-in reads: ('the ship of Thadun', 'lookup')
+      reader: start 'the' 0.45, 'the' 0.42, 'the' 0.13
+              end 'un' 1.00, '' 0.00, 'ship' 0.00
+              function lookup 0.99, apply -0.23, before -0.40, both -0.32
+        walk (same): opened 33 places: 0:1.384 536:1.184 293:0.995 154:0.002 194:0.964 71:1.005 160:1.009 176:1.045 46:1.081 598:1.09 153:1.098 29:1.122 368:1.154 378:1.158 ...
+          cand 154: dist 0.002 reach 0.500 IN relate +7.62 | made by 'the ship of Thadun is 12.' | newest 'the ship of Thadun is 28.'
+          cand 194: dist 0.964 reach 0.500 out relate -8.65 | made by 'the ship of Bane is 10.' | newest 'the ship of Bane is 24.'
+          cand 293: dist 0.995 reach 0.500 out relate -9.14 | made by 'the schedule of Thadun is 7.' | newest 'the schedule of Thadun is 7.'
+          cand 71: dist 1.005 reach 0.500 out relate -9.14 | made by 'the ship of Merpel is 8.' | newest 'the ship of Merpel is 20.'
+          cand 160: dist 1.009 reach 0.500 out relate -9.10 | made by 'the ship of Lozek is 9 (same as the first stu' | newest 'Correction: the ship of Lozek is now 20.'
+        -> place 154
+   step 3: 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between the series of Lone and (the sum of <1> and <0>))?' | nodes [(0, 'the main seat of Torsa is 6.'), (1, 'the ship of Thadun is 28.')]
+      stand-in reads: ('the sum of <1> and <0>', 'apply')
+      reader: start 'the' 0.68, 'the' 0.31, 'the' 0.00
+              end 'Lone' 1.00, '<0>' 0.00, '' 0.00
+              function lookup 0.99, apply -0.20, before -0.41, both -0.35
+        walk (same): opened 33 places: 0:1.248 118:0.148 557:0.795 117:0.983 540:1.018 493:1.023 510:1.024 530:1.026 4:1.072 145:1.143 610:1.162 572:1.165 116:1.171 433:1.174 ...
+          cand 118: dist 0.148 reach 0.500 IN relate +7.57 | made by 'the series of Lone is 25.' | newest 'the series of Lone is 25.'
+          cand 557: dist 0.795 reach 0.500 out relate -8.85 | made by 'the first cycle of Lone is 28.' | newest 'the first cycle of Lone is 28.'
+          cand 117: dist 0.983 reach 0.500 out relate -7.96 | made by 'the lane of Lone is Loka.' | newest 'the lane of Lone is Loka.'
+          cand 540: dist 1.018 reach 0.500 out relate -9.10 | made by 'the series of Loka is 9.' | newest 'the series of Loka is 9.'
+          cand 493: dist 1.023 reach 0.500 out relate -9.11 | made by 'the series of Rilvin is 10.' | newest 'the series of Rilvin is 10.'
+        -> place 118
+   step 4: 'What is the smaller of (the smaller of the birth of Pelor and the board of Merdun) and (the difference between <2> and (the sum of <1> and <0>))?' | nodes [(0, 'the main seat of Torsa is 6.'), (1, 'the ship of Thadun is 28.'), (2, 'the series of Lone is 25.')]
+      stand-in reads: ('the sum of <1> and <0>', 'apply')
+      reader: start 'the' 0.90, 'the' 0.09, 'the' 0.01
+              end 'un' 1.00, '<2>' 0.00, '<1>' 0.00
+              function lookup 0.98, apply -0.13, before -0.51, both -0.33
+        walk (same): opened 34 places: 0:1.413 155:1.256 106:1.035 22:0.996 105:0.016 560:0.855 313:0.95 236:1.068 94:1.072 556:1.072 420:1.074 462:1.078 553:1.108 548:1.111 ...
+          cand 105: dist 0.016 reach 0.500 IN relate +7.46 | made by 'the board of Merdun is 8.' | newest 'the board of Merdun is 8.'
+          cand 560: dist 0.855 reach 0.500 out relate -7.37 | made by 'the board of Merka is 15.' | newest 'the board of Merka is 15.'
+          cand 313: dist 0.950 reach 0.500 out relate -8.99 | made by 'the board of Pelvin is 30 (same as the first ' | newest 'the board of Pelvin is 11.'
+          cand 22: dist 0.996 reach 0.500 out relate -8.30 | made by 'the frame of Merdun is Merpel.' | newest 'the frame of Merdun is Merpel.'
+          cand 106: dist 1.035 reach 0.500 out relate -7.72 | made by 'the font of Merdun is 20.' | newest 'the font of Merdun is 3.'
+        -> place 105
+   step 5: 'What is the smaller of (the smaller of the birth of Pelor and <3>) and (the difference between <2> and (the sum of <1> and <0>))?' | nodes [(0, 'the main seat of Torsa is 6.'), (1, 'the ship of Thadun is 28.'), (2, 'the series of Lone is 25.'), (3, 'the board of Merdun is 8.')]
+      stand-in reads: ('the sum of <1> and <0>', 'apply')
+      reader: start 'the' 0.95, 'the' 0.05, 'the' 0.00
+              end 'or' 1.00, '<2>' 0.00, '<3>' 0.00
+              function lookup 1.00, apply -0.16, before -0.48, both -0.32
+        walk (same): opened 33 places: 0:1.364 456:0.989 92:0.003 574:0.682 421:0.926 231:1.038 26:1.05 277:1.059 491:1.08 6:1.17 490:1.172 38:1.188 390:1.197 383:1.202 ...
+          cand 92: dist 0.003 reach 0.500 IN relate +7.58 | made by 'the birth of Pelor is 15.' | newest 'the birth of Pelor is 15.'
+          cand 574: dist 0.682 reach 0.500 out relate -9.17 | made by 'the birth of Lotha is 28.' | newest 'the birth of Lotha is 28.'
+          cand 421: dist 0.926 reach 0.500 out relate +7.39 | made by 'please remember: incoming birth numbers incre' | newest 'please remember: incoming birth numbers '
+          cand 456: dist 0.989 reach 0.500 out relate -9.12 | made by 'the birth of Nedun is 2.' | newest '9'
+          cand 231: dist 1.038 reach 0.500 out relate -8.88 | made by 'the birth of Gorsa is 10.' | newest '24'
+        -> place 92
+   step 6: 'What is the smaller of (the smaller of <4> and <3>) and (the difference between <2> and (the sum of <1> and <0>))?' | nodes [(0, 'the main seat of Torsa is 6.'), (1, 'the ship of Thadun is 28.'), (2, 'the series of Lone is 25.'), (3, 'the board of Merdun is 8.'), (4, 'the birth of Pelor is 15.')]
+      stand-in reads: ('the sum of <1> and <0>', 'apply')
+      reader: start 'the' 0.99, 'the' 0.01, 'the' 0.00
+              end '<3>' 0.50, '<1>' 0.50, '<0>' 0.00
+              function lookup -0.24, apply 0.89, before -0.47, both -0.41
+        tool: want 'the smaller of' | inputs ['the birth of Pelor is 15.', 'the board of Merdun is 8.'] | routing [1.16, 0.15] -> tool 0 | output sets ['8', '8'] | count head [6.09, -6.28] | own error 0.08 | said ['8']
+   step 7: 'What is the smaller of (<5>) and (the difference between <2> and (the sum of <1> and <0>))?' | nodes [(0, 'the main seat of Torsa is 6.'), (1, 'the ship of Thadun is 28.'), (2, 'the series of Lone is 25.'), (3, 'the board of Merdun is 8.'), (4, 'the birth of Pelor is 15.'), (5, '8')]
+      stand-in reads: (' (the sum of <1> and <', 'apply')
+      reader: start 'the' 1.00, 'the' 0.00, 'the' 0.00
+              end '<1>' 1.00, '<0>' 0.00, '<2>' 0.00
+              function lookup -0.16, apply 0.89, before -0.51, both -0.45
+        tool: want 'the smaller of' | inputs ['8', 'the series of Lone is 25.', 'the ship of Thadun is 28.'] | routing [1.16, 0.15] -> tool 0 | output sets ['8', '8'] | count head [5.95, -6.08] | own error 0.03 | said ['8']
+   step 8: 'What is <6> and <0>))?' | nodes [(0, 'the main seat of Torsa is 6.'), (1, 'the ship of Thadun is 28.'), (2, 'the series of Lone is 25.'), (3, 'the board of Merdun is 8.'), (4, 'the birth of Pelor is 15.'), (5, '8'), (6, '8')]
+      stand-in reads: None
+      reader: start nothing left 1.00, '' 0.00, '' 0.00
+   ANSWER 'the main seat of Torsa is 6.' -> 6 | truth -9 | WRONG | 8 steps
+
+=== A CHAIN QUESTION
+
+--- QUESTION 'What is the last band of the patient of Gorril?' | truth 15
+   step 1: 'What is the last band of the patient of Gorril?' | nodes []
+      stand-in reads: ('the patient of Gorril', 'lookup')
+      reader: start 'the' 0.95, 'the' 0.05, 'last' 0.00
+              end 'ril' 1.00, 'the' 0.00, '?' 0.00
+              function lookup 1.00, apply -0.26, before -0.37, both -0.31
+        walk (same): opened 34 places: 0:1.46 20:1.277 37:0.086 53:0.723 386:0.774 547:0.86 18:0.9 376:0.918 280:0.922 598:0.949 143:0.962 339:0.963 164:0.967 405:0.967 ...
+          cand 37: dist 0.086 reach 0.500 IN relate +7.53 | made by 'the patient of Gorril is Gortor.' | newest 'the patient of Gorril is Gortor.'
+          cand 53: dist 0.723 reach 0.500 out relate -7.79 | made by 'the patient of Goror is Dunne.' | newest 'the patient of Goror is Dunne.'
+          cand 386: dist 0.774 reach 0.500 out relate -6.97 | made by 'the patient of Torril is Mermu.' | newest 'the patient of Torril is Mermu.'
+          cand 547: dist 0.860 reach 0.500 out relate -9.14 | made by 'the patient of Mergor is Gorba.' | newest 'the patient of Mergor is Gorba.'
+          cand 18: dist 0.900 reach 0.500 out relate -9.01 | made by 'the patient of Dunpel is Sazek.' | newest 'the patient of Dunpel is Sazek.'
+        -> place 37
+   step 2: 'What is the last band of <0>?' | nodes [(0, 'the patient of Gorril is Gorto')]
+      stand-in reads: ('the last band of <0>', 'apply')
+      reader: start 'the' 1.00, 'band' 0.00, nothing left 0.00
+              end '<0>' 1.00, 'of' 0.00, '' 0.00
+              function lookup -0.36, apply 0.88, before -0.32, both -0.44
+        tool: want 'the last band of' | inputs ['the patient of Gorril is Gortor.'] | routing [-0.41, 1.12] -> tool 1 | output sets ['the last band of Gortor', 'inororor'] | count head [6.59, -6.8] | own error -0.01 | said ['the last band of Gortor']
+   step 3: 'What is the last band of Gortor?' | nodes [(0, 'the patient of Gorril is Gorto')]
+      stand-in reads: ('the last band of Gortor', 'lookup')
+      reader: start 'the' 1.00, 'band' 0.00, 'last' 0.00
+              end 'or' 1.00, '?' 0.00, 'the' 0.00
+              function lookup 1.00, apply -0.23, before -0.41, both -0.30
+        walk (same): opened 33 places: 0:1.442 90:0.956 14:0.029 490:0.755 410:0.837 56:0.864 434:0.967 396:0.986 25:1.014 113:1.04 205:1.073 75:1.081 26:1.091 352:1.105 ...
+          cand 14: dist 0.029 reach 0.500 IN relate +6.83 | made by 'the last band of Gortor is 28 (same as the fi' | newest 'the last band of Gortor is 15.'
+          cand 490: dist 0.755 reach 0.500 out relate -9.12 | made by 'the last band of Pelor is 14.' | newest 'the last band of Pelor is 14.'
+          cand 410: dist 0.837 reach 0.500 out relate -9.14 | made by 'the last band of Toror is 9.' | newest 'the last band of Toror is 15.'
+          cand 56: dist 0.864 reach 0.500 out relate -9.16 | made by 'the last band of Riltor is 3.' | newest 'Correction: the last band of Riltor is n'
+          cand 90: dist 0.956 reach 0.500 out relate -9.19 | made by 'the last band of Dunpel is 2.' | newest 'Correction: the last band of Dunpel is n'
+        -> place 14
+   step 4: 'What is <1>?' | nodes [(0, 'the patient of Gorril is Gorto'), (1, 'the last band of Gortor is 15.')]
+      stand-in reads: None
+      reader: start nothing left 1.00, '' 0.00, 'is' 0.00
+   ANSWER 'the last band of Gortor is 15.' -> 15 | truth 15 | RIGHT | 4 steps
+graph written: 646 places, 6069 edges, 36 claims, 3 question paths
