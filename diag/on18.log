@@ -1,0 +1,51 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3180.37it/s]
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+tick 50 | places 397, statements 577 | this window: rules arith 4/110 wrong, copy 1/569 wrong, found 0/290 wrong, merge 0/540 wrong, outcome 4/148 wrong, read 0/279 wrong, roundtrip 1/569 wrong, rule 2/547 wrong, settle 3/35 wrong, stale 0/290 wrong, tool 0/168 wrong | wrong answers, first failure on the row: arith 4 | re-settled 0 | 105s
+     arith: 'What is the sum of (the difference between the last board of Pelba and': the sum of (: 0, 30 -> 20, should be 30
+     outcome: 'What is the sum of (the difference between the last board of Pelba and': said 20, truth 30, first failure: arith
+     copy: 'the old currency of Dunvin is 23 (same as the term of Vintha).': claims [], source 85
+     roundtrip: 'the memo of Zekpel is Zekka.': said back 'the memo of Zekpel is Zekpel.'
+     settle: 'the guest of Zekne is 6.': kept as said ('the guest of Zekne i') for 'the guest of Zekne is 6.' under 'rule: incoming guest numbers count as in'
+     rule: 'the old age of Thapel is 23.': found place -1, rule for old age is at 208
+tick 100 | places 671, statements 1129 | this window: rules arith 2/171 wrong, copy 2/505 wrong, found 0/295 wrong, merge 0/474 wrong, outcome 7/150 wrong, read 0/269 wrong, roundtrip 2/505 wrong, rule 8/521 wrong, settle 12/141 wrong, stale 0/295 wrong, tool 0/278 wrong | wrong answers, first failure on the row: no rule fired 6, arith 1 | re-settled 2 | 228s
+     outcome: 'What is the sum of the day of Basa and the schedule of Batha?': said 9, truth 27, first failure: no rule fired
+     settle: 'the old age of Rilba is 4.': kept as said ('the old age of Rilba') for 'the old age of Rilba is 4.' under 'from now on, incoming old age numbers sh'
+     arith: 'What is the larger of (the difference between the backup temperature o': the difference between: 22, 32 -> 10, should be -10
+     copy: 'the schedule of Loba is 26 (same as the guest of Zekne).': claims [], source 275
+     roundtrip: 'later old locale values overwrite the previous old locale': said back 'value overwrite the previous old locale'
+     rule: 'the last band of Mertor is 8.': found place -1, rule for last band is at 229
+tick 150 | places 877, statements 1693 | this window: rules arith 1/226 wrong, copy 1/467 wrong, found 1/294 wrong, merge 0/438 wrong, outcome 16/150 wrong, read 3/249 wrong, roundtrip 2/467 wrong, rule 4/535 wrong, settle 13/232 wrong, stale 0/292 wrong, tool 0/350 wrong | wrong answers, first failure on the row: no rule fired 14, found 1, arith 1 | re-settled 12 | 366s
+     outcome: 'What is the last band of Balo?': said 6, truth 28, first failure: no rule fired
+     read: 'What is the difference between the worker of Torne and (the larger of ': read '3'
+     rule: 'the quota of Mudun is 9.': found place 511, rule for quota is at 103
+     settle: 'the series of Mupel is 2.': kept as said ('the series of Mupel ') for 'the series of Mupel is 2.' under 'please remember: series figures that arr'
+     roundtrip: 'quota figures that arrive later become the current quota': said back 'y supply point.'
+     found: 'What is the font of the memo of Ortha?': asked the memo of ortha, unknown
+     copy: 'the ship of Bane is 8 (same as the author of Rilzek).': claims [], source 247
+     arith: 'What is the smaller of the list of Salo and the birth of Lotha?': the smaller of: 26, 28 -> 28, should be 26
+tick 200 | places 1031, statements 2236 | this window: rules arith 0/229 wrong, copy 0/463 wrong, found 0/308 wrong, merge 1/430 wrong, outcome 14/150 wrong, read 1/221 wrong, roundtrip 3/463 wrong, rule 6/510 wrong, settle 17/253 wrong, stale 0/308 wrong, tool 2/381 wrong | wrong answers, first failure on the row: no rule fired 14 | re-settled 14 | 530s
+     roundtrip: 'rule: old currency figures that arrive later replace the old old curre': said back 'rule: old currency figures that arrive later replace the old'
+     settle: 'the list of Thazek is 5.': kept as said ('the list of Thazek i') for 'the list of Thazek is 5.' under 'from now on, list figures that arrive la'
+     outcome: 'What is the difference between (the difference between the license of ': said 2, truth -22, first failure: no rule fired
+     rule: 'the quota of Nevin is 19.': found place 103, rule for quota is at 511
+     tool: 'the category of Bazek is 10.': numbers in, '(nothing)' out
+     read: 'What is the zone of the service of Neril?': read '22'
+     merge: 'the trace id of Lovin is A815-T.': the trace id of lovin into the trace id of savin
+tick 250 | places 1157, statements 2809 | this window: rules arith 3/225 wrong, copy 0/484 wrong, found 0/302 wrong, merge 3/451 wrong, outcome 19/150 wrong, read 3/223 wrong, roundtrip 3/484 wrong, rule 1/540 wrong, settle 12/278 wrong, stale 0/302 wrong, tool 0/399 wrong | wrong answers, first failure on the row: no rule fired 18, arith 1 | re-settled 0 | 714s
+     settle: 'the shelf of Thapel is 3.': kept as said ('the shelf of Thapel ') for 'the shelf of Thapel is 3.' under 'note: each new shelf increase the shelf '
+     outcome: 'What is the last band of Ortha?': said 2, truth 11, first failure: no rule fired
+     arith: 'What is the larger of (the larger of the offer of Torba and the author': the larger of: 9, 8 -> 8, should be 9
+     read: 'What is the sum of (the sum of the worker of Torpel and (the larger of': read '22'
+     rule: 'the quota of Dungor is 4.': found place -1, rule for quota is at 511
+     roundtrip: 'from now on, later old locale values replace the old old locale': said back 'from now on, later old locale values replace the old locale'
+     merge: 'the trace id of Pelor is N857-M.': the trace id of pelor into the trace id of torgor
+tick 300 | places 1258, statements 3375 | this window: rules arith 4/236 wrong, copy 1/474 wrong, found 0/305 wrong, merge 1/450 wrong, outcome 22/150 wrong, read 0/223 wrong, roundtrip 0/474 wrong, rule 6/542 wrong, settle 17/287 wrong, stale 0/305 wrong, tool 0/424 wrong | wrong answers, first failure on the row: no rule fired 18, arith 4 | re-settled 0 | 902s
+     settle: 'the birth of Vinsa is 3.': kept as said ('the birth of Vinsa i') for 'the birth of Vinsa is 3.' under 'please remember: each new birth should b'
+     outcome: 'What is the main seat of the patient of Dunvin?': said 8, truth 22, first failure: no rule fired
+     arith: 'What is the difference between (the larger of the font of Loka and the': the larger of: 25, 26 -> 25, should be 26
+     rule: 'the first locale of Nedun is 22.': found place 265, rule for first locale is at 1160
+     copy: 'the slot of Mertor is 12 (same as the first student of Muril).': claims [], source 775
+     merge: 'Correction: the zone of Lotor is now 26.': the zone of lotor split from place 76
+all ticks: rules arith 14/1197 wrong, copy 5/2962 wrong, found 1/1794 wrong, merge 5/2783 wrong, outcome 82/898 wrong, read 7/1464 wrong, roundtrip 11/2962 wrong, rule 27/3195 wrong, settle 74/1226 wrong, stale 0/1792 wrong, tool 2/2000 wrong
