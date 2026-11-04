@@ -35,3 +35,5 @@ step 200 loss 136.14 [salience hint 3.32, label of what it made 1.67, functions 
 step 201: no label relevant to a sub want -> made function 15
 step 222: no label relevant to a min want -> made function 16
 step 242: no label relevant to a add want -> made function 17
+step 250 loss 188.76 [salience hint 7.58, relation 10.79, label of what it made 2.11, functions 151.93, labels 1.36, check 12.96, apart 1.94, asks nothing 0.01, round trip 0.09] functions 18 | exact: add 0/49, before 0/31, both 0/37, copy 0/16, fill 71/367, fix 2/26, inc 1/50, lookup 10/263, max 0/17, min 0/14, operands 0/254, split 12/376, store 410/486, sub 0/23 | inputs the walk brought: add 147/147, before 109/109, both 115/115, copy 32/32, fedit 100/100, fill 746/746, fix 313/313, fnew 100/100, inc 100/100, lookup 526/526, max 51/51, min 42/42, operands 127/127, split 376/376, store 873/972, sub 69/69 | 1245s
+step 271: no label relevant to a max want -> made function 18
