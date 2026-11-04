@@ -1,0 +1,18 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2395.76it/s]
+=== text -> B -> text (the translator), and the heads' label against the translator's
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+rule: round trip 8/8 | heads label cos -0.012, nearest is its own 0.12 | 
+fact: round trip 40/40 | heads label cos -0.031, nearest is its own 0.05 | 
+copy: round trip 12/12 | heads label cos -0.054, nearest is its own 0.08 | 
+correction: round trip 12/12 | heads label cos -0.015, nearest is its own 0.08 | 
+question lookup: round trip 8/8 | heads label cos -0.118, nearest is its own 0.12 | 
+part: round trip 28/38 | heads label cos -0.052, nearest is its own 0.05 | 'the pilot of Lozek before' -> 'the pilot of Lozek'; 'the primary cycle of Mergor before' -> 'the primary cycle of Mergor'
+question before: round trip 5/5 | heads label cos -0.077, nearest is its own 0.20 | 
+question coexist: round trip 5/5 | heads label cos -0.127, nearest is its own 0.20 | 
+question chain: round trip 8/8 | heads label cos -0.132, nearest is its own 0.12 | 
+question ops: round trip 15/16 | heads label cos -0.017, nearest is its own 0.06 | 'What is the smaller of the main offer of Lodun and (the larger of (the sum of the fee of Nelo and the category of Torka) and the fee of Muzek)?' -> 'What is the smaller of the main offer of Lodun and (the larger of (the fee of Nelo and the category of Torka) and the fee of Muzek)?'
+value: round trip 27/27 | heads label cos -0.019, nearest is its own 0.04 | 
+typed string: round trip 0/30 | heads label cos 0.005, nearest is its own 0.03 | 'string Gorka' -> '_1955_1.jpg Gorka_1955_1.jpg Gorka_1955_1.jpg Gorka_1955_1.jpg Gorka_1955_1.jpg Gorka_1955'; 'string Mervin' -> 'ball Mervinball Mervinball Mervinball Mervinball Mervinball Mervinball Mervinball Mervinball Mervinball Mervinball Mervinball Mervin'
+chatter: round trip 12/12 | heads label cos -0.096, nearest is its own 0.08 | 
