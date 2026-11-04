@@ -732,10 +732,12 @@ class Heads(nn.Module):
 
 class ToolNet(nn.Module):
     """one function node: its label (key: the wants it answers), its code (K latents: the function as a node, read,
-    passed and edited like any node) and its own network, run as net(code, want, inputs). Out: up to M nodes, how many
-    it means, where each goes, whether one is a function, and its own guess of how wrong it is"""
+    passed and edited like any node) and its own network, run as net(code, want, signal, inputs). An output node is
+    made of up to S pieces, each either a span taken as it is from one of its inputs (where it starts and ends:
+    pointers over the inputs' tokens) or up to G latents it makes itself; a function given back is K latents. Also:
+    how many outputs it means, where each goes, whether one is a function, and its own guess of how wrong it is"""
 
-    def __init__(self, d=128, c=256, K=48, M=2, R=10, L=96):
+    def __init__(self, d=128, c=256, K=48, M=2, S=4, G=8, R=10, L=96):
         super().__init__()
         self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))
         self.register_buffer("mu", torch.tensor(5.))        # the error it usually gets, and its spread
@@ -743,42 +745,145 @@ class ToolNet(nn.Module):
         self.register_buffer("used", torch.tensor(0.))      # the last step a want fired it
         self.role = nn.Parameter(torch.randn(R, c) * .02)
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
-        self.out = nn.Parameter(torch.randn(M * K, c) * .02)
         self.code = nn.Parameter(torch.randn(K, c) * .02)
         self.me = nn.Parameter(torch.randn(c) * .02)
         self.wq = nn.Linear(d, c)
         self.wv = nn.Linear(1, c)                              # the signal that fired it (its value: sign x strength)
+        self.codeq = nn.Parameter(torch.randn(M * K, c) * .02)   # a function given back
+        self.segq = nn.Parameter(torch.randn(M * S, c) * .02)    # each piece of each output
+        self.genq = nn.Parameter(torch.randn(M * S * G, c) * .02)   # the latents a made piece can hold
         self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 3)
         self.many, self.err, self.where, self.isfn = nn.Linear(c, M), nn.Linear(c, 1), nn.Linear(c, 2 + R), nn.Linear(c, 1)
-        self.keep = nn.Linear(c, 1)                            # which slots an output keeps (a node is as long as it says)
-        self.cq, self.ck, self.cg = nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, 1)   # each output slot may take an
-        #                                         input token's value as it is (copy), mixed with what it makes (gate)
-        self.K, self.M, self.R, self.L = K, M, R, L
+        self.kind = nn.Linear(c, 3)                            # a piece: 0 no more pieces, 1 a span of an input, 2 made
+        self.ps, self.pe, self.pk, self.px = nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c)
+        self.gkeep = nn.Linear(c, 1)                           # how many latents a made piece keeps
+        self.K, self.M, self.S, self.G, self.R, self.L = K, M, S, G, R, L
 
     def forward(self, ins, q, code=None, v=1.):
-        code = F.layer_norm(self.code if code is None else code, (self.code.shape[-1],))
-        parts = [self.out, code + self.me, self.wq(q)[None], self.wv(torch.tensor([float(v)], device=q.device))[None]]
-        parts += [z[:self.L] + self.role[r] + self.pos[:len(z[:self.L])] for r, z in enumerate(ins[:self.R])]
-        h = self.f(torch.cat(parts)[None])[0]
-        y = F.layer_norm(h[:len(self.out)], (h.shape[-1],))
+        c = self.code.shape[-1]
+        code = F.layer_norm(self.code if code is None else code, (c,))
         toks = [z[:self.L] for z in ins[:self.R]]
-        self.seen = None
-        if toks:                                       # what each slot takes from the inputs' tokens, as they are
-            at = len(self.out) + self.K + 2
-            ctx, raw = h[at:at + sum(len(z) for z in toks)], F.layer_norm(torch.cat(toks), (y.shape[-1],))
-            a = (self.cq(y) @ self.ck(ctx).T / y.shape[-1] ** .5).softmax(-1)
-            g = torch.sigmoid(self.cg(y))
-            y = g * (a @ raw) + (1 - g) * y
-            self.seen = (a.detach(), g.detach().squeeze(-1), [len(z) for z in toks])
-        outs = [y[j * self.K:(j + 1) * self.K] for j in range(self.M)]
-        g = y.mean(0)
-        return (outs, self.many(g), self.err(g).squeeze(-1), torch.stack([self.where(o.mean(0)) for o in outs]),
-                torch.stack([self.isfn(o.mean(0)).squeeze(-1) for o in outs]), torch.stack([self.keep(o).squeeze(-1) for o in outs]))
+        parts = [self.codeq, self.segq, self.genq, code + self.me, self.wq(q)[None], self.wv(torch.tensor([float(v)], device=q.device))[None]]
+        parts += [z + self.role[r] + self.pos[:len(z)] for r, z in enumerate(toks)]
+        h = self.f(torch.cat(parts)[None])[0]
+        a, b = self.M * self.K, self.M * self.S
+        e = a + b + b * self.G
+        hs = h[a:a + b].view(self.M, self.S, c)
+        o = {"code": F.layer_norm(h[:a], (c,)).view(self.M, self.K, c), "hs": hs, "kind": self.kind(hs),
+             "gen": F.layer_norm(h[a + b:e], (c,)).view(self.M, self.S, self.G, c),
+             "gkeep": self.gkeep(h[a + b:e]).view(self.M, self.S, self.G)}
+        n = sum(len(z) for z in toks)
+        o["ctx"] = h[e + self.K + 2:e + self.K + 2 + n]
+        o["raw"] = torch.cat(toks) if toks else h.new_zeros(0, c)       # the inputs' tokens as they are
+        o["owner"] = torch.cat([torch.full((len(z),), r, device=h.device) for r, z in enumerate(toks)]) if toks else h.new_zeros(0)
+        o["keys"] = self.pk(o["ctx"])
+        o["start"] = self.ps(hs) @ o["keys"].T
+        g, every = hs.mean(1), h[:e].mean(0)
+        o["many"], o["err"] = self.many(every), self.err(every).squeeze(-1)
+        o["where"], o["isfn"] = self.where(g), self.isfn(g).squeeze(-1)
+        return o
+
+    def end_logits(self, o, j, s, st):
+        """where a span that starts at token st ends: at st or after, in the same input"""
+        lg = (self.pe(o["hs"][j, s]) + self.px(o["ctx"][st])) @ o["keys"].T
+        bad = (torch.arange(len(lg), device=lg.device) < st) | (o["owner"] != o["owner"][st])
+        return lg.masked_fill(bad, -1e9)
 
 
-def kept(z, k):
-    """an output's node: the slots it keeps (at least one)"""
-    return z[k > 0] if bool((k > 0).any()) else z[:1]
+def assemble(net, o, j, plan=None):
+    """output j as a node: its pieces put together (its own choices, or in demos the pieces the target is made of:
+    ("span", first token, last token) / ("made", how many latents)); returns the node's value and its pieces"""
+    rows, pieces = [], []
+    for s_ in range(net.S):
+        if plan is not None:
+            if s_ >= len(plan):
+                break
+            pc = plan[s_]
+        else:
+            kd = o["kind"][j, s_].clone()
+            if not len(o["raw"]):
+                kd[1] = -1e9                           # no inputs: nothing to take a span from
+            k = int(kd.argmax())
+            if k == 0:
+                break
+            if k == 1:
+                st_ = int(o["start"][j, s_].argmax())
+                pc = ("span", st_, int(net.end_logits(o, j, s_, st_).argmax()))
+            else:
+                pc = ("made", max(1, int((o["gkeep"][j, s_] > 0).sum())))
+        rows.append(o["raw"][pc[1]:pc[2] + 1] if pc[0] == "span" else o["gen"][j, s_, :pc[1]])
+        pieces.append(pc)
+    return (torch.cat(rows) if rows else o["gen"][j, 0, :1]), pieces
+
+
+def plan_pieces(tid, ins, S, G):
+    """the pieces a target text (its tokens) is made of, given the inputs ((rows, tokens or None) each): the longest
+    runs found as they are in an input (spans, numbered across the inputs' tokens) and what is left (made: target
+    positions i..j); None when that takes more than S pieces or a made piece longer than G"""
+    T = len(tid)
+    best, at = [(0, 0)] * (T + 1), 0                   # best[i]: the longest run of the target from i found in an input
+    for n_rows, t in ins:
+        if t is not None:
+            nxt = [0] * (len(t) + 1)
+            for i in range(T - 1, -1, -1):
+                cur = [0] * (len(t) + 1)
+                for a in range(len(t) - 1, -1, -1):
+                    if t[a] == tid[i]:
+                        cur[a] = nxt[a + 1] + 1
+                        if cur[a] > best[i][0]:
+                            best[i] = (cur[a], at + a)
+                nxt = cur
+        at += n_rows
+    pieces, i = [], 0
+    while i < T:
+        n, g = best[i]
+        if n:
+            pieces.append(("span", g, g + n - 1))
+            i += n
+            continue
+        j = i + 1
+        while j < T and best[j][0] == 0:
+            j += 1
+        pieces.append(("made", i, j))
+        i = j
+    if len(pieces) > S or any(pc[0] == "made" and pc[2] - pc[1] > G for pc in pieces):
+        return None
+    return pieces
+
+
+def say_loss(fm, A, net, o, j, target, order):
+    """how wrong output j is as the text it should say: which pieces it is made of (kind, where each span starts and
+    ends, how many latents a made piece keeps and how close they are to what the encoder makes of those words), and
+    what the assembled node says. Returns (loss, decode loss, the node, the target's pieces, its tokens) or None when
+    the target cannot be made of the pieces an output has"""
+    tid = fm.tr.tok(target)["input_ids"]
+    plan = plan_pieces(tid, [(len(n.B[:net.L]), n.toks[:net.L] if n.toks is not None else None) for n in order[:net.R]], net.S, net.G)
+    if plan is None:
+        fm.count("cannot be made of pieces")
+        return None
+    dev = o["kind"].device
+    with torch.no_grad():
+        zt, mt = fm.tr.content([target])
+        zt = zt[0][mt[0]]
+    L = 0
+    for s_ in range(min(len(plan) + 1, net.S)):
+        k = 0 if s_ == len(plan) else 1 if plan[s_][0] == "span" else 2
+        L = L + F.cross_entropy(o["kind"][j, s_][None], torch.tensor([k], device=dev))
+        if k == 1:
+            a, b = plan[s_][1], plan[s_][2]
+            L = L + F.cross_entropy(o["start"][j, s_][None], torch.tensor([a], device=dev))
+            L = L + F.cross_entropy(net.end_logits(o, j, s_, a)[None], torch.tensor([b], device=dev))
+        elif k == 2:
+            i0, i1 = plan[s_][1], plan[s_][2]
+            L = L + F.binary_cross_entropy_with_logits(o["gkeep"][j, s_], (torch.arange(net.G, device=dev) < i1 - i0).float())
+            if len(zt) == len(tid):                    # what the encoder makes of those words, there
+                L = L + F.mse_loss(o["gen"][j, s_, :i1 - i0], zt[i0:i1]) * A.mse
+    want_pcs = [(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan]
+    z, _ = assemble(net, o, j, want_pcs)
+    dl = fm.tr.decode_loss(z[None], torch.ones(1, len(z), dtype=torch.bool, device=dev), [target])
+    with torch.no_grad():                              # exact = its own pieces are the target's, and what it makes says it
+        exact = assemble(net, o, j)[1] == want_pcs and float(dl) < A.exact
+    return L + dl, exact, z, plan, tid
 
 
 class ToolBank(nn.Module):
@@ -870,6 +975,7 @@ class Node:
     def __init__(self, B, L, R, kind="work", place=-1, idx=-1, parent=None, fn=-1):
         self.B, self.L, self.R, self.kind, self.place, self.idx, self.parent, self.fn = B, L, R, kind, place, idx, parent, fn
         self.text = None                               # the text it was read from (traces only)
+        self.toks = None                               # the token each row of B is (known when read from text, or in demos)
 
 
 class Signal:
@@ -891,6 +997,7 @@ class FM:
         self.g, self.signals, self.t, self.explore = Graph(bank.d), [], 0, 0.
         self.budget, self.look, self.newest, self.kappa, self.same = budget, look, newest, kappa, same
         self.stats, self.firings, self.show, self.capture, self.said, self.trace, self.walks = {}, [], False, None, [], False, []
+        self.fit = {}                                  # (function, purpose) -> how often it did that exactly (labels)
 
     def count(self, k, n=1):
         self.stats[k] = self.stats.get(k, 0) + n
@@ -903,17 +1010,22 @@ class FM:
         L, R = self.heads(B)
         out = [Node(b, l, r) for b, l, r in zip(B, L, R)]
         for n, t in zip(out, texts):
-            n.text = t
+            n.text, ids = t, self.tr.tok(t)["input_ids"]
+            n.toks = ids if len(ids) == len(n.B) else None
         return out
 
-    def node(self, z, **kw):
+    def node(self, z, toks=None, **kw):
         L, R = self.heads([z])
-        return Node(z, L[0], R[0], **kw)
+        n = Node(z, L[0], R[0], **kw)
+        n.toks = toks
+        return n
 
     def entry(self, p, i=-1):
         i %= len(self.g.chain[p])
-        return Node(self.g.chain[p][i][0], torch.from_numpy(self.g.L[p]).to(self.dev), torch.from_numpy(self.g.R[p]).to(self.dev),
-                    "entry", p, i)
+        n = Node(self.g.chain[p][i][0], torch.from_numpy(self.g.L[p]).to(self.dev), torch.from_numpy(self.g.R[p]).to(self.dev),
+                 "entry", p, i)
+        n.toks = self.g.chain[p][i][2] if len(self.g.chain[p][i]) > 2 else None
+        return n
 
     def fnode(self, t):
         return Node(self.bank.as_node(t), self.bank.nets[t].key.detach(), torch.zeros(self.bank.d, device=self.dev), "fn", fn=t)
@@ -929,6 +1041,8 @@ class FM:
         self.walks = []
         if self.g.n:
             for kind, v in ((1, x.L), (3, F.normalize(x.R, dim=0))):
+                if kind == 3 and float(x.R.norm()) < .3:  # it relates to nothing (tr1: a direction from a near-zero R
+                    continue                              # walked to the same few places for everything)
                 found = self.g.search(v.detach().float().cpu().numpy())[:self.look]
                 self.walks.append((kind, found))
                 for _, p in found:
@@ -962,7 +1076,9 @@ class FM:
         lg = self.filt(net.key, net.code, q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C])
         take = (torch.rand_like(lg) < torch.sigmoid(lg)) if self.explore else lg > 0
         ins = [C[i][0] for i in range(len(C)) if take[i]][:net.R] or [sg.about[0]]
-        outs, many, err, where, isfn, keep = net([n.B for n in ins], q, v=sg.sign)
+        o = net([n.B for n in ins], q, v=sg.sign)
+        many, err, where, isfn = o["many"], o["err"], o["where"], o["isfn"]
+        made = [o["code"][j] if float(isfn[j]) > 0 else assemble(net, o, j)[0] for j in range(int(many.argmax()) + 1)]
         rec = {"t": t, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a) for n, k, a in C], "take": take.tolist(),
                "ins": [n.B for n in ins], "sign": sg.sign}
         if self.show:                                  # --inspect: every firing, said
@@ -980,12 +1096,12 @@ class FM:
                   f" | let through {sum(take.tolist())}/{len(C)}: " + "; ".join(f"{name(n)} {self.say(n)[:50]!r}" for n in ins) +
                   f" | many {int(many.argmax()) + 1}, where " + ", ".join(str(int(where[j].argmax())) for j in range(int(many.argmax()) + 1)) +
                   f", own error {float(err):.2f} (usual {float(net.mu):.2f}) | says: " +
-                  "; ".join(repr(self.say(Node(kept(outs[j], keep[j]), None, None))[:60]) for j in range(int(many.argmax()) + 1)), flush=True)
+                  "; ".join(repr(self.say(Node(z, None, None))[:60]) for z in made) +
+                  " | pieces " + "; ".join(str(assemble(net, o, j)[1]) for j in range(len(made))), flush=True)
         self.firings.append(rec)
         self.count("fires")
         drift = float(err) > float(net.mu + self.kappa * net.sd)
-        for j in range(int(many.argmax()) + 1):
-            z = outs[j] if float(isfn[j]) > 0 else kept(outs[j], keep[j])   # a function's code keeps all its slots
+        for j, z in enumerate(made):
             if drift:                                  # its own guess: unusually wrong -> said and read again
                 z = self.nodes([self.say(Node(z, None, None))])[0].B
                 self.count("roundtrip")
@@ -1245,11 +1361,12 @@ class Lesson:
 
 def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     """one demo step done by the model: its own want, its own routing (or a new function when no label is relevant),
-    the candidates as the module itself lists them, the filter scored against the teacher's inputs (which go in, in
-    the order the candidates list them, as when it lives), its outputs judged by what they say. outs: (what it should
-    say, or a function it should give back; where: NEW_WORK / NEW_PLACE / the input node it replaces); also: places
-    the signal's node relates to beyond its inputs (what a copy is the same as). Returns the
-    output values (latents with their gradient: the next step reads them as they are) and the inputs in their order."""
+    the candidates as the module itself lists them, the filter scored against the teacher's inputs; the function gets
+    the teacher's inputs and whatever else its filter lets through (in the order the candidates list them, as when it
+    lives); its outputs judged by what they say. outs: (what it should say, or a function it should give back; where:
+    NEW_WORK / NEW_PLACE / the input node it replaces); also: places the signal's node relates to beyond its inputs
+    (what a copy is the same as). Returns the outputs ((value, tokens): the next step reads them as they are) and the
+    inputs in their order."""
     bank = fm.bank
     q = bank.want([[n.B for n in about]], [v])[0]
     Ls.wants.append(q)
@@ -1278,14 +1395,17 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         if key(n) not in have:
             C.append((n, 1 if n.kind == "entry" else 2 if n.kind == "fn" else 0, 0))
             have.add(key(n))
-    order, seen = [], set()
-    for n, _, _ in C:
-        if key(n) in want_in and key(n) not in seen:
-            order.append(n)
-            seen.add(key(n))
     lg = fm.filt(net.key, net.code, q, v, 0., [(n.B, n.L, k, a) for n, k, a in C])
     y = torch.tensor([float(key(n) in want_in) for n, _, _ in C], device=lg.device)
-    Ls.add("filter", F.binary_cross_entropy_with_logits(lg, y))
+    wanted = y > 0                                     # the few it should let through weigh as much as the many it should not
+    Ls.add("filter", sum(F.binary_cross_entropy_with_logits(lg[m_], y[m_]) for m_ in (wanted, ~wanted) if bool(m_.any())))
+    take = lg.detach() > 0                             # what it gets: the teacher's inputs, and what else its filter lets through
+    extra = [i for i, (n, _, _) in enumerate(C) if take[i] and key(n) not in want_in][:max(0, net.R - len(want_in))]
+    order, seen = [], set()
+    for i, (n, _, _) in enumerate(C):
+        if (key(n) in want_in or i in extra) and key(n) not in seen:
+            order.append(n)
+            seen.add(key(n))
     rel, rl = sorted({n.place for n in ins if n.kind == "entry"} | set(also)), None
     places = sorted({n.place for n, k, _ in C if n.kind == "entry"} | set(rel))
     if about[0].R.requires_grad and rel and len(places) > len(rel):
@@ -1293,43 +1413,51 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         pos = torch.tensor([p in rel for p in places], device=lr.device)
         rl = -(lr.log_softmax(0)[pos]).mean()
         Ls.add("relation", rl)
-    o, many, err, where, isfn, keep = net([n.B for n in order], q, v=v)
-    L = F.cross_entropy(many[None], torch.tensor([len(outs) - 1], device=many.device))
-    res, keys, info = [], [key(n) for n in order], []
+    o = net([n.B for n in order], q, v=v)
+    dev = o["many"].device
+    L = F.cross_entropy(o["many"][None], torch.tensor([len(outs) - 1], device=dev))
+    res, keys, info, exact = [], [key(n) for n in order], [], True
     for j, (target, dest) in enumerate(outs):
         w = dest if isinstance(dest, int) else 2 + keys.index(key(dest))
         if isinstance(target, str):
             fm.said.append(target)                     # what functions are asked to say: the round trip covers it too
+            got = say_loss(fm, A, net, o, j, target, order)
+            if got is None:
+                res.append(None)
+                exact = False
+                continue
+            Lj, ok, z, plan, tid = got
+            L, exact, dl = L + Lj, exact and ok, float(Lj)
             with torch.no_grad():
                 lab, rel = fm.tr.encode([target])[0], fm.tr.relation([target])[0]
-                T_ = min(int(fm.tr.content([target])[1].sum()), net.K)
-            m_ = torch.arange(net.K, device=o[j].device) < T_
-            dl = fm.tr.decode_loss(o[j][:T_][None], torch.ones(1, T_, dtype=torch.bool, device=o[j].device), [target])
-            L = L + dl + F.binary_cross_entropy_with_logits(keep[j], m_.float())
-            if fm.capture is not None:                 # --codec_check: what it says, at the right length and at its own
-                with torch.no_grad():
-                    fm.capture.append((purpose, target, fm.say(Node(o[j][:T_], None, None)),
-                                       fm.say(Node(kept(o[j], keep[j]), None, None)), float(dl), int((keep[j] > 0).sum()), T_, t))
-            if fm.trace:
-                info.append((j, target, w, T_, float(dl)))
-            L_, R_ = fm.heads([o[j][:T_]])
+            L_, R_ = fm.heads([z])
             Ls.add("label of what it made", (1 - (L_[0] * lab).sum()) * .5 + F.mse_loss(R_[0], rel) * 5)
+            if fm.capture is not None or fm.trace:
+                with torch.no_grad():
+                    own, pcs = assemble(net, o, j)
+                    told_ = (fm.say(Node(z, None, None)), fm.say(Node(own, None, None)))
+                if fm.capture is not None:             # --codec_check: what it says, with the target's pieces and its own
+                    fm.capture.append((purpose, target, told_[0], told_[1], dl, len(pcs), len(plan), t))
+                if fm.trace:
+                    info.append((j, target, w, dl, told_, plan, pcs, tid))
+            res.append((z, tid))
         else:                                          # a function given back: judged by what it then does
             f, rins, rq, rtarget = target
-            o2 = bank.nets[f]([n.B for n in rins], rq, code=o[j])[0]
-            with torch.no_grad():
-                T2 = min(int(fm.tr.content([rtarget])[1].sum()), net.K)
-            L = L + fm.tr.decode_loss(o2[0][:T2][None], torch.ones(1, T2, dtype=torch.bool, device=o2[0].device), [rtarget])
-        L = L + F.cross_entropy(where[j][None], torch.tensor([w], device=where.device))
-        L = L + F.binary_cross_entropy_with_logits(isfn[j], torch.tensor(float(not isinstance(target, str)), device=isfn.device))
-        res.append(o[j][:T_] if isinstance(target, str) else o[j])
-    Ls.add("functions", L + F.mse_loss(err, L.detach()))
-    S, m = bank.gate(q[None])[0, t], .1                # the label: pulled when it did this as well as it usually does
-    usual = max(float(net.mu + A.kappa * net.sd), A.tool_good)
-    Ls.add("labels", F.relu(1 + m - S) if float(L) <= usual else F.relu(S - (1 - m)))
+            got = say_loss(fm, A, bank.nets[f], bank.nets[f]([n.B for n in rins], rq, code=o["code"][j]), 0, rtarget, rins)
+            if got is not None:
+                L, exact = L + got[0], exact and got[1]
+            res.append((o["code"][j], None))
+        L = L + F.cross_entropy(o["where"][j][None], torch.tensor([w], device=dev))
+        L = L + F.binary_cross_entropy_with_logits(o["isfn"][j], torch.tensor(float(not isinstance(target, str)), device=dev))
+    Ls.add("functions", L + F.mse_loss(o["err"], L.detach()))
+    S, m = bank.gate(q[None])[0, t], .1                # the label: pushed off a purpose it does not do exactly while it
+    fk = (id(net), purpose)                            # does another one well; else pulled
+    fm.fit[fk] = .9 * fm.fit.get(fk, .5) + .1 * float(exact)
+    others = [x for (i, p_), x in fm.fit.items() if i == id(net) and p_ != purpose]
+    push = not exact and bool(others) and max(others) > fm.fit[fk] + .3
+    Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(1 + m - S))
     if fm.trace:
-        trace_step(fm, purpose, v, about, t, C, lg, y, order, o, many, err, where, isfn, keep, info, outs, net,
-                   float(S), usual, float(L), rl)
+        trace_step(fm, purpose, v, about, t, C, lg, y, order, o, info, outs, net, float(S), push, exact, float(L), rl)
     with torch.no_grad():
         net.mu.mul_(.98).add_(.02 * L.detach())
         net.sd.mul_(.98).add_(.02 * (L.detach() - net.mu).abs())
@@ -1342,30 +1470,26 @@ def told(fm, n, k=70):
 
 
 @torch.no_grad()
-def copied(fm, net, order, j, T_):
-    """what each of an output's first slots took from the inputs: the token (gate >= .5) or ~token (it made its own)"""
-    if net.seen is None:
-        return "(no inputs)"
-    a, g, lens = net.seen
+def pieces_said(fm, order, net, o, j, pieces, tid=None):
+    """the pieces of an output, said: a span as the words it takes (when the input's tokens are known), a made piece
+    as the target's words it should make (in demos) or its size"""
+    lens = [len(n.B[:net.L]) for n in order[:net.R]]
     starts = np.cumsum([0] + lens)
     out = []
-    for s_ in range(min(T_, net.K)):
-        i = j * net.K + s_
-        top = int(a[i].argmax())
-        r = int(np.searchsorted(starts, top, side="right") - 1)
-        pos = top - starts[r]
-        n = order[r]
-        tok = f"<{r}.{pos}>"
-        if n.text is not None:
-            ids = fm.tr.tok(n.text)["input_ids"]
-            if pos < len(ids):
-                tok = fm.tr.tok.decode([ids[pos]])
-        out.append((tok if float(g[i]) >= .5 else "~" + tok) + f"({float(a[i].max()):.1f})")
-    return " ".join(out)
+    for pc in pieces:
+        if pc[0] == "span":
+            r = int(np.searchsorted(starts, pc[1], side="right") - 1)
+            t = order[r].toks
+            a, b = pc[1] - starts[r], pc[2] - starts[r]
+            out.append(f"span {r}:{a}-{b} " + (repr(fm.tr.tok.decode(t[a:b + 1])) if t is not None else ""))
+        else:
+            out.append(f"made {pc[2] - pc[1]} " + repr(fm.tr.tok.decode(tid[pc[1]:pc[2]])) if len(pc) == 3 and tid is not None
+                       else f"made {pc[1]}")
+    return " + ".join(out)
 
 
 @torch.no_grad()
-def trace_step(fm, purpose, v, about, t, C, lg, y, order, o, many, err, where, isfn, keep, info, outs, net, S, usual, L, rl):
+def trace_step(fm, purpose, v, about, t, C, lg, y, order, o, info, outs, net, S, push, exact, L, rl):
     gates = fm.bank.gate(fm.bank.want([[n.B for n in about]], [v]))[0]
     top = sorted(range(len(gates)), key=lambda i: -float(gates[i]))[:5]
     print(f"\n== {purpose} (signal {v:+.1f}) | about: " + " + ".join(repr(told(fm, n)) for n in about), flush=True)
@@ -1380,14 +1504,15 @@ def trace_step(fm, purpose, v, about, t, C, lg, y, order, o, many, err, where, i
         (f"fn {C[i][0].fn}" if C[i][0].kind == "fn" else f"{told(fm, C[i][0], 45)!r}" + (f" @{C[i][0].place}.{C[i][0].idx}" if C[i][0].kind == "entry" else ""))
         for i in rows[:14]), flush=True)
     print("   inputs in order: " + " | ".join(f"{r}: {told(fm, n, 50)!r}" for r, n in enumerate(order)), flush=True)
-    print(f"   many {int(many.argmax()) + 1} (target {len(outs)}), own error {float(err):.2f} (usual {float(net.mu):.2f})", flush=True)
-    for j, target, w, T_, dl in info:
-        wp = where[j].softmax(-1)
-        print(f"   out {j}: target {target!r}\n      said at its length {fm.say(Node(o[j][:T_], None, None))!r} | at its own "
-              f"({int((keep[j] > 0).sum())} slots kept, target {T_}) {fm.say(Node(kept(o[j], keep[j]), None, None))!r}\n"
-              f"      where {int(wp.argmax())} ({float(wp.max()):.2f}) target {w} | function? {float(torch.sigmoid(isfn[j])):.2f} | "
-              f"decode loss {dl:.2f}\n      slots took: {copied(fm, net, order, j, T_)}", flush=True)
-    print(f"   label gate {S:.2f}, step loss {L:.2f} vs usual {usual:.2f} -> {'pull' if L <= usual else 'push'}" +
+    print(f"   many {int(o['many'].argmax()) + 1} (target {len(outs)}), own error {float(o['err']):.2f} (usual {float(net.mu):.2f})", flush=True)
+    for j, target, w, dl, told_, plan, pcs, tid in info:
+        wp = o["where"][j].softmax(-1)
+        print(f"   out {j}: target {target!r}\n      target's pieces: {pieces_said(fm, order, net, o, j, plan, tid)}\n"
+              f"      its own pieces:  {pieces_said(fm, order, net, o, j, pcs)}\n"
+              f"      said with the target's pieces {told_[0]!r} | with its own {told_[1]!r}\n"
+              f"      where {int(wp.argmax())} ({float(wp.max()):.2f}) target {w} | function? {float(torch.sigmoid(o['isfn'][j])):.2f} | "
+              f"loss of this output {dl:.2f}", flush=True)
+    print(f"   label gate {S:.2f}, step loss {L:.2f}, exact {exact} -> {'push' if push else 'pull'}" +
           (f" | relation loss {float(rl):.2f}" if rl is not None else ""), flush=True)
 
 
@@ -1403,12 +1528,14 @@ def demo_question(fm, T, Ls, A, st, E):
                           [(text, w if w == NEW_WORK else ws[name]) for text, w, name in outs])
         if res is None:
             return False
-        for (text, w, name), z in zip(outs, res):
+        if any(x is None for x in res):
+            return False
+        for (text, w, name), (z, tid) in zip(outs, res):
             if w == NEW_WORK:
-                ws[name] = fm.node(z, parent=ws["q"])
+                ws[name] = fm.node(z, tid, parent=ws["q"])
             else:
                 old = ws[name]
-                ws[name] = fm.node(z, parent=old.parent)
+                ws[name] = fm.node(z, tid, parent=old.parent)
     Ls.none.append([ws["q"].B])                       # answered: its value asks for nothing more
     return True
 
@@ -1427,8 +1554,10 @@ def demo_statement(fm, T, Ls, A, st, text, meta, side):
     src = T.w.deps.get((meta[1], meta[2])) if meta[0] == "fact" and "(same as" in text else None
     also = [T.place[("fact",) + src]] if src and ("fact",) + src in T.place else []
     res, order = run_step(fm, Ls, A, st, "store", [s], ins, [(kept, ins[1] if p is not None else NEW_PLACE)], also)
-    z = fm.nodes([kept])[0].B.detach()                # the teacher's memory: what it should keep ...
-    own = res[0].detach() if res is not None and st["step"] > A.own else z   # ... as the store itself writes it, once it can
+    kn = fm.nodes([kept])[0]
+    z = kn.B.detach()                                  # the teacher's memory: what it should keep ...
+    own, own_t = (res[0][0].detach(), res[0][1]) if res is not None and res[0] is not None and st["step"] > A.own else (z, kn.toks)
+    #                                                    ... as the store itself writes it, once it can
     if res is not None:
         alt = {text}                                   # what it might have kept instead: as said, or old + new
         if meta[0] == "fact" and p is not None and isinstance(meta[3], int) and isinstance(value_in(T.texts[p][-1]), int):
@@ -1438,7 +1567,8 @@ def demo_statement(fm, T, Ls, A, st, text, meta, side):
             Ls.add("check", F.binary_cross_entropy_with_logits(fm.critic([n.B for n in order], c), torch.tensor(y, device=z.device)))
         if p is not None and alt and random.random() < A.fix:
             fm.t += 1
-            fm.g.chain[p].append((fm.nodes([sorted(alt)[0]])[0].B.detach(), fm.t))   # kept wrong ...
+            wrong = fm.nodes([sorted(alt)[0]])[0]
+            fm.g.chain[p].append((wrong.B.detach(), fm.t, wrong.toks))   # kept wrong ...
             bad = fm.entry(p)
             about = [bad] + [x for x in order if x.kind != "fn"]
             run_step(fm, Ls, A, st, "fix", about, about, [(kept, bad)], v=-1.)     # ... the check's failure: fixed
@@ -1448,7 +1578,7 @@ def demo_statement(fm, T, Ls, A, st, text, meta, side):
             p = fm.g.add_place(fm.heads([z])[0][0].float().cpu().numpy())
         T.place[k], T.texts[p] = p, []
     fm.t += 1
-    fm.g.chain[p].append((own, fm.t))
+    fm.g.chain[p].append((own, fm.t, own_t))
     with torch.no_grad():
         fm.g.R[p] = fm.heads([own])[1][0].float().cpu().numpy()
     T.texts[p].append(kept)
@@ -1465,12 +1595,14 @@ def demo_statement(fm, T, Ls, A, st, text, meta, side):
                     continue
                 d, e = fm.entry(q), fm.entry(T.place[("fact",) + src])
                 res, order = run_step(fm, Ls, A, st, "copy", [d, e], [d, e], [(new, d)])
-                zn = fm.nodes([new])[0].B.detach()
+                nn_ = fm.nodes([new])[0]
+                zn, zt = nn_.B.detach(), nn_.toks
                 for c, y in ((zn, 1.), (d.B, 0.)) if order else ():
                     Ls.add("check", F.binary_cross_entropy_with_logits(fm.critic([n.B for n in order], c), torch.tensor(y, device=zn.device)))
-                zn = res[0].detach() if res is not None and st["step"] > A.own else zn
+                if res is not None and res[0] is not None and st["step"] > A.own:
+                    zn, zt = res[0][0].detach(), res[0][1]
                 fm.t += 1
-                fm.g.chain[q].append((zn, fm.t))
+                fm.g.chain[q].append((zn, fm.t, zt))
                 with torch.no_grad():
                     fm.g.R[q] = fm.heads([zn])[1][0].float().cpu().numpy()
                 T.texts[q].append(new)
@@ -1594,7 +1726,7 @@ def fn_probe(fm, rng, n=32):
             x = amount(rng)
             probe = fm.nodes([INC, str(x)])
             r_ = fm.bank.nets[f]([m.B for m in probe], fm.bank.want([[m.B for m in probe]])[0])
-            ok += fm.say(Node(kept(r_[0][0], r_[5][0]), None, None)) == str(x + k)
+            ok += fm.say(Node(assemble(fm.bank.nets[f], r_, 0)[0], None, None)) == str(x + k)
             fm.bank.nets[f].code.copy_(keep)
         line.append(f"edited to add {k}: {ok}/{n // 4}")
     return " | ".join(line) + f" | {dict(fm.stats)}"
@@ -1632,10 +1764,12 @@ def imitate(fm, recs):
     label of the function it fired, the filter toward what it let through"""
     loss = 0
     for r in recs:
+        if r["t"] >= len(fm.bank.nets):                # a function the try made, gone with the try
+            continue
         net = fm.bank.nets[r["t"]]
         q = fm.bank.want([r["about"]], [r["sign"]])[0]
         loss = loss + F.relu(1.1 - fm.bank.gate(q[None])[0, r["t"]])
-        lg = fm.filt(net.key, net.code, q.detach(), r["sign"], 0., r["C"])
+        lg = fm.filt(net.key.detach(), net.code.detach(), q.detach(), r["sign"], 0., r["C"])   # (codes change in place as it lives)
         loss = loss + F.binary_cross_entropy_with_logits(lg, torch.tensor(r["take"], dtype=torch.float, device=lg.device))
     return loss / max(1, len(recs))
 
@@ -1647,8 +1781,9 @@ def checked(fm, recs):
     loss, n = 0, 0
     for r in recs:
         for j, _ in r.get("kept", []):
-            r_ = fm.bank.nets[r["t"]](r["ins"], r["q"], v=r["sign"])
-            loss, n = loss - F.logsigmoid(fm.critic(r["ins"], kept(r_[0][j], r_[5][j]))), n + 1
+            net = fm.bank.nets[r["t"]]
+            r_ = net(r["ins"], r["q"], v=r["sign"])
+            loss, n = loss - F.logsigmoid(fm.critic(r["ins"], assemble(net, r_, j)[0])), n + 1
     fm.critic.requires_grad_(True)
     return loss / max(1, n)
 
@@ -1666,7 +1801,8 @@ def live(fm, A, rng, opt, params):
             o = d()
             for text, _ in said(o, w) if o else []:
                 fm.arrive(text)
-        loss = checked(fm, fm.firings[-16:])
+        stored, loss = fm.firings[-16:], 0          # the check's gradient is built just before the step (below): asking
+        #                                             edits functions' codes in place
         for _ in range(A.lq):
             E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops"]), w, rng)
             if E is None:
@@ -1691,6 +1827,7 @@ def live(fm, A, rng, opt, params):
             if best:
                 tally["fixed by a try"] += 1
                 loss = loss + imitate(fm, best)
+        loss = loss + checked(fm, stored)
         if torch.is_tensor(loss) and loss.requires_grad:
             opt.zero_grad()
             loss.backward()
@@ -1801,7 +1938,7 @@ def deep_trace(A):
         for x in xs:
             fns[x[7]] = fns.get(x[7], 0) + 1
         print(f"{k}: {len(xs)} steps -> functions " + ", ".join(f"{f}: {c}" for f, c in sorted(fns.items(), key=lambda z: -z[1])) +
-              f" | said exactly {sum(x[1] == x[2] for x in xs)} at its length, {sum(x[1] == x[3] for x in xs)} at its own", flush=True)
+              f" | said exactly {sum(x[1] == x[2] for x in xs)} with the target's pieces, {sum(x[1] == x[3] for x in xs)} with its own", flush=True)
     fm.capture = None
     print("\n=== 4. LIVING BY ITSELF (a fresh world; nothing scripted)", flush=True)
     rng = random.Random(A.seed + 5)
@@ -1934,9 +2071,9 @@ def codec_functions(fm, A):
     for k, xs in sorted(by.items()):
         exact = sum(x[1] == x[2] for x in xs)
         own = sum(x[1] == x[3] for x in xs)
-        print(f"{k}: said exactly {exact}/{len(xs)} at the target's length, {own}/{len(xs)} at its own | decode loss "
-              f"{sum(x[4] for x in xs) / len(xs):.2f} | kept {sum(x[5] for x in xs) / len(xs):.1f} slots, target "
-              f"{sum(x[6] for x in xs) / len(xs):.1f} | e.g. " + "; ".join(f"{x[1]!r} -> {x[2]!r}" for x in xs[:2]), flush=True)
+        print(f"{k}: said exactly {exact}/{len(xs)} with the target's pieces, {own}/{len(xs)} with its own | loss "
+              f"{sum(x[4] for x in xs) / len(xs):.2f} | pieces {sum(x[5] for x in xs) / len(xs):.1f}, target "
+              f"{sum(x[6] for x in xs) / len(xs):.1f} | e.g. " + "; ".join(f"{x[1]!r} -> {x[3]!r}" for x in xs[:2]), flush=True)
 
 
 TRAINED = ("up.", "down.", "tokd.")             # the translator's own layers (text -> B, B -> text) learn with the
@@ -2093,6 +2230,8 @@ if __name__ == "__main__":
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
     P.add_argument("--cool", type=int, default=20, help="steps between two new functions")
+    P.add_argument("--exact", type=float, default=.3, help="decode loss under which an output counts as said exactly (labels)")
+    P.add_argument("--mse", type=float, default=1., help="weight of a made piece's latents against the encoder's for those words")
     P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
     P.add_argument("--prune", type=int, default=300, help="steps a function may go unfired before it is removed")
     P.add_argument("--own", type=int, default=600, help="after this step the demo memory holds what the store itself wrote")
