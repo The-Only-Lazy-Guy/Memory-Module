@@ -763,7 +763,7 @@ class Interpreter(nn.Module):
     pieces, each a span taken as it is from one of the inputs or up to G latents it makes; a function given back is K
     latents. Also: how many outputs, where each goes, whether one is a function, its own guess of how wrong it is"""
 
-    def __init__(self, d=128, c=256, K=16, M=2, S=4, G=8, R=16, L=40, r=8, layers=3):
+    def __init__(self, d=128, c=256, K=16, M=2, S=4, G=8, R=16, L=96, r=8, layers=3):
         super().__init__()
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.hop = nn.Parameter(torch.randn(4, c) * .02)       # how far the traversal went to reach an input
@@ -782,6 +782,7 @@ class Interpreter(nn.Module):
         #                                                         output's state against each input's tokens
         self.kind = nn.Linear(c, 3)                            # a piece: 0 no more pieces, 1 a span of an input, 2 made
         self.ps, self.pe, self.pk, self.px = nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c)
+        self.pin = nn.Linear(c, c)                             # which input a span is taken from
         self.gkeep = nn.Linear(c, 1)                           # how many latents a made piece keeps
         self.K, self.M, self.S, self.G, self.R, self.L, self.r = K, M, S, G, R, L, r
 
@@ -790,7 +791,7 @@ class Interpreter(nn.Module):
         a = self.act(z.mean(0)).view(2, -1, self.r)
         return a[0], a[1]
 
-    def forward(self, ins, q, program, action, v=1., hops=None, sal=None, acts=None):
+    def forward(self, ins, q, program, action, v=1., hops=None, sal=None, acts=None, copy=None):
         c, dev = self.pos.shape[-1], q.device
         toks = [z[:self.L] for z in ins[:self.R]]
         hops = (list(hops) if hops is not None else [0] * len(toks))[:len(toks)]
@@ -826,6 +827,10 @@ class Interpreter(nn.Module):
         o["many"], o["err"] = self.many(every), self.err(every).squeeze(-1)
         if toks:
             each = torch.stack([o["keys"][o["owner"] == r].mean(0) for r in range(len(toks))])
+            o["start"] = o["start"] + (self.pin(hs) @ each.T)[..., o["owner"]]     # + which input
+            if copy is not None:                       # a function's program is not words to copy
+                cm = torch.tensor(list(copy)[:len(toks)], dtype=torch.bool, device=dev)
+                o["start"] = o["start"].masked_fill(~cm[o["owner"]], -1e9)
             o["where"] = torch.cat([self.where(g), self.wp(g) @ each.T], -1)
         else:
             o["where"] = self.where(g)
@@ -888,14 +893,24 @@ def assemble(net, o, j, plan=None):
     return (torch.cat(rows) if rows else o["gen"][j, 0, :1]), pieces
 
 
-def plan_pieces(tid, ins, S, G):
+def plan_pieces(tid, ins, S, G, prefer=None):
     """the pieces a target text (its tokens) is made of, given the inputs ((rows, tokens or None) each): the longest
-    runs found as they are in an input (spans, numbered across the inputs' tokens) and what is left (made: target
-    positions i..j); None when that takes more than S pieces or a made piece longer than G"""
-    T = len(tid)
-    best, at = [(0, 0)] * (T + 1), 0                   # best[i]: the longest run of the target from i found in an input
-    for n_rows, t in ins:
-        if t is not None:
+    runs found as they are in the inputs that should be read (prefer: their indices; else any input), and what is left
+    (made: target positions i..j). A span is ("span", first, last, every (first, last) where the same tokens sit in
+    those inputs). None when that takes more than S pieces or a made piece longer than G"""
+    T, offs, at = len(tid), [], 0
+    for n_rows, _ in ins:
+        offs.append(at)
+        at += n_rows
+    every = set(range(len(ins)))
+    pref = every if prefer is None else (set(prefer) & every or every)
+
+    def runs(cls):                                     # best[i]: the longest run of the target from i in those inputs
+        best = [(0, 0)] * (T + 1)
+        for r in sorted(cls):
+            t = ins[r][1]
+            if t is None:
+                continue
             nxt = [0] * (len(t) + 1)
             for i in range(T - 1, -1, -1):
                 cur = [0] * (len(t) + 1)
@@ -903,18 +918,24 @@ def plan_pieces(tid, ins, S, G):
                     if t[a] == tid[i]:
                         cur[a] = nxt[a + 1] + 1
                         if cur[a] > best[i][0]:
-                            best[i] = (cur[a], at + a)
+                            best[i] = (cur[a], offs[r] + a)
                 nxt = cur
-        at += n_rows
+        return best
+
+    bp = runs(pref)
+    ba = runs(every) if pref != every else bp
     pieces, i = [], 0
     while i < T:
-        n, g = best[i]
+        n, cls = (bp[i][0], pref) if bp[i][0] else (ba[i][0], every)
         if n:
-            pieces.append(("span", g, g + n - 1))
+            seq = list(tid[i:i + n])
+            alts = [(offs[r] + a, offs[r] + a + n - 1) for r in sorted(cls) if ins[r][1] is not None
+                    for a in range(len(ins[r][1]) - n + 1) if list(ins[r][1][a:a + n]) == seq][:6]
+            pieces.append(("span", alts[0][0], alts[0][1], alts))
             i += n
             continue
         j = i + 1
-        while j < T and best[j][0] == 0:
+        while j < T and bp[j][0] == 0 and ba[j][0] == 0:
             j += 1
         pieces.append(("made", i, j))
         i = j
@@ -923,7 +944,13 @@ def plan_pieces(tid, ins, S, G):
     return pieces
 
 
-def say_loss(fm, A, net, o, j, target, order):
+def said_as(pieces, flat):
+    """pieces as what they say: a span as its tokens (None when an input's tokens are not known), a made piece as its
+    size -- two outputs that say the same thing the same way are the same"""
+    return [tuple(flat[pc[1]:pc[2] + 1]) if pc[0] == "span" else ("made", pc[1] if len(pc) == 2 else pc[2] - pc[1]) for pc in pieces]
+
+
+def say_loss(fm, A, net, o, j, target, order, prefer=None):
     """how wrong output j is as the text it should say: which pieces it is made of (kind, where each span starts and
     ends, how many latents a made piece keeps and how close they are to what the encoder makes of those words), and
     what the assembled node says. Returns (loss, decode loss, the node, the target's pieces, its tokens) or None when
@@ -932,7 +959,7 @@ def say_loss(fm, A, net, o, j, target, order):
     best = None
     for spelled in dict.fromkeys([D(target), " " + D(target).lstrip()]):   # as written, or as it reads inside a
         tid_ = fm.tr.tok(spelled)["input_ids"]                             # sentence: the one more of it is copied in
-        plan_ = plan_pieces(tid_, ins_t, net.S, net.G)
+        plan_ = plan_pieces(tid_, ins_t, net.S, net.G, prefer)
         if plan_ is not None:
             copied = sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span")
             if best is None or copied > best[0]:
@@ -949,10 +976,10 @@ def say_loss(fm, A, net, o, j, target, order):
     for s_ in range(min(len(plan) + 1, net.S)):
         k = 0 if s_ == len(plan) else 1 if plan[s_][0] == "span" else 2
         L = L + F.cross_entropy(o["kind"][j, s_][None], torch.tensor([k], device=dev))
-        if k == 1:
-            a, b = plan[s_][1], plan[s_][2]
-            L = L + F.cross_entropy(o["start"][j, s_][None], torch.tensor([a], device=dev))
-            L = L + F.cross_entropy(net.end_logits(o, j, s_, a)[None], torch.tensor([b], device=dev))
+        if k == 1:                                     # any of the places the same tokens sit is right
+            ls = o["start"][j, s_].log_softmax(-1)
+            L = L - torch.logsumexp(torch.stack([ls[a] + net.end_logits(o, j, s_, a).log_softmax(-1)[b]
+                                                 for a, b in plan[s_][3]]), 0)
         elif k == 2:
             i0, i1 = plan[s_][1], plan[s_][2]
             L = L + F.binary_cross_entropy_with_logits(o["gkeep"][j, s_], (torch.arange(net.G, device=dev) < i1 - i0).float())
@@ -961,8 +988,11 @@ def say_loss(fm, A, net, o, j, target, order):
     want_pcs = [(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan]
     z, _ = assemble(net, o, j, want_pcs)
     dl = fm.tr.decode_loss(z[None], torch.ones(1, len(z), dtype=torch.bool, device=dev), [target])
-    with torch.no_grad():                              # exact = its own pieces are the target's, and what it makes says it
-        exact = assemble(net, o, j)[1] == want_pcs and float(dl) < A.exact
+    flat = [x for n_rows, t in ins_t for x in (list(t) if t is not None else [None] * n_rows)]
+    with torch.no_grad():                              # exact = its own pieces say what the target's say (from wherever
+        own = said_as(assemble(net, o, j)[1], flat)   # those tokens sit), and what it makes says it
+        exact = own == said_as(want_pcs, flat) and None not in [x for p_ in own if p_ and p_[0] != "made" for x in p_] \
+            and float(dl) < A.exact
     return L + dl, exact, z, plan, tid, target
 
 
@@ -1033,7 +1063,8 @@ class Acting(nn.Module):
     def run(self, actor, ins, q, v=1., hops=None, sal=None, program=None):
         """the actor acts: the interpreter reads its program and applies its action, and every input's own action"""
         return self.interp([n.B for n in ins], q, self.program(actor) if program is None else program,
-                           self.action(actor, program), v, hops, sal, acts=[self.action(n) for n in ins[:self.interp.R]])
+                           self.action(actor, program), v, hops, sal, acts=[self.action(n) for n in ins[:self.interp.R]],
+                           copy=[n.kind != "fn" for n in ins[:self.interp.R]])
 
     def make(self, key, like=None, code=None, scope=.9):
         """a new node that acts (a function): made like another acting node (its program and its own action; a read
@@ -1665,7 +1696,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         w = dest if isinstance(dest, int) else 2 + keys.index(key(dest))
         if isinstance(target, str):
             fm.said.append(target)                     # what functions are asked to say: the round trip covers it too
-            got = say_loss(fm, A, net, o, j, target, order)
+            got = say_loss(fm, A, net, o, j, target, order, prefer=[r for r, n in enumerate(order[:net.R]) if key(n) in want_in])
             if got is None:
                 res.append(None)
                 exact = False
