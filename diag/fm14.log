@@ -1,0 +1,36 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 5338.65it/s]
+/marimo/frozen/fm14/gnm.py:1854: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f}", flush=True)
+codec 100: label cos 0.319 relation err 0.0010
+codec 200: label cos 0.553 relation err 0.0007
+codec 300: label cos 0.693 relation err 0.0004
+codec 400: label cos 0.708 relation err 0.0011
+codec 500: label cos 0.765 relation err 0.0006
+codec 600: label cos 0.762 relation err 0.0011
+codec 700: label cos 0.803 relation err 0.0005
+codec 800: label cos 0.815 relation err 0.0016
+codec 900: label cos 0.833 relation err 0.0007
+codec 1000: label cos 0.846 relation err 0.0005
+codec 1100: label cos 0.849 relation err 0.0007
+codec 1200: label cos 0.852 relation err 0.0009
+codec 1300: label cos 0.845 relation err 0.0009
+codec 1400: label cos 0.867 relation err 0.0014
+codec 1500: label cos 0.877 relation err 0.0004
+step 1: no label relevant to a store want -> made function 5
+step 21: no label relevant to a store want -> made function 6
+step 41: no label relevant to a store want -> made function 7
+step 50 loss 46.15 (functions per demo step 4.16, 298 updates, 1 targets not made of pieces) [salience hint 0.53, relation 2.80, label of what it made 0.33, functions 12.48, labels 0.20, check 2.29, apart 25.40, asks nothing 0.00, round trip 0.03, round trip (pieces) 2.10] functions 8 | exact: add 0/29, before 0/14, both 0/21, copy 0/12, fill 2/199, lookup 0/148, max 0/11, min 0/7, operands 0/154, split 4/216, store 70/212, sub 0/14 | inputs the walk brought: add 87/87, before 47/47, both 68/68, copy 24/24, fill 400/400, lookup 294/296, max 33/33, min 21/21, operands 77/77, split 216/216, store 302/323, sub 42/42 | 207s
+step 61: no label relevant to a store want -> made function 8
+step 81: no label relevant to a store want -> made function 9
+step 100 loss 63.40 (functions per demo step 5.24, 300 updates, 1 targets not made of pieces) [salience hint 1.80, relation 4.70, label of what it made 0.49, functions 26.20, labels 0.09, check 5.36, apart 23.03, asks nothing 0.00, round trip 0.15, round trip (pieces) 1.58] functions 10 | exact: add 0/22, before 0/18, both 0/13, copy 0/12, fill 19/151, lookup 0/113, max 0/7, min 0/5, operands 0/98, split 4/163, store 180/315, sub 0/4 | inputs the walk brought: add 66/66, before 62/62, both 40/40, copy 24/24, fill 304/304, lookup 226/226, max 21/21, min 15/15, operands 49/49, split 163/163, store 583/669, sub 12/12 | 367s
+step 101: no label relevant to a store want -> made function 10
+step 121: no label relevant to a sub want -> made function 11
+step 141: no label relevant to a store want -> made function 12
+step 150 loss 298.46 (functions per demo step 6.73, 300 updates, 1 targets not made of pieces) [salience hint 5.08, relation 10.92, label of what it made 2.29, functions 242.42, labels 5.52, check 7.47, apart 23.04, asks nothing 0.00, round trip 0.06, round trip (pieces) 1.65] functions 13 | exact: add 0/42, before 0/34, both 0/28, copy 0/5, fill 76/325, lookup 2/243, max 0/22, min 0/12, operands 8/198, split 23/385, store 317/503, sub 0/5 | inputs the walk brought: add 126/126, before 123/128, both 87/87, copy 10/10, fill 652/652, lookup 484/486, max 66/66, min 36/36, operands 99/99, split 385/385, store 962/1163, sub 15/15 | 720s
+step 161: no label relevant to a fix want -> made function 13
+step 181: no label relevant to a lookup want -> made function 14
+step 200 loss 168.64 (functions per demo step 4.10, 300 updates, 7 targets not made of pieces) [salience hint 6.10, label of what it made 2.34, functions 123.13, labels 2.15, check 5.38, relation 5.89, apart 22.36, asks nothing 0.00, round trip 0.07, round trip (pieces) 1.21] functions 15 | exact: add 0/55, before 0/24, both 0/35, copy 0/11, fill 103/326, fix 1/19, lookup 3/237, max 1/16, min 1/28, operands 36/238, split 31/370, store 418/469, sub 0/9 | inputs the walk brought: add 165/165, before 86/86, both 118/118, copy 22/22, fill 666/666, fix 218/218, lookup 473/474, max 48/48, min 84/84, operands 119/119, split 370/370, store 702/712, sub 27/27 | 1053s
+step 201: no label relevant to a add want -> made function 15
+step 221: no label relevant to a store want -> made function 16
