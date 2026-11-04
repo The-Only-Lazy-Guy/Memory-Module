@@ -834,8 +834,8 @@ class ToolNet(nn.Module):
     def __init__(self, interp, d=128, c=256, calc=None):
         super().__init__()
         self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))
-        self.register_buffer("mu", torch.tensor(5.))        # the error it usually gets, and its spread
-        self.register_buffer("sd", torch.tensor(2.))
+        self.register_buffer("mu", torch.tensor(2.))        # the error it usually gets (log 1 + loss), and its spread
+        self.register_buffer("sd", torch.tensor(1.))
         self.register_buffer("used", torch.tensor(0.))      # the last step a want fired it
         self.code = nn.Parameter(torch.randn(interp.K, c) * .02)
         self.au = nn.Parameter(torch.randn(c, interp.r) * .01)
@@ -975,7 +975,7 @@ class ToolBank(nn.Module):
         net = ToolNet(self.interp, self.d, self.c).to(key.device)
         if like is not None:
             net.load_state_dict(self.nets[like].state_dict())
-            net.mu.fill_(5.), net.sd.fill_(2.)
+            net.mu.fill_(2.), net.sd.fill_(1.)
         with torch.no_grad():
             net.key.copy_(F.normalize(key, dim=0) / scope)
             if code is not None:
@@ -1599,7 +1599,8 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             res.append((o["code"][j], None, True))
         L = L + F.cross_entropy(o["where"][j][None], torch.tensor([w], device=dev))
         L = L + F.binary_cross_entropy_with_logits(o["isfn"][j], torch.tensor(float(not isinstance(target, str)), device=dev))
-    Ls.add("functions", L + F.mse_loss(o["err"], L.detach()))
+    Ls.add("functions", L + F.mse_loss(o["err"], torch.log1p(L.detach())))   # its own guess of how wrong, on a log scale
+    #                                                  (fm12: the raw loss squared swamped everything, 8233 of 8289)
     S, m = bank.gate(q[None])[0, t], .1                # the label: pushed off a purpose it does not do exactly while it
     fk = (id(net), purpose)                            # does another one well; else pulled
     fm.fit[fk] = .9 * fm.fit.get(fk, 0.) + .1 * float(exact)
@@ -1619,8 +1620,8 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     if fm.trace:
         trace_step(fm, purpose, v, about, t, C, lg, y, order, o, info, outs, net, float(S), push, exact, float(L), rl)
     with torch.no_grad():
-        net.mu.mul_(.98).add_(.02 * L.detach())
-        net.sd.mul_(.98).add_(.02 * (L.detach() - net.mu).abs())
+        net.mu.mul_(.98).add_(.02 * torch.log1p(L.detach()))
+        net.sd.mul_(.98).add_(.02 * (torch.log1p(L.detach()) - net.mu).abs())
     return res, order
 
 
