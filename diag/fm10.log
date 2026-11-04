@@ -126,3 +126,43 @@ step 1252: no label relevant to a copy want -> made function 23
 step 1300: functions [4, 9] idle 300 steps -> removed
 step 1300 loss 1602.73 [filter 5.01, relation 5.72, label of what it made 3.90, functions 1581.92, labels 0.00, check 3.81, apart 2.26, asks nothing 0.03, round trip 0.07] functions 22 | inputs the walk brought: add 57/57, before 92/92, both 71/75, copy 24/24, fedit 92/92, fill 838/838, fix 150/150, fnew 92/92, inc 100/100, lookup 593/596, max 46/46, min 25/25, split 439/439, store 822/950, sub 29/29 | 2561s
 step 1302: no label relevant to a copy want -> made function 22
+step 1336: no label relevant to a split want -> made function 23
+step 1350: functions [3, 7, 8, 9, 10] idle 300 steps -> removed
+step 1350 loss 429.60 [filter 6.83, relation 9.19, label of what it made 2.20, functions 401.21, labels 0.25, check 7.94, apart 1.94, asks nothing 0.00, round trip 0.04] functions 19 | inputs the walk brought: add 63/63, before 122/122, both 93/93, copy 24/24, fedit 100/100, fill 874/874, fix 237/237, fnew 100/100, inc 100/100, lookup 615/616, max 38/38, min 35/35, split 439/439, store 906/1102, sub 29/29 | 2702s
+step 1357: no label relevant to a before want -> made function 19
+step 1400: functions [8] idle 300 steps -> removed
+step 1400 loss 190.54 [filter 5.15, relation 8.73, label of what it made 2.48, functions 171.90, labels 0.05, check 0.36, apart 1.77, asks nothing 0.00, round trip 0.09] functions 19 | inputs the walk brought: add 69/69, before 125/125, both 105/105, copy 12/12, fedit 100/100, fill 820/820, fix 142/142, fnew 100/100, inc 100/100, lookup 564/564, max 30/30, min 29/29, split 414/414, store 714/733, sub 27/27 | 2832s
+step 1411: no label relevant to a before want -> made function 19
+step 1450: functions [6] idle 300 steps -> removed
+step 1450 loss 237.16 [filter 4.96, relation 8.71, label of what it made 1.64, functions 213.33, labels 1.29, check 5.50, apart 1.68, asks nothing 0.00, round trip 0.04] functions 19 | inputs the walk brought: add 66/66, before 104/106, both 101/103, copy 38/38, fedit 100/100, fill 916/916, fix 214/214, fnew 100/100, inc 100/100, lookup 629/634, max 36/36, min 37/37, split 458/458, store 886/1025, sub 36/36 | 2975s
+step 1455: no label relevant to a copy want -> made function 19
+step 1475: no label relevant to a fill want -> made function 20
+step 1495: no label relevant to a add want -> made function 21
+step 1500: functions [4, 5, 7, 10] idle 300 steps -> removed
+step 1500 loss 198.54 [filter 4.18, relation 7.75, label of what it made 2.39, functions 176.29, labels 1.71, check 4.36, apart 1.83, asks nothing 0.00, round trip 0.03] functions 18 | inputs the walk brought: add 42/42, before 113/113, both 116/116, copy 18/18, fedit 100/100, fill 532/532, fix 343/343, fnew 100/100, inc 100/100, lookup 477/478, max 12/12, min 19/19, split 348/348, store 1007/1198, sub 20/20 | 3096s
+Traceback (most recent call last):
+  File "/marimo/frozen/fm10/gnm.py", line 2247, in <module>
+    (deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/marimo/frozen/fm10/gnm.py", line 2176, in run_fm
+    print(f"EVAL step {step}: {evaluate(fm, A, A.seed + 1000 + step)} | {fn_probe(fm, random.Random(step))}", flush=True)
+                               ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/marimo/frozen/fm10/gnm.py", line 1697, in evaluate
+    got, k = fm.ask(ask_text(E))
+             ~~~~~~^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/marimo/frozen/fm10/gnm.py", line 1179, in ask
+    n = self.run()
+  File "/marimo/frozen/fm10/gnm.py", line 1163, in run
+    self.fire(sg)
+    ~~~~~~~~~^^^^
+  File "/marimo/frozen/fm10/gnm.py", line 1108, in fire
+    self.write(z, int(where[j].argmax()), ins, sg, float(isfn[j]) > 0, rec, j)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/frozen/fm10/gnm.py", line 1118, in write
+    self.bank.nets[x.fn].code.copy_(z)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+RuntimeError: The size of tensor a (48) must match the size of tensor b (96) at non-singleton dimension 0
