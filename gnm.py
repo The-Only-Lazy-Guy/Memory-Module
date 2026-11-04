@@ -1611,6 +1611,10 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
               f"-> made function {t}", flush=True)
         actor = fm.fnode(t)
         C.append((actor, 2, 0))
+    rd = [i for i, (n, _, _) in enumerate(C) if n.kind != "fn"]
+    if how != "new" and actor.kind == "fn" and rd and not fm.frozen and random.random() < A.try_read:
+        a = max(rd, key=lambda i: float(s_all[i]))     # now and then the read node nearest the want tries (a rule
+        actor, how = C[a][0], "tried"                  # read as a program): its label learns from how it turns out
     fm.count(f"acts by {how}"), fm.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
     C = fm.around(actor, C)
     keep = [i for i, (n, _, _) in enumerate(C) if key(n) in want_in]
@@ -1675,7 +1679,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     S, m = bank.gate(q[None], [actor])[0, 0], .1       # the label: pushed off a purpose it does not do exactly while it
     fk = (who(fm, actor), purpose)                     # does another one well; else pulled
     fm.fit[fk] = .9 * fm.fit.get(fk, 0.) + .1 * float(exact)
-    push = not exact and specialized(fm, actor, purpose)
+    push = not exact and (how == "tried" or specialized(fm, actor, purpose))
     Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(1 + m - S))
     if not exact and fm.calc_on and outs and isinstance(outs[0][0], str) and num(D(outs[0][0])) is not None:
         for c_i, c_net in enumerate(bank.fns):         # trying the tools it has: a calculator that gets this right
@@ -2580,6 +2584,7 @@ if __name__ == "__main__":
     P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
     P.add_argument("--own", type=int, default=600, help="after this step the demo memory holds what the store itself wrote")
     P.add_argument("--scope", type=float, default=.9)
+    P.add_argument("--try_read", type=float, default=.1, help="share of demo steps where the read node nearest the want acts instead")
     P.add_argument("--kappa", type=float, default=2.)
     P.add_argument("--tool_good", type=float, default=.3)
     P.add_argument("--live", type=int, default=300, help="ticks it then lives by itself (signals only)")
