@@ -773,7 +773,7 @@ class Interpreter(nn.Module):
         a = self.act(z.mean(0)).view(2, -1, self.r)
         return a[0], a[1]
 
-    def forward(self, ins, q, program, action, v=1., hops=None, sal=None):
+    def forward(self, ins, q, program, action, v=1., hops=None, sal=None, acts=None):
         c, dev = self.pos.shape[-1], q.device
         toks = [z[:self.L] for z in ins[:self.R]]
         hops = (list(hops) if hops is not None else [0] * len(toks))[:len(toks)]
@@ -783,7 +783,7 @@ class Interpreter(nn.Module):
         nh = sum(len(x) for x in head)
         parts = head + [z + self.pos[:len(z)] + self.hop[min(hp, 3)] + sv * self.salv for z, hp, sv in zip(toks, hops, sal)]
         reach = torch.tensor([-1] * nh + [hp for z, hp in zip(toks, hops) for _ in range(len(z))], device=dev)
-        acts = [self.action_of(z) for z in toks]
+        acts = list(acts)[:len(toks)] if acts is not None else [self.action_of(z) for z in toks]
         h = torch.cat(parts)
         total = 1 + sum(float(sv) for sv in sal)
         for li, layer in enumerate(self.layers):       # layer li reads what lies up to li hops away (and all its own)
@@ -826,32 +826,23 @@ UIDS = iter(range(10 ** 9))
 CALC = {"add": lambda a, b: a + b, "sub": lambda a, b: a - b, "max": max, "min": min, "mul": lambda a, b: a * b}
 
 
-class ToolNet(nn.Module):
-    """a function node: its label (key: the wants it answers), its value (the program the interpreter reads: K rows)
-    and its action (U, V); run, it is the shared interpreter acting as this node. A calculator node also has a body
-    of its own (calc: decode the numbers it reads, compute, encode the result); its learned side is its mimic, which
-    takes over when the calculator is removed"""
+class FnNode(nn.Module):
+    """a node the model made to act (a function): its label (key: the wants it answers), its value (its program: K
+    rows) and its own correction to the action its value gives (au, av). A calculator node also has a body of its own
+    (calc: decode the numbers it reads, compute, encode the result); its learned side is its mimic, which takes over
+    when the calculator is removed. It is a node like the others: every signal sees it, it is chosen like any node,
+    edited like any node's value"""
 
-    def __init__(self, interp, d=128, c=256, calc=None):
+    def __init__(self, K, d=128, c=256, r=8, calc=None):
         super().__init__()
         self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))
         self.register_buffer("mu", torch.tensor(2.))        # the error it usually gets (log 1 + loss), and its spread
         self.register_buffer("sd", torch.tensor(1.))
-        self.register_buffer("used", torch.tensor(0.))      # the last step a want fired it
-        self.code = nn.Parameter(torch.randn(interp.K, c) * .02)
-        self.au = nn.Parameter(torch.randn(c, interp.r) * .01)
-        self.av = nn.Parameter(torch.randn(c, interp.r) * .01)
+        self.code = nn.Parameter(torch.randn(K, c) * .02)
+        self.au = nn.Parameter(torch.randn(c, r) * .01)
+        self.av = nn.Parameter(torch.randn(c, r) * .01)
         self.calc = calc
         self.uid = next(UIDS)                          # who it is (its record of what it does well is its own)
-        object.__setattr__(self, "interp", interp)     # shared, not a part of this node
-
-    K, M, S, G, R, L = (property(lambda self, k=k: getattr(self.interp, k)) for k in "KMSGRL")
-
-    def end_logits(self, *a):
-        return self.interp.end_logits(*a)
-
-    def forward(self, ins, q, code=None, v=1., hops=None, sal=None):
-        return self.interp(ins, q, self.code if code is None else code, (self.au, self.av), v, hops, sal)
 
 
 def assemble(net, o, j, plan=None):
@@ -958,18 +949,26 @@ def say_loss(fm, A, net, o, j, target, order):
     return L + dl, exact, z, plan, tid, target
 
 
-class ToolBank(nn.Module):
-    """the functions the model has made (none at first) and the want reader: a signal's nodes -> what is wanted"""
+class Acting(nn.Module):
+    """what lets any node act (user 11-04: a node has abilities like a function, its action a matrix that multiplies
+    into and adds to other nodes; label, value and relation stay): the shared interpreter; each node's action A, from
+    its value (plus, for a node the model made, its own correction); how much a node read from text answers wants
+    (its label, scaled by what its value says); the want reader (a signal's nodes -> what is wanted); and the nodes the
+    model made to act (functions are nodes: made by writing one, seen and chosen like any other; the calculator's
+    nodes are there from the start)"""
 
-    def __init__(self, d=128, c=256, cap=24, calculators=tuple(CALC)):
+    def __init__(self, d=128, c=256, calculators=tuple(CALC)):
         super().__init__()
-        self.nets, self.d, self.c, self.cap = nn.ModuleList(), d, c, cap
+        self.d, self.c = d, c
         self.interp = Interpreter(d, c)
-        for op in calculators:                         # the calculator: one function node per operation, its body real
-            self.nets.append(ToolNet(self.interp, d, c, calc=op))
+        self.fns = nn.ModuleList(FnNode(self.interp.K, d, c, self.interp.r, calc=op) for op in calculators)
         self.wp = Pool(c, 1)
         self.wv = nn.Linear(1, c)
         self.wo = nn.Sequential(nn.Linear(c, 512), nn.GELU(), nn.Linear(512, d))
+        self.wk = nn.Sequential(nn.Linear(c, 256), nn.GELU(), nn.Linear(256, 1))   # a read node: how much it acts
+        nn.init.constant_(self.wk[-1].bias, -1.)       # (at first little: softplus(-1) = .31, below a made label)
+        self.register_buffer("mu", torch.tensor(2.))     # the error read nodes usually get when they act
+        self.register_buffer("sd", torch.tensor(1.))
 
     def want(self, rows, v=None):
         """what a signal wants: from its nodes and its value (1 when not given)"""
@@ -977,32 +976,63 @@ class ToolBank(nn.Module):
         v = torch.ones(len(rows), 1, device=y.device) if v is None else torch.tensor(v, dtype=y.dtype, device=y.device).reshape(-1, 1)
         return F.normalize(self.wo(y + self.wv(v)), dim=-1)
 
-    def gate(self, q):                                 # every want against every label: > 1 = relevant
-        return q @ torch.stack([t.key for t in self.nets]).T
+    def key(self, n):
+        """the label a want meets: a made node's own; a read node's label, as long as its value says it acts"""
+        if n.kind == "fn":
+            return self.fns[n.fn].key
+        return n.L * F.softplus(self.wk(n.B.mean(0))).squeeze(-1)
 
-    def spawn(self, key, like=None, scope=.9, code=None):
-        net = ToolNet(self.interp, self.d, self.c).to(key.device)
-        if like is not None:
-            net.load_state_dict(self.nets[like].state_dict())
-            net.mu.fill_(2.), net.sd.fill_(1.)
-            net.uid = next(UIDS)
+    def gate(self, q, nodes):                          # every want against every node's label: > 1 = relevant
+        keys = [self.fns[n.fn].key if n.kind == "fn" else None for n in nodes]
+        rd = [i for i, n in enumerate(nodes) if n.kind != "fn"]
+        if rd:                                         # the read nodes' together (one pass)
+            w = F.softplus(self.wk(torch.stack([nodes[i].B.mean(0) for i in rd]))).squeeze(-1)
+            for k_, i in enumerate(rd):
+                keys[i] = nodes[i].L * w[k_]
+        return q @ torch.stack(keys).T
+
+    def program(self, n):
+        """what the interpreter reads as the acting node's program: its value"""
+        return self.fns[n.fn].code if n.kind == "fn" else n.B[:self.interp.L]
+
+    def action(self, n, program=None):
+        """the node's action A (U, V): from its value; a made node adds its own"""
+        if n.kind == "fn":
+            f = self.fns[n.fn]
+            U, V = self.interp.action_of(f.code if program is None else program)
+            return U + f.au, V + f.av
+        return self.interp.action_of(n.B if program is None else program)
+
+    def stats_of(self, n):                             # whose usual error
+        return self.fns[n.fn] if n.kind == "fn" else self
+
+    def calc_of(self, n):
+        return self.fns[n.fn].calc if n.kind == "fn" else None
+
+    def run(self, actor, ins, q, v=1., hops=None, sal=None, program=None):
+        """the actor acts: the interpreter reads its program and applies its action, and every input's own action"""
+        return self.interp([n.B for n in ins], q, self.program(actor) if program is None else program,
+                           self.action(actor, program), v, hops, sal, acts=[self.action(n) for n in ins[:self.interp.R]])
+
+    def make(self, key, like=None, code=None, scope=.9):
+        """a new node that acts (a function): made like another acting node (its program and its own action; a read
+        node: its value as the program), labelled with the want it answers"""
+        f = FnNode(self.interp.K, self.d, self.c, self.interp.r).to(key.device)
         with torch.no_grad():
-            net.key.copy_(F.normalize(key, dim=0) / scope)
+            if like is not None and like.kind == "fn":
+                src = self.fns[like.fn]
+                f.code.copy_(src.code), f.au.copy_(src.au), f.av.copy_(src.av)
+            elif like is not None:
+                rows = like.B.detach()
+                f.code.copy_(rows[torch.arange(self.interp.K, device=rows.device) % len(rows)])
             if code is not None:
-                net.code.copy_(code)
-        self.nets.append(net)
-        return len(self.nets) - 1
+                f.code.copy_(code)
+            f.key.copy_(F.normalize(key, dim=0) / scope)
+        self.fns.append(f)
+        return len(self.fns) - 1
 
-    def prune(self, step, idle):
-        """a function no want has fired for `idle` steps goes (two that did one job: the wants of that job come
-        together and fire one of them, the other goes idle)"""
-        gone = [i for i, t in enumerate(self.nets) if step - float(t.used) > idle and t.calc is None]
-        for i in reversed(gone):
-            del self.nets[i]
-        return gone
-
-    def as_node(self, t):                              # function t as a node: its code (being read does not change it)
-        return F.layer_norm(self.nets[t].code.detach(), (self.c,))
+    def as_node(self, t):                              # made node t's value (being read does not change it)
+        return F.layer_norm(self.fns[t].code.detach(), (self.c,))
 
 
 class Critic(nn.Module):
@@ -1046,8 +1076,9 @@ class Filter(nn.Module):
 
 
 class Node:
-    """a node in the pool: its value B, label L, relation R; where it lives (a memory entry (place, index), the
-    workspace, or a function); the node that asked for it (parent)"""
+    """a node in the pool: its value B, label L, relation R, and its action A (Acting.action: from B, plus a made
+    node's own correction); where it lives (a memory entry (place, index), the workspace, or a made node that acts);
+    the node that asked for it (parent). Any node can act: a signal's want meets its label (Acting.key)"""
 
     def __init__(self, B, L, R, kind="work", place=-1, idx=-1, parent=None, fn=-1):
         self.B, self.L, self.R, self.kind, self.place, self.idx, self.parent, self.fn = B, L, R, kind, place, idx, parent, fn
@@ -1076,6 +1107,8 @@ class FM:
         self.stats, self.firings, self.show, self.capture, self.said, self.trace, self.walks = {}, [], False, None, [], False, []
         self.fit = {}                                  # (function, purpose) -> how often it did that exactly (labels)
         self.calc_on, self.news = True, []             # the calculator's own body answers (False: removed, its mimic does)
+        self.made, self.frozen = False, False          # a node that acts was made (the optimizer takes it in); frozen:
+        #                                                no new one (checks)
 
     def count(self, k, n=1):
         self.stats[k] = self.stats.get(k, 0) + n
@@ -1107,7 +1140,13 @@ class FM:
         return n
 
     def fnode(self, t):
-        return Node(self.bank.as_node(t), self.bank.nets[t].key.detach(), torch.zeros(self.bank.d, device=self.dev), "fn", fn=t)
+        return Node(self.bank.as_node(t), self.bank.fns[t].key.detach(), torch.zeros(self.bank.d, device=self.dev), "fn", fn=t)
+
+    def name(self, n):
+        if n.kind == "fn":
+            c = self.bank.fns[n.fn].calc
+            return f"function {n.fn}" + (f" (calculator {c})" if c else "")
+        return (f"entry {n.place}.{n.idx} " if n.kind == "entry" else "node ") + repr((n.text or self.say(n))[:40])
 
     def say(self, n):
         return self.tr.decode(n.B[None], torch.ones(1, len(n.B), dtype=torch.bool, device=self.dev))[0].strip()
@@ -1139,13 +1178,27 @@ class FM:
                     if (p2, i) not in seen:
                         seen.add((p2, i))
                         out.append((self.entry(p2, i), 4, 0))
-        out += [(self.fnode(t), 2, 0) for t in range(len(self.bank.nets))]
+        out += [(self.fnode(t), 2, 0) for t in range(len(self.bank.fns))]
         return out
 
-    def perceive(self, net, q, sg, C, keep=(), explore=0.):
+    def around(self, actor, C):
+        """what the acting node itself relates to joins what is near the signal (the traversal from it)"""
+        if actor.kind == "fn" or not self.g.n or float(actor.R.norm()) < .3:
+            return C
+        seen = {(n.place, n.idx) for n, _, _ in C if n.kind == "entry"}
+        for _, p in self.g.search(F.normalize(actor.R, dim=0).detach().float().cpu().numpy())[:self.look]:
+            for a in range(min(self.newest, len(self.g.chain[p]))):
+                i = len(self.g.chain[p]) - 1 - a
+                if (p, i) not in seen:
+                    seen.add((p, i))
+                    C.append((self.entry(p, i), 3, a))
+        return C
+
+    def perceive(self, actor, q, sg, C, keep=(), explore=0.):
         """what the acting node takes in: the signal's nodes and the most salient of the rest (up to R), each with its
         salience; returns (nodes, hops, salience, all logits)"""
-        lg = self.filt(net.key, net.code, q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C])
+        net = self.bank.interp
+        lg = self.filt(self.bank.key(actor), self.bank.program(actor), q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C])
         score = lg + torch.randn_like(lg) * explore if explore else lg
         first = [i for i, (n, k, _) in enumerate(C) if k == 0 or i in keep]
         rest = [i for i in sorted(range(len(C)), key=lambda i: -float(score[i])) if i not in first]
@@ -1153,10 +1206,9 @@ class FM:
         HOP = {0: 0, 1: 1, 2: 1, 3: 1, 4: 2}
         return [C[i][0] for i in pick], [HOP[C[i][1]] for i in pick], [torch.sigmoid(lg[i]) for i in pick], lg, pick
 
-    def route(self, q):
-        if not len(self.bank.nets):
-            return -1
-        s = self.bank.gate(q[None])[0]
+    def choose(self, q, C):
+        """which node acts: the one whose label the want meets (any node near the signal, or a made one); -1 = rest"""
+        s = self.bank.gate(q[None], [n for n, _, _ in C])[0]
         if float(s.max()) <= 1:
             return -1
         if self.explore:
@@ -1166,22 +1218,26 @@ class FM:
     # --- one firing
     def fire(self, sg):
         q = self.bank.want([[n.B for n in sg.about]], [sg.sign])[0]
-        t = self.route(q)
-        if t < 0:
+        C = self.cands(sg)
+        a = self.choose(q, C)
+        if a < 0:
             self.count("rest")
             return None
-        net = self.bank.nets[t]
-        C = self.cands(sg)
-        ins, hops, sal, lg, pick = self.perceive(net, q, sg, C, explore=self.explore)
-        o = net([n.B for n in ins], q, v=sg.sign, hops=hops, sal=sal)
+        actor = C[a][0]
+        C = self.around(actor, C)
+        ins, hops, sal, lg, pick = self.perceive(actor, q, sg, C, explore=self.explore)
+        net = self.bank.interp
+        o = self.bank.run(actor, ins, q, v=sg.sign, hops=hops, sal=sal)
         many, err, where, isfn = o["many"], o["err"], o["where"], o["isfn"]
         to_fn = lambda j: int(where[j].argmax()) >= 2 and int(where[j].argmax()) - 2 < len(ins) and ins[int(where[j].argmax()) - 2].kind == "fn"
         made = [o["code"][j] if float(isfn[j]) > 0 or to_fn(j) else assemble(net, o, j)[0] for j in range(int(many.argmax()) + 1)]
         take = [i in pick for i in range(len(C))]
-        rec = {"t": t, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a) for n, k, a in C], "take": take,
-               "ins": [n.B for n in ins], "hops": hops, "sign": sg.sign}
-        if net.calc is not None and self.calc_on:      # the calculator: its own body answers; its mimic is checked
-            got = calculate(self, net, ins, sal)
+        rec = {"actor": actor, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a_) for n, k, a_ in C], "take": take,
+               "ins": ins, "hops": hops, "sign": sg.sign}
+        self.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
+        calc = self.bank.calc_of(actor)
+        if calc is not None and self.calc_on:          # the calculator: its own body answers; its mimic is checked
+            got = calculate(self, calc, ins, sal)
             mimic = self.say(Node(made[0], None, None)) if made else ""
             if got is not None:
                 self.count("calculator"), self.count("mimic agrees", int(num(mimic) == got))
@@ -1192,26 +1248,26 @@ class FM:
                 self.count("fires")
                 return rec
             self.count("calculator read no numbers")
+        st_ = self.bank.stats_of(actor)
         if self.show:                                  # --inspect: every firing, said
             for kind, found in self.walks:
                 print(f"    walk by {'label' if kind == 1 else 'relation'}: " + "; ".join(
                     f"{p} d {d:.2f} {self.say(self.entry(p))[:35]!r}" for d, p in found), flush=True)
             rows = sorted(range(len(C)), key=lambda i: -float(lg[i]))[:10]
-            print("    candidates (filter logit): " + " | ".join(f"{float(lg[i]):+.1f} " + (f"fn {C[i][0].fn}" if C[i][0].kind == "fn"
-                  else f"{self.say(C[i][0])[:35]!r}" + (f" @{C[i][0].place}.{C[i][0].idx}" if C[i][0].kind == "entry" else "")) for i in rows), flush=True)
-            g = self.bank.gate(q[None])[0]
+            print("    candidates (salience logit): " + " | ".join(f"{float(lg[i]):+.1f} {self.name(C[i][0])[:45]}" for i in rows), flush=True)
+            g = self.bank.gate(q[None], [n for n, _, _ in C])[0]
             top = sorted(range(len(g)), key=lambda i: -float(g[i]))[:3]
-            name = lambda n: {"entry": f"entry {n.place}.{n.idx}", "fn": f"function {n.fn}"}.get(n.kind, "work")
-            print(f"  fire {len(self.firings)}: signal {sg.sign:+.2f}, function {t}{' (calculator ' + net.calc + ')' if net.calc else ''} (gates " + ", ".join(f"{i}:{float(g[i]):.2f}" for i in top) +
+            print(f"  fire {len(self.firings)}: signal {sg.sign:+.2f}, acts: {self.name(actor)} (gates " + ", ".join(
+                  f"{self.name(C[i][0])[:30]} {float(g[i]):.2f}" for i in top) +
                   ") | about: " + " + ".join(repr(self.say(n)[:60]) for n in sg.about) +
-                  f" | takes in {len(ins)}/{len(C)}: " + "; ".join(f"{name(n)} {self.say(n)[:40]!r} ({float(sv):.2f})" for n, sv in zip(ins, sal)) +
+                  f" | takes in {len(ins)}/{len(C)}: " + "; ".join(f"{self.name(n)[:45]} ({float(sv):.2f})" for n, sv in zip(ins, sal)) +
                   f" | many {int(many.argmax()) + 1}, where " + ", ".join(str(int(where[j].argmax())) for j in range(int(many.argmax()) + 1)) +
-                  f", own error {float(err):.2f} (usual {float(net.mu):.2f}) | says: " +
+                  f", own error {float(err):.2f} (usual {float(st_.mu):.2f}) | says: " +
                   "; ".join(repr(self.say(Node(z, None, None))[:60]) for z in made) +
                   " | pieces " + "; ".join(str(assemble(net, o, j)[1]) for j in range(len(made))), flush=True)
         self.firings.append(rec)
         self.count("fires")
-        drift = float(err) > float(net.mu + self.kappa * net.sd)
+        drift = float(err) > float(st_.mu + self.kappa * st_.sd)
         self.news = []
         for j, z in enumerate(made):
             if drift:                                  # its own guess: unusually wrong -> said and read again
@@ -1246,7 +1302,7 @@ class FM:
             x = ins[w - 2]
             if x.kind == "fn":                         # an edited function: its code is now this
                 with torch.no_grad():
-                    self.bank.nets[x.fn].code.copy_(z)
+                    self.bank.fns[x.fn].code.copy_(z)
                 self.count("edits")
             elif x.kind == "entry":                    # A to be B: the place's chain takes the new value, A stays
                 self.memorize(x.place, z, ins, rec, j)
@@ -1259,9 +1315,10 @@ class FM:
                     return
                 self.signals.append(Signal([x.parent, x] if x.parent is not None else [x], 1., self.t))
             return
-        if isfn and len(self.bank.nets) < self.bank.cap:   # a new function, made from an input function's network
-            like = next((n.fn for n in ins if n.kind == "fn"), None)
-            self.bank.spawn(self.bank.want([[z]])[0].detach(), like, code=z.detach())
+        if isfn and not self.frozen:                   # a new node that acts (a function), made like an input function
+            like = next((n for n in ins if n.kind == "fn"), None)
+            self.bank.make(self.bank.want([[z]])[0].detach(), like, code=z.detach())
+            self.made = True
             self.count("new functions")
             return
         n = self.node(z, parent=sg.about[0])
@@ -1499,7 +1556,7 @@ def number_of(fm, n):
     return n._num
 
 
-def calculate(fm, net, ins, sal):
+def calculate(fm, op, ins, sal):
     """the calculator's own body: the first two numbers among what it took in (as much as it attends to them),
     decoded; computed; None when it read no two numbers"""
     nums = []
@@ -1512,37 +1569,24 @@ def calculate(fm, net, ins, sal):
     if len(nums) < 2:
         return None
     try:
-        return CALC[net.calc](nums[0], nums[1])
+        return CALC[op](nums[0], nums[1])
     except Exception:
         return None
 
 
 def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
-    """one demo step done by the model: its own want, its own routing (or a new function when no label is relevant),
-    the candidates as the module itself lists them, the filter scored against the teacher's inputs; the function gets
-    the teacher's inputs and whatever else its filter lets through (in the order the candidates list them, as when it
+    """one demo step done by the model: its own want; the node that acts chosen by it among every node near the signal
+    and the made ones (none meets the want: the nearest, or a new node made like it when the nearest does another
+    purpose); the candidates as the module itself lists them, salience scored against the teacher's inputs; the actor
+    gets the teacher's inputs and whatever else is most salient (in the order the candidates list them, as when it
     lives); its outputs judged by what they say. outs: (what it should say, or a function it should give back; where:
     NEW_WORK / NEW_PLACE / the input node it replaces); also: places the signal's node relates to beyond its inputs
     (what a copy is the same as). Returns the outputs ((value, tokens): the next step reads them as they are) and the
     inputs in their order."""
-    bank = fm.bank
+    bank, net = fm.bank, fm.bank.interp
     q = bank.want([[n.B for n in about]], [v])[0]
     Ls.wants.append(q)
     Ls.kinds.append(purpose)
-    if len(bank.nets):
-        s = bank.gate(q[None])[0]
-        t = int(s.argmax()) if float(s.max()) > 1 else -1
-    else:
-        s, t = None, -1
-    if t < 0:
-        if st["step"] - st["last"] < A.cool or len(bank.nets) >= bank.cap:
-            return None, None
-        t = bank.spawn(q.detach(), int(s.argmax()) if s is not None else None, A.scope)
-        bank.nets[t].used.fill_(st["step"])
-        st.update(last=st["step"], spawned=True)
-        print(f"step {st['step']}: no label relevant to a {purpose} want -> made function {t}", flush=True)
-    net = bank.nets[t]
-    net.used.fill_(st["step"])
     fm.count("steps run")
     C = fm.cands(Signal(about, v))
     key = lambda n: ("e", n.place, n.idx) if n.kind == "entry" else ("f", n.fn) if n.kind == "fn" else id(n)
@@ -1554,8 +1598,23 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         if key(n) not in have:
             C.append((n, 1 if n.kind == "entry" else 2 if n.kind == "fn" else 0, 0))
             have.add(key(n))
+    # which node acts: any node near the signal or a made one, the one whose label the want meets. None meets it:
+    # the nearest acts (and its label is pulled to this want), unless it does another purpose well and not this one
+    # (or is a calculator): then a new node that acts is made like it, for this want
+    s_all = bank.gate(q[None], [n for n, _, _ in C])[0]
+    a = int(s_all.argmax())
+    actor, how = C[a][0], "routed" if float(s_all[a]) > 1 else "nearest"
+    if how == "nearest" and not fm.frozen and specialized(fm, actor, purpose):
+        t = bank.make(q.detach(), like=actor, scope=A.scope)
+        fm.made, how = True, "new"
+        print(f"step {st['step']}: no label meets a {purpose} want; the nearest ({fm.name(actor)}) does another purpose "
+              f"-> made function {t}", flush=True)
+        actor = fm.fnode(t)
+        C.append((actor, 2, 0))
+    fm.count(f"acts by {how}"), fm.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
+    C = fm.around(actor, C)
     keep = [i for i, (n, _, _) in enumerate(C) if key(n) in want_in]
-    order, hops, sal, lg, pick = fm.perceive(net, q, Signal(about, v), C, keep)
+    order, hops, sal, lg, pick = fm.perceive(actor, q, Signal(about, v), C, keep)
     y = torch.tensor([float(key(n) in want_in) for n, _, _ in C], device=lg.device)
     wanted = y > 0                                     # a light hint: the teacher's inputs salient, the rest less so
     Ls.add("salience hint", A.sal_sup * sum(F.binary_cross_entropy_with_logits(lg[m_], y[m_]) for m_ in (wanted, ~wanted) if bool(m_.any())))
@@ -1566,7 +1625,8 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         pos = torch.tensor([p in rel for p in places], device=lr.device)
         rl = -(lr.log_softmax(0)[pos]).mean()
         Ls.add("relation", rl)
-    o = net([n.B for n in order], q, v=v, hops=hops, sal=sal)
+    o = bank.run(actor, order, q, v=v, hops=hops, sal=sal)
+    calc = bank.calc_of(actor)
     dev = o["many"].device
     L = F.cross_entropy(o["many"][None], torch.tensor([len(outs) - 1], device=dev))
     res, keys, info, exact = [], [key(n) for n in order], [], True
@@ -1582,9 +1642,9 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             Lj, ok, z, plan, tid, spelled = got
             L, exact, dl = L + Lj, exact and ok, float(Lj)
             fm.count(f"{purpose} exact", int(ok)), fm.count(f"{purpose} said", 1)
-            if net.calc is not None and fm.calc_on:    # the calculator's own body: what goes on is its result when it
+            if calc is not None and fm.calc_on:        # the calculator's own body: what goes on is its result when it
                 with torch.no_grad():                  # is the right one; its mimic (this output) learns from it
-                    got_c = calculate(fm, net, order, sal)
+                    got_c = calculate(fm, calc, order, sal)
                 fm.count("calculator right", int(got_c is not None and D(str(got_c)) == D(target))), fm.count("calculator", 1)
                 if got_c is not None and D(str(got_c)) == D(target):
                     cz = fm.nodes([spelled])[0]
@@ -1598,13 +1658,13 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                     own, pcs = assemble(net, o, j)
                     told_ = (fm.say(Node(z, None, None)), fm.say(Node(own, None, None)))
                 if fm.capture is not None:             # --codec_check: what it says, with the target's pieces and its own
-                    fm.capture.append((purpose, D(target), told_[0], told_[1], dl, len(pcs), len(plan), t))
+                    fm.capture.append((purpose, D(target), told_[0], told_[1], dl, len(pcs), len(plan), fm.name(actor)[:30]))
                 if fm.trace:
                     info.append((j, target, w, dl, told_, plan, pcs, tid))
             res.append((z, tid, ok, spelled))
         else:                                          # a function given back: judged by what it then does
             f, rins, rq, rtarget = target
-            got = say_loss(fm, A, bank.nets[f], bank.nets[f]([n.B for n in rins], rq, code=o["code"][j]), 0, rtarget, rins)
+            got = say_loss(fm, A, net, bank.run(fm.fnode(f), rins, rq, program=o["code"][j]), 0, rtarget, rins)
             if got is not None:
                 L, exact = L + got[0], exact and got[1]
             res.append((o["code"][j], None, True, None))
@@ -1612,28 +1672,43 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         L = L + F.binary_cross_entropy_with_logits(o["isfn"][j], torch.tensor(float(not isinstance(target, str)), device=dev))
     Ls.add("functions", L + F.mse_loss(o["err"], torch.log1p(L.detach())))   # its own guess of how wrong, on a log scale
     #                                                  (fm12: the raw loss squared swamped everything, 8233 of 8289)
-    S, m = bank.gate(q[None])[0, t], .1                # the label: pushed off a purpose it does not do exactly while it
-    fk = (net.uid, purpose)                            # does another one well; else pulled
+    S, m = bank.gate(q[None], [actor])[0, 0], .1       # the label: pushed off a purpose it does not do exactly while it
+    fk = (who(fm, actor), purpose)                     # does another one well; else pulled
     fm.fit[fk] = .9 * fm.fit.get(fk, 0.) + .1 * float(exact)
-    others = [x for (i, p_), x in fm.fit.items() if i == net.uid and p_ != purpose]
-    push = not exact and bool(others) and max(others) > fm.fit[fk] + .3
+    push = not exact and specialized(fm, actor, purpose)
     Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(1 + m - S))
     if not exact and fm.calc_on and outs and isinstance(outs[0][0], str) and num(D(outs[0][0])) is not None:
-        for c_i, c_net in enumerate(bank.nets):        # trying the tools it has: a calculator that gets this right
-            if c_net.calc is None or c_i == t:         # is where this want's label should lead
+        for c_i, c_net in enumerate(bank.fns):         # trying the tools it has: a calculator that gets this right
+            if c_net.calc is None or (actor.kind == "fn" and c_i == actor.fn):   # is where this want's label should lead
                 continue
             with torch.no_grad():
-                got_c = calculate(fm, c_net, order, sal)
+                got_c = calculate(fm, c_net.calc, order, sal)
             if got_c is not None and D(str(got_c)) == D(outs[0][0]):
-                Ls.add("labels", F.relu(1 + m - bank.gate(q[None])[0, c_i]) + F.relu(S - (1 - m)))   # its label here,
+                Ls.add("labels", F.relu(1 + m - bank.gate(q[None], [fm.fnode(c_i)])[0, 0]) + F.relu(S - (1 - m)))   # its label here,
                 fm.count("calculator found by trying")                                             # the one that missed off
                 break
     if fm.trace:
-        trace_step(fm, purpose, v, about, t, C, lg, y, order, o, info, outs, net, float(S), push, exact, float(L), rl)
+        trace_step(fm, purpose, v, about, actor, how, C, s_all, lg, y, order, o, info, outs, net, float(S), push, exact, float(L), rl)
     with torch.no_grad():
-        net.mu.mul_(.98).add_(.02 * torch.log1p(L.detach()))
-        net.sd.mul_(.98).add_(.02 * (torch.log1p(L.detach()) - net.mu).abs())
+        st_ = bank.stats_of(actor)
+        st_.mu.mul_(.98).add_(.02 * torch.log1p(L.detach()))
+        st_.sd.mul_(.98).add_(.02 * (torch.log1p(L.detach()) - st_.mu).abs())
     return res, order
+
+
+def who(fm, n):
+    """whose record of what it does well: a made node's own; read nodes acting share one"""
+    return ("fn", fm.bank.fns[n.fn].uid) if n.kind == "fn" else ("read",)
+
+
+def specialized(fm, n, purpose):
+    """it does another purpose well and this one not (a calculator: its operation only)"""
+    if fm.bank.calc_of(n) is not None:
+        return True
+    k = who(fm, n)
+    mine = fm.fit.get((k, purpose), 0.)
+    others = [x for (i, p_), x in fm.fit.items() if i == k and p_ != purpose]
+    return bool(others) and max(others) > mine + .3
 
 
 def told(fm, n, k=70):
@@ -1661,22 +1736,21 @@ def pieces_said(fm, order, net, o, j, pieces, tid=None):
 
 
 @torch.no_grad()
-def trace_step(fm, purpose, v, about, t, C, lg, y, order, o, info, outs, net, S, push, exact, L, rl):
-    gates = fm.bank.gate(fm.bank.want([[n.B for n in about]], [v]))[0]
+def trace_step(fm, purpose, v, about, actor, how, C, gates, lg, y, order, o, info, outs, net, S, push, exact, L, rl):
     top = sorted(range(len(gates)), key=lambda i: -float(gates[i]))[:5]
     print(f"\n== {purpose} (signal {v:+.1f}) | about: " + " + ".join(repr(told(fm, n)) for n in about), flush=True)
-    print(f"   want -> function {t}; gates " + ", ".join(f"{i}:{float(gates[i]):.2f}" for i in top), flush=True)
+    print(f"   acts: {fm.name(actor)} ({how}); gates " + ", ".join(f"{fm.name(C[i][0])[:30]} {float(gates[i]):.2f}" for i in top), flush=True)
     for kind, found in fm.walks:
         print(f"   walk by {'label' if kind == 1 else 'relation'}: " + "; ".join(
             f"place {p} d {d:.2f} {fm.say(fm.entry(p))[:40]!r}" for d, p in found), flush=True)
-    name = {0: "signal's", 1: "label walk", 2: "function", 3: "relation walk"}
+    name = {0: "signal's", 1: "label walk", 2: "function", 3: "relation walk", 4: "two hops"}
     rows = sorted(range(len(C)), key=lambda i: -float(lg[i]))
     print(f"   candidates {len(C)} (filter logit, wanted): " + " | ".join(
         f"{float(lg[i]):+.1f}{'*' if y[i] > 0 else ''} {name[C[i][1]]} " +
         (f"fn {C[i][0].fn}" if C[i][0].kind == "fn" else f"{told(fm, C[i][0], 45)!r}" + (f" @{C[i][0].place}.{C[i][0].idx}" if C[i][0].kind == "entry" else ""))
         for i in rows[:14]), flush=True)
     print("   inputs in order: " + " | ".join(f"{r}: {told(fm, n, 50)!r}" for r, n in enumerate(order)), flush=True)
-    print(f"   many {int(o['many'].argmax()) + 1} (target {len(outs)}), own error {float(o['err']):.2f} (usual {float(net.mu):.2f})", flush=True)
+    print(f"   many {int(o['many'].argmax()) + 1} (target {len(outs)}), own error {float(o['err']):.2f} (usual {float(fm.bank.stats_of(actor).mu):.2f})", flush=True)
     for j, target, w, dl, told_, plan, pcs, tid in info:
         wp = o["where"][j].softmax(-1)
         print(f"   out {j}: target {target!r}\n      target's pieces: {pieces_said(fm, order, net, o, j, plan, tid)}\n"
@@ -1787,16 +1861,25 @@ def demo_functions(fm, Ls, A, st, rng):
     v = amount(rng)
     ins = fm.nodes([INC, str(v)])
     run_step(fm, Ls, A, st, "inc", ins, ins, [(str(v + 1), ins[1])])
-    with torch.no_grad():
-        s = fm.bank.gate(fm.bank.want([[n.B for n in fm.nodes([INC, "1"])]]))[0] if len(fm.bank.nets) else None
-    if s is None or float(s.max()) <= 1:
+    f = inc_fn(fm)                                     # the made node an add-one want reaches most
+    if f is None:
         return
-    f, k, x = int(s.argmax()), rng.choice([2, 3, 4, 5]), amount(rng)
+    k, x = rng.choice([2, 3, 4, 5]), amount(rng)
     probe = fm.nodes([INC, str(x)])
     rq = fm.bank.want([[n.B for n in probe]])[0].detach()
     for text, edit in ((EDIT.format(k=k), True), (NEWF.format(k=k), False)):
         ins = [fm.nodes([text])[0], fm.fnode(f)]      # the instruction arrives; the function is among what is visible
         run_step(fm, Ls, A, st, "fedit" if edit else "fnew", ins[:1], ins, [((f, probe, rq, str(x + k)), ins[1] if edit else NEW_WORK)])
+
+
+@torch.no_grad()
+def inc_fn(fm):
+    """the made node (not a calculator) an add-one want meets most, or None"""
+    made = [t for t, f in enumerate(fm.bank.fns) if f.calc is None]
+    if not made:
+        return None
+    s = fm.bank.gate(fm.bank.want([[n.B for n in fm.nodes([INC, "1"])]]), [fm.fnode(t) for t in made])[0]
+    return made[int(s.argmax())]
 
 
 def apart(q, kinds, tau=.1, aq=None, akinds=()):
@@ -1817,7 +1900,8 @@ def apart(q, kinds, tau=.1, aq=None, akinds=()):
 def finish(fm, Ls, rng, recent=None):
     """the routing losses of a batch: wants of one purpose together; what asks nothing (talk, answered values) below
     every label. recent: [(want detached, purpose)] of the last updates, compared against (and extended)"""
-    rows = Ls.none + [[fm.nodes([x])[0].B] for x in rng.sample(CHAT, 3) + [VAL(amount(rng)), VAL(_name(rng, 2))]]
+    talk = fm.nodes(rng.sample(CHAT, 3) + [VAL(amount(rng)), VAL(_name(rng, 2))])
+    rows = Ls.none + [[n.B] for n in talk]
     qn = fm.bank.want(rows)
     q = torch.stack(Ls.wants) if Ls.wants else qn[:0]
     kinds = Ls.kinds + ["none"] * len(qn)
@@ -1826,8 +1910,9 @@ def finish(fm, Ls, rng, recent=None):
     if recent is not None:
         recent.extend(zip(torch.cat([q, qn]).detach(), kinds))
         del recent[:-256]
-    if len(fm.bank.nets):
-        Ls.add("asks nothing", F.relu(fm.bank.gate(qn) - .9).sum() / max(1, len(rows)))
+    asks = F.relu(fm.bank.gate(qn, [fm.fnode(t) for t in range(len(fm.bank.fns))]) - .9).sum() if len(fm.bank.fns) else 0
+    asks = asks + F.relu(torch.diagonal(fm.bank.gate(qn[-len(talk):], talk)) - .9).sum()   # talk does not act on itself
+    Ls.add("asks nothing", asks / max(1, len(rows)))
 
 
 def train_codec(fm, A, rng, opt):
@@ -1882,14 +1967,13 @@ def evaluate(fm, A, seed):
             hit += got == D(VAL(truth_of(E, w)))
         line.append(f"{kind} {hit}/{n} ({steps / max(1, n):.1f} firings)")
     stats = ", ".join(f"{k} {v}" for k, v in sorted(mem.items()))
-    return f"statements {nstat} [{stats}] | answers: " + " | ".join(line) + f" | functions {len(fm.bank.nets)}"
+    return f"statements {nstat} [{stats}] | answers: " + " | ".join(line) + f" | made nodes that act {len(fm.bank.fns)}"
 
 
 @torch.no_grad()
 def fn_probe(fm, rng, n=32):
     """through the module: add one in place; the add-one function edited (k 2-5 read, k 6 never); a new function"""
-    if not len(fm.bank.nets):
-        return "no functions"
+    f = inc_fn(fm)
     hit = 0
     for _ in range(n):
         v = amount(rng)
@@ -1898,9 +1982,9 @@ def fn_probe(fm, rng, n=32):
         fm.run()
         hit += fm.say(x[1]) == D(str(v + 1))
     line = [f"add one in place {hit}/{n}"]
-    s = fm.bank.gate(fm.bank.want([[m.B for m in fm.nodes([INC, "1"])]]))[0]
-    f = int(s.argmax())
-    keep = fm.bank.nets[f].code.detach().clone()
+    if f is None:
+        return " | ".join(line) + " | no made node to edit"
+    keep = fm.bank.fns[f].code.detach().clone()
     for k in (3, 6):
         ok = 0
         for _ in range(n // 4):
@@ -1908,9 +1992,9 @@ def fn_probe(fm, rng, n=32):
             fm.run()
             x = amount(rng)
             probe = fm.nodes([INC, str(x)])
-            r_ = fm.bank.nets[f]([m.B for m in probe], fm.bank.want([[m.B for m in probe]])[0])
-            ok += fm.say(Node(assemble(fm.bank.nets[f], r_, 0)[0], None, None)) == D(str(x + k))
-            fm.bank.nets[f].code.copy_(keep)
+            r_ = fm.bank.run(fm.fnode(f), probe, fm.bank.want([[m.B for m in probe]])[0])
+            ok += fm.say(Node(assemble(fm.bank.interp, r_, 0)[0], None, None)) == D(str(x + k))
+            fm.bank.fns[f].code.copy_(keep)
         line.append(f"edited to add {k}: {ok}/{n // 4}")
     return " | ".join(line) + f" | {dict(fm.stats)}"
 
@@ -1923,15 +2007,15 @@ def amount(rng):
 
 
 def snapshot(bank):
-    return len(bank.nets), [t.code.detach().clone() for t in bank.nets]
+    return len(bank.fns), [t.code.detach().clone() for t in bank.fns]
 
 
 @torch.no_grad()
 def restore(bank, snap):
     """what living changed in the functions (edits, new ones) undone: an eval or a sampled try leaves no trace"""
     n, codes = snap
-    del bank.nets[n:]
-    for t, c in zip(bank.nets, codes):
+    del bank.fns[n:]
+    for t, c in zip(bank.fns, codes):
         t.code.copy_(c)
 
 
@@ -1947,12 +2031,12 @@ def imitate(fm, recs):
     label of the function it fired, the filter toward what it let through"""
     loss = 0
     for r in recs:
-        if r["t"] >= len(fm.bank.nets):                # a function the try made, gone with the try
+        a = r["actor"]
+        if a.kind == "fn" and a.fn >= len(fm.bank.fns):   # a node the try made, gone with the try
             continue
-        net = fm.bank.nets[r["t"]]
         q = fm.bank.want([r["about"]], [r["sign"]])[0]
-        loss = loss + F.relu(1.1 - fm.bank.gate(q[None])[0, r["t"]])
-        lg = fm.filt(net.key.detach(), net.code.detach(), q.detach(), r["sign"], 0., r["C"])   # (codes change in place as it lives)
+        loss = loss + F.relu(1.1 - fm.bank.gate(q[None], [a])[0, 0])
+        lg = fm.filt(fm.bank.key(a).detach(), fm.bank.program(a).detach(), q.detach(), r["sign"], 0., r["C"])   # (codes change in place as it lives)
         loss = loss + F.binary_cross_entropy_with_logits(lg, torch.tensor(r["take"], dtype=torch.float, device=lg.device))
     return loss / max(1, len(recs))
 
@@ -1963,15 +2047,17 @@ def checked(fm, recs):
     fm.critic.requires_grad_(False)
     loss, n = 0, 0
     for r in recs:
+        a = r["actor"]
+        if a.kind == "fn" and a.fn >= len(fm.bank.fns):
+            continue
         for j, _ in r.get("kept", []):
-            net = fm.bank.nets[r["t"]]
-            r_ = net(r["ins"], r["q"], v=r["sign"], hops=r.get("hops"))
-            loss, n = loss - F.logsigmoid(fm.critic(r["ins"], assemble(net, r_, j)[0])), n + 1
+            r_ = fm.bank.run(a, r["ins"], r["q"], v=r["sign"], hops=r.get("hops"))
+            loss, n = loss - F.logsigmoid(fm.critic([x.B for x in r["ins"]], assemble(fm.bank.interp, r_, j)[0])), n + 1
     fm.critic.requires_grad_(True)
     return loss / max(1, n)
 
 
-def live(fm, A, rng, opt, params):
+def live(fm, A, rng, O, params, remake):
     """the module lives in a fresh world by itself: nothing is scripted and no demo is shown. Lessons come only from
     signals: the check's score on what it kept, and for a wrong answer (the truth arrives) sampled tries, of which the
     cheapest right one is what its choices learn"""
@@ -2011,11 +2097,14 @@ def live(fm, A, rng, opt, params):
                 tally["fixed by a try"] += 1
                 loss = loss + imitate(fm, best)
         loss = loss + checked(fm, stored)
+        if fm.made:                                    # nodes it made while living join the optimizer
+            remake()
+            fm.made = False
         if torch.is_tensor(loss) and loss.requires_grad:
-            opt.zero_grad()
+            O["opt"].zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params(), 1.)
-            opt.step()
+            O["opt"].step()
         if tick % 25 == 0:
             print(f"live {tick}: {tally} | {dict(fm.stats)} | {time.time() - t0:.0f}s", flush=True)
             tally, fm.stats = {"asked": 0, "right": 0, "fixed by a try": 0}, {}
@@ -2028,7 +2117,7 @@ def inspect(A):
     tr = Translator().to(dev).eval()
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
-    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
     load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
@@ -2067,15 +2156,15 @@ def deep_trace(A):
     tr = Translator().to(dev).eval()
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
-    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
     load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
-    print(f"=== 1. THE TRANSLATOR ({len(fm.bank.nets)} functions in the module)", flush=True)
+    print(f"=== 1. THE TRANSLATOR ({len(fm.bank.fns)} made nodes that act in the module)", flush=True)
     translator_report(fm, random.Random(A.seed + 3))
     print("\n=== 2. ONE BATCH OF DEMOS, EVERY STEP (memory written by the teacher, 12 ticks first)", flush=True)
-    A.cool, A.own = 10 ** 9, 10 ** 9
-    st, fm.g = {"step": 10 ** 9, "last": 10 ** 9}, Graph(fm.bank.d)
+    A.own, fm.frozen = 10 ** 9, True                   # no new node made, memory = what the teacher keeps
+    st, fm.g = {"step": 10 ** 9}, Graph(fm.bank.d)
     rng = random.Random(A.seed + 4)
     w = new_world(rng)
     T = Teacher(w)
@@ -2120,7 +2209,7 @@ def deep_trace(A):
         fns = {}
         for x in xs:
             fns[x[7]] = fns.get(x[7], 0) + 1
-        print(f"{k}: {len(xs)} steps -> functions " + ", ".join(f"{f}: {c}" for f, c in sorted(fns.items(), key=lambda z: -z[1])) +
+        print(f"{k}: {len(xs)} steps -> acting nodes " + ", ".join(f"{f}: {c}" for f, c in sorted(fns.items(), key=lambda z: -z[1])) +
               f" | said exactly {sum(x[1] == x[2] for x in xs)} with the target's pieces, {sum(x[1] == x[3] for x in xs)} with its own", flush=True)
     fm.capture = None
     print("\n=== 4. LIVING BY ITSELF (a fresh world; nothing scripted)", flush=True)
@@ -2164,7 +2253,7 @@ def eval_only(A):
     tr = Translator().to(dev).eval()
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
-    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
     load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
@@ -2181,7 +2270,7 @@ def codec_check(A):
     tr = Translator().to(dev).eval()
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
-    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
     if A.load:
         load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
@@ -2232,8 +2321,8 @@ def translator_report(fm, rng):
 @torch.no_grad()
 def codec_functions(fm, A):
     print("=== each function on its demos (the teacher's inputs given)", flush=True)
-    A.cool, A.own = 10 ** 9, 10 ** 9                  # no new function, memory = what the teacher keeps
-    st, fm.capture, fm.g = {"step": 10 ** 9, "last": 10 ** 9}, [], Graph(fm.bank.d)
+    A.own, fm.frozen = 10 ** 9, True                   # no new node made, memory = what the teacher keeps
+    st, fm.capture, fm.g = {"step": 10 ** 9}, [], Graph(fm.bank.d)
     rng2 = random.Random(A.seed + 4)
     w2 = new_world(rng2)
     T = Teacher(w2)
@@ -2270,16 +2359,16 @@ def tr_params(tr):
 
 
 def save_fm(fm, path):
-    torch.save({"n": len(fm.bank.nets), "calc": [t.calc for t in fm.bank.nets], "bank": fm.bank.state_dict(), "heads": fm.heads.state_dict(),
+    torch.save({"n": len(fm.bank.fns), "calc": [t.calc for t in fm.bank.fns], "bank": fm.bank.state_dict(), "heads": fm.heads.state_dict(),
                 "filt": fm.filt.state_dict(), "critic": fm.critic.state_dict(),
                 "tr": {k: v for k, v in fm.tr.state_dict().items() if k.startswith(TRAINED)}}, path)
 
 
 def load_fm(fm, path):
     s = torch.load(path, map_location=fm.dev)
-    del fm.bank.nets[:]
+    del fm.bank.fns[:]
     for op in s["calc"]:
-        fm.bank.nets.append(ToolNet(fm.bank.interp, fm.bank.d, fm.bank.c, calc=op).to(fm.dev))
+        fm.bank.fns.append(FnNode(fm.bank.interp.K, fm.bank.d, fm.bank.c, fm.bank.interp.r, calc=op).to(fm.dev))
     for k in ("bank", "heads", "filt", "critic"):
         getattr(fm, k).load_state_dict(s[k])
     if "tr" in s:                                      # the translator as it had learned
@@ -2296,7 +2385,7 @@ def run_fm(A):
     tr.requires_grad_(False)
     for p_ in tr_params(tr):                           # the encoder and the decoder learn from every signal too
         p_.requires_grad_(True)
-    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
     rng = random.Random(A.seed)
     if A.load:
         load_fm(fm, A.load)
@@ -2341,9 +2430,9 @@ def run_fm(A):
             fm.count("skipped (gradient not finite)")
             if fm.stats["skipped (gradient not finite)"] <= 5:
                 print(f"step {st['step']}: gradient not finite (loss {float(loss):.2f})", flush=True)
-        if st["spawned"]:
+        if fm.made:                                    # a node that acts was made: its params join, moments kept
             remake()
-            st["spawned"] = False
+            fm.made = False
 
     def spans(z, m, seen):
         """the translator's round trip over pieces: a span of a text's rows, or two spans of two texts joined, says the
@@ -2365,10 +2454,10 @@ def run_fm(A):
         x, xm = pad(xs)
         return tr.decode_loss(x, xm, ts)
 
-    st, t0, recent = {"step": 0, "last": -10 ** 9, "spawned": False}, time.time(), []
+    st, t0, recent = {"step": 0}, time.time(), []
     w = T = None
     for step in range(1, A.steps + 1):
-        st["step"] = step                              # (a function made in an update that was skipped still joins)
+        st["step"] = step
         if w is None or step % 150 == 1:               # a new world now and then: names, keys, numbers all new
             w = new_world(rng)
             T = Teacher(w)
@@ -2408,10 +2497,6 @@ def run_fm(A):
             if sp is not None:
                 Ls.add("round trip (pieces)", sp)
         update(Ls, acc)
-        gone = fm.bank.prune(step, A.prune) if step % 50 == 0 else []
-        if gone:
-            print(f"step {step}: functions {gone} idle {A.prune} steps -> removed", flush=True)
-            remake()
         if step % 50 == 0:
             parts = acc
             loss = sum(acc.values())
@@ -2419,7 +2504,8 @@ def run_fm(A):
             print(f"step {step} loss {loss:.2f} (functions per demo step {acc.get('functions', 0) / n_run:.2f}, "
                   f"{fm.stats.get('updates', 0)} updates, {fm.stats.get('cannot be made of pieces', 0)} targets not made of pieces) [" +
                   ", ".join(f"{k} {v:.2f}" for k, v in parts.items()) +
-                  f"] functions {len(fm.bank.nets)} | exact: " + ", ".join(
+                  f"] made nodes that act {len(fm.bank.fns)} | who acts: " + ", ".join(
+                      f"{k[5:]} {v}" for k, v in sorted(fm.stats.items()) if k.startswith("acts")) + " | exact: " + ", ".join(
                       f"{k[:-5]} {fm.stats.get(k[:-5] + ' exact', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" said")) +
                   " | inputs the walk brought: " + ", ".join(
                       f"{k[:-3]} {fm.stats.get(k[:-3] + ' walked', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" in")) +
@@ -2440,7 +2526,7 @@ def run_fm(A):
             if A.save:
                 save_fm(fm, A.save)
     if A.live:                                         # then it lives by itself, learning from signals only
-        live(fm, A, rng, O["opt"], params)
+        live(fm, A, rng, O, params, remake)
         for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
             mod.eval()
         snap = snapshot(fm.bank)
@@ -2488,12 +2574,10 @@ if __name__ == "__main__":
     P.add_argument("--qb", type=int, default=4, help="questions per step")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
-    P.add_argument("--cool", type=int, default=20, help="steps between two new functions")
     P.add_argument("--sal_sup", type=float, default=.3, help="weight of the teacher's hint on what is salient")
     P.add_argument("--exact", type=float, default=.3, help="decode loss under which an output counts as said exactly (labels)")
     P.add_argument("--mse", type=float, default=1., help="weight of a made piece's latents against the encoder's for those words")
     P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
-    P.add_argument("--prune", type=int, default=300, help="steps a function may go unfired before it is removed")
     P.add_argument("--own", type=int, default=600, help="after this step the demo memory holds what the store itself wrote")
     P.add_argument("--scope", type=float, default=.9)
     P.add_argument("--kappa", type=float, default=2.)
