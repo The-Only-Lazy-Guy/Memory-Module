@@ -1480,16 +1480,23 @@ class Lesson:
         return sum(x for _, x in self.parts)
 
 
+def number_of(fm, n):
+    """the number a node says (decoded once, then kept on the node), or None"""
+    if not hasattr(n, "_num"):
+        n._num = num(n.text) if n.text is not None else None if n.kind == "fn" else num(fm.say(n))
+    return n._num
+
+
 def calculate(fm, net, ins, sal):
     """the calculator's own body: the first two numbers among what it took in (as much as it attends to them),
     decoded; computed; None when it read no two numbers"""
     nums = []
     for n, sv in zip(ins, sal):
-        x = num(n.text if n.text is not None else fm.say(n))
+        x = number_of(fm, n)
         if x is not None and float(sv) > .5:
             nums.append(x)
     if len(nums) < 2:
-        nums = [x for x in (num(n.text if n.text is not None else fm.say(n)) for n in ins) if x is not None]
+        nums = [x for x in (number_of(fm, n) for n in ins) if x is not None]
     if len(nums) < 2:
         return None
     try:
