@@ -2088,13 +2088,14 @@ def imitate(fm, recs):
 
 
 def signalled(fm, recs, sign):
-    """a + / - signal on firings: each actor's label moves toward / away from the want that fired it"""
+    """a + / - signal on firings: each actor's label moves toward / away from the want that fired it (the want reader,
+    shared by everything, does not move here: fm17c, pushing through it silenced every node in 3 ticks)"""
     loss, n = 0, 0
     for r in recs:
         a = r["actor"]
         if a.kind == "fn" and a.fn >= len(fm.bank.fns):
             continue
-        q = fm.bank.want([r["about"]], [r["sign"]])[0]
+        q = fm.bank.want([r["about"]], [r["sign"]])[0].detach()
         S = fm.bank.gate(q[None], [a])[0, 0]
         loss, n = loss + (F.relu(1.1 - S) if sign > 0 else F.relu(S - .9)), n + 1
     return loss / max(1, n)
@@ -2155,8 +2156,8 @@ def live(fm, A, rng, O, params, remake):
                 fm.arrive(text)
         stored = [r for r in fm.firings if r.get("kept")]
         good = [r for r in stored if all(ok >= .5 for _, ok in r["kept"])]
-        bad = [r for r in stored if not all(ok >= .5 for _, ok in r["kept"])]
-        step(checked(fm, stored[-16:]) + signalled(fm, good, 1) + .5 * signalled(fm, bad, -1))
+        step(checked(fm, stored[-16:]) + signalled(fm, good, 1))   # (a fail is the check's own gradient; a - on the
+        #                                                    label silenced the module in 3 ticks, fm17c)
         for _ in range(A.lq):
             E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops"]), w, rng)
             if E is None:
@@ -2182,7 +2183,8 @@ def live(fm, A, rng, O, params, remake):
                     best = list(fm.firings)
             fm.explore, fm.g = 0., g0
             tuned(g0, recs, -A.tune / 2)
-            loss = .3 * signalled(fm, recs, -1)
+            loss = 0                                   # wrong: no push on the labels (which one was wrong is not known);
+            #                                            the cheapest right try is what the choices learn
             if best:
                 tally["fixed by a try"] += 1
                 tuned(g0, best, A.tune)
