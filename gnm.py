@@ -748,6 +748,16 @@ class Heads(nn.Module):
         self.lab = nn.Sequential(nn.Linear(c, 512), nn.GELU(), nn.Linear(512, d))
         self.rel = nn.Sequential(nn.Linear(c, 512), nn.GELU(), nn.Linear(512, d))
         self.how = nn.Linear(c, 1)
+        self.rr = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 512, batch_first=True, activation="gelu"), 2)
+        self.rpos = nn.Parameter(torch.randn(96, c) * .02)
+        self.ro = nn.Linear(c, c)                      # the re-reader's change (zero at first: it starts as it is)
+        nn.init.zeros_(self.ro.weight), nn.init.zeros_(self.ro.bias)
+
+    def reread(self, z):
+        """a node a function made (pieces from several texts, each still carrying its sentence) read again, latent, as
+        the encoder would read those words: what goes on from a function is a node like any other"""
+        y = self.rr((z[:96] + self.rpos[:len(z[:96])])[None])[0]
+        return F.layer_norm(torch.cat([z[:96] + self.ro(y), z[96:]]), (z.shape[-1],))
 
     def forward(self, zs):
         y = self.p([[z] for z in zs])
@@ -987,6 +997,9 @@ def say_loss(fm, A, net, o, j, target, order, prefer=None):
                 L = L + F.mse_loss(o["gen"][j, s_, :i1 - i0], zt[i0:i1]) * A.mse
     want_pcs = [(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan]
     z, _ = assemble(net, o, j, want_pcs)
+    z = fm.heads.reread(z)                             # read again, as the encoder reads those words
+    if len(zt) == len(z):
+        L = L + F.mse_loss(z, zt) * A.mse
     dl = fm.tr.decode_loss(z[None], torch.ones(1, len(z), dtype=torch.bool, device=dev), [target])
     flat = [x for n_rows, t in ins_t for x in (list(t) if t is not None else [None] * n_rows)]
     with torch.no_grad():                              # exact = its own pieces say what the target's say (from wherever
@@ -1282,8 +1295,7 @@ class FM:
         net = self.bank.interp
         o = self.bank.run(actor, ins, q, v=sg.sign, hops=hops, sal=sal)
         many, err, where, isfn = o["many"], o["err"], o["where"], o["isfn"]
-        to_fn = lambda j: int(where[j].argmax()) >= 2 and int(where[j].argmax()) - 2 < len(ins) and ins[int(where[j].argmax()) - 2].kind == "fn"
-        made = [o["code"][j] if float(isfn[j]) > 0 or to_fn(j) else assemble(net, o, j)[0] for j in range(int(many.argmax()) + 1)]
+        made = [o["code"][j] if float(isfn[j]) > 0 else self.heads.reread(assemble(net, o, j)[0]) for j in range(int(many.argmax()) + 1)]
         take = [i in pick for i in range(len(C))]
         rec = {"actor": actor, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a_) for n, k, a_ in C], "take": take,
                "ins": ins, "hops": hops, "sign": sg.sign,
@@ -1354,10 +1366,14 @@ class FM:
         self.t += 1
         if w >= 2 and w - 2 < len(ins):
             x = ins[w - 2]
-            if x.kind == "fn":                         # an edited function: its code is now this
+            if x.kind == "fn" and isfn:                # an edited function: its code is now this
                 with torch.no_grad():
                     self.bank.fns[x.fn].code.copy_(z)
                 self.count("edits")
+            elif x.kind == "fn":                       # words aimed at a function: a program is not words (fm18c: 270 of
+                self.count("words aimed at a function")   # 346 statements overwrote a function) -> a new node
+                n = self.node(z, parent=sg.about[0])
+                self.news.append(n)
             elif x.kind == "entry":                    # A to be B: the place's chain takes the new value, A stays
                 self.memorize(x.place, z, ins, rec, j)
             else:                                      # a workspace node's value changed: the node that asked for it hears
@@ -1662,7 +1678,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     s_all = bank.gate(q[None], [n for n, _, _ in C])[0]
     a = int(s_all.argmax())
     actor, how = C[a][0], "routed" if float(s_all[a]) > 1 else "nearest"
-    free = [i for i, (n, _, _) in enumerate(C) if not specialized(fm, n, purpose)] if how == "nearest" else []
+    free = [i for i, (n, _, _) in enumerate(C) if n.kind == "fn" and not specialized(fm, n, purpose)] if how == "nearest" else []
     if free:                                           # none meets the want: the nearest node not doing another purpose
         a = max(free, key=lambda i: float(s_all[i]))   # (fm17: making one whenever the nearest was busy made a node per
         actor = C[a][0]                                # want, 63 by step 150)
@@ -2012,12 +2028,41 @@ def train_codec(fm, A, rng, opt):
             lab, rel = fm.tr.encode(texts), fm.tr.relation(texts)
         z, m = fm.tr.content(texts)
         L, R = fm.heads([z[i][m[i]] for i in range(len(texts))])
-        loss = (1 - (L * lab).sum(-1)).mean() + F.mse_loss(R, rel) * 10
+        loss = (1 - (L * lab).sum(-1)).mean() + F.mse_loss(R, rel) * 10 + reread_loss(fm, z, m, texts, rng)
         opt.zero_grad()
         loss.backward()
         opt.step()
         if step % 100 == 0:
             print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f}", flush=True)
+
+
+def reread_loss(fm, z, m, texts, rng, n=12):
+    """pieces of texts' rows joined (a span or two, as a function's output is), read again: against the encoder's rows
+    for the joined words, and said back"""
+    tr = fm.tr
+    rows = [(z[i][m[i]].detach(), tr.tok(t)["input_ids"]) for i, t in enumerate(texts)]
+    rows = [(r, ids) for r, ids in rows if len(ids) == len(r) and len(ids) > 1]
+    if not rows:
+        return 0
+
+    def cut(r, ids):
+        a = rng.randrange(len(ids))
+        b = min(len(ids) - 1, a + rng.randrange(8))
+        return r[a:b + 1], ids[a:b + 1]
+    loss, k = 0, 0
+    for _ in range(n):
+        parts = [cut(*rng.choice(rows)) for _ in range(rng.choice([1, 2, 2, 3]))]
+        ids = [i for _, x in parts for i in x]
+        text = tr.tok.decode(ids)
+        if tr.tok(text)["input_ids"] != ids:
+            continue
+        zr = fm.heads.reread(torch.cat([r for r, _ in parts]))
+        with torch.no_grad():
+            zt, mt = tr.content([text])
+        zt = zt[0][mt[0]]
+        if len(zt) == len(zr):
+            loss, k = loss + F.mse_loss(zr, zt) + tr.decode_loss(zr[None], torch.ones(1, len(zr), dtype=torch.bool, device=zr.device), [text]), k + 1
+    return loss / max(1, k)
 
 
 @torch.no_grad()
@@ -2120,6 +2165,48 @@ def imitate(fm, recs):
         lg = fm.filt(fm.bank.key(a).detach(), fm.bank.program(a).detach(), q.detach(), r["sign"], 0., r["C"])   # (codes change in place as it lives)
         loss = loss + F.binary_cross_entropy_with_logits(lg, torch.tensor(r["take"], dtype=torch.float, device=lg.device))
     return loss / max(1, len(recs))
+
+
+def free_question(fm, A, w, rng):
+    """the module answers a question by itself (nothing scripted) on the memory as it is; the truth arrives after: right:
+    + on its firings, the places it read easier to reach; wrong: the cheapest right one of a few sampled tries is what
+    its choices learn. Returns the loss"""
+    E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops"]), w, rng)
+    if E is None or not fm.g.n:
+        return 0
+    mods = (fm.bank, fm.heads, fm.filt, fm.critic)
+    for mod in mods:
+        mod.eval()
+    truth, g0, snap, budget = D(VAL(truth_of(E, w))), fm.g, snapshot(fm.bank), fm.budget
+    fm.budget = 16
+    fm.g, fm.firings = clone_graph(g0), []
+    got, _ = fm.ask(ask_text(E))
+    recs = list(fm.firings)
+    restore(fm.bank, snap)
+    fm.g = g0
+    fm.count("free questions"), fm.count("free right", int(got == truth)), fm.count("free firings", len(recs))
+    loss = 0
+    if got == truth:
+        tuned(g0, recs, A.tune)
+        loss = signalled(fm, recs, 1)
+    else:
+        best, fm.explore = None, A.explore
+        for _ in range(A.tries):
+            fm.g, fm.firings = clone_graph(g0), []
+            got, _ = fm.ask(ask_text(E))
+            restore(fm.bank, snap)
+            if got == truth and (best is None or len(fm.firings) < len(best)):
+                best = list(fm.firings)
+        fm.explore, fm.g = 0., g0
+        tuned(g0, recs, -A.tune / 2)
+        if best:
+            fm.count("free fixed by a try")
+            tuned(g0, best, A.tune)
+            loss = imitate(fm, best)
+    fm.budget = budget
+    for mod in mods:
+        mod.train()
+    return loss
 
 
 def signalled(fm, recs, sign):
@@ -2572,7 +2659,7 @@ def run_fm(A):
             ts.append(tr.tok.decode([i for _, ids in parts for i in ids]))
         if not xs:
             return None
-        x, xm = pad(xs)
+        x, xm = pad([fm.heads.reread(r) for r in xs])
         return tr.decode_loss(x, xm, ts)
 
     st, t0, recent = {"step": 0}, time.time(), []
@@ -2601,6 +2688,10 @@ def run_fm(A):
                 seen.append(ask_text(E))
                 finish(fm, Ls, rng, recent)
                 update(Ls, acc)
+        for _ in range(A.free):                        # questions it answers by itself: one update each
+            Ls = Lesson()
+            Ls.add("free question", free_question(fm, A, w, rng))
+            update(Ls, acc)
         Ls = Lesson()                                  # the functions on functions and the translator: one update
         demo_functions(fm, Ls, A, st, rng)
         finish(fm, Ls, rng, recent)
@@ -2617,6 +2708,7 @@ def run_fm(A):
             sp = spans(z_, m_, seen)
             if sp is not None:
                 Ls.add("round trip (pieces)", sp)
+            Ls.add("re-read", reread_loss(fm, z_, m_, seen, rng))
         update(Ls, acc)
         if step % 50 == 0:
             parts = acc
@@ -2630,7 +2722,9 @@ def run_fm(A):
                       f"{k[:-5]} {fm.stats.get(k[:-5] + ' exact', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" said")) +
                   " | inputs the walk brought: " + ", ".join(
                       f"{k[:-3]} {fm.stats.get(k[:-3] + ' walked', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" in")) +
-                  f" | {time.time() - t0:.0f}s", flush=True)
+                  f" | free questions right {fm.stats.get('free right', 0)}/{fm.stats.get('free questions', 0)} "
+                  f"({fm.stats.get('free firings', 0) / max(1, fm.stats.get('free questions', 0)):.1f} firings, "
+                  f"{fm.stats.get('free fixed by a try', 0)} fixed by a try) | {time.time() - t0:.0f}s", flush=True)
             fm.stats = {}
         if step % A.every == 0 or step == A.steps:
             for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
@@ -2701,6 +2795,7 @@ if __name__ == "__main__":
     P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
     P.add_argument("--own", type=int, default=600, help="after this step the demo memory holds what the store itself wrote")
     P.add_argument("--scope", type=float, default=.9)
+    P.add_argument("--free", type=int, default=2, help="questions per step it answers by itself (truth after)")
     P.add_argument("--tune", type=float, default=.1, help="how far a place's access key moves per use")
     P.add_argument("--try_read", type=float, default=.1, help="share of demo steps where the read node nearest the want acts instead")
     P.add_argument("--kappa", type=float, default=2.)
