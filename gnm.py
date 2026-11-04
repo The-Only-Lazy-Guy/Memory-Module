@@ -1818,9 +1818,13 @@ def run_fm(A):
         demo_functions(fm, Ls, A, st, rng)
         finish(fm, Ls, rng)
         seen += fm.said                                # what it reads and what functions say (typed values, parts,
-        fm.said = []                                   # filled questions) still says back as it was written
+        fm.said = []                                   # filled questions) still says back as it was written, long
+        for kind, ops in (("ops", (1, 3)), ("ops", (4, 6)), ("chain", 0), ("before", 0)) * 2:   # questions too
+            E = q_expr(kind, w, rng, ops or (1, 3))    # (fm8: with few of them the decoder drifted off long text,
+            if E is not None:                          # ops questions said back 15/16 -> 5/16)
+                seen.append(ask_text(E))
         if seen:
-            seen = rng.sample(seen, min(24, len(seen)))
+            seen = rng.sample(seen, min(32, len(seen)))
             Ls.add("round trip", tr.decode_loss(*tr.content(seen), seen))
         loss = Ls.total()
         opt.zero_grad()
@@ -1895,7 +1899,7 @@ if __name__ == "__main__":
     P.add_argument("--steps", type=int, default=3000)
     P.add_argument("--every", type=int, default=500)
     P.add_argument("--lr", type=float, default=2e-4)
-    P.add_argument("--lr_tr", type=float, default=5e-5, help="the translator's own layers (encoder, decoder)")
+    P.add_argument("--lr_tr", type=float, default=2e-5, help="the translator's own layers (encoder, decoder)")
     P.add_argument("--qb", type=int, default=4, help="questions per step")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
