@@ -497,6 +497,9 @@ class Graph:
         self.d, self.beam = d, beam
         self.L = np.zeros((cap, d), dtype=np.float32)
         self.R = np.zeros((cap, d), dtype=np.float32)
+        self.K = np.zeros((cap, d), dtype=np.float32)     # each place's access key: where the walk by label finds it.
+        #                                                   Starts at its label; each use moves it (the label, what it
+        #                                                   is, stays: storing finds the place by L)
         self.S = np.full(cap, REACH, dtype=np.float32)    # each place's reach: a query further from its label is not it
         self.n, self.adj, self.chain, self.cost = 0, [], [], 0
 
@@ -518,6 +521,18 @@ class Graph:
                 self.cost += len(new)
                 seen.update(zip(new, dist(new).tolist()))
 
+    def access(self, q, k):
+        """the places whose access key is nearest q, as (distance, place), closest first"""
+        if self.n == 0:
+            return []
+        d = np.linalg.norm(self.K[:self.n] - q, axis=-1)
+        return [(float(d[i]), int(i)) for i in np.argsort(d)[:k]]
+
+    def tune(self, p, v, eta):
+        """a use of place p found by v: its access key moves toward v (eta > 0: it was the right one) or away (< 0)"""
+        k = self.K[p] + eta * (v - self.K[p])
+        self.K[p] = k / max(1e-6, float(np.linalg.norm(k)))
+
     def flat(self, q):
         return int(np.linalg.norm(self.L[:self.n] - q, axis=-1).argmin()) if self.n else -1
 
@@ -532,10 +547,12 @@ class Graph:
     def add_place(self, label):
         if self.n == len(self.L):
             self.L, self.R = np.vstack([self.L, np.zeros_like(self.L)]), np.vstack([self.R, np.zeros_like(self.R)])
+            self.K = np.vstack([self.K, np.zeros_like(self.K)])
             self.S = np.concatenate([self.S, np.full(len(self.S), REACH, dtype=np.float32)])
         cands = self.search(label)
         i, self.n = self.n, self.n + 1
         self.L[i] = label
+        self.K[i] = label
         self.chain.append([])
         self.adj.append(self.cut(cands))
         for j in self.adj[i]:                          # the way back (cutting here left new places with no way in)
@@ -967,6 +984,8 @@ class Acting(nn.Module):
         self.wo = nn.Sequential(nn.Linear(c, 512), nn.GELU(), nn.Linear(512, d))
         self.wk = nn.Sequential(nn.Linear(c, 256), nn.GELU(), nn.Linear(256, 1))   # a read node: how much it acts
         nn.init.constant_(self.wk[-1].bias, -1.)       # (at first little: softplus(-1) = .31, below a made label)
+        self.kq = nn.Sequential(nn.Linear(c, 256), nn.GELU(), nn.Linear(256, d))   # ... and which wants it answers:
+        nn.init.zeros_(self.kq[-1].weight), nn.init.zeros_(self.kq[-1].bias)     # from its value, starting at its label
         self.register_buffer("mu", torch.tensor(2.))     # the error read nodes usually get when they act
         self.register_buffer("sd", torch.tensor(1.))
 
@@ -980,15 +999,17 @@ class Acting(nn.Module):
         """the label a want meets: a made node's own; a read node's label, as long as its value says it acts"""
         if n.kind == "fn":
             return self.fns[n.fn].key
-        return n.L * F.softplus(self.wk(n.B.mean(0))).squeeze(-1)
+        m = n.B.mean(0)
+        return F.normalize(n.L + self.kq(m), dim=-1) * F.softplus(self.wk(m)).squeeze(-1)
 
     def gate(self, q, nodes):                          # every want against every node's label: > 1 = relevant
         keys = [self.fns[n.fn].key if n.kind == "fn" else None for n in nodes]
         rd = [i for i, n in enumerate(nodes) if n.kind != "fn"]
         if rd:                                         # the read nodes' together (one pass)
-            w = F.softplus(self.wk(torch.stack([nodes[i].B.mean(0) for i in rd]))).squeeze(-1)
+            m = torch.stack([nodes[i].B.mean(0) for i in rd])
+            w, dk = F.softplus(self.wk(m)).squeeze(-1), self.kq(m)
             for k_, i in enumerate(rd):
-                keys[i] = nodes[i].L * w[k_]
+                keys[i] = F.normalize(nodes[i].L + dk[k_], dim=-1) * w[k_]
         return q @ torch.stack(keys).T
 
     def program(self, n):
@@ -1107,7 +1128,7 @@ class FM:
         self.stats, self.firings, self.show, self.capture, self.said, self.trace, self.walks = {}, [], False, None, [], False, []
         self.fit = {}                                  # (function, purpose) -> how often it did that exactly (labels)
         self.calc_on, self.news = True, []             # the calculator's own body answers (False: removed, its mimic does)
-        self.made, self.frozen = False, False          # a node that acts was made (the optimizer takes it in); frozen:
+        self.made, self.frozen, self.tune = False, False, .1          # a node that acts was made (the optimizer takes it in); frozen:
         #                                                no new one (checks)
 
     def count(self, k, n=1):
@@ -1161,7 +1182,8 @@ class FM:
             for kind, v in ((1, x.L), (3, F.normalize(x.R, dim=0))):
                 if kind == 3 and float(x.R.norm()) < .3:  # it relates to nothing (tr1: a direction from a near-zero R
                     continue                              # walked to the same few places for everything)
-                found = self.g.search(v.detach().float().cpu().numpy())[:self.look]
+                v_ = v.detach().float().cpu().numpy()
+                found = self.g.access(v_, self.look) if kind == 1 else self.g.search(v_)[:self.look]
                 self.walks.append((kind, found))
                 for _, p in found:
                     for a in range(min(self.newest, len(self.g.chain[p]))):
@@ -1233,7 +1255,8 @@ class FM:
         made = [o["code"][j] if float(isfn[j]) > 0 or to_fn(j) else assemble(net, o, j)[0] for j in range(int(many.argmax()) + 1)]
         take = [i in pick for i in range(len(C))]
         rec = {"actor": actor, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a_) for n, k, a_ in C], "take": take,
-               "ins": ins, "hops": hops, "sign": sg.sign}
+               "ins": ins, "hops": hops, "sign": sg.sign,
+               "walkq": sg.about[0].L.detach().float().cpu().numpy() if sg.about[0].L is not None else None}
         self.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
         calc = self.bank.calc_of(actor)
         if calc is not None and self.calc_on:          # the calculator: its own body answers; its mimic is checked
@@ -1336,6 +1359,10 @@ class FM:
         self.g.R[p] = n.R.detach().float().cpu().numpy()
         ok = float(torch.sigmoid(self.critic([x.B for x in ins], z)))     # the check: does what was kept pass?
         rec.setdefault("kept", []).append((j, ok))
+        if rec.get("walkq") is not None:               # the check's signal lands at once: the places it read from get
+            for x in ins:                              # easier (pass) or harder (fail) to reach by the walk that found them
+                if x.kind == "entry" and x.place < self.g.n:
+                    self.g.tune(x.place, rec["walkq"], self.tune if ok >= .5 else -self.tune / 2)
         if ok < .5:                                    # a failure is a signal: its value the check's score, about the
             self.count("check fails")                  # entry and what it was made from
             self.signals.append(Signal([self.entry(p)] + [x for x in ins if x.kind != "fn"], 2 * ok - 1, self.t))
@@ -1681,6 +1708,21 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     fm.fit[fk] = .9 * fm.fit.get(fk, 0.) + .1 * float(exact)
     push = not exact and (how == "tried" or specialized(fm, actor, purpose))
     Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(1 + m - S))
+    if exact and len(C) > 1:                           # it was right: among every node near the want, its label is the
+        g_all = bank.gate(q[None], [n for n, _, _ in C])[0]    # one the want meets (all the others' move too)
+        at = next(i for i, (n, _, _) in enumerate(C) if n is actor)
+        Ls.add("labels", F.cross_entropy((g_all / .1)[None], torch.tensor([at], device=dev)))
+    if fm.g.n and about[0].L is not None:              # the places that were the right inputs: their access keys move
+        v_ = about[0].L.detach().float().cpu().numpy()     # toward the want's walk; places the walk put ahead of them that
+        right = {n.place for n in ins if n.kind == "entry"}   # were not wanted, away
+        found = fm.g.access(v_, fm.look)
+        for p_ in right:
+            fm.g.tune(p_, v_, A.tune)
+        worst = max((d for d, p_ in found if p_ in right), default=None)
+        for d, p_ in found:
+            if p_ not in right and right and (worst is None or d < worst):
+                fm.g.tune(p_, v_, -A.tune / 2)
+        fm.count("walk found the right place", int(bool(right) and all(p_ in {q_ for _, q_ in found} for p_ in right)))
     if not exact and fm.calc_on and outs and isinstance(outs[0][0], str) and num(D(outs[0][0])) is not None:
         for c_i, c_net in enumerate(bank.fns):         # trying the tools it has: a calculator that gets this right
             if c_net.calc is None or (actor.kind == "fn" and c_i == actor.fn):   # is where this want's label should lead
@@ -2025,7 +2067,7 @@ def restore(bank, snap):
 
 def clone_graph(g):
     h = copy.copy(g)
-    h.L, h.R, h.S = g.L.copy(), g.R.copy(), g.S.copy()
+    h.L, h.R, h.S, h.K = g.L.copy(), g.R.copy(), g.S.copy(), g.K.copy()
     h.adj, h.chain = [list(a) for a in g.adj], [list(c) for c in g.chain]
     return h
 
@@ -2043,6 +2085,29 @@ def imitate(fm, recs):
         lg = fm.filt(fm.bank.key(a).detach(), fm.bank.program(a).detach(), q.detach(), r["sign"], 0., r["C"])   # (codes change in place as it lives)
         loss = loss + F.binary_cross_entropy_with_logits(lg, torch.tensor(r["take"], dtype=torch.float, device=lg.device))
     return loss / max(1, len(recs))
+
+
+def signalled(fm, recs, sign):
+    """a + / - signal on firings: each actor's label moves toward / away from the want that fired it"""
+    loss, n = 0, 0
+    for r in recs:
+        a = r["actor"]
+        if a.kind == "fn" and a.fn >= len(fm.bank.fns):
+            continue
+        q = fm.bank.want([r["about"]], [r["sign"]])[0]
+        S = fm.bank.gate(q[None], [a])[0, 0]
+        loss, n = loss + (F.relu(1.1 - S) if sign > 0 else F.relu(S - .9)), n + 1
+    return loss / max(1, n)
+
+
+def tuned(g, recs, eta):
+    """+ / - on firings: the places they read from become easier / harder to reach by the walk that found them"""
+    for r in recs:
+        if r.get("walkq") is None:
+            continue
+        for x in r["ins"]:
+            if x.kind == "entry" and x.place < g.n:
+                g.tune(x.place, r["walkq"], eta)
 
 
 def checked(fm, recs):
@@ -2063,19 +2128,35 @@ def checked(fm, recs):
 
 def live(fm, A, rng, O, params, remake):
     """the module lives in a fresh world by itself: nothing is scripted and no demo is shown. Lessons come only from
-    signals: the check's score on what it kept, and for a wrong answer (the truth arrives) sampled tries, of which the
-    cheapest right one is what its choices learn"""
+    signals, and each lands at once (an update after the statements of a tick and after each question): the check's
+    score on what it kept (+ / - on those firings: their actors' labels, the places they read); a question's outcome
+    when the truth arrives (right: + on every firing of it; wrong: a light - on them, and the cheapest right one of a
+    few sampled tries is imitated, + on its firings)"""
     w = new_world(rng)
     fm.g, t0 = Graph(fm.bank.d), time.time()
-    tally = {"asked": 0, "right": 0, "fixed by a try": 0}
+    tally = {"asked": 0, "right": 0, "fixed by a try": 0, "updates": 0}
+
+    def step(loss):
+        if fm.made:                                    # nodes it made while living join the optimizer
+            remake()
+            fm.made = False
+        if torch.is_tensor(loss) and loss.requires_grad:
+            O["opt"].zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(params(), 1.)
+            O["opt"].step()
+            tally["updates"] += 1
+
     for tick in range(1, A.live + 1):
         fm.firings = []
         for d in world_step(w, rng):
             o = d()
             for text, _ in said(o, w) if o else []:
                 fm.arrive(text)
-        stored, loss = fm.firings[-16:], 0          # the check's gradient is built just before the step (below): asking
-        #                                             edits functions' codes in place
+        stored = [r for r in fm.firings if r.get("kept")]
+        good = [r for r in stored if all(ok >= .5 for _, ok in r["kept"])]
+        bad = [r for r in stored if not all(ok >= .5 for _, ok in r["kept"])]
+        step(checked(fm, stored[-16:]) + signalled(fm, good, 1) + .5 * signalled(fm, bad, -1))
         for _ in range(A.lq):
             E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops"]), w, rng)
             if E is None:
@@ -2084,10 +2165,13 @@ def live(fm, A, rng, O, params, remake):
             tally["asked"] += 1
             fm.g, fm.firings = clone_graph(g0), []
             got, _ = fm.ask(ask_text(E))
+            recs = list(fm.firings)
             restore(fm.bank, snap)
-            fm.g = g0                                  # asking leaves the memory as it was
+            fm.g = g0                                  # asking leaves the memory as it was (its access keys learn)
             if got == truth:
                 tally["right"] += 1
+                tuned(g0, recs, A.tune)
+                step(signalled(fm, recs, 1))
                 continue
             best, fm.explore = None, A.explore
             for _ in range(A.tries):
@@ -2097,21 +2181,16 @@ def live(fm, A, rng, O, params, remake):
                 if got == truth and (best is None or len(fm.firings) < len(best)):
                     best = list(fm.firings)
             fm.explore, fm.g = 0., g0
+            tuned(g0, recs, -A.tune / 2)
+            loss = .3 * signalled(fm, recs, -1)
             if best:
                 tally["fixed by a try"] += 1
+                tuned(g0, best, A.tune)
                 loss = loss + imitate(fm, best)
-        loss = loss + checked(fm, stored)
-        if fm.made:                                    # nodes it made while living join the optimizer
-            remake()
-            fm.made = False
-        if torch.is_tensor(loss) and loss.requires_grad:
-            O["opt"].zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(params(), 1.)
-            O["opt"].step()
+            step(loss)
         if tick % 25 == 0:
             print(f"live {tick}: {tally} | {dict(fm.stats)} | {time.time() - t0:.0f}s", flush=True)
-            tally, fm.stats = {"asked": 0, "right": 0, "fixed by a try": 0}, {}
+            tally, fm.stats = {"asked": 0, "right": 0, "fixed by a try": 0, "updates": 0}, {}
 
 
 @torch.no_grad()
@@ -2390,6 +2469,7 @@ def run_fm(A):
     for p_ in tr_params(tr):                           # the encoder and the decoder learn from every signal too
         p_.requires_grad_(True)
     fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm.tune = A.tune
     rng = random.Random(A.seed)
     if A.load:
         load_fm(fm, A.load)
@@ -2584,6 +2664,7 @@ if __name__ == "__main__":
     P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
     P.add_argument("--own", type=int, default=600, help="after this step the demo memory holds what the store itself wrote")
     P.add_argument("--scope", type=float, default=.9)
+    P.add_argument("--tune", type=float, default=.1, help="how far a place's access key moves per use")
     P.add_argument("--try_read", type=float, default=.1, help="share of demo steps where the read node nearest the want acts instead")
     P.add_argument("--kappa", type=float, default=2.)
     P.add_argument("--tool_good", type=float, default=.3)
