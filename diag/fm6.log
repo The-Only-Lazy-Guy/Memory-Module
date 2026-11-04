@@ -1,0 +1,38 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4040.41it/s]
+/marimo/frozen/fm6/gnm.py:1458: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f}", flush=True)
+codec 100: label cos 0.298 relation err 0.0010
+codec 200: label cos 0.540 relation err 0.0007
+codec 300: label cos 0.677 relation err 0.0004
+codec 400: label cos 0.690 relation err 0.0011
+codec 500: label cos 0.772 relation err 0.0006
+codec 600: label cos 0.767 relation err 0.0012
+codec 700: label cos 0.794 relation err 0.0005
+codec 800: label cos 0.815 relation err 0.0016
+codec 900: label cos 0.821 relation err 0.0007
+codec 1000: label cos 0.839 relation err 0.0005
+codec 1100: label cos 0.851 relation err 0.0006
+codec 1200: label cos 0.857 relation err 0.0009
+codec 1300: label cos 0.846 relation err 0.0009
+codec 1400: label cos 0.856 relation err 0.0014
+codec 1500: label cos 0.879 relation err 0.0004
+step 1: no label relevant to a store want -> made function 0
+step 21: no label relevant to a store want -> made function 1
+step 41: no label relevant to a fix want -> made function 2
+step 50 loss 65.97 [filter 1.07, relation 5.89, label of what it made 2.65, functions 51.44, labels 0.00, check 3.47, apart 1.45, asks nothing 0.00] functions 3 | inputs the walk brought: copy 32/32, fix 30/30, split 4/4, store 459/461 | 48s
+step 61: no label relevant to a split want -> made function 3
+step 81: no label relevant to a lookup want -> made function 4
+step 100 loss 144.00 [filter 2.12, relation 10.75, label of what it made 5.94, functions 113.17, labels 0.43, check 9.80, apart 1.80, asks nothing 0.00] functions 5 | inputs the walk brought: add 3/3, before 2/8, both 3/9, copy 32/32, fill 16/16, fix 141/141, lookup 3/6, split 156/156, store 996/1008 | 136s
+step 101: no label relevant to a both want -> made function 5
+step 121: no label relevant to a fill want -> made function 6
+step 141: no label relevant to a inc want -> made function 7
+step 150 loss 485.11 [filter 1.83, relation 35.72, label of what it made 12.58, functions 422.32, labels 0.68, check 8.63, apart 3.26, asks nothing 0.09] functions 8 | inputs the walk brought: add 63/63, before 30/104, both 36/108, copy 40/40, fedit 4/4, fill 802/802, fix 157/157, inc 10/10, lookup 303/594, max 25/25, min 38/38, split 430/430, store 1114/1133, sub 31/31 | 352s
+step 161: no label relevant to a lookup want -> made function 8
+step 181: no label relevant to a inc want -> made function 9
+step 200 loss 566.95 [filter 1.75, label of what it made 18.41, functions 496.90, labels 0.87, check 7.57, relation 38.15, apart 3.30, asks nothing 0.00] functions 10 | inputs the walk brought: add 78/78, before 47/114, both 28/81, copy 46/46, fedit 4/4, fill 930/930, fix 76/76, inc 40/40, lookup 383/652, max 42/42, min 35/35, split 465/465, store 715/721, sub 25/25 | 562s
+step 201: no label relevant to a fedit want -> made function 10
+step 224: no label relevant to a store want -> made function 11
+step 250 loss 268.70 [filter 1.73, relation 27.27, label of what it made 10.92, functions 211.63, labels 0.62, check 13.88, apart 2.64, asks nothing 0.02] functions 12 | inputs the walk brought: add 73/73, before 44/142, both 31/99, copy 30/30, fedit 98/98, fill 856/856, fix 97/97, fnew 94/94, inc 100/100, lookup 301/582, max 36/36, min 22/22, split 432/432, store 945/960, sub 32/32 | 785s
+step 300 loss 267.44 [filter 1.28, relation 32.90, label of what it made 10.64, functions 209.68, labels 0.43, check 9.73, apart 2.78, asks nothing 0.00] functions 12 | inputs the walk brought: add 57/57, before 31/107, both 29/93, copy 32/32, fedit 100/100, fill 914/914, fix 138/138, fnew 100/100, inc 100/100, lookup 330/646, max 39/39, min 44/44, split 457/457, store 1181/1205, sub 37/37 | 1033s
