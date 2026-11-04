@@ -887,7 +887,7 @@ class FM:
         self.dev = next(heads.parameters()).device
         self.g, self.signals, self.t, self.explore = Graph(bank.d), [], 0, 0.
         self.budget, self.look, self.newest, self.kappa, self.same = budget, look, newest, kappa, same
-        self.stats, self.firings, self.show = {}, [], False
+        self.stats, self.firings, self.show, self.capture = {}, [], False, None
 
     def count(self, k, n=1):
         self.stats[k] = self.stats.get(k, 0) + n
@@ -1287,8 +1287,12 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                 lab, rel = fm.tr.encode([target])[0], fm.tr.relation([target])[0]
                 T_ = min(int(fm.tr.content([target])[1].sum()), net.K)
             m_ = torch.arange(net.K, device=o[j].device) < T_
-            L = L + fm.tr.decode_loss(o[j][:T_][None], torch.ones(1, T_, dtype=torch.bool, device=o[j].device), [target])
-            L = L + F.binary_cross_entropy_with_logits(keep[j], m_.float())
+            dl = fm.tr.decode_loss(o[j][:T_][None], torch.ones(1, T_, dtype=torch.bool, device=o[j].device), [target])
+            L = L + dl + F.binary_cross_entropy_with_logits(keep[j], m_.float())
+            if fm.capture is not None:                 # --codec_check: what it says, at the right length and at its own
+                with torch.no_grad():
+                    fm.capture.append((purpose, target, fm.say(Node(o[j][:T_], None, None)),
+                                       fm.say(Node(kept(o[j], keep[j]), None, None)), float(dl), int((keep[j] > 0).sum()), T_))
             L_, R_ = fm.heads([o[j][:T_]])
             Ls.add("label of what it made", (1 - (L_[0] * lab).sum()) * .5 + F.mse_loss(R_[0], rel) * 5)
         else:                                          # a function given back: judged by what it then does
@@ -1669,6 +1673,84 @@ def eval_only(A):
     print(f"EVAL {A.load}: {evaluate(fm, A, A.seed + 1000)} | {fn_probe(fm, random.Random(1))}", flush=True)
 
 
+@torch.no_grad()
+def codec_check(A):
+    """--codec_check (--load X optional): the translator and the heads on every kind of text the module meets, and
+    with --load each function's outputs on its demos (the teacher's inputs given): what decodes back exactly"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    if A.load:
+        load_fm(fm, A.load)
+    for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
+        mod.eval()
+    rng = random.Random(A.seed + 3)
+    w = new_world(rng)
+    kinds = {}
+    add = lambda k, t: kinds.setdefault(k, []).append(t)
+    for _ in range(15):
+        for d in world_step(w, rng):
+            o = d()
+            for text, meta in said(o, w) if o else []:
+                add("rule" if meta[0] == "rule" else "correction" if text.startswith("Correction") else
+                    "copy" if "(same as" in text else "fact", text)
+    for kind in ("lookup", "before", "coexist", "chain", "ops", "ops"):
+        for _ in range(8):
+            E = q_expr(kind, w, rng)
+            if E is not None:
+                add(f"question {kind}", ask_text(E))
+                add("part", show(unresolved(E)))
+    for _ in range(30):
+        add("value", VAL(amount(rng)))
+        add("typed string", VAL(_name(rng, 2)))
+    for t in CHAT:
+        add("chatter", t)
+    print("=== text -> B -> text (the translator), and the heads' label against the translator's", flush=True)
+    for k, ts in kinds.items():
+        ts = list(dict.fromkeys(ts))[:40]
+        z, m = tr.content(ts)
+        dec = [x.strip() for x in tr.decode(z, m)]
+        ok = [a == b for a, b in zip(dec, ts)]
+        L, _ = fm.heads([z[i][m[i]] for i in range(len(ts))])
+        lab = tr.encode(ts)
+        cos = float((L * lab).sum(-1).mean())
+        near = float((((L @ lab.T).argmax(1)) == torch.arange(len(ts), device=L.device)).float().mean())
+        bad = [f"{a!r} -> {b!r}" for a, b, o_ in zip(ts, dec, ok) if not o_][:2]
+        print(f"{k}: round trip {sum(ok)}/{len(ts)} | heads label cos {cos:.3f}, nearest is its own {near:.2f} | " + "; ".join(bad), flush=True)
+    if not A.load:
+        return
+    print("=== each function on its demos (the teacher's inputs given)", flush=True)
+    A.cool, A.own = 10 ** 9, 10 ** 9                  # no new function, memory = what the teacher keeps
+    st, fm.capture, fm.g = {"step": 10 ** 9, "last": 10 ** 9}, [], Graph(fm.bank.d)
+    rng2 = random.Random(A.seed + 4)
+    w2 = new_world(rng2)
+    T = Teacher(w2)
+    for _ in range(12):
+        Ls = Lesson()
+        for d in world_step(w2, rng2):
+            o = d()
+            side = w2.side.get(id(o), {}) if o else {}
+            for text, meta in said(o, w2) if o else []:
+                demo_statement(fm, T, Ls, A, st, text, meta, side)
+    for kind in ("lookup", "before", "coexist", "chain", "ops") * 6:
+        E = q_expr(kind, w2, rng2)
+        if E is not None:
+            demo_question(fm, T, Lesson(), A, st, E)
+    for _ in range(8):
+        demo_functions(fm, Lesson(), A, st, rng2)
+    by = {}
+    for x in fm.capture:
+        by.setdefault(x[0], []).append(x)
+    for k, xs in sorted(by.items()):
+        exact = sum(x[1] == x[2] for x in xs)
+        own = sum(x[1] == x[3] for x in xs)
+        print(f"{k}: said exactly {exact}/{len(xs)} at the target's length, {own}/{len(xs)} at its own | decode loss "
+              f"{sum(x[4] for x in xs) / len(xs):.2f} | kept {sum(x[5] for x in xs) / len(xs):.1f} slots, target "
+              f"{sum(x[6] for x in xs) / len(xs):.1f} | e.g. " + "; ".join(f"{x[1]!r} -> {x[2]!r}" for x in xs[:2]), flush=True)
+
+
 def save_fm(fm, path):
     torch.save({"n": len(fm.bank.nets), "bank": fm.bank.state_dict(), "heads": fm.heads.state_dict(),
                 "filt": fm.filt.state_dict(), "critic": fm.critic.state_dict()}, path)
@@ -1779,6 +1861,7 @@ if __name__ == "__main__":
     P.add_argument("--fm", action="store_true", help="the function machine: codec stage 2, demos, then a world by itself")
     P.add_argument("--inspect", action="store_true", help="with --load: every firing of a few questions, said")
     P.add_argument("--eval", action="store_true", help="with --load: the saved module in a fresh world")
+    P.add_argument("--codec_check", action="store_true", help="the translator, the heads (and with --load each function) on every kind of text")
     P.add_argument("--same", type=float, default=.1, help="a node whose label moved less than this did not change: no signal")
     P.add_argument("--init", default="", help="translator weights (text -> B, B -> text)")
     P.add_argument("--load", default="", help="a saved module (skips the codec stage)")
@@ -1805,4 +1888,4 @@ if __name__ == "__main__":
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
-    inspect(A) if A.inspect else eval_only(A) if A.eval else run_fm(A)
+    inspect(A) if A.inspect else eval_only(A) if A.eval else codec_check(A) if A.codec_check else run_fm(A)
