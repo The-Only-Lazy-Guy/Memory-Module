@@ -785,12 +785,14 @@ class Interpreter(nn.Module):
         reach = torch.tensor([-1] * nh + [hp for z, hp in zip(toks, hops) for _ in range(len(z))], device=dev)
         acts = [self.action_of(z) for z in toks]
         h = torch.cat(parts)
+        total = 1 + sum(float(sv) for sv in sal)
         for li, layer in enumerate(self.layers):       # layer li reads what lies up to li hops away (and all its own)
             h = layer(h[None], src_key_padding_mask=(reach > li)[None])[0]
-            if action is not None:                     # the acting node's action multiplies into and adds to the states
-                h = h + (h @ action[0]) @ action[1].T * .1
-            for (U, V), sv in zip(acts, sal):          # so does every input's, as much as it is salient
-                h = h + sv * ((h @ U) @ V.T) * .1
+            d = (h @ action[0]) @ action[1].T if action is not None else 0   # the acting node's action multiplies into
+            for (U, V), sv in zip(acts, sal):          # and adds to the states; so does every input's, as much as it is
+                d = d + sv * ((h @ U) @ V.T) / total   # salient (averaged by salience)
+            h = F.layer_norm(h + .1 * d, (c,))         # (normalized again: added unnormalized, the states grew every
+            #                                            layer until the loss was 1e29 by step 32, fm12)
         a, b = self.M * self.K, self.M * self.S
         e = a + b + b * self.G
         hs = h[a:a + b].view(self.M, self.S, c)
