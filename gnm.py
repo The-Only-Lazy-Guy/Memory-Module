@@ -2426,17 +2426,17 @@ def run_fm(A):
                 print(f"step {st['step']}: loss not finite in {sorted(set(bad))}", flush=True)
             return
         loss.backward()
+        if fm.made:                                    # a node made in this chunk joins before the step: its first
+            remake()                                   # try trains it too (fm15 to step ~50: its own gradients were
+            fm.made = False                            # dropped, the optimizer took it in only after)
         norm = torch.nn.utils.clip_grad_norm_(params(), 1.)
         if bool(torch.isfinite(norm)):
-            opt.step()
+            O["opt"].step()
             fm.count("updates")
         else:
             fm.count("skipped (gradient not finite)")
             if fm.stats["skipped (gradient not finite)"] <= 5:
                 print(f"step {st['step']}: gradient not finite (loss {float(loss):.2f})", flush=True)
-        if fm.made:                                    # a node that acts was made: its params join, moments kept
-            remake()
-            fm.made = False
 
     def spans(z, m, seen):
         """the translator's round trip over pieces: a span of a text's rows, or two spans of two texts joined, says the
