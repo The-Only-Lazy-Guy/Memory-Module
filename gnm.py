@@ -675,6 +675,8 @@ CHAT = ["Thanks for the update!", "Morning everyone.", "Let me know if anything 
         "Quick update:", "Cheers, talk soon.", "Nothing new on my side."]
 VAL = lambda v: str(v) if isinstance(v, int) else f"string {v}"      # what a value node says: typed ("1", "string hello")
 INC, EDIT, NEWF = "add one to it", "make it add {k} instead", "make a new one that adds {k}"
+RELATED = .5                                   # R . L above this: the node relates to that place (R's length = how
+#                                                much it relates at all)
 NEW_WORK, NEW_PLACE = 0, 1                     # where an output goes: a new node in the workspace / in the memory, or 2 + r:
 #                                                in place of input r (its value changed)
 
@@ -824,7 +826,8 @@ class Filter(nn.Module):
 
     def __init__(self, c=256, d=128):
         super().__init__()
-        self.kind = nn.Parameter(torch.randn(4, c) * .02)   # 0 the signal's node, 1 a memory entry, 2 a function
+        self.kind = nn.Parameter(torch.randn(4, c) * .02)   # 0 the signal's node, 1 / 3 a memory entry the label /
+        #                                                     relation walk brought, 2 a function
         self.age = nn.Parameter(torch.randn(8, c) * .02)    # how many entries back in its place
         self.cand = nn.Sequential(nn.Linear(c + d, c), nn.GELU(), nn.Linear(c, c))
         self.qry = nn.Sequential(nn.Linear(2 * d + 2 + c, c), nn.GELU(), nn.Linear(c, c))
@@ -889,16 +892,19 @@ class FM:
     def say(self, n):
         return self.tr.decode(n.B[None], torch.ones(1, len(n.B), dtype=torch.bool, device=self.dev))[0].strip()
 
-    # --- what is near a signal (everything is visible; the walk only orders the memory by label)
+    # --- what is near a signal (everything is visible; two walks order the memory: by the node's label, where it
+    #     lives, and by its relation, what it relates to: the rule over it, what it links to, what it is the same as)
     def cands(self, sg):
         out, seen = [(n, 0, 0) for n in sg.about], {(n.place, n.idx) for n in sg.about if n.kind == "entry"}
+        x = sg.about[0]
         if self.g.n:
-            for _, p in self.g.search(sg.about[0].L.detach().float().cpu().numpy())[:self.look]:
-                for a in range(min(self.newest, len(self.g.chain[p]))):
-                    i = len(self.g.chain[p]) - 1 - a
-                    if (p, i) not in seen:
-                        seen.add((p, i))
-                        out.append((self.entry(p, i), 1, a))
+            for kind, v in ((1, x.L), (3, F.normalize(x.R, dim=0))):
+                for _, p in self.g.search(v.detach().float().cpu().numpy())[:self.look]:
+                    for a in range(min(self.newest, len(self.g.chain[p]))):
+                        i = len(self.g.chain[p]) - 1 - a
+                        if (p, i) not in seen:
+                            seen.add((p, i))
+                            out.append((self.entry(p, i), kind, a))
         out += [(self.fnode(t), 2, 0) for t in range(len(self.bank.nets))]
         return out
 
@@ -981,14 +987,17 @@ class FM:
 
     def memorize(self, p, z, ins, rec, j):
         n = self.node(z)
+        if self.g.chain[p] and self.say(Node(z, None, None)) == self.say(self.entry(p)):
+            self.count("no change")                    # it says what the place says now: nothing new, nothing to hear
+            return                                     # (a fact's label does not move with its value: said, compared)
         self.g.chain[p].append((z.detach(), self.t))
         self.g.R[p] = n.R.detach().float().cpu().numpy()
         ok = float(torch.sigmoid(self.critic([x.B for x in ins], z)))     # the check: does what was kept pass?
         rec.setdefault("kept", []).append((j, ok))
         if ok < .5:
             self.count("check fails")
-        for j in np.nonzero(self.g.R[:self.g.n] @ self.g.L[p] > 1)[0]:     # what depends on it hears
-            if j != p:
+        for j in np.nonzero(self.g.R[:self.g.n] @ self.g.L[p] > RELATED)[0]:   # what relates to it hears; the function
+            if j != p:                                                    # that fires reads the values: follow or not
                 self.signals.append(Signal([self.entry(int(j)), self.entry(p)], 1., self.t))
 
     def run(self):
@@ -1195,11 +1204,12 @@ class Lesson:
         return sum(x for _, x in self.parts)
 
 
-def run_step(fm, Ls, A, st, purpose, about, ins, outs):
+def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=()):
     """one demo step done by the model: its own want, its own routing (or a new function when no label is relevant),
     the candidates as the module itself lists them, the filter scored against the teacher's inputs (which go in, in
     the order the candidates list them, as when it lives), its outputs judged by what they say. outs: (what it should
-    say, or a function it should give back; where: NEW_WORK / NEW_PLACE / the input node it replaces). Returns the
+    say, or a function it should give back; where: NEW_WORK / NEW_PLACE / the input node it replaces); also: places
+    the signal's node relates to beyond its inputs (what a copy is the same as). Returns the
     output values (latents with their gradient: the next step reads them as they are) and the inputs in their order."""
     bank = fm.bank
     q = bank.want([[n.B for n in about]])[0]
@@ -1237,6 +1247,12 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs):
     lg = fm.filt(net.key, net.code, q, 1., 0., [(n.B, n.L, k, a) for n, k, a in C])
     y = torch.tensor([float(key(n) in want_in) for n, _, _ in C], device=lg.device)
     Ls.add("filter", F.binary_cross_entropy_with_logits(lg, y))
+    rel = sorted({n.place for n in ins if n.kind == "entry"} | set(also))
+    places = sorted({n.place for n, k, _ in C if n.kind == "entry"} | set(rel))
+    if about[0].R.requires_grad and rel and len(places) > len(rel):
+        lr = F.normalize(about[0].R, dim=0) @ torch.from_numpy(fm.g.L[places]).to(about[0].R.device).T / .1
+        pos = torch.tensor([p in rel for p in places], device=lr.device)
+        Ls.add("relation", -(lr.log_softmax(0)[pos]).mean())
     o, many, err, where, isfn = net([n.B for n in order], q)
     L = F.cross_entropy(many[None], torch.tensor([len(outs) - 1], device=many.device))
     res, keys = [], [key(n) for n in order]
@@ -1298,7 +1314,9 @@ def demo_statement(fm, T, Ls, A, st, text, meta, side):
     if r is not None:
         ins.append(fm.entry(r))
     kept = T.kept(text, meta, side)
-    res, order = run_step(fm, Ls, A, st, "store", [s], ins, [(kept, ins[1] if p is not None else NEW_PLACE)])
+    src = T.w.deps.get((meta[1], meta[2])) if meta[0] == "fact" and "(same as" in text else None
+    also = [T.place[("fact",) + src]] if src and ("fact",) + src in T.place else []
+    res, order = run_step(fm, Ls, A, st, "store", [s], ins, [(kept, ins[1] if p is not None else NEW_PLACE)], also)
     z = fm.nodes([kept])[0].B.detach()                # the teacher's memory: what it should keep ...
     own = res[0].detach() if res is not None and st["step"] > A.own else z   # ... as the store itself writes it, once it can
     if res is not None:
