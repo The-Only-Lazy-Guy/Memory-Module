@@ -115,3 +115,24 @@ step 1307: no label relevant to a min want -> made function 19
 step 1350: no label relevant to a add want -> made function 20
 step 1350: functions [6, 8, 10] idle 300 steps -> removed
 step 1350 loss 220.95 [filter 1.01, relation 39.04, label of what it made 10.73, functions 161.73, labels 0.48, check 5.26, apart 2.70, asks nothing 0.02] functions 18 | inputs the walk brought: add 64/64, before 39/136, both 39/124, copy 28/28, fedit 100/100, fill 852/852, fnew 100/100, inc 100/100, lookup 297/582, max 35/35, min 32/32, split 428/428, store 1075/1124, sub 28/28 | 3778s
+step 1396: no label relevant to a lookup want -> made function 18
+step 1400: functions [8] idle 300 steps -> removed
+step 1400 loss 89.74 [filter 0.48, relation 23.62, label of what it made 4.56, functions 57.94, labels 0.23, check 1.52, apart 1.39, asks nothing 0.00] functions 18 | inputs the walk brought: add 63/63, before 34/98, both 30/87, copy 18/18, fedit 100/100, fill 886/886, fnew 100/100, inc 100/100, lookup 365/630, max 33/33, min 36/36, split 445/445, store 707/726, sub 33/33 | 3980s
+step 1440: no label relevant to a lookup want -> made function 18
+step 1450: functions [9] idle 300 steps -> removed
+step 1450 loss 143.59 [filter 1.08, relation 26.13, label of what it made 6.14, functions 103.11, labels 0.24, check 5.13, apart 1.76, asks nothing 0.00] functions 18 | inputs the walk brought: add 65/65, before 47/146, both 31/90, copy 22/22, fedit 100/100, fill 810/810, fnew 100/100, inc 100/100, lookup 286/554, max 22/22, min 30/30, split 406/406, store 852/916, sub 28/28 | 4172s
+step 1480: no label relevant to a add want -> made function 18
+step 1500: functions [9] idle 300 steps -> removed
+step 1500 loss 180.88 [filter 0.80, label of what it made 9.49, functions 123.58, labels 0.87, check 5.55, relation 38.31, apart 2.26, asks nothing 0.03] functions 18 | inputs the walk brought: add 58/58, before 34/128, both 31/92, copy 32/32, fedit 100/100, fill 850/850, fnew 100/100, inc 100/100, lookup 311/608, max 26/26, min 44/44, split 426/426, store 1058/1145, sub 30/30 | 4384s
+EVAL step 1500: statements 291 [fires 291, roundtrip 2] | answers: lookup 2/24 (4.2 firings) | before 0/24 (4.0 firings) | coexist 0/24 (5.0 firings) | chain 0/24 (7.8 firings) | ops 0/24 (19.2 firings) | long 1/24 (15.5 firings) | functions 18 | add one in place 3/32 | edited to add 3: 1/8 | edited to add 6: 0/8 | {'fires': 1535, 'roundtrip': 31, 'rest': 176, 'edits': 16}
+step 1521: no label relevant to a copy want -> made function 18
+step 1542: no label relevant to a min want -> made function 19
+step 1550: functions [9] idle 300 steps -> removed
+step 1550 loss 127.18 [filter 0.62, relation 26.01, label of what it made 6.40, functions 90.77, labels 0.02, check 1.44, apart 1.92, asks nothing 0.00] functions 19 | inputs the walk brought: add 76/76, before 29/71, both 51/106, copy 32/32, fedit 100/100, fill 890/890, fnew 100/100, inc 100/100, lookup 368/636, max 32/32, min 40/40, split 446/446, store 691/701, sub 27/27 | 4658s
+step 1597: no label relevant to a sub want -> made function 19
+step 1600: functions [8, 9, 10] idle 300 steps -> removed
+step 1600 loss 157.75 [filter 0.94, relation 34.13, label of what it made 7.52, functions 106.03, labels 0.22, check 6.82, apart 2.03, asks nothing 0.05] functions 17 | inputs the walk brought: add 71/71, before 26/81, both 32/104, copy 34/34, fedit 100/100, fill 954/954, fnew 100/100, inc 100/100, lookup 347/678, max 46/46, min 40/40, split 477/477, store 875/913, sub 34/34 | 4863s
+step 1623: no label relevant to a inc want -> made function 17
+step 1650: functions [8, 9] idle 300 steps -> removed
+step 1650 loss 167.02 [filter 1.32, relation 36.93, label of what it made 8.99, functions 108.86, labels 0.86, check 7.97, apart 2.08, asks nothing 0.00] functions 16 | inputs the walk brought: add 60/60, before 29/117, both 41/107, copy 34/34, fedit 100/100, fill 876/876, fnew 100/100, inc 98/98, lookup 316/624, max 28/28, min 33/33, split 443/443, store 1072/1129, sub 35/35 | 5079s
+step 1653: no label relevant to a split want -> made function 16
