@@ -1,0 +1,61 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 5234.83it/s]
+/marimo/frozen/fm12/gnm.py:1831: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f}", flush=True)
+codec 100: label cos 0.319 relation err 0.0010
+codec 200: label cos 0.553 relation err 0.0007
+codec 300: label cos 0.693 relation err 0.0004
+codec 400: label cos 0.708 relation err 0.0011
+codec 500: label cos 0.765 relation err 0.0006
+codec 600: label cos 0.762 relation err 0.0011
+codec 700: label cos 0.803 relation err 0.0005
+codec 800: label cos 0.815 relation err 0.0016
+codec 900: label cos 0.833 relation err 0.0007
+codec 1000: label cos 0.846 relation err 0.0005
+codec 1100: label cos 0.849 relation err 0.0007
+codec 1200: label cos 0.852 relation err 0.0009
+codec 1300: label cos 0.845 relation err 0.0009
+codec 1400: label cos 0.867 relation err 0.0014
+codec 1500: label cos 0.877 relation err 0.0004
+step 1: no label relevant to a store want -> made function 5
+step 21: no label relevant to a store want -> made function 6
+step 41: no label relevant to a store want -> made function 7
+step 50 loss nan [apart nan, asks nothing nan, round trip nan] functions 8 | exact: copy 0/1, fill 0/2, lookup 0/2, split 0/3, store 0/47 | inputs the walk brought: copy 2/2, fill 4/4, lookup 4/4, split 3/3, store 77/80 | 22s
+step 61: no label relevant to a store want -> made function 8
+step 81: no label relevant to a store want -> made function 9
+step 100 loss nan [apart nan, asks nothing nan, round trip nan] functions 10 | exact: store 0/2 | inputs the walk brought: store 2/4 | 41s
+step 101: no label relevant to a store want -> made function 10
+step 121: no label relevant to a store want -> made function 11
+step 141: no label relevant to a store want -> made function 12
+step 150 loss nan [apart nan, asks nothing nan, round trip nan] functions 13 | exact: store 0/3 | inputs the walk brought: store 3/8 | 61s
+step 161: no label relevant to a store want -> made function 13
+step 181: no label relevant to a store want -> made function 14
+step 200 loss nan [apart nan, asks nothing nan, round trip nan] functions 15 | exact: store 0/2 | inputs the walk brought: store 2/2 | 81s
+step 201: no label relevant to a store want -> made function 15
+step 221: no label relevant to a store want -> made function 16
+step 241: no label relevant to a store want -> made function 17
+step 250 loss nan [apart nan, asks nothing nan, round trip nan] functions 18 | exact: store 0/3 | inputs the walk brought: store 3/5 | 100s
+step 261: no label relevant to a store want -> made function 18
+step 281: no label relevant to a store want -> made function 19
+step 300 loss nan [apart nan, asks nothing nan, round trip nan] functions 20 | exact: store 0/2 | inputs the walk brought: store 2/4 | 119s
+step 301: no label relevant to a store want -> made function 20
+step 321: no label relevant to a store want -> made function 21
+step 341: no label relevant to a store want -> made function 22
+step 350: functions [5, 6, 7] idle 300 steps -> removed
+step 350 loss nan [apart nan, asks nothing nan, round trip nan] functions 20 | exact: store 0/3 | inputs the walk brought: store 3/5 | 138s
+step 361: no label relevant to a store want -> made function 20
+step 381: no label relevant to a store want -> made function 21
+step 400: functions [5, 6] idle 300 steps -> removed
+step 400 loss nan [apart nan, asks nothing nan, round trip nan] functions 20 | exact: store 0/2 | inputs the walk brought: store 2/5 | 157s
+step 401: no label relevant to a store want -> made function 20
+step 421: no label relevant to a store want -> made function 21
+step 441: no label relevant to a store want -> made function 22
+step 450: functions [5, 6, 7] idle 300 steps -> removed
+step 450 loss nan [apart nan, asks nothing nan, round trip nan] functions 20 | exact: store 0/3 | inputs the walk brought: store 3/6 | 177s
+step 461: no label relevant to a store want -> made function 20
+step 481: no label relevant to a store want -> made function 21
+step 500: functions [5, 6] idle 300 steps -> removed
+step 500 loss nan [apart nan, asks nothing nan, round trip nan] functions 20 | exact: store 0/2 | inputs the walk brought: store 2/3 | 197s
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
