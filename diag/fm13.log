@@ -1,0 +1,37 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4222.38it/s]
+/marimo/frozen/fm13/gnm.py:1834: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f}", flush=True)
+codec 100: label cos 0.319 relation err 0.0010
+codec 200: label cos 0.553 relation err 0.0007
+codec 300: label cos 0.693 relation err 0.0004
+codec 400: label cos 0.708 relation err 0.0011
+codec 500: label cos 0.765 relation err 0.0006
+codec 600: label cos 0.762 relation err 0.0011
+codec 700: label cos 0.803 relation err 0.0005
+codec 800: label cos 0.815 relation err 0.0016
+codec 900: label cos 0.833 relation err 0.0007
+codec 1000: label cos 0.846 relation err 0.0005
+codec 1100: label cos 0.849 relation err 0.0007
+codec 1200: label cos 0.852 relation err 0.0009
+codec 1300: label cos 0.845 relation err 0.0009
+codec 1400: label cos 0.867 relation err 0.0014
+codec 1500: label cos 0.877 relation err 0.0004
+step 1: no label relevant to a store want -> made function 5
+step 21: no label relevant to a fix want -> made function 6
+step 41: no label relevant to a store want -> made function 7
+step 50 loss 103.74 [salience hint 10.06, label of what it made 0.69, functions 77.32, labels 0.02, check 6.34, relation 7.56, apart 1.75, asks nothing 0.00, round trip 0.00] functions 8 | exact: add 0/24, before 0/9, both 0/15, copy 0/5, fill 0/152, fix 0/1, inc 0/17, lookup 0/117, max 0/11, min 0/10, operands 0/116, split 0/160, store 95/303, sub 0/11 | inputs the walk brought: add 72/72, before 33/33, both 48/48, copy 10/10, fedit 34/34, fill 308/308, fix 10/10, fnew 34/34, inc 34/34, lookup 234/234, max 33/33, min 30/30, operands 58/58, split 160/160, store 432/443, sub 33/33 | 170s
+step 61: no label relevant to a split want -> made function 8
+step 81: no label relevant to a store want -> made function 9
+step 100 loss 313.81 [salience hint 3.80, relation 8.16, label of what it made 3.26, functions 289.86, labels 0.12, check 5.78, apart 2.67, asks nothing 0.00, round trip 0.15] functions 10 | exact: add 0/7, before 0/23, both 0/20, copy 0/10, fill 3/185, lookup 0/156, min 0/1, operands 0/88, split 4/246, store 282/485, sub 0/2 | inputs the walk brought: add 21/21, before 87/87, both 65/65, copy 20/20, fill 386/386, lookup 311/312, min 3/3, operands 44/44, split 246/246, store 901/1015, sub 6/6 | 355s
+step 101: no label relevant to a fix want -> made function 10
+step 121: no label relevant to a inc want -> made function 11
+step 141: no label relevant to a add want -> made function 12
+step 150 loss 109.50 [salience hint 1.97, relation 5.45, label of what it made 0.92, functions 90.93, labels 0.23, check 8.32, apart 1.63, asks nothing 0.04, round trip 0.02] functions 13 | exact: add 0/9, before 0/25, both 0/34, copy 0/18, fill 44/249, fix 1/43, inc 0/30, lookup 3/200, operands 0/130, split 8/285, store 342/496, sub 0/1 | inputs the walk brought: add 27/27, before 86/86, both 118/118, copy 36/36, fedit 60/60, fill 518/518, fix 513/513, fnew 34/34, inc 60/60, lookup 398/400, operands 65/65, split 285/285, store 982/1164, sub 3/3 | 598s
+step 161: no label relevant to a split want -> made function 13
+step 181: no label relevant to a operands want -> made function 14
+step 200 loss 136.14 [salience hint 3.32, label of what it made 1.67, functions 118.36, labels 0.64, check 5.09, relation 4.94, apart 2.06, asks nothing 0.01, round trip 0.05] functions 15 | exact: add 0/16, before 1/27, both 0/22, copy 0/19, fill 65/287, fix 0/25, inc 0/50, lookup 8/228, max 0/12, min 0/11, operands 0/166, split 22/317, store 420/482, sub 0/8 | inputs the walk brought: add 48/48, before 99/99, both 70/72, copy 38/38, fedit 100/100, fill 594/594, fix 266/266, fnew 98/98, inc 100/100, lookup 456/456, max 36/36, min 33/33, operands 83/83, split 317/317, store 696/719, sub 24/24 | 878s
+step 201: no label relevant to a sub want -> made function 15
+step 222: no label relevant to a min want -> made function 16
+step 242: no label relevant to a add want -> made function 17
