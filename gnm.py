@@ -735,7 +735,7 @@ class ToolNet(nn.Module):
     passed and edited like any node) and its own network, run as net(code, want, inputs). Out: up to M nodes, how many
     it means, where each goes, whether one is a function, and its own guess of how wrong it is"""
 
-    def __init__(self, d=128, c=256, K=24, M=2, R=10, L=96):
+    def __init__(self, d=128, c=256, K=48, M=2, R=10, L=96):
         super().__init__()
         self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))
         self.register_buffer("mu", torch.tensor(5.))        # the error it usually gets, and its spread
@@ -750,18 +750,33 @@ class ToolNet(nn.Module):
         self.wv = nn.Linear(1, c)                              # the signal that fired it (its value: sign x strength)
         self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 3)
         self.many, self.err, self.where, self.isfn = nn.Linear(c, M), nn.Linear(c, 1), nn.Linear(c, 2 + R), nn.Linear(c, 1)
+        self.keep = nn.Linear(c, 1)                            # which slots an output keeps (a node is as long as it says)
+        self.cq, self.ck, self.cg = nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, 1)   # each output slot may take an
+        #                                         input token's value as it is (copy), mixed with what it makes (gate)
         self.K, self.M, self.R, self.L = K, M, R, L
 
     def forward(self, ins, q, code=None, v=1.):
         code = F.layer_norm(self.code if code is None else code, (self.code.shape[-1],))
         parts = [self.out, code + self.me, self.wq(q)[None], self.wv(torch.tensor([float(v)], device=q.device))[None]]
         parts += [z[:self.L] + self.role[r] + self.pos[:len(z[:self.L])] for r, z in enumerate(ins[:self.R])]
-        y = self.f(torch.cat(parts)[None])[0, :len(self.out)]
-        y = F.layer_norm(y, (y.shape[-1],))
+        h = self.f(torch.cat(parts)[None])[0]
+        y = F.layer_norm(h[:len(self.out)], (h.shape[-1],))
+        toks = [z[:self.L] for z in ins[:self.R]]
+        if toks:                                       # what each slot takes from the inputs' tokens, as they are
+            at = len(self.out) + self.K + 2
+            ctx, raw = h[at:at + sum(len(z) for z in toks)], F.layer_norm(torch.cat(toks), (y.shape[-1],))
+            a = (self.cq(y) @ self.ck(ctx).T / y.shape[-1] ** .5).softmax(-1)
+            g = torch.sigmoid(self.cg(y))
+            y = g * (a @ raw) + (1 - g) * y
         outs = [y[j * self.K:(j + 1) * self.K] for j in range(self.M)]
         g = y.mean(0)
         return (outs, self.many(g), self.err(g).squeeze(-1), torch.stack([self.where(o.mean(0)) for o in outs]),
-                torch.stack([self.isfn(o.mean(0)).squeeze(-1) for o in outs]))
+                torch.stack([self.isfn(o.mean(0)).squeeze(-1) for o in outs]), torch.stack([self.keep(o).squeeze(-1) for o in outs]))
+
+
+def kept(z, k):
+    """an output's node: the slots it keeps (at least one)"""
+    return z[k > 0] if bool((k > 0).any()) else z[:1]
 
 
 class ToolBank(nn.Module):
@@ -938,7 +953,7 @@ class FM:
         lg = self.filt(net.key, net.code, q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C])
         take = (torch.rand_like(lg) < torch.sigmoid(lg)) if self.explore else lg > 0
         ins = [C[i][0] for i in range(len(C)) if take[i]][:net.R] or [sg.about[0]]
-        outs, many, err, where, isfn = net([n.B for n in ins], q, v=sg.sign)
+        outs, many, err, where, isfn, keep = net([n.B for n in ins], q, v=sg.sign)
         rec = {"t": t, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a) for n, k, a in C], "take": take.tolist(),
                "ins": [n.B for n in ins], "sign": sg.sign}
         if self.show:                                  # --inspect: every firing, said
@@ -950,12 +965,12 @@ class FM:
                   f" | let through {sum(take.tolist())}/{len(C)}: " + "; ".join(f"{name(n)} {self.say(n)[:50]!r}" for n in ins) +
                   f" | many {int(many.argmax()) + 1}, where " + ", ".join(str(int(where[j].argmax())) for j in range(int(many.argmax()) + 1)) +
                   f", own error {float(err):.2f} (usual {float(net.mu):.2f}) | says: " +
-                  "; ".join(repr(self.say(Node(outs[j], None, None))[:60]) for j in range(int(many.argmax()) + 1)), flush=True)
+                  "; ".join(repr(self.say(Node(kept(outs[j], keep[j]), None, None))[:60]) for j in range(int(many.argmax()) + 1)), flush=True)
         self.firings.append(rec)
         self.count("fires")
         drift = float(err) > float(net.mu + self.kappa * net.sd)
         for j in range(int(many.argmax()) + 1):
-            z = outs[j]
+            z = outs[j] if float(isfn[j]) > 0 else kept(outs[j], keep[j])   # a function's code keeps all its slots
             if drift:                                  # its own guess: unusually wrong -> said and read again
                 z = self.nodes([self.say(Node(z, None, None))])[0].B
                 self.count("roundtrip")
@@ -1262,24 +1277,29 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         lr = F.normalize(about[0].R, dim=0) @ torch.from_numpy(fm.g.L[places]).to(about[0].R.device).T / .1
         pos = torch.tensor([p in rel for p in places], device=lr.device)
         Ls.add("relation", -(lr.log_softmax(0)[pos]).mean())
-    o, many, err, where, isfn = net([n.B for n in order], q, v=v)
+    o, many, err, where, isfn, keep = net([n.B for n in order], q, v=v)
     L = F.cross_entropy(many[None], torch.tensor([len(outs) - 1], device=many.device))
     res, keys = [], [key(n) for n in order]
     for j, (target, dest) in enumerate(outs):
         w = dest if isinstance(dest, int) else 2 + keys.index(key(dest))
         if isinstance(target, str):
-            L = L + fm.tr.decode_loss(o[j][None], torch.ones(1, len(o[j]), dtype=torch.bool, device=o[j].device), [target])
             with torch.no_grad():
                 lab, rel = fm.tr.encode([target])[0], fm.tr.relation([target])[0]
-            L_, R_ = fm.heads([o[j]])
+                T_ = min(int(fm.tr.content([target])[1].sum()), net.K)
+            m_ = torch.arange(net.K, device=o[j].device) < T_
+            L = L + fm.tr.decode_loss(o[j][:T_][None], torch.ones(1, T_, dtype=torch.bool, device=o[j].device), [target])
+            L = L + F.binary_cross_entropy_with_logits(keep[j], m_.float())
+            L_, R_ = fm.heads([o[j][:T_]])
             Ls.add("label of what it made", (1 - (L_[0] * lab).sum()) * .5 + F.mse_loss(R_[0], rel) * 5)
         else:                                          # a function given back: judged by what it then does
             f, rins, rq, rtarget = target
             o2 = bank.nets[f]([n.B for n in rins], rq, code=o[j])[0]
-            L = L + fm.tr.decode_loss(o2[0][None], torch.ones(1, len(o2[0]), dtype=torch.bool, device=o2[0].device), [rtarget])
+            with torch.no_grad():
+                T2 = min(int(fm.tr.content([rtarget])[1].sum()), net.K)
+            L = L + fm.tr.decode_loss(o2[0][:T2][None], torch.ones(1, T2, dtype=torch.bool, device=o2[0].device), [rtarget])
         L = L + F.cross_entropy(where[j][None], torch.tensor([w], device=where.device))
         L = L + F.binary_cross_entropy_with_logits(isfn[j], torch.tensor(float(not isinstance(target, str)), device=isfn.device))
-        res.append(o[j])
+        res.append(o[j][:T_] if isinstance(target, str) else o[j])
     Ls.add("functions", L + F.mse_loss(err, L.detach()))
     S, m = bank.gate(q[None])[0, t], .1                # the label: pulled when it did this as well as it usually does
     usual = max(float(net.mu + A.kappa * net.sd), A.tool_good)
@@ -1492,8 +1512,8 @@ def fn_probe(fm, rng, n=32):
             fm.run()
             x = amount(rng)
             probe = fm.nodes([INC, str(x)])
-            o = fm.bank.nets[f]([m.B for m in probe], fm.bank.want([[m.B for m in probe]])[0])[0]
-            ok += fm.say(Node(o[0], None, None)) == str(x + k)
+            r_ = fm.bank.nets[f]([m.B for m in probe], fm.bank.want([[m.B for m in probe]])[0])
+            ok += fm.say(Node(kept(r_[0][0], r_[5][0]), None, None)) == str(x + k)
             fm.bank.nets[f].code.copy_(keep)
         line.append(f"edited to add {k}: {ok}/{n // 4}")
     return " | ".join(line) + f" | {dict(fm.stats)}"
@@ -1546,8 +1566,8 @@ def checked(fm, recs):
     loss, n = 0, 0
     for r in recs:
         for j, _ in r.get("kept", []):
-            o = fm.bank.nets[r["t"]](r["ins"], r["q"], v=r["sign"])[0]
-            loss, n = loss - F.logsigmoid(fm.critic(r["ins"], o[j])), n + 1
+            r_ = fm.bank.nets[r["t"]](r["ins"], r["q"], v=r["sign"])
+            loss, n = loss - F.logsigmoid(fm.critic(r["ins"], kept(r_[0][j], r_[5][j]))), n + 1
     fm.critic.requires_grad_(True)
     return loss / max(1, n)
 
