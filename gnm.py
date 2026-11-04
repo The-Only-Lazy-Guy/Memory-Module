@@ -674,6 +674,13 @@ CHAT = ["Thanks for the update!", "Morning everyone.", "Let me know if anything 
         "Have a good weekend.", "Sorry for the delay.", "See the notes below.", "That is all for today.", "Hope you are well.",
         "Quick update:", "Cheers, talk soon.", "Nothing new on my side."]
 VAL = lambda v: str(v) if isinstance(v, int) else f"string {v}"      # what a value node says: typed ("1", "string hello")
+D = lambda t: re.sub(r"(?<=\d)(?=\d)", " ", t)       # numbers as the module reads and says them: digit by digit
+#                                                (one row per digit: a function can work along them)
+
+
+def num(text):
+    """the number a said node is, or None"""
+    return number(text.replace(" ", "").strip())
 INC, EDIT, NEWF = "add one to it", "make it add {k} instead", "make a new one that adds {k}"
 RELATED = .5                                   # R . L above this: the node relates to that place (R's length = how
 #                                                much it relates at all)
@@ -730,44 +737,60 @@ class Heads(nn.Module):
         return F.normalize(self.lab(y[:, 0]), dim=-1), F.normalize(self.rel(y[:, 1]), dim=-1) * torch.sigmoid(self.how(y[:, 2])) / .9
 
 
-class ToolNet(nn.Module):
-    """one function node: its label (key: the wants it answers), its code (K latents: the function as a node, read,
-    passed and edited like any node) and its own network, run as net(code, want, signal, inputs). An output node is
-    made of up to S pieces, each either a span taken as it is from one of its inputs (where it starts and ends:
-    pointers over the inputs' tokens) or up to G latents it makes itself; a function given back is K latents. Also:
-    how many outputs it means, where each goes, whether one is a function, and its own guess of how wrong it is"""
+class Interpreter(nn.Module):
+    """what every node runs when it acts: one network for all. It reads the acting node's program (its value: rows)
+    and applies its action (a low-rank matrix pair that multiplies into and adds to the states it reads, every layer),
+    the signal, and everything it perceives (each input with how salient it is and how far the traversal went to reach
+    it; layer k reads what lies up to k hops away; each input's own action, from its value, acts on the states too, as
+    much as it is salient: a rule in view changes how the statement is read). An output node is made of up to S
+    pieces, each a span taken as it is from one of the inputs or up to G latents it makes; a function given back is K
+    latents. Also: how many outputs, where each goes, whether one is a function, its own guess of how wrong it is"""
 
-    def __init__(self, d=128, c=256, K=48, M=2, S=4, G=8, R=10, L=96):
+    def __init__(self, d=128, c=256, K=16, M=2, S=4, G=8, R=16, L=40, r=8, layers=3):
         super().__init__()
-        self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))
-        self.register_buffer("mu", torch.tensor(5.))        # the error it usually gets, and its spread
-        self.register_buffer("sd", torch.tensor(2.))
-        self.register_buffer("used", torch.tensor(0.))      # the last step a want fired it
-        self.role = nn.Parameter(torch.randn(R, c) * .02)
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
-        self.code = nn.Parameter(torch.randn(K, c) * .02)
-        self.me = nn.Parameter(torch.randn(c) * .02)
+        self.hop = nn.Parameter(torch.randn(4, c) * .02)       # how far the traversal went to reach an input
+        self.salv = nn.Parameter(torch.randn(c) * .02)         # how salient it is (perception)
+        self.me = nn.Parameter(torch.randn(c) * .02)           # marks the program
         self.wq = nn.Linear(d, c)
         self.wv = nn.Linear(1, c)                              # the signal that fired it (its value: sign x strength)
         self.codeq = nn.Parameter(torch.randn(M * K, c) * .02)   # a function given back
         self.segq = nn.Parameter(torch.randn(M * S, c) * .02)    # each piece of each output
         self.genq = nn.Parameter(torch.randn(M * S * G, c) * .02)   # the latents a made piece can hold
-        self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 3)
+        self.layers = nn.ModuleList(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu") for _ in range(layers))
+        self.act = nn.Linear(c, 2 * c * r)                     # a node's action from its value (what any node does)
+        nn.init.normal_(self.act.weight, std=1e-3), nn.init.zeros_(self.act.bias)
         self.many, self.err, self.isfn = nn.Linear(c, M), nn.Linear(c, 1), nn.Linear(c, 1)
         self.where, self.wp = nn.Linear(c, 2), nn.Linear(c, c)  # a new node / a new place, or in place of input r: the
         #                                                         output's state against each input's tokens
         self.kind = nn.Linear(c, 3)                            # a piece: 0 no more pieces, 1 a span of an input, 2 made
         self.ps, self.pe, self.pk, self.px = nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c)
         self.gkeep = nn.Linear(c, 1)                           # how many latents a made piece keeps
-        self.K, self.M, self.S, self.G, self.R, self.L = K, M, S, G, R, L
+        self.K, self.M, self.S, self.G, self.R, self.L, self.r = K, M, S, G, R, L, r
 
-    def forward(self, ins, q, code=None, v=1.):
-        c = self.code.shape[-1]
-        code = F.layer_norm(self.code if code is None else code, (c,))
+    def action_of(self, z):
+        """a node's action (U, V) from its value"""
+        a = self.act(z.mean(0)).view(2, -1, self.r)
+        return a[0], a[1]
+
+    def forward(self, ins, q, program, action, v=1., hops=None, sal=None):
+        c, dev = self.pos.shape[-1], q.device
         toks = [z[:self.L] for z in ins[:self.R]]
-        parts = [self.codeq, self.segq, self.genq, code + self.me, self.wq(q)[None], self.wv(torch.tensor([float(v)], device=q.device))[None]]
-        parts += [z + self.role[r] + self.pos[:len(z)] for r, z in enumerate(toks)]
-        h = self.f(torch.cat(parts)[None])[0]
+        hops = (list(hops) if hops is not None else [0] * len(toks))[:len(toks)]
+        sal = (list(sal) if sal is not None else [torch.ones((), device=dev)] * len(toks))[:len(toks)]
+        head = [self.codeq, self.segq, self.genq, F.layer_norm(program, (c,)) + self.me, self.wq(q)[None],
+                self.wv(torch.tensor([float(v)], device=dev))[None]]
+        nh = sum(len(x) for x in head)
+        parts = head + [z + self.pos[:len(z)] + self.hop[min(hp, 3)] + sv * self.salv for z, hp, sv in zip(toks, hops, sal)]
+        reach = torch.tensor([-1] * nh + [hp for z, hp in zip(toks, hops) for _ in range(len(z))], device=dev)
+        acts = [self.action_of(z) for z in toks]
+        h = torch.cat(parts)
+        for li, layer in enumerate(self.layers):       # layer li reads what lies up to li hops away (and all its own)
+            h = layer(h[None], src_key_padding_mask=(reach > li)[None])[0]
+            if action is not None:                     # the acting node's action multiplies into and adds to the states
+                h = h + (h @ action[0]) @ action[1].T * .1
+            for (U, V), sv in zip(acts, sal):          # so does every input's, as much as it is salient
+                h = h + sv * ((h @ U) @ V.T) * .1
         a, b = self.M * self.K, self.M * self.S
         e = a + b + b * self.G
         hs = h[a:a + b].view(self.M, self.S, c)
@@ -775,9 +798,9 @@ class ToolNet(nn.Module):
              "gen": F.layer_norm(h[a + b:e], (c,)).view(self.M, self.S, self.G, c),
              "gkeep": self.gkeep(h[a + b:e]).view(self.M, self.S, self.G)}
         n = sum(len(z) for z in toks)
-        o["ctx"] = h[e + self.K + 2:e + self.K + 2 + n]
+        o["ctx"] = h[nh:nh + n]
         o["raw"] = torch.cat(toks) if toks else h.new_zeros(0, c)       # the inputs' tokens as they are
-        o["owner"] = torch.cat([torch.full((len(z),), r, device=h.device) for r, z in enumerate(toks)]) if toks else h.new_zeros(0)
+        o["owner"] = torch.cat([torch.full((len(z),), r, device=dev) for r, z in enumerate(toks)]) if toks else h.new_zeros(0)
         o["keys"] = self.pk(o["ctx"])
         o["start"] = self.ps(hs) @ o["keys"].T
         g, every = hs.mean(1), h[:e].mean(0)
@@ -795,6 +818,36 @@ class ToolNet(nn.Module):
         lg = (self.pe(o["hs"][j, s]) + self.px(o["ctx"][st])) @ o["keys"].T
         bad = (torch.arange(len(lg), device=lg.device) < st) | (o["owner"] != o["owner"][st])
         return lg.masked_fill(bad, -1e9)
+
+
+CALC = {"add": lambda a, b: a + b, "sub": lambda a, b: a - b, "max": max, "min": min, "mul": lambda a, b: a * b}
+
+
+class ToolNet(nn.Module):
+    """a function node: its label (key: the wants it answers), its value (the program the interpreter reads: K rows)
+    and its action (U, V); run, it is the shared interpreter acting as this node. A calculator node also has a body
+    of its own (calc: decode the numbers it reads, compute, encode the result); its learned side is its mimic, which
+    takes over when the calculator is removed"""
+
+    def __init__(self, interp, d=128, c=256, calc=None):
+        super().__init__()
+        self.key = nn.Parameter(F.normalize(torch.randn(d), dim=0))
+        self.register_buffer("mu", torch.tensor(5.))        # the error it usually gets, and its spread
+        self.register_buffer("sd", torch.tensor(2.))
+        self.register_buffer("used", torch.tensor(0.))      # the last step a want fired it
+        self.code = nn.Parameter(torch.randn(interp.K, c) * .02)
+        self.au = nn.Parameter(torch.randn(c, interp.r) * .01)
+        self.av = nn.Parameter(torch.randn(c, interp.r) * .01)
+        self.calc = calc
+        object.__setattr__(self, "interp", interp)     # shared, not a part of this node
+
+    K, M, S, G, R, L = (property(lambda self, k=k: getattr(self.interp, k)) for k in "KMSGRL")
+
+    def end_logits(self, *a):
+        return self.interp.end_logits(*a)
+
+    def forward(self, ins, q, code=None, v=1., hops=None, sal=None):
+        return self.interp(ins, q, self.code if code is None else code, (self.au, self.av), v, hops, sal)
 
 
 def assemble(net, o, j, plan=None):
@@ -863,6 +916,7 @@ def say_loss(fm, A, net, o, j, target, order):
     ends, how many latents a made piece keeps and how close they are to what the encoder makes of those words), and
     what the assembled node says. Returns (loss, decode loss, the node, the target's pieces, its tokens) or None when
     the target cannot be made of the pieces an output has"""
+    target = D(target)
     tid = fm.tr.tok(target)["input_ids"]
     plan = plan_pieces(tid, [(len(n.B[:net.L]), n.toks[:net.L] if n.toks is not None else None) for n in order[:net.R]], net.S, net.G)
     if plan is None:
@@ -896,9 +950,12 @@ def say_loss(fm, A, net, o, j, target, order):
 class ToolBank(nn.Module):
     """the functions the model has made (none at first) and the want reader: a signal's nodes -> what is wanted"""
 
-    def __init__(self, d=128, c=256, cap=24):
+    def __init__(self, d=128, c=256, cap=24, calculators=tuple(CALC)):
         super().__init__()
         self.nets, self.d, self.c, self.cap = nn.ModuleList(), d, c, cap
+        self.interp = Interpreter(d, c)
+        for op in calculators:                         # the calculator: one function node per operation, its body real
+            self.nets.append(ToolNet(self.interp, d, c, calc=op))
         self.wp = Pool(c, 1)
         self.wv = nn.Linear(1, c)
         self.wo = nn.Sequential(nn.Linear(c, 512), nn.GELU(), nn.Linear(512, d))
@@ -913,7 +970,7 @@ class ToolBank(nn.Module):
         return q @ torch.stack([t.key for t in self.nets]).T
 
     def spawn(self, key, like=None, scope=.9, code=None):
-        net = ToolNet(self.d, self.c).to(key.device)
+        net = ToolNet(self.interp, self.d, self.c).to(key.device)
         if like is not None:
             net.load_state_dict(self.nets[like].state_dict())
             net.mu.fill_(5.), net.sd.fill_(2.)
@@ -927,7 +984,7 @@ class ToolBank(nn.Module):
     def prune(self, step, idle):
         """a function no want has fired for `idle` steps goes (two that did one job: the wants of that job come
         together and fire one of them, the other goes idle)"""
-        gone = [i for i, t in enumerate(self.nets) if step - float(t.used) > idle]
+        gone = [i for i, t in enumerate(self.nets) if step - float(t.used) > idle and t.calc is None]
         for i in reversed(gone):
             del self.nets[i]
         return gone
@@ -955,13 +1012,14 @@ class Critic(nn.Module):
 
 
 class Filter(nn.Module):
-    """what reaches a recipient: everything is visible; it reads the recipient (label, code), the state (the signal's
-    want, sign, strength) and each candidate (value, label, kind, age) and lets through what fits (logit > 0)"""
+    """perception: how salient each thing near the signal is for the node about to act (its label, program), given
+    the state (the signal's want, sign) and the thing (value, label, kind, age). Nothing is cut away by it: what it
+    weighs goes in with its salience, and the salience learns from how the act turns out"""
 
     def __init__(self, c=256, d=128):
         super().__init__()
-        self.kind = nn.Parameter(torch.randn(4, c) * .02)   # 0 the signal's node, 1 / 3 a memory entry the label /
-        #                                                     relation walk brought, 2 a function
+        self.kind = nn.Parameter(torch.randn(5, c) * .02)   # 0 the signal's node, 1 / 3 a memory entry the label /
+        #                                                     relation walk brought, 2 a function, 4 two hops away
         self.age = nn.Parameter(torch.randn(8, c) * .02)    # how many entries back in its place
         self.cand = nn.Sequential(nn.Linear(c + d, c), nn.GELU(), nn.Linear(c, c))
         self.qry = nn.Sequential(nn.Linear(2 * d + 2 + c, c), nn.GELU(), nn.Linear(c, c))
@@ -1005,6 +1063,7 @@ class FM:
         self.budget, self.look, self.newest, self.kappa, self.same = budget, look, newest, kappa, same
         self.stats, self.firings, self.show, self.capture, self.said, self.trace, self.walks = {}, [], False, None, [], False, []
         self.fit = {}                                  # (function, purpose) -> how often it did that exactly (labels)
+        self.calc_on, self.news = True, []             # the calculator's own body answers (False: removed, its mimic does)
 
     def count(self, k, n=1):
         self.stats[k] = self.stats.get(k, 0) + n
@@ -1012,6 +1071,7 @@ class FM:
     # --- nodes
     def nodes(self, texts):
         """text -> nodes (once, when it arrives)"""
+        texts = [D(t) for t in texts]
         z, m = self.tr.content(texts)
         B = [z[i][m[i]] for i in range(len(texts))]
         L, R = self.heads(B)
@@ -1058,8 +1118,28 @@ class FM:
                         if (p, i) not in seen:
                             seen.add((p, i))
                             out.append((self.entry(p, i), kind, a))
+            for _, p in (self.walks[0][1][:2] if self.walks else []):   # hop 2: what the nearest places relate to
+                y = self.entry(p)
+                if float(y.R.norm()) < .3:
+                    continue
+                for _, p2 in self.g.search(F.normalize(y.R, dim=0).detach().float().cpu().numpy())[:2]:
+                    i = len(self.g.chain[p2]) - 1
+                    if (p2, i) not in seen:
+                        seen.add((p2, i))
+                        out.append((self.entry(p2, i), 4, 0))
         out += [(self.fnode(t), 2, 0) for t in range(len(self.bank.nets))]
         return out
+
+    def perceive(self, net, q, sg, C, keep=(), explore=0.):
+        """what the acting node takes in: the signal's nodes and the most salient of the rest (up to R), each with its
+        salience; returns (nodes, hops, salience, all logits)"""
+        lg = self.filt(net.key, net.code, q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C])
+        score = lg + torch.randn_like(lg) * explore if explore else lg
+        first = [i for i, (n, k, _) in enumerate(C) if k == 0 or i in keep]
+        rest = [i for i in sorted(range(len(C)), key=lambda i: -float(score[i])) if i not in first]
+        pick = sorted(first + rest[:max(0, net.R - len(first))])
+        HOP = {0: 0, 1: 1, 2: 1, 3: 1, 4: 2}
+        return [C[i][0] for i in pick], [HOP[C[i][1]] for i in pick], [torch.sigmoid(lg[i]) for i in pick], lg, pick
 
     def route(self, q):
         if not len(self.bank.nets):
@@ -1080,15 +1160,26 @@ class FM:
             return None
         net = self.bank.nets[t]
         C = self.cands(sg)
-        lg = self.filt(net.key, net.code, q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C])
-        take = (torch.rand_like(lg) < torch.sigmoid(lg)) if self.explore else lg > 0
-        ins = [C[i][0] for i in range(len(C)) if take[i]][:net.R] or [sg.about[0]]
-        o = net([n.B for n in ins], q, v=sg.sign)
+        ins, hops, sal, lg, pick = self.perceive(net, q, sg, C, explore=self.explore)
+        o = net([n.B for n in ins], q, v=sg.sign, hops=hops, sal=sal)
         many, err, where, isfn = o["many"], o["err"], o["where"], o["isfn"]
         to_fn = lambda j: int(where[j].argmax()) >= 2 and int(where[j].argmax()) - 2 < len(ins) and ins[int(where[j].argmax()) - 2].kind == "fn"
         made = [o["code"][j] if float(isfn[j]) > 0 or to_fn(j) else assemble(net, o, j)[0] for j in range(int(many.argmax()) + 1)]
-        rec = {"t": t, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a) for n, k, a in C], "take": take.tolist(),
-               "ins": [n.B for n in ins], "sign": sg.sign}
+        take = [i in pick for i in range(len(C))]
+        rec = {"t": t, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a) for n, k, a in C], "take": take,
+               "ins": [n.B for n in ins], "hops": hops, "sign": sg.sign}
+        if net.calc is not None and self.calc_on:      # the calculator: its own body answers; its mimic is checked
+            got = calculate(self, net, ins, sal)
+            mimic = self.say(Node(made[0], None, None)) if made else ""
+            if got is not None:
+                self.count("calculator"), self.count("mimic agrees", int(num(mimic) == got))
+                z = self.nodes([str(got)])[0].B
+                self.memo(sg.about[0], got)
+                self.write(z, 2 + ins.index(sg.about[0]), ins, sg, False, rec, 0)
+                self.firings.append(rec)
+                self.count("fires")
+                return rec
+            self.count("calculator read no numbers")
         if self.show:                                  # --inspect: every firing, said
             for kind, found in self.walks:
                 print(f"    walk by {'label' if kind == 1 else 'relation'}: " + "; ".join(
@@ -1099,9 +1190,9 @@ class FM:
             g = self.bank.gate(q[None])[0]
             top = sorted(range(len(g)), key=lambda i: -float(g[i]))[:3]
             name = lambda n: {"entry": f"entry {n.place}.{n.idx}", "fn": f"function {n.fn}"}.get(n.kind, "work")
-            print(f"  fire {len(self.firings)}: signal {sg.sign:+.2f}, function {t} (gates " + ", ".join(f"{i}:{float(g[i]):.2f}" for i in top) +
+            print(f"  fire {len(self.firings)}: signal {sg.sign:+.2f}, function {t}{' (calculator ' + net.calc + ')' if net.calc else ''} (gates " + ", ".join(f"{i}:{float(g[i]):.2f}" for i in top) +
                   ") | about: " + " + ".join(repr(self.say(n)[:60]) for n in sg.about) +
-                  f" | let through {sum(take.tolist())}/{len(C)}: " + "; ".join(f"{name(n)} {self.say(n)[:50]!r}" for n in ins) +
+                  f" | takes in {len(ins)}/{len(C)}: " + "; ".join(f"{name(n)} {self.say(n)[:40]!r} ({float(sv):.2f})" for n, sv in zip(ins, sal)) +
                   f" | many {int(many.argmax()) + 1}, where " + ", ".join(str(int(where[j].argmax())) for j in range(int(many.argmax()) + 1)) +
                   f", own error {float(err):.2f} (usual {float(net.mu):.2f}) | says: " +
                   "; ".join(repr(self.say(Node(z, None, None))[:60]) for z in made) +
@@ -1109,12 +1200,32 @@ class FM:
         self.firings.append(rec)
         self.count("fires")
         drift = float(err) > float(net.mu + self.kappa * net.sd)
+        self.news = []
         for j, z in enumerate(made):
             if drift:                                  # its own guess: unusually wrong -> said and read again
                 z = self.nodes([self.say(Node(z, None, None))])[0].B
                 self.count("roundtrip")
             self.write(z, int(where[j].argmax()), ins, sg, float(isfn[j]) > 0, rec, j)
+        if len(self.news) == 1:                        # a new node is heard by itself; several made at once are heard
+            self.signals.append(Signal(self.news, 1., self.t))   # together, with what they came from
+        elif self.news:
+            self.signals.append(Signal([sg.about[0]] + self.news, 1., self.t))
         return rec
+
+    def memo(self, about, got):
+        """what the calculator found is kept as memory, where the question part's label leads (a later query finds it)"""
+        n = self.nodes([f"{self.say(about)} is {got}."])[0]
+        p = self.find_place(about.L)
+        if p < 0:
+            p = self.g.add_place(about.L.detach().float().cpu().numpy())
+        self.t += 1
+        self.g.chain[p].append((n.B.detach(), self.t, n.toks))
+
+    def find_place(self, L):
+        if not self.g.n:
+            return -1
+        d, p = self.g.search(L.detach().float().cpu().numpy())[0]
+        return p if d < .1 else -1
 
     def write(self, z, w, ins, sg, isfn, rec, j):
         """where an output lands, and what that change signals"""
@@ -1145,14 +1256,14 @@ class FM:
         if w == NEW_PLACE:
             self.memorize(self.g.add_place(n.L.detach().float().cpu().numpy()), z, ins, rec, j)
         else:
-            self.signals.append(Signal([n], 1., self.t))
+            self.news.append(n)
 
     def memorize(self, p, z, ins, rec, j):
         n = self.node(z)
         if self.g.chain[p] and self.say(Node(z, None, None)) == self.say(self.entry(p)):
             self.count("no change")                    # it says what the place says now: nothing new, nothing to hear
             return                                     # (a fact's label does not move with its value: said, compared)
-        self.g.chain[p].append((z.detach(), self.t))
+        self.g.chain[p].append((z.detach(), self.t, None))
         self.g.R[p] = n.R.detach().float().cpu().numpy()
         ok = float(torch.sigmoid(self.critic([x.B for x in ins], z)))     # the check: does what was kept pass?
         rec.setdefault("kept", []).append((j, ok))
@@ -1275,15 +1386,17 @@ def plan(T, E):
             y = ("leaf", x[2][1], x[1])
             E = swap(E, x, y)
             continue
-        if x[0] == "op" and x is E:                    # the whole question is arithmetic on values
-            v = next(f for f in TOOLS if f[0] == x[1])[1](*[c[1] for c in x[2]])
-            steps.append((x[1], ["q"], ["q"], [(VAL(v), 2, "q")]))
+        if x[0] == "op" and x is E:                    # the whole question is arithmetic on values: its operands are
+            v = next(f for f in TOOLS if f[0] == x[1])[1](*[c[1] for c in x[2]])   # read out, then the operation
+            steps.append(("operands", ["q"], ["q"], [(f" {x[2][0][1]}", NEW_WORK, "a"), (f" {x[2][1][1]}", NEW_WORK, "b")]))
+            steps.append((x[1], ["q", "a", "b"], ["q", "a", "b"], [(VAL(v), 2, "q")]))
             return steps, ("val", v)
         part = show(x)
         steps.append(("split", ["q"], ["q"], [(part, NEW_WORK, "p")]))
         if x[0] == "op":
             v = next(f for f in TOOLS if f[0] == x[1])[1](*[c[1] for c in x[2]])
-            steps.append((x[1], ["p"], ["p"], [(VAL(v), 2, "p")]))
+            steps.append(("operands", ["p"], ["p"], [(f" {x[2][0][1]}", NEW_WORK, "a"), (f" {x[2][1][1]}", NEW_WORK, "b")]))
+            steps.append((x[1], ["p", "a", "b"], ["p", "a", "b"], [(VAL(v), 2, "p")]))
             y = ("val", v)
         else:
             p = T.place.get(("fact", x[1], x[2]))
@@ -1367,6 +1480,24 @@ class Lesson:
         return sum(x for _, x in self.parts)
 
 
+def calculate(fm, net, ins, sal):
+    """the calculator's own body: the first two numbers among what it took in (as much as it attends to them),
+    decoded; computed; None when it read no two numbers"""
+    nums = []
+    for n, sv in zip(ins, sal):
+        x = num(n.text if n.text is not None else fm.say(n))
+        if x is not None and float(sv) > .5:
+            nums.append(x)
+    if len(nums) < 2:
+        nums = [x for x in (num(n.text if n.text is not None else fm.say(n)) for n in ins) if x is not None]
+    if len(nums) < 2:
+        return None
+    try:
+        return CALC[net.calc](nums[0], nums[1])
+    except Exception:
+        return None
+
+
 def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     """one demo step done by the model: its own want, its own routing (or a new function when no label is relevant),
     the candidates as the module itself lists them, the filter scored against the teacher's inputs; the function gets
@@ -1403,17 +1534,11 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         if key(n) not in have:
             C.append((n, 1 if n.kind == "entry" else 2 if n.kind == "fn" else 0, 0))
             have.add(key(n))
-    lg = fm.filt(net.key, net.code, q, v, 0., [(n.B, n.L, k, a) for n, k, a in C])
+    keep = [i for i, (n, _, _) in enumerate(C) if key(n) in want_in]
+    order, hops, sal, lg, pick = fm.perceive(net, q, Signal(about, v), C, keep)
     y = torch.tensor([float(key(n) in want_in) for n, _, _ in C], device=lg.device)
-    wanted = y > 0                                     # the few it should let through weigh as much as the many it should not
-    Ls.add("filter", sum(F.binary_cross_entropy_with_logits(lg[m_], y[m_]) for m_ in (wanted, ~wanted) if bool(m_.any())))
-    take = lg.detach() > 0                             # what it gets: the teacher's inputs, and what else its filter lets through
-    extra = [i for i, (n, _, _) in enumerate(C) if take[i] and key(n) not in want_in][:max(0, net.R - len(want_in))]
-    order, seen = [], set()
-    for i, (n, _, _) in enumerate(C):
-        if (key(n) in want_in or i in extra) and key(n) not in seen:
-            order.append(n)
-            seen.add(key(n))
+    wanted = y > 0                                     # a light hint: the teacher's inputs salient, the rest less so
+    Ls.add("salience hint", A.sal_sup * sum(F.binary_cross_entropy_with_logits(lg[m_], y[m_]) for m_ in (wanted, ~wanted) if bool(m_.any())))
     rel, rl = sorted({n.place for n in ins if n.kind == "entry"} | set(also)), None
     places = sorted({n.place for n, k, _ in C if n.kind == "entry"} | set(rel))
     if about[0].R.requires_grad and rel and len(places) > len(rel):
@@ -1421,7 +1546,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         pos = torch.tensor([p in rel for p in places], device=lr.device)
         rl = -(lr.log_softmax(0)[pos]).mean()
         Ls.add("relation", rl)
-    o = net([n.B for n in order], q, v=v)
+    o = net([n.B for n in order], q, v=v, hops=hops, sal=sal)
     dev = o["many"].device
     L = F.cross_entropy(o["many"][None], torch.tensor([len(outs) - 1], device=dev))
     res, keys, info, exact = [], [key(n) for n in order], [], True
@@ -1437,6 +1562,13 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             Lj, ok, z, plan, tid = got
             L, exact, dl = L + Lj, exact and ok, float(Lj)
             fm.count(f"{purpose} exact", int(ok)), fm.count(f"{purpose} said", 1)
+            if net.calc is not None and fm.calc_on:    # the calculator's own body: what goes on is its result when it
+                with torch.no_grad():                  # is the right one; its mimic (this output) learns from it
+                    got_c = calculate(fm, net, order, sal)
+                fm.count("calculator right", int(got_c is not None and D(str(got_c)) == D(target))), fm.count("calculator", 1)
+                if got_c is not None and D(str(got_c)) == D(target):
+                    cz = fm.nodes([str(got_c)])[0]
+                    z, tid, ok = cz.B, cz.toks, True
             with torch.no_grad():
                 lab, rel = fm.tr.encode([target])[0], fm.tr.relation([target])[0]
             L_, R_ = fm.heads([z])
@@ -1446,7 +1578,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                     own, pcs = assemble(net, o, j)
                     told_ = (fm.say(Node(z, None, None)), fm.say(Node(own, None, None)))
                 if fm.capture is not None:             # --codec_check: what it says, with the target's pieces and its own
-                    fm.capture.append((purpose, target, told_[0], told_[1], dl, len(pcs), len(plan), t))
+                    fm.capture.append((purpose, D(target), told_[0], told_[1], dl, len(pcs), len(plan), t))
                 if fm.trace:
                     info.append((j, target, w, dl, told_, plan, pcs, tid))
             res.append((z, tid, ok))
@@ -1465,6 +1597,16 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     others = [x for (i, p_), x in fm.fit.items() if i == id(net) and p_ != purpose]
     push = not exact and bool(others) and max(others) > fm.fit[fk] + .3
     Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(1 + m - S))
+    if not exact and fm.calc_on and outs and isinstance(outs[0][0], str) and num(D(outs[0][0])) is not None:
+        for c_i, c_net in enumerate(bank.nets):        # trying the tools it has: a calculator that gets this right
+            if c_net.calc is None or c_i == t:         # is where this want's label should lead
+                continue
+            with torch.no_grad():
+                got_c = calculate(fm, c_net, order, sal)
+            if got_c is not None and D(str(got_c)) == D(outs[0][0]):
+                Ls.add("labels", F.relu(1 + m - bank.gate(q[None])[0, c_i]) + F.relu(S - (1 - m)))   # its label here,
+                fm.count("calculator found by trying")                                             # the one that missed off
+                break
     if fm.trace:
         trace_step(fm, purpose, v, about, t, C, lg, y, order, o, info, outs, net, float(S), push, exact, float(L), rl)
     with torch.no_grad():
@@ -1669,6 +1811,7 @@ def train_codec(fm, A, rng, opt):
                 texts += [t for t, _ in said(o, w)] if o else []
         texts = rng.sample(texts, min(24, len(texts))) + rng.sample(CHAT, 2)
         texts += [ask_text(e) for e in (q_expr(k, w, rng) for k in ("lookup", "before", "chain", "ops")) if e]
+        texts = [D(t) for t in texts]
         with torch.no_grad():
             lab, rel = fm.tr.encode(texts), fm.tr.relation(texts)
         z, m = fm.tr.content(texts)
@@ -1706,7 +1849,7 @@ def evaluate(fm, A, seed):
             n += 1
             got, k = fm.ask(ask_text(E))
             steps += k
-            hit += got == VAL(truth_of(E, w))
+            hit += got == D(VAL(truth_of(E, w)))
         line.append(f"{kind} {hit}/{n} ({steps / max(1, n):.1f} firings)")
     stats = ", ".join(f"{k} {v}" for k, v in sorted(mem.items()))
     return f"statements {nstat} [{stats}] | answers: " + " | ".join(line) + f" | functions {len(fm.bank.nets)}"
@@ -1723,7 +1866,7 @@ def fn_probe(fm, rng, n=32):
         x = fm.nodes([INC, str(v)])
         fm.signals.append(Signal(x, 1., fm.t))
         fm.run()
-        hit += fm.say(x[1]) == str(v + 1)
+        hit += fm.say(x[1]) == D(str(v + 1))
     line = [f"add one in place {hit}/{n}"]
     s = fm.bank.gate(fm.bank.want([[m.B for m in fm.nodes([INC, "1"])]]))[0]
     f = int(s.argmax())
@@ -1736,7 +1879,7 @@ def fn_probe(fm, rng, n=32):
             x = amount(rng)
             probe = fm.nodes([INC, str(x)])
             r_ = fm.bank.nets[f]([m.B for m in probe], fm.bank.want([[m.B for m in probe]])[0])
-            ok += fm.say(Node(assemble(fm.bank.nets[f], r_, 0)[0], None, None)) == str(x + k)
+            ok += fm.say(Node(assemble(fm.bank.nets[f], r_, 0)[0], None, None)) == D(str(x + k))
             fm.bank.nets[f].code.copy_(keep)
         line.append(f"edited to add {k}: {ok}/{n // 4}")
     return " | ".join(line) + f" | {dict(fm.stats)}"
@@ -1792,7 +1935,7 @@ def checked(fm, recs):
     for r in recs:
         for j, _ in r.get("kept", []):
             net = fm.bank.nets[r["t"]]
-            r_ = net(r["ins"], r["q"], v=r["sign"])
+            r_ = net(r["ins"], r["q"], v=r["sign"], hops=r.get("hops"))
             loss, n = loss - F.logsigmoid(fm.critic(r["ins"], assemble(net, r_, j)[0])), n + 1
     fm.critic.requires_grad_(True)
     return loss / max(1, n)
@@ -1817,7 +1960,7 @@ def live(fm, A, rng, opt, params):
             E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops"]), w, rng)
             if E is None:
                 continue
-            truth, g0, snap = VAL(truth_of(E, w)), fm.g, snapshot(fm.bank)
+            truth, g0, snap = D(VAL(truth_of(E, w))), fm.g, snapshot(fm.bank)
             tally["asked"] += 1
             fm.g, fm.firings = clone_graph(g0), []
             got, _ = fm.ask(ask_text(E))
@@ -1996,6 +2139,8 @@ def eval_only(A):
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
     print(f"EVAL {A.load}: {evaluate(fm, A, A.seed + 1000)} | {fn_probe(fm, random.Random(1))}", flush=True)
+    fm.calc_on = False
+    print(f"EVAL {A.load}, calculator removed (its mimic answers): {evaluate(fm, A, A.seed + 1000)}", flush=True)
 
 
 @torch.no_grad()
@@ -2042,7 +2187,7 @@ def translator_report(fm, rng):
         add("chatter", t)
     print("=== text -> B -> text (the translator), and the heads' label against the translator's", flush=True)
     for k, ts in kinds.items():
-        ts = list(dict.fromkeys(ts))[:40]
+        ts = [D(t) for t in dict.fromkeys(ts)][:40]
         z, m = tr.content(ts)
         dec = [x.strip() for x in tr.decode(z, m)]
         ok = [a == b for a, b in zip(dec, ts)]
@@ -2095,15 +2240,16 @@ def tr_params(tr):
 
 
 def save_fm(fm, path):
-    torch.save({"n": len(fm.bank.nets), "bank": fm.bank.state_dict(), "heads": fm.heads.state_dict(),
+    torch.save({"n": len(fm.bank.nets), "calc": [t.calc for t in fm.bank.nets], "bank": fm.bank.state_dict(), "heads": fm.heads.state_dict(),
                 "filt": fm.filt.state_dict(), "critic": fm.critic.state_dict(),
                 "tr": {k: v for k, v in fm.tr.state_dict().items() if k.startswith(TRAINED)}}, path)
 
 
 def load_fm(fm, path):
     s = torch.load(path, map_location=fm.dev)
-    for _ in range(s["n"]):
-        fm.bank.nets.append(ToolNet(fm.bank.d, fm.bank.c).to(fm.dev))
+    del fm.bank.nets[:]
+    for op in s["calc"]:
+        fm.bank.nets.append(ToolNet(fm.bank.interp, fm.bank.d, fm.bank.c, calc=op).to(fm.dev))
     for k in ("bank", "heads", "filt", "critic"):
         getattr(fm, k).load_state_dict(s[k])
     if "tr" in s:                                      # the translator as it had learned
@@ -2158,7 +2304,7 @@ def run_fm(A):
             if E is not None:                          # ops questions said back 15/16 -> 5/16)
                 seen.append(ask_text(E))
         if seen:
-            seen = rng.sample(seen, min(32, len(seen)))
+            seen = [D(x) for x in rng.sample(seen, min(32, len(seen)))]
             Ls.add("round trip", tr.decode_loss(*tr.content(seen), seen))
         loss = Ls.total()
         opt.zero_grad()
@@ -2186,6 +2332,9 @@ def run_fm(A):
                 mod.eval()
             keep, snap = (fm.g, fm.stats), snapshot(fm.bank)
             print(f"EVAL step {step}: {evaluate(fm, A, A.seed + 1000 + step)} | {fn_probe(fm, random.Random(step))}", flush=True)
+            fm.calc_on = False
+            print(f"EVAL step {step}, calculator removed (its mimic answers): {evaluate(fm, A, A.seed + 1000 + step)}", flush=True)
+            fm.calc_on = True
             restore(fm.bank, snap)
             fm.g, fm.stats = keep
             for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
@@ -2242,6 +2391,7 @@ if __name__ == "__main__":
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
     P.add_argument("--cool", type=int, default=20, help="steps between two new functions")
+    P.add_argument("--sal_sup", type=float, default=.3, help="weight of the teacher's hint on what is salient")
     P.add_argument("--exact", type=float, default=.3, help="decode loss under which an output counts as said exactly (labels)")
     P.add_argument("--mse", type=float, default=1., help="weight of a made piece's latents against the encoder's for those words")
     P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
