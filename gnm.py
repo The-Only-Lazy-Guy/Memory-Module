@@ -1662,7 +1662,11 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     s_all = bank.gate(q[None], [n for n, _, _ in C])[0]
     a = int(s_all.argmax())
     actor, how = C[a][0], "routed" if float(s_all[a]) > 1 else "nearest"
-    if how == "nearest" and not fm.frozen and specialized(fm, actor, purpose):
+    free = [i for i, (n, _, _) in enumerate(C) if not specialized(fm, n, purpose)] if how == "nearest" else []
+    if free:                                           # none meets the want: the nearest node not doing another purpose
+        a = max(free, key=lambda i: float(s_all[i]))   # (fm17: making one whenever the nearest was busy made a node per
+        actor = C[a][0]                                # want, 63 by step 150)
+    elif how == "nearest" and not fm.frozen:           # every node near does another purpose: a new one, made like the nearest
         t = bank.make(q.detach(), like=actor, scope=A.scope)
         fm.made, how = True, "new"
         print(f"step {st['step']}: no label meets a {purpose} want; the nearest ({fm.name(actor)}) does another purpose "
