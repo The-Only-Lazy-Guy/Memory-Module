@@ -1,0 +1,710 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3986.32it/s]
+=== 1. THE TRANSLATOR (10 functions in the module)
+=== text -> B -> text (the translator), and the heads' label against the translator's
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+rule: round trip 7/8 | heads label cos 0.715, nearest is its own 0.75 | 'please remember: incoming next category numbers are amounts to add to the current next category' -> 'please remember: incoming next category numbers are amounts to add to the current category'
+fact: round trip 40/40 | heads label cos 0.744, nearest is its own 0.80 | 
+copy: round trip 12/12 | heads label cos 0.617, nearest is its own 0.92 | 
+correction: round trip 12/12 | heads label cos 0.784, nearest is its own 0.83 | 
+question lookup: round trip 8/8 | heads label cos 0.593, nearest is its own 1.00 | 
+part: round trip 28/38 | heads label cos 0.743, nearest is its own 0.97 | 'the pilot of Lozek before' -> ''; 'the primary cycle of Mergor before' -> 'the primary cycle of Mergor'
+question before: round trip 5/5 | heads label cos 0.562, nearest is its own 1.00 | 
+question coexist: round trip 5/5 | heads label cos 0.621, nearest is its own 1.00 | 
+question chain: round trip 8/8 | heads label cos 0.646, nearest is its own 1.00 | 
+question ops: round trip 5/16 | heads label cos 0.552, nearest is its own 1.00 | 'What is the larger of the primary motor of Mervin and (the difference between (the larger of the primary cycle of Lodun and the old node of Gormer) and the main offer of Lodun)?' -> 'What'; 'What is the difference between the primary cycle of Torka and (the sum of the speed of Torka and the pilot of Lozek)?' -> 'SonSon'
+value: round trip 26/27 | heads label cos 0.891, nearest is its own 0.37 | '37' -> '38'
+typed string: round trip 1/30 | heads label cos 0.534, nearest is its own 1.00 | 'string Mervin' -> 'string Mervinstring Mervinstring Mervinstring Mervinstring Mervinstring Mervinstring Mervinstring Mervinstring Mervinstring Mervinstring Mervinstring Mervin'; 'string Merne' -> 'thestring'
+chatter: round trip 8/12 | heads label cos 0.750, nearest is its own 0.92 | 'Morning everyone.' -> 'Morning everyone everyone.'; 'Let me know if anything else changes.' -> 'let me know if anything else changes.'
+
+=== 2. ONE BATCH OF DEMOS, EVERY STEP (memory written by the teacher, 12 ticks first)
+
+--- statement 'the last node of Torgor is 9.' (memory should keep 'the last node of Torgor is 9.')
+
+== store (signal +1.0) | about: 'the last node of Torgor is 9.'
+   want -> function 3; gates 3:1.11, 8:0.99, 0:0.88, 7:0.52, 2:0.50
+   walk by label: place 50 d 0.91 'the next part of Thagor is 23.'; place 39 d 0.92 'the last guest of Mutor is 26 (same as t'; place 20 d 0.94 'the next part of Kagor is 10.'; place 38 d 1.04 'Correction: the base cart of Mutor is no'; place 21 d 1.05 'the frame of Kagor is 11 (same as the te'; place 52 d 1.06 'the bonus of Thagor is 13.'
+   walk by relation: place 31 d 1.17 'from now on, each new branch become the '; place 50 d 1.19 'the next part of Thagor is 23.'; place 12 d 1.26 'the shelf of Thaor is 21.'; place 39 d 1.27 'the last guest of Mutor is 26 (same as t'; place 20 d 1.28 'the next part of Kagor is 10.'; place 21 d 1.31 'the frame of Kagor is 11 (same as the te'
+   candidates 24 (filter logit, wanted): +8.8* signal's 'the last node of Torgor is 9.' | -0.9 relation walk 'from now on, each new branch become the curre' @31.2 | -2.8 label walk 'Correction: the base cart of Mutor is now 13.' @38.1 | -2.9 label walk 'the last guest of Mutor is 26 (same as the ne' @39.0 | -3.3 label walk 'the next part of Thagor is 23.' @50.0 | -3.4 label walk 'the next part of Kagor is 10.' @20.1 | -3.6 label walk 'the frame of Kagor is 11 (same as the term of' @21.1 | -4.2 label walk 'the bonus of Thagor is 13.' @52.0 | -6.1 relation walk 'the shelf of Thaor is 21.' @12.0 | -6.1 relation walk 'note: any further branch replace the old bran' @31.0 | -6.7 relation walk 'please remember: branch figures that arrive l' @31.1 | -8.1 label walk 'the next part of Kagor is 4.' @20.0 | -8.2 label walk 'the frame of Kagor is 4 (same as the term of ' @21.0 | -8.2 label walk 'the base cart of Mutor is 20.' @38.0
+   inputs in order: 0: 'the last node of Torgor is 9.'
+   many 1 (target 1), own error 0.76 (usual 1.16)
+   out 0: target 'the last node of Torgor is 9.'
+      said at its length 'the last node of Ororg is Torgor.' | at its own (9 slots kept, target 10) 'the node of Torot is 9.'
+      where 1 (1.00) target 1 | function? 0.00 | decode loss 0.57
+      slots took:  T(0.3) ~ 9(0.5) org(0.3) ~ node(0.4)  node(0.4) ~ 9(0.4) ~ 9(0.4) ~ 9(0.4) ~ 9(0.3) ~.(0.5)
+   label gate 1.11, step loss 0.60 vs usual 2.51 -> pull
+
+--- statement 'the next part of Torgor is 28.' (memory should keep 'the next part of Torgor is 28.')
+
+== store (signal +1.0) | about: 'the next part of Torgor is 28.'
+   want -> function 3; gates 3:1.11, 8:1.00, 0:0.87, 7:0.53, 2:0.50
+   walk by label: place 50 d 0.51 'the next part of Thagor is 23.'; place 20 d 0.66 'the next part of Kagor is 10.'; place 80 d 0.74 'the last node of Torgor is 9.'; place 39 d 0.96 'the last guest of Mutor is 26 (same as t'; place 67 d 1.01 'the net lesson of Vingor is Kagor.'; place 52 d 1.03 'the bonus of Thagor is 13.'
+   walk by relation: place 50 d 0.97 'the next part of Thagor is 23.'; place 20 d 1.07 'the next part of Kagor is 10.'; place 31 d 1.08 'from now on, each new branch become the '; place 80 d 1.13 'the last node of Torgor is 9.'; place 53 d 1.16 'the next class of Zekmer is 1.'; place 67 d 1.21 'the net lesson of Vingor is Kagor.'
+   candidates 23 (filter logit, wanted): +8.8* signal's 'the next part of Torgor is 28.' | -0.9 relation walk 'from now on, each new branch become the curre' @31.2 | -2.7 label walk 'the last node of Torgor is 9.' @80.0 | -2.7 label walk 'the last guest of Mutor is 26 (same as the ne' @39.0 | -3.1 label walk 'the next part of Thagor is 23.' @50.0 | -3.1 label walk 'the next part of Kagor is 10.' @20.1 | -3.9 label walk 'the bonus of Thagor is 13.' @52.0 | -4.6 label walk 'the net lesson of Vingor is Kagor.' @67.0 | -6.1 relation walk 'note: any further branch replace the old bran' @31.0 | -6.6 relation walk 'please remember: branch figures that arrive l' @31.1 | -6.7 relation walk 'the next class of Zekmer is 1.' @53.1 | -8.1 label walk 'the next part of Kagor is 4.' @20.0 | -8.8 function fn 4 | -8.8 relation walk 'the next class of Zekmer is 23.' @53.0
+   inputs in order: 0: 'the next part of Torgor is 28.'
+   many 1 (target 1), own error 0.71 (usual 1.15)
+   out 0: target 'the next part of Torgor is 28.'
+      said at its length 'the part of Ororg is 10.' | at its own (9 slots kept, target 10) 'the part of Totorg is 10.'
+      where 1 (1.00) target 1 | function? 0.00 | decode loss 1.35
+      slots took:  T(0.3) ~ part(0.8) org(0.3) ~ part(0.8)  part(0.6) ~ part(0.8) ~ part(0.8) ~ part(0.8) ~ part(0.5) ~.(0.5)
+   label gate 1.11, step loss 1.39 vs usual 2.49 -> pull
+
+--- statement 'the step of Torgor is 16.' (memory should keep 'the step of Torgor is 16.')
+
+== store (signal +1.0) | about: 'the step of Torgor is 16.'
+   want -> function 3; gates 3:1.12, 8:0.99, 0:0.88, 7:0.52, 2:0.50
+   walk by label: place 81 d 0.78 'the next part of Torgor is 28.'; place 80 d 0.84 'the last node of Torgor is 9.'; place 52 d 0.85 'the bonus of Thagor is 13.'; place 41 d 0.85 'the step of Torne is 21.'; place 20 d 0.87 'the next part of Kagor is 10.'; place 2 d 0.90 'the step of Zekdun is 25.'
+   walk by relation: place 31 d 0.99 'from now on, each new branch become the '; place 81 d 1.01 'the next part of Torgor is 28.'; place 50 d 1.12 'the next part of Thagor is 23.'; place 80 d 1.13 'the last node of Torgor is 9.'; place 20 d 1.14 'the next part of Kagor is 10.'; place 71 d 1.17 'the branch of Vinmer is 6.'
+   candidates 25 (filter logit, wanted): +8.8* signal's 'the step of Torgor is 16.' | -0.9 relation walk 'from now on, each new branch become the curre' @31.2 | -2.2 label walk 'the last node of Torgor is 9.' @80.0 | -2.5 label walk 'the next part of Torgor is 28.' @81.0 | -2.7 label walk 'the next part of Kagor is 10.' @20.1 | -3.4 label walk 'the bonus of Thagor is 13.' @52.0 | -3.6 label walk 'the step of Torne is 21.' @41.1 | -4.5 label walk 'the step of Zekdun is 25.' @2.1 | -5.4 relation walk 'the next part of Thagor is 23.' @50.0 | -5.7 relation walk 'note: any further branch replace the old bran' @31.0 | -6.3 relation walk 'the branch of Vinmer is 6.' @71.0 | -6.3 relation walk 'please remember: branch figures that arrive l' @31.1 | -7.6 label walk 'the next part of Kagor is 4.' @20.0 | -8.3 label walk 'the step of Torne is 11.' @41.0
+   inputs in order: 0: 'the step of Torgor is 16.'
+   many 1 (target 1), own error 0.62 (usual 1.15)
+   out 0: target 'the step of Torgor is 16.'
+      said at its length 'the step of Ororg is 10.' | at its own (9 slots kept, target 9) 'the step of Ororg is 10.'
+      where 1 (1.00) target 1 | function? 0.00 | decode loss 0.75
+      slots took: org(0.3) ~ step(0.9) org(0.3) ~ step(0.9)  step(0.9) ~ step(0.9) ~ step(0.9) ~ step(0.9) ~ step(0.4)
+   label gate 1.12, step loss 0.78 vs usual 2.48 -> pull
+
+--- statement 'the net lesson of Pello is Loba.' (memory should keep 'the net lesson of Pello is Loba.')
+
+== store (signal +1.0) | about: 'the net lesson of Pello is Loba.'
+   want -> function 3; gates 3:1.11, 8:0.99, 0:0.88, 7:0.51, 2:0.50
+   walk by label: place 35 d 0.81 'the tax of Loba is Dunka.'; place 36 d 0.83 'the main department of Loba is Kagor.'; place 78 d 0.87 'the net lesson of Pelka is Neba.'; place 28 d 0.88 'Correction: the cart of Pello is now 3.'; place 55 d 0.95 'the net lesson of Zekmu is Nesa.'; place 74 d 0.96 'the income of Loba is 21.'
+   walk by relation: place 36 d 0.99 'the main department of Loba is Kagor.'; place 28 d 1.00 'Correction: the cart of Pello is now 3.'; place 35 d 1.01 'the tax of Loba is Dunka.'; place 78 d 1.13 'the net lesson of Pelka is Neba.'; place 74 d 1.15 'the income of Loba is 21.'; place 55 d 1.19 'the net lesson of Zekmu is Nesa.'
+   candidates 19 (filter logit, wanted): +5.9* signal's 'the net lesson of Pello is Loba.' | -1.5 label walk 'Correction: the cart of Pello is now 3.' @28.1 | -2.1 label walk 'the income of Loba is 21.' @74.0 | -2.4 label walk 'the net lesson of Pelka is Neba.' @78.0 | -2.7 label walk 'the main department of Loba is Kagor.' @36.1 | -2.8 label walk 'the tax of Loba is Dunka.' @35.0 | -3.6 label walk 'the net lesson of Zekmu is Nesa.' @55.0 | -5.9 label walk 'the cart of Pello is 22.' @28.0 | -6.8 label walk 'the main department of Loba is Kagor.' @36.0 | -7.1 function fn 4 | -8.4 function fn 7 | -8.7 function fn 6 | -8.7 function fn 1 | -8.7 function fn 9
+   inputs in order: 0: 'the net lesson of Pello is Loba.'
+   many 1 (target 1), own error 1.18 (usual 1.14)
+   out 0: target 'the net lesson of Pello is Loba.'
+      said at its length 'the lesson of Pello is Pello.' | at its own (10 slots kept, target 10) 'the lesson of Pello is Pello.'
+      where 1 (1.00) target 1 | function? 0.00 | decode loss 1.92
+      slots took: oba(0.2) ~ lesson(0.8) oba(0.2) ~ lesson(0.9)  lesson(0.7) ~ lesson(0.9) ~ lesson(0.9) ~ lesson(0.8) ~ lesson(0.4) ~.(0.6)
+   label gate 1.11, step loss 1.95 vs usual 2.46 -> pull
+
+--- statement 'the main department of Torne is Losa.' (memory should keep 'the main department of Torne is Losa.')
+
+== store (signal +1.0) | about: 'the main department of Torne is Losa.'
+   want -> function 3; gates 3:1.11, 8:0.99, 0:0.88, 7:0.51, 2:0.50
+   walk by label: place 62 d 0.00 'the main department of Torne is Losa.'; place 76 d 0.62 'the main department of Dunne is Vingor.'; place 15 d 0.88 'the main department of Neba is Dunka.'; place 41 d 1.02 'the step of Torne is 21.'; place 36 d 1.03 'the main department of Loba is Kagor.'; place 42 d 1.03 'the daily profile of Torne is Mutor.'
+   walk by relation: place 62 d 0.89 'the main department of Torne is Losa.'; place 76 d 1.02 'the main department of Dunne is Vingor.'; place 31 d 1.09 'from now on, each new branch become the '; place 15 d 1.16 'the main department of Neba is Dunka.'; place 41 d 1.19 'the step of Torne is 21.'; place 42 d 1.19 'the daily profile of Torne is Mutor.'
+   candidates 24 (filter logit, wanted): +8.2* signal's 'the main department of Torne is Losa.' | -0.9 relation walk 'from now on, each new branch become the curre' @31.2 | -2.6 label walk 'the main department of Neba is Dunka.' @15.0 | -3.0 label walk 'the daily profile of Torne is Mutor.' @42.2 | -3.1 label walk 'the step of Torne is 21.' @41.1 | -3.2 label walk 'the main department of Dunne is Vingor.' @76.0 | -3.3 label walk 'the main department of Loba is Kagor.' @36.1 | -3.4* label walk 'the main department of Torne is Losa.' @62.0 | -5.6 relation walk 'note: any further branch replace the old bran' @31.0 | -6.2 relation walk 'please remember: branch figures that arrive l' @31.1 | -7.3 label walk 'the daily profile of Torne is Mutor.' @42.0 | -7.5 label walk 'the main department of Loba is Kagor.' @36.0 | -7.5 label walk 'the step of Torne is 11.' @41.0 | -7.5 label walk 'the daily profile of Torne is Mutor.' @42.1
+   inputs in order: 0: 'the main department of Torne is Losa.' | 1: 'the main department of Torne is Losa.'
+   many 1 (target 1), own error 1.11 (usual 1.16)
+   out 0: target 'the main department of Torne is Losa.'
+      said at its length 'the main department of Torne is Torne.' | at its own (10 slots kept, target 10) 'the main department of Torne is Torne.'
+      where 3 (0.99) target 3 | function? 0.00 | decode loss 0.87
+      slots took:  Tor(0.1) ~ department(0.4)  Tor(0.1) ~ department(0.4)  department(0.4) ~ department(0.5) ~ department(0.5) ~ department(0.5) ~ department(0.4) ~ department(0.3)
+   label gate 1.11, step loss 0.91 vs usual 2.48 -> pull
+
+--- statement 'the genre of Torne is 27.' (memory should keep 'the genre of Torne is 27.')
+
+== store (signal +1.0) | about: 'the genre of Torne is 27.'
+   want -> function 3; gates 3:1.12, 8:0.99, 0:0.89, 2:0.51, 7:0.50
+   walk by label: place 23 d 0.02 'the genre of Torne is 9.'; place 27 d 0.72 'the mode of Torne is 25.'; place 13 d 0.89 'Correction: the genre of Thaor is now 22'; place 29 d 1.02 'the market of Pello is Thaor.'; place 22 d 1.03 'the cart of Torne is 19.'; place 49 d 1.03 'the market of Peltor is Gorpel.'
+   walk by relation: place 23 d 0.86 'the genre of Torne is 9.'; place 27 d 1.09 'the mode of Torne is 25.'; place 13 d 1.10 'Correction: the genre of Thaor is now 22'; place 49 d 1.17 'the market of Peltor is Gorpel.'; place 3 d 1.17 'the cycle of Zekdun is 14.'; place 22 d 1.18 'the cart of Torne is 19.'
+   candidates 27 (filter logit, wanted): +8.8* signal's 'the genre of Torne is 27.' | -2.3 label walk 'Correction: the genre of Thaor is now 22.' @13.2 | -2.8 label walk 'the cart of Torne is 19.' @22.4 | -3.4 label walk 'the market of Pello is Thaor.' @29.0 | -3.5 label walk 'the mode of Torne is 25.' @27.1 | -3.5* label walk 'the genre of Torne is 9.' @23.3 | -3.7 label walk 'the market of Peltor is Gorpel.' @49.0 | -6.3 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -6.3 relation walk 'the cycle of Zekdun is 14.' @3.0 | -7.3 label walk 'the genre of Torne is 29.' @23.0 | -7.5 label walk 'the genre of Thaor is 4 (same as the term of ' @13.0 | -7.6 label walk 'the cart of Torne is 27.' @22.2 | -7.7 label walk 'the genre of Thaor is 4.' @13.1 | -7.7 label walk 'the genre of Torne is 29.' @23.1
+   inputs in order: 0: 'the genre of Torne is 27.' | 1: 'the genre of Torne is 9.'
+   many 1 (target 1), own error 0.53 (usual 1.15)
+   out 0: target 'the genre of Torne is 27.'
+      said at its length 'the genre of Torne is 26.' | at its own (9 slots kept, target 8) 'the genre of Torne is 28.'
+      where 3 (0.99) target 3 | function? 0.00 | decode loss 0.24
+      slots took:  Tor(0.2) ~<1.6>(0.2)  Tor(0.2) ~ genre(0.3)  genre(0.3) ~ genre(0.2) ~<1.6>(0.2) ~<1.6>(0.3)
+   label gate 1.12, step loss 0.32 vs usual 2.46 -> pull
+
+--- statement 'the genre of Kagor is 19.' (memory should keep 'the genre of Kagor is 19.')
+
+== store (signal +1.0) | about: 'the genre of Kagor is 19.'
+   want -> function 3; gates 3:1.12, 8:0.99, 0:0.88, 2:0.51, 7:0.50
+   walk by label: place 19 d 0.74 'the genre of Kagor is 16 (same as the st'; place 23 d 0.77 'the genre of Torne is 27.'; place 13 d 0.84 'Correction: the genre of Thaor is now 22'; place 16 d 0.86 'Correction: the period of Kagor is now 2'; place 21 d 0.89 'the frame of Kagor is 11 (same as the te'; place 79 d 0.92 'the cycle of Mugor is 10.'
+   walk by relation: place 19 d 0.90 'the genre of Kagor is 16 (same as the st'; place 13 d 1.05 'Correction: the genre of Thaor is now 22'; place 23 d 1.05 'the genre of Torne is 27.'; place 21 d 1.09 'the frame of Kagor is 11 (same as the te'; place 79 d 1.10 'the cycle of Mugor is 10.'; place 16 d 1.12 'Correction: the period of Kagor is now 2'
+   candidates 24 (filter logit, wanted): +8.6* signal's 'the genre of Kagor is 19.' | -2.4* label walk 'the genre of Kagor is 16 (same as the store o' @19.0 | -2.5 label walk 'Correction: the genre of Thaor is now 22.' @13.2 | -2.6 label walk 'Correction: the period of Kagor is now 23.' @16.1 | -2.8 label walk 'the cycle of Mugor is 10.' @79.0 | -3.0 label walk 'the frame of Kagor is 11 (same as the term of' @21.1 | -3.3 label walk 'the genre of Torne is 27.' @23.4 | -7.5 label walk 'the genre of Torne is 29.' @23.1 | -7.5 label walk 'the genre of Thaor is 4 (same as the term of ' @13.0 | -7.7 label walk 'the genre of Thaor is 4.' @13.1 | -7.7 label walk 'the frame of Kagor is 4 (same as the term of ' @21.0 | -7.7 label walk 'the period of Kagor is 29.' @16.0 | -7.8 label walk 'the genre of Torne is 17.' @23.2 | -8.1 label walk 'the genre of Torne is 9.' @23.3
+   inputs in order: 0: 'the genre of Kagor is 19.' | 1: 'the genre of Kagor is 16 (same as the store of Dun'
+   many 1 (target 1), own error 2.67 (usual 1.14)
+   out 0: target 'the genre of Kagor is 19.'
+      said at its length 'the genre of Kagor is 12.' | at its own (12 slots kept, target 8) 'the genre of Kagor is the genre of Kagor.'
+      where 3 (0.55) target 3 | function? 0.00 | decode loss 0.66
+      slots took:  Kag(0.1) ~<1.11>(0.2)  Kag(0.2) ~<1.11>(0.3)  genre(0.3) ~<1.11>(0.3) ~<1.11>(0.3) ~<1.11>(0.3)
+   label gate 1.12, step loss 1.53 vs usual 2.45 -> pull
+
+== fix (signal -1.0) | about: 'the genre of Kagor is 35.' + 'the genre of Kagor is 19.' + 'the genre of Kagor is 16 (same as the store of Dunka).'
+   want -> function 2; gates 2:1.11, 0:0.53, 3:0.41, 8:0.28, 9:-0.14
+   walk by label: place 19 d 0.00 'the genre of Kagor is 35.'; place 47 d 1.00 'the trade of Vingor is 25.'; place 56 d 1.00 'the store of Zekmu is 11 (same as the fr'; place 37 d 1.01 'the mode of Losa is 23 (same as the mode'; place 18 d 1.06 'the mode of Dunka is 23.'; place 16 d 1.07 'Correction: the period of Kagor is now 2'
+   walk by relation: place 19 d 0.78 'the genre of Kagor is 35.'; place 56 d 1.16 'the store of Zekmu is 11 (same as the fr'; place 30 d 1.23 'the locale of Neka is Neba.'; place 49 d 1.23 'the market of Peltor is Gorpel.'; place 61 d 1.24 'the daily profile of Kagor is Losa.'; place 37 d 1.25 'the mode of Losa is 23 (same as the mode'
+   candidates 24 (filter logit, wanted): +8.8* signal's 'the genre of Kagor is 16 (same as the store o' @19.0 | +8.6* signal's 'the genre of Kagor is 35.' @19.1 | +8.4* signal's 'the genre of Kagor is 19.' | -5.4 label walk 'Correction: the period of Kagor is now 23.' @16.1 | -5.8 label walk 'the store of Zekmu is 11 (same as the frame o' @56.1 | -6.4 label walk 'the mode of Dunka is 23.' @18.0 | -6.7 label walk 'the trade of Vingor is 25.' @47.0 | -6.7 label walk 'the mode of Losa is 23 (same as the mode of D' @37.0 | -8.4 relation walk 'the locale of Neka is Neba.' @30.1 | -8.5 relation walk 'the daily profile of Kagor is Losa.' @61.0 | -8.7 relation walk 'the market of Peltor is Gorpel.' @49.0 | -9.1 label walk 'the period of Kagor is 29.' @16.0 | -9.1 function fn 4 | -9.1 label walk 'the store of Zekmu is 4 (same as the frame of' @56.0
+   inputs in order: 0: 'the genre of Kagor is 35.' | 1: 'the genre of Kagor is 19.' | 2: 'the genre of Kagor is 16 (same as the store of Dun'
+   many 1 (target 1), own error 3.08 (usual 3.26)
+   out 0: target 'the genre of Kagor is 19.'
+      said at its length 'the number of the Dragon is 10.' | at its own (9 slots kept, target 8) 'the number of the Dragon is 10.'
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 2.74
+      slots took:  genre(0.3) ~ genre(0.3) ~ genre(0.3) ~ genre(0.3) ~ genre(0.3) ~ genre(0.3) ~ genre(0.3) ~ genre(0.3)
+   label gate 1.11, step loss 2.77 vs usual 4.21 -> pull
+
+--- statement 'the period of Kagor is 18.' (memory should keep 'the period of Kagor is 18.')
+
+== store (signal +1.0) | about: 'the period of Kagor is 18.'
+   want -> function 3; gates 3:1.12, 8:0.99, 0:0.88, 7:0.51, 2:0.50
+   walk by label: place 16 d 0.05 'Correction: the period of Kagor is now 2'; place 21 d 0.76 'the frame of Kagor is 11 (same as the te'; place 79 d 0.91 'the cycle of Mugor is 10.'; place 65 d 0.94 'the period of Vintha is 26.'; place 75 d 0.97 'the period of Dunne is 15.'; place 20 d 1.00 'the next part of Kagor is 10.'
+   walk by relation: place 16 d 0.88 'Correction: the period of Kagor is now 2'; place 21 d 1.03 'the frame of Kagor is 11 (same as the te'; place 19 d 1.12 'the genre of Kagor is 19.'; place 13 d 1.12 'Correction: the genre of Thaor is now 22'; place 79 d 1.12 'the cycle of Mugor is 10.'; place 65 d 1.15 'the period of Vintha is 26.'
+   candidates 25 (filter logit, wanted): +8.1* signal's 'the period of Kagor is 18.' | -2.2* label walk 'Correction: the period of Kagor is now 23.' @16.1 | -2.3 label walk 'the next part of Kagor is 10.' @20.1 | -2.4 label walk 'the cycle of Mugor is 10.' @79.0 | -2.5 label walk 'the frame of Kagor is 11 (same as the term of' @21.1 | -3.0 label walk 'the period of Vintha is 26.' @65.0 | -3.1 label walk 'the period of Dunne is 15.' @75.0 | -4.5 relation walk 'Correction: the genre of Thaor is now 22.' @13.2 | -4.9 relation walk 'the genre of Kagor is 19.' @19.1 | -7.0 label walk 'the next part of Kagor is 4.' @20.0 | -7.1 label walk 'the frame of Kagor is 4 (same as the term of ' @21.0 | -7.2 label walk 'the period of Kagor is 29.' @16.0 | -8.3 relation walk 'the genre of Thaor is 4 (same as the term of ' @13.0 | -8.4 relation walk 'the genre of Kagor is 16 (same as the store o' @19.0
+   inputs in order: 0: 'the period of Kagor is 18.' | 1: 'Correction: the period of Kagor is now 23.'
+   many 1 (target 1), own error 0.68 (usual 1.14)
+   out 0: target 'the period of Kagor is 18.'
+      said at its length 'the period of Roror is 9.' | at its own (9 slots kept, target 8) 'the period of Kagor is 12.'
+      where 3 (0.99) target 3 | function? 0.00 | decode loss 0.49
+      slots took: <1.5>(0.2) ~<1.0>(0.7) <1.5>(0.2) ~<1.0>(0.3)  period(0.3) ~<1.0>(0.7) ~<1.0>(0.7) ~<1.0>(0.6)
+   label gate 1.12, step loss 0.57 vs usual 2.45 -> pull
+
+--- statement 'the main department of Mutor is Loba.' (memory should keep 'the main department of Mutor is Loba.')
+
+== store (signal +1.0) | about: 'the main department of Mutor is Loba.'
+   want -> function 3; gates 3:1.11, 8:0.99, 0:0.88, 7:0.51, 2:0.50
+   walk by label: place 36 d 0.57 'the main department of Loba is Kagor.'; place 81 d 0.92 'the next part of Torgor is 28.'; place 76 d 0.93 'the main department of Dunne is Vingor.'; place 35 d 0.97 'the tax of Loba is Dunka.'; place 62 d 0.98 'the main department of Torne is Losa.'; place 20 d 0.99 'the next part of Kagor is 10.'
+   walk by relation: place 36 d 1.05 'the main department of Loba is Kagor.'; place 31 d 1.15 'from now on, each new branch become the '; place 62 d 1.15 'the main department of Torne is Losa.'; place 76 d 1.17 'the main department of Dunne is Vingor.'; place 15 d 1.18 'the main department of Neba is Dunka.'; place 81 d 1.21 'the next part of Torgor is 28.'
+   candidates 24 (filter logit, wanted): +7.2* signal's 'the main department of Mutor is Loba.' | -0.9 relation walk 'from now on, each new branch become the curre' @31.2 | -2.3 label walk 'the next part of Torgor is 28.' @81.0 | -2.3 label walk 'the next part of Kagor is 10.' @20.1 | -3.4 label walk 'the main department of Dunne is Vingor.' @76.0 | -3.5 label walk 'the main department of Loba is Kagor.' @36.1 | -3.5 label walk 'the tax of Loba is Dunka.' @35.0 | -3.7 label walk 'the main department of Torne is Losa.' @62.1 | -5.4 relation walk 'the main department of Neba is Dunka.' @15.0 | -5.5 relation walk 'note: any further branch replace the old bran' @31.0 | -6.1 relation walk 'please remember: branch figures that arrive l' @31.1 | -6.8 label walk 'the next part of Kagor is 4.' @20.0 | -7.6 label walk 'the main department of Loba is Kagor.' @36.0 | -7.7 label walk 'the main department of Torne is Losa.' @62.0
+   inputs in order: 0: 'the main department of Mutor is Loba.'
+   many 1 (target 1), own error 1.20 (usual 1.13)
+   out 0: target 'the main department of Mutor is Loba.'
+      said at its length 'the Makor of Mutor is Mutor.' | at its own (10 slots kept, target 10) 'the Makor of Mutor is Mutor.'
+      where 1 (1.00) target 1 | function? 0.00 | decode loss 1.17
+      slots took:  Mut(0.3) ~ department(0.9)  Mut(0.3) ~ department(0.9)  department(0.8) ~ department(0.9) ~ department(0.9) ~ department(0.9) ~ department(0.6) ~.(0.6)
+   label gate 1.11, step loss 1.20 vs usual 2.43 -> pull
+
+--- statement 'the font of Mutor is 29.' (memory should keep 'the font of Mutor is 29.')
+
+== store (signal +1.0) | about: 'the font of Mutor is 29.'
+   want -> function 3; gates 3:1.12, 8:0.99, 0:0.88, 7:0.51, 2:0.50
+   walk by label: place 38 d 0.95 'Correction: the base cart of Mutor is no'; place 21 d 1.09 'the frame of Kagor is 11 (same as the te'; place 60 d 1.09 'the motor of Kagor is 12.'; place 68 d 1.12 'the net class of Vingor is 3 (same as th'; place 46 d 1.14 'the cart of Vingor is 23.'; place 51 d 1.14 'the mode of Thagor is 23.'
+   walk by relation: place 38 d 1.24 'Correction: the base cart of Mutor is no'; place 21 d 1.27 'the frame of Kagor is 11 (same as the te'; place 60 d 1.27 'the motor of Kagor is 12.'; place 19 d 1.27 'the genre of Kagor is 19.'; place 30 d 1.28 'the locale of Neka is Neba.'; place 23 d 1.28 'the genre of Torne is 27.'
+   candidates 28 (filter logit, wanted): +8.9* signal's 'the font of Mutor is 29.' | -2.7 label walk 'Correction: the base cart of Mutor is now 13.' @38.1 | -3.1 label walk 'the cart of Vingor is 23.' @46.0 | -3.2 label walk 'the motor of Kagor is 12.' @60.1 | -3.4 label walk 'the net class of Vingor is 3 (same as the bas' @68.0 | -3.4 label walk 'the frame of Kagor is 11 (same as the term of' @21.1 | -3.6 label walk 'the mode of Thagor is 23.' @51.0 | -6.0 relation walk 'the genre of Kagor is 19.' @19.1 | -6.6 relation walk 'the locale of Neka is Neba.' @30.1 | -6.7 relation walk 'the genre of Torne is 27.' @23.4 | -7.9 label walk 'the motor of Kagor is 6.' @60.0 | -8.0 label walk 'the base cart of Mutor is 20.' @38.0 | -8.1 label walk 'the frame of Kagor is 4 (same as the term of ' @21.0 | -8.7 relation walk 'the genre of Torne is 29.' @23.1
+   inputs in order: 0: 'the font of Mutor is 29.'
+   many 1 (target 1), own error 0.57 (usual 1.13)
+   out 0: target 'the font of Mutor is 29.'
+      said at its length 'the font of Mutor is 5.' | at its own (9 slots kept, target 8) 'the font of Mutor is 5.'
+      where 1 (1.00) target 1 | function? 0.00 | decode loss 0.43
+      slots took:  Mut(0.4) ~ font(0.7)  Mut(0.5) ~ font(0.8)  font(0.7) ~ font(0.8) ~ font(0.8) ~ font(0.8)
+   label gate 1.12, step loss 0.48 vs usual 2.41 -> pull
+
+--- statement 'the step of Torgor is 9.' (memory should keep 'the step of Torgor is 9.')
+
+== store (signal +1.0) | about: 'the step of Torgor is 9.'
+   want -> function 3; gates 3:1.11, 8:0.99, 0:0.88, 7:0.52, 2:0.50
+   walk by label: place 82 d 0.01 'the step of Torgor is 16.'; place 81 d 0.78 'the next part of Torgor is 28.'; place 80 d 0.84 'the last node of Torgor is 9.'; place 52 d 0.85 'the bonus of Thagor is 13.'; place 41 d 0.85 'the step of Torne is 21.'; place 20 d 0.87 'the next part of Kagor is 10.'
+   walk by relation: place 82 d 0.85 'the step of Torgor is 16.'; place 31 d 0.99 'from now on, each new branch become the '; place 81 d 1.01 'the next part of Torgor is 28.'; place 50 d 1.12 'the next part of Thagor is 23.'; place 80 d 1.13 'the last node of Torgor is 9.'; place 20 d 1.14 'the next part of Kagor is 10.'
+   candidates 23 (filter logit, wanted): +8.6* signal's 'the step of Torgor is 9.' | -0.9 relation walk 'from now on, each new branch become the curre' @31.2 | -1.9 label walk 'the last node of Torgor is 9.' @80.0 | -2.2 label walk 'the next part of Torgor is 28.' @81.0 | -2.3 label walk 'the next part of Kagor is 10.' @20.1 | -2.5* label walk 'the step of Torgor is 16.' @82.0 | -2.9 label walk 'the bonus of Thagor is 13.' @52.0 | -3.2 label walk 'the step of Torne is 21.' @41.1 | -5.0 relation walk 'the next part of Thagor is 23.' @50.0 | -5.7 relation walk 'note: any further branch replace the old bran' @31.0 | -6.3 relation walk 'please remember: branch figures that arrive l' @31.1 | -7.1 label walk 'the next part of Kagor is 4.' @20.0 | -8.0 label walk 'the step of Torne is 11.' @41.0 | -8.8 function fn 4
+   inputs in order: 0: 'the step of Torgor is 9.' | 1: 'the step of Torgor is 16.'
+   many 1 (target 1), own error 0.60 (usual 1.12)
+   out 0: target 'the step of Torgor is 9.'
+      said at its length 'the step of Totor is 9.' | at its own (10 slots kept, target 9) 'the step of Totor is 9.'
+      where 3 (0.99) target 3 | function? 0.00 | decode loss 0.42
+      slots took: or(0.1) ~ step(0.4) org(0.2) ~ step(0.4)  step(0.4) ~ step(0.4) ~ step(0.4) ~ step(0.4) ~ step(0.4)
+   label gate 1.11, step loss 0.46 vs usual 2.40 -> pull
+
+--- question (lookup) 'What is the mode of Torne?' truth '25'
+
+== split (signal +1.0) | about: 'What is the mode of Torne?'
+   want -> function 1; gates 1:1.16, 9:0.64, 0:0.25, 6:0.23, 3:0.15
+   walk by label: place 27 d 0.33 'the mode of Torne is 25.'; place 23 d 0.81 'the genre of Torne is 27.'; place 42 d 0.99 'the daily profile of Torne is Mutor.'; place 51 d 1.02 'the mode of Thagor is 23.'; place 18 d 1.04 'the mode of Dunka is 23.'; place 22 d 1.05 'the cart of Torne is 19.'
+   walk by relation: place 27 d 0.95 'the mode of Torne is 25.'; place 23 d 1.03 'the genre of Torne is 27.'; place 22 d 1.16 'the cart of Torne is 19.'; place 42 d 1.17 'the daily profile of Torne is Mutor.'; place 3 d 1.23 'the cycle of Zekdun is 14.'; place 29 d 1.24 'the market of Pello is Thaor.'
+   candidates 28 (filter logit, wanted): +8.7* signal's 'What is the mode of Torne?' | -6.7 label walk 'the mode of Dunka is 23.' @18.0 | -6.7 label walk 'the cart of Torne is 19.' @22.4 | -6.9 label walk 'the mode of Thagor is 23.' @51.0 | -6.9 label walk 'the genre of Torne is 27.' @23.4 | -7.5 label walk 'the mode of Torne is 25.' @27.1 | -7.5 label walk 'the daily profile of Torne is Mutor.' @42.2 | -8.4 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -8.8 function fn 4 | -9.0 relation walk 'the cycle of Zekdun is 14.' @3.0 | -9.0 relation walk 'the market of Pello is Thaor.' @29.0 | -9.0 label walk 'the genre of Torne is 29.' @23.1 | -9.2 label walk 'the genre of Torne is 17.' @23.2 | -9.2 label walk 'the cart of Torne is 27.' @22.2
+   inputs in order: 0: 'What is the mode of Torne?'
+   many 1 (target 1), own error 3.42 (usual 2.70)
+   out 0: target 'the mode of Torne'
+      said at its length 'the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of' | at its own (1 slots kept, target 5) '10'
+      where 0 (0.99) target 0 | function? 0.00 | decode loss 3.54
+      slots took: What(1.0) ~What(1.0) What(1.0) What(1.0) What(1.0)
+   label gate 1.16, step loss 3.65 vs usual 4.88 -> pull
+
+== lookup (signal +1.0) | about: 'the first of the first of the first of the first of the first of the f'
+   want -> function 9; gates 9:1.11, 1:0.92, 0:0.29, 2:0.08, 3:0.04
+   walk by label: place 22 d 1.06 'the cart of Torne is 19.'; place 75 d 1.14 'the period of Dunne is 15.'; place 65 d 1.14 'the period of Vintha is 26.'; place 78 d 1.17 'the net lesson of Pelka is Neba.'; place 7 d 1.18 'rule: incoming log numbers increase the '; place 28 d 1.18 'Correction: the cart of Pello is now 3.'
+   walk by relation: place 23 d 1.35 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 34 d 1.36 'the invoice of Torne is 17.'; place 27 d 1.37 'the mode of Torne is 25.'; place 42 d 1.37 'the daily profile of Torne is Mutor.'; place 13 d 1.37 'Correction: the genre of Thaor is now 22'
+   candidates 39 (filter logit, wanted): +7.5* signal's 'the first of the first of the first of the fi' | -0.0 label walk 'Correction: the cart of Pello is now 3.' @28.1 | -0.5 label walk 'the period of Vintha is 26.' @65.0 | -1.1 label walk 'the period of Dunne is 15.' @75.0 | -1.4 label walk 'the cart of Torne is 19.' @22.4 | -2.0 label walk 'the net lesson of Pelka is Neba.' @78.0 | -4.6 label walk 'rule: incoming log numbers increase the log b' @7.1 | -5.6 relation walk 'the genre of Kagor is 19.' @19.1 | -5.7 relation walk 'Correction: the genre of Thaor is now 22.' @13.2 | -6.1 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -6.4 label walk 'the cart of Pello is 22.' @28.0 | -7.0 relation walk 'the invoice of Torne is 17.' @34.2 | -7.3 label walk 'the cart of Torne is 27.' @22.2 | -7.5 label walk 'the cart of Torne is 29.' @22.3
+   inputs in order: 0: 'the first of the first of the first of the first o' | 1: 'the mode of Torne is 25.'
+   many 1 (target 1), own error -0.23 (usual 0.76)
+   out 0: target '25'
+      said at its length '25' | at its own (1 slots kept, target 1) '25'
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 0.01
+      slots took: ~<1.6>(1.0)
+   label gate 1.11, step loss 0.02 vs usual 2.80 -> pull
+
+== fill (signal +1.0) | about: 'What is the mode of Torne?' + '25'
+   want -> function 1; gates 1:1.16, 9:0.63, 0:0.26, 6:0.24, 3:0.16
+   walk by label: place 27 d 0.33 'the mode of Torne is 25.'; place 23 d 0.81 'the genre of Torne is 27.'; place 42 d 0.99 'the daily profile of Torne is Mutor.'; place 51 d 1.02 'the mode of Thagor is 23.'; place 18 d 1.04 'the mode of Dunka is 23.'; place 22 d 1.05 'the cart of Torne is 19.'
+   walk by relation: place 27 d 0.95 'the mode of Torne is 25.'; place 23 d 1.03 'the genre of Torne is 27.'; place 22 d 1.16 'the cart of Torne is 19.'; place 42 d 1.17 'the daily profile of Torne is Mutor.'; place 3 d 1.23 'the cycle of Zekdun is 14.'; place 29 d 1.24 'the market of Pello is Thaor.'
+   candidates 29 (filter logit, wanted): +8.8* signal's '25' | +8.6* signal's 'What is the mode of Torne?' | -8.4 label walk 'the mode of Dunka is 23.' @18.0 | -8.5 label walk 'the mode of Thagor is 23.' @51.0 | -8.6 label walk 'the cart of Torne is 19.' @22.4 | -8.6 label walk 'the genre of Torne is 27.' @23.4 | -8.8 label walk 'the mode of Torne is 25.' @27.1 | -8.8 label walk 'the daily profile of Torne is Mutor.' @42.2 | -9.0 function fn 4 | -9.2 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -9.4 relation walk 'the market of Pello is Thaor.' @29.0 | -9.4 relation walk 'the cycle of Zekdun is 14.' @3.0 | -9.4 label walk 'the genre of Torne is 29.' @23.1 | -9.5 function fn 3
+   inputs in order: 0: 'What is the mode of Torne?' | 1: '25'
+   many 1 (target 1), own error 0.36 (usual 2.72)
+   out 0: target '25'
+      said at its length '25' | at its own (5 slots kept, target 1) '25'
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 0.09
+      slots took: <1.0>(1.0)
+   label gate 1.16, step loss 0.23 vs usual 4.89 -> pull
+
+--- question (before) 'What was the store of Dunka before?' truth '20'
+
+== split (signal +1.0) | about: 'What was the store of Dunka before?'
+   want -> function 1; gates 1:1.16, 9:0.63, 0:0.25, 6:0.23, 3:0.15
+   walk by label: place 17 d 0.99 'the tax of Dunka is Kagor.'; place 18 d 1.03 'the mode of Dunka is 23.'; place 19 d 1.07 'the genre of Kagor is 19.'; place 15 d 1.08 'the main department of Neba is Dunka.'; place 14 d 1.08 'the store of Dunka is 16.'; place 33 d 1.20 'the next invoice of Losa is 26 (same as '
+   walk by relation: place 19 d 1.11 'the genre of Kagor is 19.'; place 15 d 1.21 'the main department of Neba is Dunka.'; place 31 d 1.25 'from now on, each new branch become the '; place 1 d 1.26 'the branch of Neba is 21.'; place 18 d 1.26 'the mode of Dunka is 23.'; place 17 d 1.28 'the tax of Dunka is Kagor.'
+   candidates 25 (filter logit, wanted): +9.0* signal's 'What was the store of Dunka before?' | -7.1 label walk 'the store of Dunka is 16.' @14.1 | -7.5 label walk 'the genre of Kagor is 19.' @19.1 | -7.7 label walk 'the next invoice of Losa is 26 (same as the l' @33.0 | -7.9 label walk 'the mode of Dunka is 23.' @18.0 | -8.0 relation walk 'from now on, each new branch become the curre' @31.2 | -8.2 label walk 'the main department of Neba is Dunka.' @15.0 | -8.3 label walk 'the tax of Dunka is Kagor.' @17.0 | -8.9 relation walk 'the branch of Neba is 21.' @1.2 | -8.9 function fn 4 | -9.0 relation walk 'note: any further branch replace the old bran' @31.0 | -9.0 relation walk 'please remember: branch figures that arrive l' @31.1 | -9.4 relation walk 'the branch of Neba is 30.' @1.0 | -9.4 label walk 'the genre of Kagor is 16 (same as the store o' @19.0
+   inputs in order: 0: 'What was the store of Dunka before?'
+   many 1 (target 1), own error 3.43 (usual 2.67)
+   out 0: target 'the store of Dunka before'
+      said at its length 'the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of the first of' | at its own (1 slots kept, target 6) '10'
+      where 0 (0.99) target 0 | function? 0.00 | decode loss 3.27
+      slots took: What(1.0) ~What(1.0) What(1.0) What(1.0) What(1.0) What(1.0)
+   label gate 1.16, step loss 3.40 vs usual 4.89 -> pull
+
+== before (signal +1.0) | about: 'the first of the first of the first of the first of the first of the f'
+   want -> function 9; gates 9:1.11, 1:0.93, 0:0.29, 2:0.08, 3:0.04
+   walk by label: place 22 d 1.07 'the cart of Torne is 19.'; place 5 d 1.11 'Correction: the part of Zekdun is now 27'; place 53 d 1.15 'the next class of Zekmer is 1.'; place 7 d 1.19 'rule: incoming log numbers increase the '; place 31 d 1.19 'from now on, each new branch become the '; place 28 d 1.20 'Correction: the cart of Pello is now 3.'
+   walk by relation: place 23 d 1.35 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 34 d 1.37 'the invoice of Torne is 17.'; place 27 d 1.37 'the mode of Torne is 25.'; place 42 d 1.37 'the daily profile of Torne is Mutor.'; place 13 d 1.37 'Correction: the genre of Thaor is now 22'
+   candidates 46 (filter logit, wanted): +7.6* signal's 'the first of the first of the first of the fi' | +1.4* label walk 'the store of Dunka is 16.' @14.1 | -1.8 label walk 'Correction: the cart of Pello is now 3.' @28.1 | -2.2* label walk 'the store of Dunka is 20 (same as the medal o' @14.0 | -3.4 label walk 'the cart of Torne is 19.' @22.4 | -4.0 label walk 'from now on, each new branch become the curre' @31.2 | -4.1 label walk 'the next class of Zekmer is 1.' @53.1 | -4.7 label walk 'Correction: the part of Zekdun is now 27.' @5.2 | -6.2 label walk 'rule: incoming log numbers increase the log b' @7.1 | -6.9 relation walk 'Correction: the genre of Thaor is now 22.' @13.2 | -6.9 relation walk 'the genre of Kagor is 19.' @19.1 | -7.4 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -7.6 function fn 4 | -7.8 label walk 'the cart of Pello is 22.' @28.0
+   inputs in order: 0: 'the first of the first of the first of the first o' | 1: 'the store of Dunka is 16.' | 2: 'the store of Dunka is 20 (same as the medal of Zek'
+   many 1 (target 1), own error 1.03 (usual 0.75)
+   out 0: target '20'
+      said at its length '20' | at its own (1 slots kept, target 1) '20'
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 0.44
+      slots took: <2.6>(0.5)
+   label gate 1.11, step loss 0.45 vs usual 2.77 -> pull
+
+== fill (signal +1.0) | about: 'What was the store of Dunka before?' + '20'
+   want -> function 1; gates 1:1.16, 9:0.63, 0:0.26, 6:0.24, 3:0.16
+   walk by label: place 17 d 0.99 'the tax of Dunka is Kagor.'; place 18 d 1.03 'the mode of Dunka is 23.'; place 19 d 1.07 'the genre of Kagor is 19.'; place 15 d 1.08 'the main department of Neba is Dunka.'; place 14 d 1.08 'the store of Dunka is 16.'; place 33 d 1.20 'the next invoice of Losa is 26 (same as '
+   walk by relation: place 19 d 1.11 'the genre of Kagor is 19.'; place 15 d 1.21 'the main department of Neba is Dunka.'; place 31 d 1.25 'from now on, each new branch become the '; place 1 d 1.26 'the branch of Neba is 21.'; place 18 d 1.26 'the mode of Dunka is 23.'; place 17 d 1.28 'the tax of Dunka is Kagor.'
+   candidates 26 (filter logit, wanted): +8.9* signal's 'What was the store of Dunka before?' | +8.8* signal's '20' | -8.2 label walk 'the store of Dunka is 16.' @14.1 | -8.4 label walk 'the genre of Kagor is 19.' @19.1 | -8.4 relation walk 'from now on, each new branch become the curre' @31.2 | -8.6 label walk 'the mode of Dunka is 23.' @18.0 | -8.6 label walk 'the next invoice of Losa is 26 (same as the l' @33.0 | -8.8 label walk 'the main department of Neba is Dunka.' @15.0 | -8.8 label walk 'the tax of Dunka is Kagor.' @17.0 | -9.1 function fn 4 | -9.1 relation walk 'note: any further branch replace the old bran' @31.0 | -9.2 relation walk 'please remember: branch figures that arrive l' @31.1 | -9.3 relation walk 'the branch of Neba is 21.' @1.2 | -9.5 relation walk 'the branch of Neba is 30.' @1.0
+   inputs in order: 0: 'What was the store of Dunka before?' | 1: '20'
+   many 1 (target 1), own error 0.91 (usual 2.68)
+   out 0: target '20'
+      said at its length '16' | at its own (5 slots kept, target 1) '20'
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 1.00
+      slots took: <1.0>(1.0)
+   label gate 1.16, step loss 1.13 vs usual 4.89 -> pull
+
+--- question (coexist) 'What is the sum of both values of the motor of Neba?' truth '57'
+
+== split (signal +1.0) | about: 'What is the sum of both values of the motor of Neba?'
+   want -> function 1; gates 1:1.15, 9:0.62, 6:0.24, 0:0.24, 3:0.14
+   walk by label: place 9 d 0.62 'the motor of Neba is 28.'; place 10 d 1.15 'the tax of Neba is Zekdun.'; place 72 d 1.16 'the primary point of Neka is 16.'; place 8 d 1.16 'Correction: the term of Neba is now 11.'; place 60 d 1.19 'the motor of Kagor is 12.'; place 58 d 1.26 'the number of Vinsa is 7.'
+   walk by relation: place 9 d 0.97 'the motor of Neba is 28.'; place 60 d 1.18 'the motor of Kagor is 12.'; place 79 d 1.19 'the cycle of Mugor is 10.'; place 8 d 1.24 'Correction: the term of Neba is now 11.'; place 10 d 1.27 'the tax of Neba is Zekdun.'; place 23 d 1.28 'the genre of Torne is 27.'
+   candidates 28 (filter logit, wanted): +9.0* signal's 'What is the sum of both values of the motor o' | -7.6 label walk 'Correction: the term of Neba is now 11.' @8.2 | -8.2 label walk 'the motor of Neba is 28.' @9.1 | -8.3 label walk 'the motor of Kagor is 12.' @60.1 | -8.6 label walk 'the number of Vinsa is 7.' @58.0 | -8.7 label walk 'the primary point of Neka is 16.' @72.0 | -8.9 function fn 4 | -9.0 label walk 'the tax of Neba is Zekdun.' @10.2 | -9.3 relation walk 'the cycle of Mugor is 10.' @79.0 | -9.3 label walk 'the term of Neba is 4.' @8.0 | -9.4 label walk 'the term of Neba is 4.' @8.1 | -9.4 relation walk 'the genre of Torne is 27.' @23.4 | -9.4 label walk 'the motor of Neba is 29.' @9.0 | -9.4 label walk 'the motor of Kagor is 6.' @60.0
+   inputs in order: 0: 'What is the sum of both values of the motor of Neb'
+   many 1 (target 1), own error 3.26 (usual 2.65)
+   out 0: target 'both values of the motor of Neba'
+      said at its length 'both values of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the' | at its own (6 slots kept, target 8) 'the value of the previous owner'
+      where 0 (1.00) target 0 | function? 0.00 | decode loss 2.42
+      slots took: What(1.0) ~What(1.0) ~What(1.0) ~What(1.0) What(1.0) ~What(1.0) ~What(1.0) ~What(1.0)
+   label gate 1.15, step loss 2.52 vs usual 4.88 -> pull
+
+== both (signal +1.0) | about: 'both values of the previous owner of the previous owner of the previou'
+   want -> function 1; gates 1:1.21, 9:0.84, 0:0.23, 6:0.10, 3:0.04
+   walk by label: place 5 d 1.10 'Correction: the part of Zekdun is now 27'; place 22 d 1.13 'the cart of Torne is 19.'; place 78 d 1.17 'the net lesson of Pelka is Neba.'; place 50 d 1.18 'the next part of Thagor is 23.'; place 53 d 1.20 'the next class of Zekmer is 1.'; place 55 d 1.20 'the net lesson of Zekmu is Nesa.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 34 d 1.36 'the invoice of Torne is 17.'; place 27 d 1.37 'the mode of Torne is 25.'; place 42 d 1.37 'the daily profile of Torne is Mutor.'; place 62 d 1.37 'the main department of Torne is Losa.'
+   candidates 41 (filter logit, wanted): +8.1* signal's 'both values of the previous owner of the prev' | +0.0* label walk 'the motor of Neba is 28.' @9.1 | +0.0* label walk 'the motor of Neba is 29.' @9.0 | -1.8 label walk 'the next part of Thagor is 23.' @50.0 | -2.3 label walk 'the cart of Torne is 19.' @22.4 | -2.9 label walk 'the next class of Zekmer is 1.' @53.1 | -3.2 label walk 'the net lesson of Pelka is Neba.' @78.0 | -3.3 label walk 'Correction: the part of Zekdun is now 27.' @5.2 | -5.6 label walk 'the net lesson of Zekmu is Nesa.' @55.0 | -6.7 relation walk 'the genre of Kagor is 19.' @19.1 | -7.0 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -7.7 relation walk 'the invoice of Torne is 17.' @34.2 | -8.0 label walk 'Correction: the part of Zekdun is now 5.' @5.1 | -8.0 label walk 'the next class of Zekmer is 23.' @53.0
+   inputs in order: 0: 'both values of the previous owner of the previous ' | 1: 'the motor of Neba is 28.' | 2: 'the motor of Neba is 29.'
+   many 1 (target 1), own error 1.64 (usual 2.65)
+   out 0: target '29 and 28'
+      said at its length '29 and 29' | at its own (3 slots kept, target 3) '29 and 29'
+      where 2 (0.94) target 2 | function? 0.00 | decode loss 0.33
+      slots took: ~<2.6>(0.5) ~<2.6>(0.5) ~<2.6>(0.5)
+   label gate 1.21, step loss 0.45 vs usual 4.84 -> pull
+
+== fill (signal +1.0) | about: 'What is the sum of both values of the motor of Neba?' + '29 and 29'
+   want -> function 1; gates 1:1.15, 9:0.62, 0:0.25, 6:0.24, 3:0.15
+   walk by label: place 9 d 0.62 'the motor of Neba is 28.'; place 10 d 1.15 'the tax of Neba is Zekdun.'; place 72 d 1.16 'the primary point of Neka is 16.'; place 8 d 1.16 'Correction: the term of Neba is now 11.'; place 60 d 1.19 'the motor of Kagor is 12.'; place 58 d 1.26 'the number of Vinsa is 7.'
+   walk by relation: place 9 d 0.97 'the motor of Neba is 28.'; place 60 d 1.18 'the motor of Kagor is 12.'; place 79 d 1.19 'the cycle of Mugor is 10.'; place 8 d 1.24 'Correction: the term of Neba is now 11.'; place 10 d 1.27 'the tax of Neba is Zekdun.'; place 23 d 1.28 'the genre of Torne is 27.'
+   candidates 29 (filter logit, wanted): +9.0* signal's '29 and 29' | +9.0* signal's 'What is the sum of both values of the motor o' | -7.9 label walk 'Correction: the term of Neba is now 11.' @8.2 | -8.3 label walk 'the motor of Neba is 28.' @9.1 | -8.4 label walk 'the motor of Kagor is 12.' @60.1 | -8.7 label walk 'the number of Vinsa is 7.' @58.0 | -8.7 label walk 'the primary point of Neka is 16.' @72.0 | -9.0 label walk 'the tax of Neba is Zekdun.' @10.2 | -9.1 function fn 4 | -9.3 relation walk 'the cycle of Mugor is 10.' @79.0 | -9.4 label walk 'the term of Neba is 4.' @8.0 | -9.4 label walk 'the term of Neba is 4.' @8.1 | -9.4 relation walk 'the genre of Torne is 27.' @23.4 | -9.4 label walk 'the motor of Neba is 29.' @9.0
+   inputs in order: 0: 'What is the sum of both values of the motor of Neb' | 1: '29 and 29'
+   many 1 (target 1), own error 0.67 (usual 2.60)
+   out 0: target 'What is the sum of 29 and 28?'
+      said at its length 'What is the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the' | at its own (7 slots kept, target 9) '(29x29'
+      where 2 (0.98) target 2 | function? 0.00 | decode loss 0.51
+      slots took: <1.0>(1.0) ~<1.0>(1.0) ~<1.0>(0.9) ~<1.0>(0.9) <1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0)
+   label gate 1.15, step loss 0.60 vs usual 4.83 -> pull
+
+== add (signal +1.0) | about: 'What is the sum of the sum of the sum of the sum of the sum of the sum'
+   want -> function 1; gates 1:1.14, 9:1.05, 0:0.41, 3:0.23, 2:0.02
+   walk by label: place 25 d 0.94 'the last layer of Nesa is 26.'; place 24 d 1.04 'the base cart of Nesa is 3.'; place 14 d 1.05 'the store of Dunka is 16.'; place 37 d 1.05 'the mode of Losa is 23 (same as the mode'; place 77 d 1.07 'the bonus of Dunne is 14.'; place 52 d 1.08 'the bonus of Thagor is 13.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.34 'the genre of Kagor is 19.'; place 15 d 1.35 'the main department of Neba is Dunka.'; place 34 d 1.36 'the invoice of Torne is 17.'; place 27 d 1.36 'the mode of Torne is 25.'; place 62 d 1.36 'the main department of Torne is Losa.'
+   candidates 32 (filter logit, wanted): +9.0* signal's 'What is the sum of the sum of the sum of the ' | -7.2 label walk 'the store of Dunka is 16.' @14.1 | -8.3 label walk 'the last layer of Nesa is 26.' @25.0 | -8.4 label walk 'the base cart of Nesa is 3.' @24.0 | -8.4 label walk 'the bonus of Dunne is 14.' @77.0 | -8.4 label walk 'the bonus of Thagor is 13.' @52.0 | -8.4 label walk 'the mode of Losa is 23 (same as the mode of D' @37.0 | -9.0 relation walk 'the genre of Kagor is 19.' @19.1 | -9.1 relation walk 'the invoice of Torne is 17.' @34.2 | -9.1 function fn 4 | -9.2 relation walk 'the mode of Torne is 25.' @27.1 | -9.2 relation walk 'the genre of Torne is 27.' @23.4 | -9.2 relation walk 'the main department of Neba is Dunka.' @15.0 | -9.3 relation walk 'the main department of Torne is Losa.' @62.1
+   inputs in order: 0: 'What is the sum of the sum of the sum of the sum o'
+   many 1 (target 1), own error 1.81 (usual 2.56)
+   out 0: target '57'
+      said at its length '29' | at its own (1 slots kept, target 1) '29'
+      where 2 (0.99) target 2 | function? 0.00 | decode loss 3.47
+      slots took: ~<0.4>(0.8)
+   label gate 1.14, step loss 3.52 vs usual 4.83 -> pull
+
+--- question (chain) 'What is the term of the daily profile of Zekdun?' truth '11'
+
+== split (signal +1.0) | about: 'What is the term of the daily profile of Zekdun?'
+   want -> function 1; gates 1:1.15, 9:0.62, 0:0.25, 6:0.24, 3:0.16
+   walk by label: place 4 d 0.42 'the daily profile of Zekdun is Neba.'; place 11 d 0.69 'the daily profile of Thaor is Zekdun.'; place 42 d 0.90 'the daily profile of Torne is Mutor.'; place 61 d 1.04 'the daily profile of Kagor is Losa.'; place 44 d 1.06 'the daily profile of Neka is Nesa.'; place 3 d 1.13 'the cycle of Zekdun is 14.'
+   walk by relation: place 4 d 1.01 'the daily profile of Zekdun is Neba.'; place 11 d 1.14 'the daily profile of Thaor is Zekdun.'; place 3 d 1.23 'the cycle of Zekdun is 14.'; place 44 d 1.24 'the daily profile of Neka is Nesa.'; place 61 d 1.26 'the daily profile of Kagor is Losa.'; place 42 d 1.28 'the daily profile of Torne is Mutor.'
+   candidates 22 (filter logit, wanted): +8.8* signal's 'What is the term of the daily profile of Zekd' | -7.7 label walk 'the daily profile of Neka is Nesa.' @44.0 | -7.8 label walk 'the daily profile of Kagor is Losa.' @61.0 | -8.1 label walk 'the cycle of Zekdun is 14.' @3.0 | -8.2 label walk 'the daily profile of Thaor is Zekdun.' @11.1 | -8.2 label walk 'the daily profile of Torne is Mutor.' @42.2 | -8.3 label walk 'the daily profile of Zekdun is Neba.' @4.2 | -8.9 function fn 4 | -9.3 label walk 'the daily profile of Zekdun is Neba.' @4.0 | -9.4 label walk 'the daily profile of Torne is Mutor.' @42.0 | -9.4 label walk 'the daily profile of Thaor is Zekdun.' @11.0 | -9.4 label walk 'the daily profile of Zekdun is Neba.' @4.1 | -9.4 label walk 'the daily profile of Torne is Mutor.' @42.1 | -9.5 function fn 3
+   inputs in order: 0: 'What is the term of the daily profile of Zekdun?'
+   many 1 (target 1), own error 3.43 (usual 2.58)
+   out 0: target 'the daily profile of Zekdun'
+      said at its length 'both values of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the previous owner of the' | at its own (6 slots kept, target 8) 'the value of the previous owner of the previous owner'
+      where 0 (0.99) target 0 | function? 0.00 | decode loss 4.63
+      slots took: What(1.0) ~What(1.0) What(1.0) ~What(1.0) What(1.0) ~What(1.0) ~What(1.0) ~What(1.0)
+   label gate 1.15, step loss 4.75 vs usual 4.84 -> pull
+
+== lookup (signal +1.0) | about: 'both values of the previous owner of the previous owner of the previou'
+   want -> function 1; gates 1:1.21, 9:0.86, 0:0.23, 6:0.09, 3:0.04
+   walk by label: place 5 d 1.12 'Correction: the part of Zekdun is now 27'; place 22 d 1.12 'the cart of Torne is 19.'; place 31 d 1.19 'from now on, each new branch become the '; place 50 d 1.20 'the next part of Thagor is 23.'; place 53 d 1.20 'the next class of Zekmer is 1.'; place 62 d 1.21 'the main department of Torne is Losa.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 34 d 1.36 'the invoice of Torne is 17.'; place 27 d 1.37 'the mode of Torne is 25.'; place 42 d 1.37 'the daily profile of Torne is Mutor.'; place 62 d 1.37 'the main department of Torne is Losa.'
+   candidates 41 (filter logit, wanted): +8.1* signal's 'both values of the previous owner of the prev' | -2.7 label walk 'the next part of Thagor is 23.' @50.0 | -3.4 label walk 'the cart of Torne is 19.' @22.4 | -4.2* label walk 'the daily profile of Zekdun is Neba.' @4.2 | -4.2 label walk 'the next class of Zekmer is 1.' @53.1 | -5.0 label walk 'Correction: the part of Zekdun is now 27.' @5.2 | -5.2 label walk 'from now on, each new branch become the curre' @31.2 | -5.7 label walk 'the main department of Torne is Losa.' @62.1 | -7.4 relation walk 'the genre of Kagor is 19.' @19.1 | -7.8 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -8.3 relation walk 'the invoice of Torne is 17.' @34.2 | -8.5 function fn 4 | -8.5 label walk 'the next class of Zekmer is 23.' @53.0 | -8.5 label walk 'Correction: the part of Zekdun is now 5.' @5.1
+   inputs in order: 0: 'both values of the previous owner of the previous ' | 1: 'the daily profile of Zekdun is Neba.'
+   many 1 (target 1), own error 3.30 (usual 2.63)
+   out 0: target 'string Neba'
+      said at its length 'string = 0x11' | at its own (3 slots kept, target 3) 'string = 0x11'
+      where 2 (0.62) target 2 | function? 0.00 | decode loss 3.57
+      slots took: <0.4>(0.8) ~<0.4>(0.8) ~<0.4>(0.9)
+   label gate 1.21, step loss 4.11 vs usual 4.92 -> pull
+
+== fill (signal +1.0) | about: 'What is the term of the daily profile of Zekdun?' + 'string = 0x11'
+   want -> function 1; gates 1:1.16, 9:0.63, 0:0.25, 6:0.24, 3:0.16
+   walk by label: place 4 d 0.42 'the daily profile of Zekdun is Neba.'; place 11 d 0.69 'the daily profile of Thaor is Zekdun.'; place 42 d 0.90 'the daily profile of Torne is Mutor.'; place 61 d 1.04 'the daily profile of Kagor is Losa.'; place 44 d 1.06 'the daily profile of Neka is Nesa.'; place 3 d 1.13 'the cycle of Zekdun is 14.'
+   walk by relation: place 4 d 1.01 'the daily profile of Zekdun is Neba.'; place 11 d 1.14 'the daily profile of Thaor is Zekdun.'; place 3 d 1.23 'the cycle of Zekdun is 14.'; place 44 d 1.24 'the daily profile of Neka is Nesa.'; place 61 d 1.26 'the daily profile of Kagor is Losa.'; place 42 d 1.28 'the daily profile of Torne is Mutor.'
+   candidates 23 (filter logit, wanted): +8.8* signal's 'What is the term of the daily profile of Zekd' | +8.7* signal's 'string = 0x11' | -7.9 label walk 'the daily profile of Neka is Nesa.' @44.0 | -7.9 label walk 'the daily profile of Kagor is Losa.' @61.0 | -8.2 label walk 'the cycle of Zekdun is 14.' @3.0 | -8.4 label walk 'the daily profile of Thaor is Zekdun.' @11.1 | -8.4 label walk 'the daily profile of Torne is Mutor.' @42.2 | -8.4 label walk 'the daily profile of Zekdun is Neba.' @4.2 | -9.1 function fn 4 | -9.4 label walk 'the daily profile of Zekdun is Neba.' @4.0 | -9.4 label walk 'the daily profile of Zekdun is Neba.' @4.1 | -9.4 label walk 'the daily profile of Thaor is Zekdun.' @11.0 | -9.4 label walk 'the daily profile of Torne is Mutor.' @42.0 | -9.4 label walk 'the daily profile of Torne is Mutor.' @42.1
+   inputs in order: 0: 'What is the term of the daily profile of Zekdun?' | 1: 'string = 0x11'
+   many 1 (target 1), own error 3.02 (usual 2.65)
+   out 0: target 'What is the term of Neba?'
+      said at its length 'What is the size of the city of Nokor?' | at its own (6 slots kept, target 8) 'the value of the Vold'
+      where 2 (0.59) target 2 | function? 0.00 | decode loss 2.53
+      slots took: What(1.0) ~What(0.6) ~What(0.9) ~What(0.8) What(1.0) ~What(0.6) ~<1.0>(0.9) ~<1.0>(1.0)
+   label gate 1.16, step loss 3.12 vs usual 4.96 -> pull
+
+== split (signal +1.0) | about: 'What is the size of the city of Nokor?'
+   want -> function 1; gates 1:1.15, 9:0.62, 0:0.22, 6:0.21, 3:0.11
+   walk by label: place 5 d 1.07 'Correction: the part of Zekdun is now 27'; place 41 d 1.14 'the step of Torne is 21.'; place 50 d 1.16 'the next part of Thagor is 23.'; place 55 d 1.16 'the net lesson of Zekmu is Nesa.'; place 2 d 1.17 'the step of Zekdun is 25.'; place 22 d 1.20 'the cart of Torne is 19.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 34 d 1.37 'the invoice of Torne is 17.'; place 27 d 1.37 'the mode of Torne is 25.'; place 62 d 1.37 'the main department of Torne is Losa.'; place 42 d 1.37 'the daily profile of Torne is Mutor.'
+   candidates 40 (filter logit, wanted): +8.5* signal's 'What is the size of the city of Nokor?' | -2.3 label walk 'the next part of Thagor is 23.' @50.0 | -2.6 label walk 'the cart of Torne is 19.' @22.4 | -3.6 label walk 'Correction: the part of Zekdun is now 27.' @5.2 | -4.7 label walk 'the step of Torne is 21.' @41.1 | -5.8 label walk 'the step of Zekdun is 25.' @2.1 | -6.3 label walk 'the net lesson of Zekmu is Nesa.' @55.0 | -7.0 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -7.1 relation walk 'the genre of Kagor is 19.' @19.1 | -7.7 relation walk 'the invoice of Torne is 17.' @34.2 | -8.1 label walk 'Correction: the part of Zekdun is now 5.' @5.1 | -8.1 relation walk 'the genre of Torne is 27.' @23.4 | -8.3 relation walk 'the mode of Torne is 25.' @27.1 | -8.4 label walk 'the cart of Torne is 27.' @22.2
+   inputs in order: 0: 'What is the size of the city of Nokor?'
+   many 1 (target 1), own error 3.49 (usual 2.66)
+   out 0: target 'the term of Neba'
+      said at its length 'the last post of the last' | at its own (2 slots kept, target 5) 'the'
+      where 0 (0.98) target 0 | function? 0.00 | decode loss 3.33
+      slots took: <0.0>(0.7) ~<0.0>(0.7) <0.0>(0.6) <0.0>(0.7) <0.0>(0.6)
+   label gate 1.15, step loss 3.47 vs usual 4.95 -> pull
+
+== lookup (signal +1.0) | about: 'the last post of the last'
+   want -> function 9; gates 9:1.11, 1:0.89, 0:0.28, 2:0.06, 3:0.04
+   walk by label: place 75 d 1.05 'the period of Dunne is 15.'; place 22 d 1.06 'the cart of Torne is 19.'; place 65 d 1.10 'the period of Vintha is 26.'; place 35 d 1.14 'the tax of Loba is Dunka.'; place 28 d 1.14 'Correction: the cart of Pello is now 3.'; place 83 d 1.16 'the net lesson of Pello is Loba.'
+   walk by relation: place 23 d 1.35 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 34 d 1.37 'the invoice of Torne is 17.'; place 42 d 1.37 'the daily profile of Torne is Mutor.'; place 27 d 1.37 'the mode of Torne is 25.'; place 13 d 1.37 'Correction: the genre of Thaor is now 22'
+   candidates 39 (filter logit, wanted): +7.9* signal's 'the last post of the last' | +2.0* label walk 'Correction: the term of Neba is now 11.' @8.2 | +0.2 label walk 'Correction: the cart of Pello is now 3.' @28.1 | -1.0 label walk 'the period of Vintha is 26.' @65.0 | -1.4 label walk 'the period of Dunne is 15.' @75.0 | -1.5 label walk 'the cart of Torne is 19.' @22.4 | -2.8 label walk 'the tax of Loba is Dunka.' @35.0 | -3.8 label walk 'the net lesson of Pello is Loba.' @83.0 | -5.4 relation walk 'Correction: the genre of Thaor is now 22.' @13.2 | -5.9 relation walk 'the genre of Kagor is 19.' @19.1 | -6.1 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -6.9 label walk 'the cart of Pello is 22.' @28.0 | -6.9 relation walk 'the invoice of Torne is 17.' @34.2 | -7.5 relation walk 'the genre of Torne is 27.' @23.4
+   inputs in order: 0: 'the last post of the last' | 1: 'Correction: the term of Neba is now 11.'
+   many 1 (target 1), own error -0.06 (usual 0.74)
+   out 0: target '11'
+      said at its length '11' | at its own (1 slots kept, target 1) '11'
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 0.10
+      slots took: <1.9>(1.0)
+   label gate 1.11, step loss 0.11 vs usual 2.74 -> pull
+
+== fill (signal +1.0) | about: 'What is the size of the city of Nokor?' + '11'
+   want -> function 1; gates 1:1.14, 9:0.61, 0:0.23, 6:0.22, 3:0.13
+   walk by label: place 5 d 1.07 'Correction: the part of Zekdun is now 27'; place 41 d 1.14 'the step of Torne is 21.'; place 50 d 1.16 'the next part of Thagor is 23.'; place 55 d 1.16 'the net lesson of Zekmu is Nesa.'; place 2 d 1.17 'the step of Zekdun is 25.'; place 22 d 1.20 'the cart of Torne is 19.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 34 d 1.37 'the invoice of Torne is 17.'; place 27 d 1.37 'the mode of Torne is 25.'; place 62 d 1.37 'the main department of Torne is Losa.'; place 42 d 1.37 'the daily profile of Torne is Mutor.'
+   candidates 41 (filter logit, wanted): +8.8* signal's '11' | +8.5* signal's 'What is the size of the city of Nokor?' | -8.6 label walk 'the next part of Thagor is 23.' @50.0 | -8.7 label walk 'the cart of Torne is 19.' @22.4 | -8.7 label walk 'Correction: the part of Zekdun is now 27.' @5.2 | -9.0 label walk 'the step of Torne is 21.' @41.1 | -9.0 function fn 4 | -9.2 label walk 'the step of Zekdun is 25.' @2.1 | -9.2 label walk 'the net lesson of Zekmu is Nesa.' @55.0 | -9.2 label walk 'Correction: the cart of Torne is now 27.' @22.1 | -9.3 relation walk 'the genre of Kagor is 19.' @19.1 | -9.4 relation walk 'the invoice of Torne is 17.' @34.2 | -9.4 relation walk 'the mode of Torne is 25.' @27.1 | -9.4 relation walk 'the genre of Torne is 27.' @23.4
+   inputs in order: 0: 'What is the size of the city of Nokor?' | 1: '11'
+   many 1 (target 1), own error 0.38 (usual 2.68)
+   out 0: target '11'
+      said at its length '9' | at its own (5 slots kept, target 1) ''
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 0.76
+      slots took: <1.0>(1.0)
+   label gate 1.14, step loss 0.88 vs usual 4.95 -> pull
+
+--- question (ops) 'What is the larger of the voucher of Gorpel and the log of Torne?' truth '21'
+
+== split (signal +1.0) | about: 'What is the larger of the voucher of Gorpel and the log of Torne?'
+   want -> function 1; gates 1:1.15, 9:0.62, 0:0.25, 6:0.24, 3:0.16
+   walk by label: place 48 d 0.63 'the voucher of Gorpel is 18.'; place 77 d 0.96 'the bonus of Dunne is 14.'; place 28 d 1.05 'Correction: the cart of Pello is now 3.'; place 26 d 1.08 'the log of Torne is 21.'; place 83 d 1.10 'the net lesson of Pello is Loba.'; place 71 d 1.11 'the branch of Vinmer is 6.'
+   walk by relation: place 48 d 1.10 'the voucher of Gorpel is 18.'; place 7 d 1.16 'rule: incoming log numbers increase the '; place 26 d 1.16 'the log of Torne is 21.'; place 31 d 1.18 'from now on, each new branch become the '; place 28 d 1.20 'Correction: the cart of Pello is now 3.'; place 49 d 1.20 'the market of Peltor is Gorpel.'
+   candidates 26 (filter logit, wanted): +8.9* signal's 'What is the larger of the voucher of Gorpel a' | -6.9 label walk 'Correction: the cart of Pello is now 3.' @28.1 | -7.8 relation walk 'from now on, each new branch become the curre' @31.2 | -7.9 label walk 'the voucher of Gorpel is 18.' @48.0 | -8.0 label walk 'the log of Torne is 21.' @26.2 | -8.2 label walk 'the branch of Vinmer is 6.' @71.0 | -8.2 label walk 'the bonus of Dunne is 14.' @77.0 | -8.2 relation walk 'rule: incoming log numbers increase the log b' @7.1 | -8.8 label walk 'the net lesson of Pello is Loba.' @83.0 | -8.9 function fn 4 | -8.9 relation walk 'note: any further branch replace the old bran' @31.0 | -9.0 relation walk 'please remember: branch figures that arrive l' @31.1 | -9.0 relation walk 'note: later log values replace the old log' @7.0 | -9.3 relation walk 'the market of Peltor is Gorpel.' @49.0
+   inputs in order: 0: 'What is the larger of the voucher of Gorpel and th'
+   many 1 (target 1), own error 3.54 (usual 2.64)
+   out 0: target 'the voucher of Gorpel'
+      said at its length 'the value of the player' | at its own (8 slots kept, target 6) 'What is the value of the last-value of the last-value of the last-value of the last-value of the last-value of the last-value of the last-value of the last-value of the last-'
+      where 0 (0.99) target 0 | function? 0.00 | decode loss 3.75
+      slots took: What(1.0) ~What(1.0) ~What(1.0) ~What(1.0) What(1.0) ~What(1.0)
+   label gate 1.15, step loss 3.85 vs usual 4.94 -> pull
+
+== lookup (signal +1.0) | about: 'the value of the player'
+   want -> function 9; gates 9:1.12, 1:0.98, 0:0.29, 2:0.07, 3:0.04
+   walk by label: place 5 d 1.06 'Correction: the part of Zekdun is now 27'; place 78 d 1.11 'the net lesson of Pelka is Neba.'; place 75 d 1.12 'the period of Dunne is 15.'; place 53 d 1.14 'the next class of Zekmer is 1.'; place 55 d 1.15 'the net lesson of Zekmu is Nesa.'; place 65 d 1.15 'the period of Vintha is 26.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 27 d 1.36 'the mode of Torne is 25.'; place 42 d 1.37 'the daily profile of Torne is Mutor.'; place 34 d 1.37 'the invoice of Torne is 17.'; place 13 d 1.37 'Correction: the genre of Thaor is now 22'
+   candidates 38 (filter logit, wanted): +8.1* signal's 'the value of the player' | -0.5 label walk 'the period of Vintha is 26.' @65.0 | -0.7* label walk 'the voucher of Gorpel is 18.' @48.0 | -1.1 label walk 'the period of Dunne is 15.' @75.0 | -1.8 label walk 'the next class of Zekmer is 1.' @53.1 | -1.9 label walk 'the net lesson of Pelka is Neba.' @78.0 | -2.2 label walk 'Correction: the part of Zekdun is now 27.' @5.2 | -4.3 label walk 'the net lesson of Zekmu is Nesa.' @55.0 | -5.3 relation walk 'Correction: the genre of Thaor is now 22.' @13.2 | -5.6 relation walk 'the genre of Kagor is 19.' @19.1 | -6.7 relation walk 'the invoice of Torne is 17.' @34.2 | -7.2 label walk 'the next class of Zekmer is 23.' @53.0 | -7.2 label walk 'Correction: the part of Zekdun is now 5.' @5.1 | -7.2 relation walk 'the genre of Torne is 27.' @23.4
+   inputs in order: 0: 'the value of the player' | 1: 'the voucher of Gorpel is 18.'
+   many 1 (target 1), own error -0.02 (usual 0.73)
+   out 0: target '18'
+      said at its length '18' | at its own (1 slots kept, target 1) '18'
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 0.01
+      slots took: ~<1.7>(1.0)
+   label gate 1.12, step loss 0.02 vs usual 2.71 -> pull
+
+== fill (signal +1.0) | about: 'What is the larger of the voucher of Gorpel and the log of Torne?' + '18'
+   want -> function 1; gates 1:1.15, 9:0.62, 0:0.26, 6:0.24, 3:0.17
+   walk by label: place 48 d 0.63 'the voucher of Gorpel is 18.'; place 77 d 0.96 'the bonus of Dunne is 14.'; place 28 d 1.05 'Correction: the cart of Pello is now 3.'; place 26 d 1.08 'the log of Torne is 21.'; place 83 d 1.10 'the net lesson of Pello is Loba.'; place 71 d 1.11 'the branch of Vinmer is 6.'
+   walk by relation: place 48 d 1.10 'the voucher of Gorpel is 18.'; place 7 d 1.16 'rule: incoming log numbers increase the '; place 26 d 1.16 'the log of Torne is 21.'; place 31 d 1.18 'from now on, each new branch become the '; place 28 d 1.20 'Correction: the cart of Pello is now 3.'; place 49 d 1.20 'the market of Peltor is Gorpel.'
+   candidates 27 (filter logit, wanted): +8.8* signal's '18' | +8.8* signal's 'What is the larger of the voucher of Gorpel a' | -8.0 label walk 'Correction: the cart of Pello is now 3.' @28.1 | -8.3 relation walk 'from now on, each new branch become the curre' @31.2 | -8.5 label walk 'the voucher of Gorpel is 18.' @48.0 | -8.5 label walk 'the log of Torne is 21.' @26.2 | -8.6 relation walk 'rule: incoming log numbers increase the log b' @7.1 | -8.7 label walk 'the branch of Vinmer is 6.' @71.0 | -8.7 label walk 'the bonus of Dunne is 14.' @77.0 | -9.1 function fn 4 | -9.1 label walk 'the net lesson of Pello is Loba.' @83.0 | -9.1 relation walk 'note: any further branch replace the old bran' @31.0 | -9.2 relation walk 'please remember: branch figures that arrive l' @31.1 | -9.2 relation walk 'note: later log values replace the old log' @7.0
+   inputs in order: 0: 'What is the larger of the voucher of Gorpel and th' | 1: '18'
+   many 1 (target 1), own error 2.63 (usual 2.67)
+   out 0: target 'What is the larger of 18 and the log of Torne?'
+      said at its length 'What is the difference between the number of the two cities of the city of the city of the city of the city of the city of the city of the city of the city of the city of the city of the city of the city of' | at its own (9 slots kept, target 13) 'What is the difference between the number of the two cities of the city of the city of the city of the city of the city of the city of the city of the city of the city of the city of the city of the city of'
+      where 2 (0.98) target 2 | function? 0.00 | decode loss 2.29
+      slots took: What(1.0) ~What(0.6) ~What(1.0) ~What(0.8) What(1.0) ~What(0.7) ~<1.0>(0.9) ~<1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0)
+   label gate 1.15, step loss 2.46 vs usual 4.96 -> pull
+
+== split (signal +1.0) | about: 'What is the difference between the number of the two cities of the cit'
+   want -> function 1; gates 1:1.14, 9:0.60, 0:0.25, 6:0.23, 3:0.16
+   walk by label: place 41 d 1.05 'the step of Torne is 21.'; place 2 d 1.11 'the step of Zekdun is 25.'; place 33 d 1.11 'the next invoice of Losa is 26 (same as '; place 82 d 1.14 'the step of Torgor is 9.'; place 77 d 1.16 'the bonus of Dunne is 14.'; place 52 d 1.18 'the bonus of Thagor is 13.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 62 d 1.36 'the main department of Torne is Losa.'; place 34 d 1.36 'the invoice of Torne is 17.'; place 15 d 1.36 'the main department of Neba is Dunka.'; place 27 d 1.37 'the mode of Torne is 25.'
+   candidates 34 (filter logit, wanted): +8.9* signal's 'What is the difference between the number of ' | -7.1 label walk 'the next invoice of Losa is 26 (same as the l' @33.0 | -7.4 label walk 'the step of Torgor is 9.' @82.1 | -7.6 label walk 'the bonus of Dunne is 14.' @77.0 | -7.6 label walk 'the bonus of Thagor is 13.' @52.0 | -7.9 label walk 'the step of Torne is 21.' @41.1 | -8.4 label walk 'the step of Zekdun is 25.' @2.1 | -8.7 relation walk 'the genre of Kagor is 19.' @19.1 | -8.9 relation walk 'the invoice of Torne is 17.' @34.2 | -9.0 function fn 4 | -9.0 relation walk 'the main department of Neba is Dunka.' @15.0 | -9.1 relation walk 'the genre of Torne is 27.' @23.4 | -9.1 relation walk 'the mode of Torne is 25.' @27.1 | -9.2 relation walk 'the main department of Torne is Losa.' @62.1
+   inputs in order: 0: 'What is the difference between the number of the t'
+   many 1 (target 1), own error 3.66 (usual 2.66)
+   out 0: target 'the log of Torne'
+      said at its length 'the value of the' | at its own (6 slots kept, target 5) 'the value of the'
+      where 0 (1.00) target 0 | function? 0.00 | decode loss 3.26
+      slots took: ~<0.0>(0.8) ~<0.0>(0.9) ~<0.0>(0.9) ~<0.0>(0.9) ~<0.0>(0.9)
+   label gate 1.14, step loss 3.35 vs usual 4.92 -> pull
+
+== lookup (signal +1.0) | about: 'the value of the'
+   want -> function 9; gates 9:1.12, 1:0.94, 0:0.30, 2:0.07, 3:0.05
+   walk by label: place 77 d 0.87 'the bonus of Dunne is 14.'; place 52 d 0.94 'the bonus of Thagor is 13.'; place 69 d 0.94 'the bonus of Orril is 23 (same as the mo'; place 75 d 0.99 'the period of Dunne is 15.'; place 83 d 1.01 'the net lesson of Pello is Loba.'; place 25 d 1.02 'the last layer of Nesa is 26.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 27 d 1.36 'the mode of Torne is 25.'; place 42 d 1.37 'the daily profile of Torne is Mutor.'; place 13 d 1.37 'Correction: the genre of Thaor is now 22'; place 34 d 1.37 'the invoice of Torne is 17.'
+   candidates 35 (filter logit, wanted): +8.1* signal's 'the value of the' | -0.6* label walk 'the log of Torne is 21.' @26.2 | -0.8 label walk 'the last layer of Nesa is 26.' @25.0 | -1.2 label walk 'the period of Dunne is 15.' @75.0 | -1.5 label walk 'the bonus of Thagor is 13.' @52.0 | -1.6 label walk 'the bonus of Dunne is 14.' @77.0 | -2.4 label walk 'the bonus of Orril is 23 (same as the mode of' @69.0 | -3.6 label walk 'the net lesson of Pello is Loba.' @83.0 | -5.2 relation walk 'Correction: the genre of Thaor is now 22.' @13.2 | -5.5 relation walk 'the genre of Kagor is 19.' @19.1 | -6.6 relation walk 'the invoice of Torne is 17.' @34.2 | -7.1 relation walk 'the genre of Torne is 27.' @23.4 | -7.4 relation walk 'the mode of Torne is 25.' @27.1 | -7.5 relation walk 'the daily profile of Torne is Mutor.' @42.2
+   inputs in order: 0: 'the value of the' | 1: 'the log of Torne is 21.'
+   many 1 (target 1), own error -0.34 (usual 0.71)
+   out 0: target '21'
+      said at its length '21' | at its own (1 slots kept, target 1) '21'
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 0.02
+      slots took: ~<1.6>(1.0)
+   label gate 1.12, step loss 0.03 vs usual 2.68 -> pull
+
+== fill (signal +1.0) | about: 'What is the difference between the number of the two cities of the cit' + '21'
+   want -> function 1; gates 1:1.14, 9:0.60, 0:0.26, 6:0.24, 3:0.17
+   walk by label: place 41 d 1.05 'the step of Torne is 21.'; place 2 d 1.11 'the step of Zekdun is 25.'; place 33 d 1.11 'the next invoice of Losa is 26 (same as '; place 82 d 1.14 'the step of Torgor is 9.'; place 77 d 1.16 'the bonus of Dunne is 14.'; place 52 d 1.18 'the bonus of Thagor is 13.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 62 d 1.36 'the main department of Torne is Losa.'; place 34 d 1.36 'the invoice of Torne is 17.'; place 15 d 1.36 'the main department of Neba is Dunka.'; place 27 d 1.37 'the mode of Torne is 25.'
+   candidates 35 (filter logit, wanted): +8.9* signal's 'What is the difference between the number of ' | +8.8* signal's '21' | -8.7 label walk 'the next invoice of Losa is 26 (same as the l' @33.0 | -8.8 label walk 'the step of Torgor is 9.' @82.1 | -8.9 label walk 'the bonus of Thagor is 13.' @52.0 | -8.9 label walk 'the bonus of Dunne is 14.' @77.0 | -9.1 label walk 'the step of Torne is 21.' @41.1 | -9.1 function fn 4 | -9.2 label walk 'the step of Zekdun is 25.' @2.1 | -9.3 relation walk 'the genre of Kagor is 19.' @19.1 | -9.4 relation walk 'the invoice of Torne is 17.' @34.2 | -9.4 relation walk 'the main department of Neba is Dunka.' @15.0 | -9.4 relation walk 'the mode of Torne is 25.' @27.1 | -9.4 relation walk 'the genre of Torne is 27.' @23.4
+   inputs in order: 0: 'What is the difference between the number of the t' | 1: '21'
+   many 1 (target 1), own error 1.00 (usual 2.68)
+   out 0: target 'What is the larger of 18 and 21?'
+      said at its length 'What is the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the' | at its own (7 slots kept, target 9) 'What is the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the sum of the'
+      where 2 (0.99) target 2 | function? 0.00 | decode loss 0.83
+      slots took: ~<1.0>(0.9) ~<1.0>(0.9) ~<1.0>(0.9) ~<1.0>(0.9) ~<1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0) ~<1.0>(1.0)
+   label gate 1.14, step loss 0.94 vs usual 4.92 -> pull
+
+== max (signal +1.0) | about: 'What is the sum of the sum of the sum of the sum of the sum of the sum'
+   want -> function 1; gates 1:1.13, 9:1.10, 0:0.37, 3:0.16, 2:0.04
+   walk by label: place 25 d 0.92 'the last layer of Nesa is 26.'; place 77 d 1.01 'the bonus of Dunne is 14.'; place 24 d 1.01 'the base cart of Nesa is 3.'; place 52 d 1.03 'the bonus of Thagor is 13.'; place 37 d 1.04 'the mode of Losa is 23 (same as the mode'; place 14 d 1.06 'the store of Dunka is 16.'
+   walk by relation: place 23 d 1.34 'the genre of Torne is 27.'; place 19 d 1.35 'the genre of Kagor is 19.'; place 15 d 1.36 'the main department of Neba is Dunka.'; place 62 d 1.37 'the main department of Torne is Losa.'; place 47 d 1.37 'the trade of Vingor is 25.'; place 27 d 1.37 'the mode of Torne is 25.'
+   candidates 30 (filter logit, wanted): +8.9* signal's 'What is the sum of the sum of the sum of the ' | -3.9 label walk 'the store of Dunka is 16.' @14.1 | -6.7 label walk 'the base cart of Nesa is 3.' @24.0 | -6.7 label walk 'the last layer of Nesa is 26.' @25.0 | -6.7 label walk 'the bonus of Dunne is 14.' @77.0 | -6.8 label walk 'the mode of Losa is 23 (same as the mode of D' @37.0 | -6.9 label walk 'the bonus of Thagor is 13.' @52.0 | -8.1 relation walk 'the genre of Kagor is 19.' @19.1 | -8.6 relation walk 'the genre of Torne is 27.' @23.4 | -8.6 relation walk 'the main department of Neba is Dunka.' @15.0 | -8.6 relation walk 'the mode of Torne is 25.' @27.1 | -8.7 relation walk 'the trade of Vingor is 25.' @47.0 | -8.9 relation walk 'the main department of Torne is Losa.' @62.1 | -9.1 label walk 'the store of Dunka is 20 (same as the medal o' @14.0
+   inputs in order: 0: 'What is the sum of the sum of the sum of the sum o'
+   many 1 (target 1), own error 1.36 (usual 2.64)
+   out 0: target '21'
+      said at its length '22' | at its own (1 slots kept, target 1) '22'
+      where 2 (1.00) target 2 | function? 0.00 | decode loss 1.83
+      slots took: ~<0.0>(1.0)
+   label gate 1.13, step loss 1.86 vs usual 4.90 -> pull
+
+--- functions on functions
+
+== inc (signal +1.0) | about: 'add one to it' + '120'
+   want -> function 4; gates 4:1.12, 7:1.03, 5:0.91, 6:0.71, 8:0.42
+   walk by label: place 43 d 1.02 'Correction: the last guest of Neka is no'; place 5 d 1.10 'Correction: the part of Zekdun is now 27'; place 81 d 1.11 'the next part of Torgor is 28.'; place 39 d 1.14 'the last guest of Mutor is 26 (same as t'; place 50 d 1.14 'the next part of Thagor is 23.'; place 75 d 1.15 'the period of Dunne is 15.'
+   walk by relation: place 81 d 1.21 'the next part of Torgor is 28.'; place 31 d 1.21 'from now on, each new branch become the '; place 43 d 1.23 'Correction: the last guest of Neka is no'; place 50 d 1.24 'the next part of Thagor is 23.'; place 53 d 1.26 'the next class of Zekmer is 1.'; place 5 d 1.26 'Correction: the part of Zekdun is now 27'
+   candidates 26 (filter logit, wanted): +8.8* signal's 'add one to it' | +8.7* signal's '120' | -7.0 label walk 'Correction: the last guest of Neka is now 23.' @43.1 | -7.8 label walk 'the last guest of Mutor is 26 (same as the ne' @39.0 | -8.1 label walk 'the next part of Torgor is 28.' @81.0 | -8.2 relation walk 'from now on, each new branch become the curre' @31.2 | -8.2 label walk 'the next part of Thagor is 23.' @50.0 | -8.3 label walk 'the period of Dunne is 15.' @75.0 | -8.7 label walk 'Correction: the part of Zekdun is now 27.' @5.2 | -9.0 function fn 4 | -9.2 relation walk 'note: any further branch replace the old bran' @31.0 | -9.2 label walk 'the last guest of Neka is 13.' @43.0 | -9.3 relation walk 'please remember: branch figures that arrive l' @31.1 | -9.3 relation walk 'the next class of Zekmer is 1.' @53.1
+   inputs in order: 0: 'add one to it' | 1: '120'
+   many 1 (target 1), own error 2.11 (usual 1.89)
+   out 0: target '121'
+      said at its length '121' | at its own (0 slots kept, target 1) '121'
+      where 3 (1.00) target 3 | function? 0.01 | decode loss 1.21
+      slots took: 120(1.0)
+   label gate 1.12, step loss 1.31 vs usual 2.89 -> pull
+
+== fedit (signal +1.0) | about: 'make it add 2 instead'
+   want -> function 4; gates 4:1.10, 7:1.08, 5:0.89, 6:0.69, 8:0.50
+   walk by label: place 5 d 1.06 'Correction: the part of Zekdun is now 27'; place 81 d 1.08 'the next part of Torgor is 28.'; place 50 d 1.11 'the next part of Thagor is 23.'; place 20 d 1.12 'the next part of Kagor is 10.'; place 6 d 1.13 'the medal of Zekdun is 10.'; place 39 d 1.15 'the last guest of Mutor is 26 (same as t'
+   walk by relation: place 31 d 1.21 'from now on, each new branch become the '; place 7 d 1.24 'rule: incoming log numbers increase the '; place 5 d 1.28 'Correction: the part of Zekdun is now 27'; place 30 d 1.29 'the locale of Neka is Neba.'; place 71 d 1.30 'the branch of Vinmer is 6.'; place 54 d 1.31 'from now on, every reported net class co'
+   candidates 30 (filter logit, wanted): +8.7* signal's 'make it add 2 instead' | +7.0* function fn 4 | -8.0 label walk 'the last guest of Mutor is 26 (same as the ne' @39.0 | -8.0 relation walk 'from now on, each new branch become the curre' @31.2 | -8.1 label walk 'the next part of Kagor is 10.' @20.1 | -8.2 label walk 'the next part of Torgor is 28.' @81.0 | -8.3 label walk 'the next part of Thagor is 23.' @50.0 | -8.5 relation walk 'rule: incoming log numbers increase the log b' @7.1 | -8.6 label walk 'Correction: the part of Zekdun is now 27.' @5.2 | -8.6 relation walk 'from now on, every reported net class count a' @54.0 | -8.7 label walk 'the medal of Zekdun is 10.' @6.1 | -8.8 function fn 9 | -8.9 function fn 7 | -9.0 function fn 5
+   inputs in order: 0: 'make it add 2 instead' | 1: ''
+   many 1 (target 1), own error 2.22 (usual 1.88)
+   label gate 1.10, step loss 1.11 vs usual 2.89 -> pull
+
+== fnew (signal +1.0) | about: 'make a new one that adds 2'
+   want -> function 7; gates 7:1.17, 8:0.95, 5:0.77, 4:0.77, 6:0.65
+   walk by label: place 5 d 1.06 'Correction: the part of Zekdun is now 27'; place 50 d 1.08 'the next part of Thagor is 23.'; place 81 d 1.10 'the next part of Torgor is 28.'; place 53 d 1.11 'the next class of Zekmer is 1.'; place 39 d 1.11 'the last guest of Mutor is 26 (same as t'; place 31 d 1.13 'from now on, each new branch become the '
+   walk by relation: place 53 d 1.20 'the next class of Zekmer is 1.'; place 5 d 1.22 'Correction: the part of Zekdun is now 27'; place 50 d 1.23 'the next part of Thagor is 23.'; place 20 d 1.24 'the next part of Kagor is 10.'; place 81 d 1.24 'the next part of Torgor is 28.'; place 31 d 1.26 'from now on, each new branch become the '
+   candidates 24 (filter logit, wanted): +8.8* signal's 'make a new one that adds 2' | +6.7* function fn 4 | -4.3 label walk 'from now on, each new branch become the curre' @31.2 | -7.5 label walk 'the last guest of Mutor is 26 (same as the ne' @39.0 | -7.7 label walk 'the next part of Torgor is 28.' @81.0 | -7.8 label walk 'the next part of Thagor is 23.' @50.0 | -8.2 label walk 'Correction: the part of Zekdun is now 27.' @5.2 | -8.4 label walk 'the next class of Zekmer is 1.' @53.1 | -8.8 function fn 9 | -8.8 label walk 'note: any further branch replace the old bran' @31.0 | -8.9 function fn 7 | -9.0 function fn 5 | -9.0 relation walk 'the next part of Kagor is 10.' @20.1 | -9.0 label walk 'please remember: branch figures that arrive l' @31.1
+   inputs in order: 0: 'make a new one that adds 2' | 1: ''
+   many 1 (target 1), own error 2.26 (usual 2.23)
+   label gate 1.17, step loss 1.21 vs usual 3.82 -> pull
+
+=== 3. ROUTING OVER MANY DEMO STEPS (purpose -> the function its want reaches; said exactly)
+add: 31 steps -> functions 1: 25, 9: 6 | said exactly 4 at its length, 4 at its own
+before: 25 steps -> functions 9: 23, 1: 2 | said exactly 10 at its length, 10 at its own
+both: 25 steps -> functions 1: 25 | said exactly 2 at its length, 2 at its own
+copy: 8 steps -> functions 3: 8 | said exactly 0 at its length, 0 at its own
+fill: 209 steps -> functions 1: 209 | said exactly 55 at its length, 14 at its own
+fix: 12 steps -> functions 2: 12 | said exactly 0 at its length, 0 at its own
+inc: 25 steps -> functions 4: 25 | said exactly 5 at its length, 3 at its own
+lookup: 142 steps -> functions 9: 142 | said exactly 117 at its length, 117 at its own
+max: 14 steps -> functions 9: 12, 1: 2 | said exactly 1 at its length, 1 at its own
+min: 11 steps -> functions 1: 6, 9: 5 | said exactly 2 at its length, 2 at its own
+split: 209 steps -> functions 1: 209 | said exactly 0 at its length, 0 at its own
+store: 239 steps -> functions 3: 226, 8: 13 | said exactly 17 at its length, 14 at its own
+sub: 11 steps -> functions 9: 7, 1: 4 | said exactly 0 at its length, 0 at its own
+
+=== 4. LIVING BY ITSELF (a fresh world; nothing scripted)
+
+statement 'from now on, each new color are amounts to add to the current color'
+    candidates (filter logit): +8.6 'from now on, each new colorare amou' | -4.5 fn 4 | -9.2 fn 7 | -9.3 fn 9 | -9.3 fn 6 | -9.3 fn 5 | -9.4 fn 1 | -9.5 fn 2 | -9.5 fn 8 | -9.5 fn 3
+  fire 0: signal +1.00, function 8 (gates 8:1.14, 3:0.95, 7:0.81) | about: 'from now on, each new colorare amounts to add to the current' | let through 1/11: work 'from now on, each new colorare amounts to add to t' | many 1, where 1, own error 6.93 (usual 6.84) | says: 'by @bobobobobobobobobobobobobobobobobobobobobobobobobobobobo'
+
+statement 'the post of Vinzek is 8.'
+    walk by label: 0 d 1.19 'by @bobobobobobobobobobobobobobobob'
+    walk by relation: 0 d 1.38 'by @bobobobobobobobobobobobobobobob'
+    candidates (filter logit): +7.5 'the post of Vinzek is 8.' | +0.4 'by @bobobobobobobobobobobobobobobob' @0.0 | -7.2 fn 4 | -8.7 fn 7 | -8.9 fn 9 | -8.9 fn 6 | -9.0 fn 1 | -9.0 fn 2 | -9.1 fn 5 | -9.1 fn 0
+  fire 1: signal +1.00, function 3 (gates 3:1.11, 8:1.00, 0:0.87) | about: 'the post of Vinzek is 8.' | let through 2/12: work 'the post of Vinzek is 8.'; entry 0.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo' | many 1, where 1, own error 0.62 (usual 1.14) | says: 'the post of Vinzek is 1.'
+
+statement 'the trade of Vinzek is 27.'
+    walk by label: 1 d 0.92 'the post of Vinzek is 1.'; 0 d 1.19 'by @bobobobobobobobobobobobobobobob'
+    walk by relation: 1 d 1.14 'the post of Vinzek is 1.'; 0 d 1.44 'by @bobobobobobobobobobobobobobobob'
+    candidates (filter logit): +7.8 'the trade of Vinzek is 27.' | +0.3 'by @bobobobobobobobobobobobobobobob' @0.0 | -2.6 'the post of Vinzek is 1.' @1.0 | -7.6 fn 4 | -8.9 fn 7 | -9.1 fn 6 | -9.1 fn 9 | -9.1 fn 1 | -9.2 fn 2 | -9.2 fn 5
+  fire 2: signal +1.00, function 3 (gates 3:1.12, 8:0.99, 0:0.88) | about: 'the trade of Vinzek is 27.' | let through 2/13: work 'the trade of Vinzek is 27.'; entry 0.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo' | many 1, where 1, own error 0.62 (usual 1.14) | says: 'the trade of Vinzek is 27.'
+
+statement 'the primary frame of Sapel is Vinzek.'
+    walk by label: 1 d 1.13 'the post of Vinzek is 1.'; 0 d 1.21 'by @bobobobobobobobobobobobobobobob'; 2 d 1.22 'the trade of Vinzek is 27.'
+    walk by relation: 1 d 1.17 'the post of Vinzek is 1.'; 2 d 1.32 'the trade of Vinzek is 27.'; 0 d 1.43 'by @bobobobobobobobobobobobobobobob'
+    candidates (filter logit): +6.7 'the primary frame of Sapel is Vinze' | +0.2 'by @bobobobobobobobobobobobobobobob' @0.0 | -2.4 'the trade of Vinzek is 27.' @2.0 | -2.4 'the post of Vinzek is 1.' @1.0 | -7.9 fn 4 | -8.9 fn 7 | -9.1 fn 6 | -9.2 fn 1 | -9.2 fn 9 | -9.2 fn 2
+  fire 3: signal +1.00, function 3 (gates 3:1.11, 8:0.99, 0:0.88) | about: 'the primary frame of Sapel is Vinzek.' | let through 2/14: work 'the primary frame of Sapel is Vinzek.'; entry 0.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo' | many 1, where 1, own error 1.21 (usual 1.14) | says: 'the frame of Vinzek is Chzek.'
+
+statement 'the trade of Vinzek is 29.'
+    walk by label: 2 d 0.60 'the trade of Vinzek is 27.'; 1 d 0.93 'the post of Vinzek is 1.'; 3 d 1.02 'the frame of Vinzek is Chzek.'; 0 d 1.19 'by @bobobobobobobobobobobobobobobob'
+    walk by relation: 2 d 0.93 'the trade of Vinzek is 27.'; 1 d 1.14 'the post of Vinzek is 1.'; 3 d 1.24 'the frame of Vinzek is Chzek.'; 0 d 1.44 'by @bobobobobobobobobobobobobobobob'
+    candidates (filter logit): +7.9 'the trade of Vinzek is 29.' | +0.1 'by @bobobobobobobobobobobobobobobob' @0.0 | -2.5 'the trade of Vinzek is 27.' @2.0 | -2.5 'the post of Vinzek is 1.' @1.0 | -2.6 'the frame of Vinzek is Chzek.' @3.0 | -7.8 fn 4 | -9.0 fn 7 | -9.2 fn 6 | -9.2 fn 9 | -9.2 fn 1
+  fire 4: signal +1.00, function 3 (gates 3:1.11, 8:0.99, 0:0.87) | about: 'the trade of Vinzek is 29.' | let through 2/15: work 'the trade of Vinzek is 29.'; entry 0.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo' | many 1, where 1, own error 0.62 (usual 1.14) | says: 'the Scotch is 30.'
+
+statement 'the genre of Dunmu is 8.'
+    walk by label: 2 d 1.24 'the trade of Vinzek is 27.'; 4 d 1.30 'the Scotch is 30.'; 0 d 1.35 'by @bobobobobobobobobobobobobobobob'; 1 d 1.42 'the post of Vinzek is 1.'; 3 d 1.44 'the frame of Vinzek is Chzek.'
+    walk by relation: 2 d 1.39 'the trade of Vinzek is 27.'; 4 d 1.41 'the Scotch is 30.'; 0 d 1.42 'by @bobobobobobobobobobobobobobobob'; 3 d 1.43 'the frame of Vinzek is Chzek.'; 1 d 1.48 'the post of Vinzek is 1.'
+    candidates (filter logit): +7.1 'the genre of Dunmu is 8.' | -0.0 'by @bobobobobobobobobobobobobobobob' @0.0 | -2.5 'the Scotch is 30.' @4.0 | -2.6 'the trade of Vinzek is 27.' @2.0 | -2.6 'the post of Vinzek is 1.' @1.0 | -2.7 'the frame of Vinzek is Chzek.' @3.0 | -8.3 fn 4 | -9.1 fn 7 | -9.3 fn 0 | -9.3 fn 9
+  fire 5: signal +1.00, function 3 (gates 3:1.12, 8:0.99, 0:0.88) | about: 'the genre of Dunmu is 8.' | let through 1/16: work 'the genre of Dunmu is 8.' | many 1, where 1, own error 0.55 (usual 1.14) | says: 'the genre of Mumu is 2.'
+
+statement 'from now on, country figures that arrive later are the new country; discard the old one'
+    walk by label: 0 d 1.15 'by @bobobobobobobobobobobobobobobob'; 4 d 1.23 'the Scotch is 30.'; 2 d 1.28 'the trade of Vinzek is 27.'; 3 d 1.33 'the frame of Vinzek is Chzek.'; 1 d 1.36 'the post of Vinzek is 1.'; 5 d 1.47 'the genre of Mumu is 2.'
+    walk by relation: 3 d 1.31 'the frame of Vinzek is Chzek.'; 0 d 1.33 'by @bobobobobobobobobobobobobobobob'; 4 d 1.33 'the Scotch is 30.'; 2 d 1.34 'the trade of Vinzek is 27.'; 1 d 1.41 'the post of Vinzek is 1.'; 5 d 1.48 'the genre of Mumu is 2.'
+    candidates (filter logit): +8.2 'from now on, country figures that a' | +0.0 'by @bobobobobobobobobobobobobobobob' @0.0 | -2.7 'the genre of Mumu is 2.' @5.0 | -3.6 'the post of Vinzek is 1.' @1.0 | -3.6 'the frame of Vinzek is Chzek.' @3.0 | -3.6 'the Scotch is 30.' @4.0 | -3.7 'the trade of Vinzek is 27.' @2.0 | -6.0 fn 4 | -9.3 fn 7 | -9.3 fn 9
+  fire 6: signal +1.00, function 8 (gates 8:1.13, 3:1.00, 7:0.72) | about: 'from now on, country figures that arrive laterare the new co' | let through 2/17: work 'from now on, country figures that arrive laterare '; entry 0.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo' | many 1, where 1, own error 6.97 (usual 6.84) | says: 'by @bobobobobobobobobobobobobobobobobobobobobobobobobobobobo'
+
+statement 'the first camera of Gorvin is 12.'
+    walk by label: 2 d 1.09 'the trade of Vinzek is 27.'; 4 d 1.12 'the Scotch is 30.'; 3 d 1.15 'the frame of Vinzek is Chzek.'; 1 d 1.27 'the post of Vinzek is 1.'; 6 d 1.36 'by @bobobobobobobobobobobobobobobob'; 0 d 1.36 'by @bobobobobobobobobobobobobobobob'
+    walk by relation: 4 d 1.24 'the Scotch is 30.'; 2 d 1.24 'the trade of Vinzek is 27.'; 3 d 1.25 'the frame of Vinzek is Chzek.'; 1 d 1.33 'the post of Vinzek is 1.'; 6 d 1.36 'by @bobobobobobobobobobobobobobobob'; 0 d 1.36 'by @bobobobobobobobobobobobobobobob'
+    candidates (filter logit): +7.9 'the first camera of Gorvin is 12.' | -0.1 'by @bobobobobobobobobobobobobobobob' @0.0 | -0.1 'by @bobobobobobobobobobobobobobobob' @6.0 | -2.5 'the Scotch is 30.' @4.0 | -2.6 'the trade of Vinzek is 27.' @2.0 | -2.6 'the frame of Vinzek is Chzek.' @3.0 | -2.6 'the post of Vinzek is 1.' @1.0 | -8.3 fn 4 | -9.1 fn 7 | -9.3 fn 6
+  fire 7: signal +1.00, function 3 (gates 3:1.12, 8:0.98, 0:0.89) | about: 'the first camera of Gorvin is 12.' | let through 1/17: work 'the first camera of Gorvin is 12.' | many 1, where 1, own error 0.59 (usual 1.14) | says: 'the first camera of Gorvin is 11.'
+
+memory: 110 places from 111 statements, entries per place 1.01 | newest entries that are a true current fact 6/110 | facts held right somewhere 6/62 | subjects with more than one place 18 | {'fires': 111, 'roundtrip': 3, 'check fails': 1, 'rest': 1}
+   places: 0: 'by @bobobobobobobobobobobobobobobobobobobobob' (1) | 1: 'the post of Vinzek is 1.' (1) | 2: 'the trade of Vinzek is 27.' (1) | 3: 'the frame of Vinzek is Chzek.' (1) | 4: 'the Scotch is 30.' (1) | 5: 'the genre of Mumu is 2.' (1) | 6: 'by @bobobobobobobobobobobobobobobobobobobobob' (1) | 7: 'the first camera of Gorvin is 11.' (1) | 8: 'the meter of Vingin is 25.' (1) | 9: 'the color of the color of the roux is 5.' (1) | 10: 'the genre of Muur is Muur.' (1) | 11: 'the vessel of Vinzek is Vzek.' (1) | 12: 'the grade of Merba is 7.' (1) | 13: 'the lane of Braba is 18.' (1) | 14: 'the shelf of Dunild is 26.' (1) | 15: 'the lesson of Rildild is 10.' (1) | 16: 'the lesson of Samu is 17.' (1) | 17: 'the fee of Samsa is Sapu.' (1) | 18: 'the secondary grade of Merba is 22.' (1) | 19: 'the temp of Samu is 10.' (1) | 20: 'the lesson of Samu is 17.' (1) | 21: 'the vessel of Dunun is Muldun.' (1) | 22: 'the step of Rildru is 16.' (1) | 23: 'the vessel of Pelor is Pelor.' (1) | 24: 'the day of Pelor is 22.' (1) | 25: 'Correction: Gororororororor is now the first ' (2) | 26: 'by @bobobobobobobobobobobobobobobobobobobobob' (1) | 27: 'the meter of Vinmu is 30.' (1) | 28: 'the first first is Mumu.' (1) | 29: 'the last entry of Dunr is Muld.' (1) | 30: 'the vessel of Rilgor is Rilgor.' (1) | 31: 'the fee of Rorgor is Rorgor.' (1) | 32: 'the account of Gorlo is 7.' (1) | 33: 'the event of Grba is Merba.' (1) | 34: 'the vessel of Rilgor is Rilgor.' (1) | 35: 'the fee of Rorgor is Rorgor.' (1) | 36: 'the screen of Rilsa is 1.' (1) | 37: 'the vessel of Pelor is Pelor.' (1) | 38: 'the post of Vinzek is 1.' (1) | 39: 'the account of Gorlo is 26.' (1)
+
+question (lookup) 'What is the trade of Vinzek?' truth '5'
+    walk by label: 88 d 0.51 'the 5 vzek is Vinzek.'; 4 d 0.57 'the Scotch is 30.'; 57 d 0.59 'the 1 is Vinzek.'; 76 d 0.59 'the trade of Vinzek is 16.'; 85 d 0.59 'the trade of Vinzek is 16.'; 2 d 0.61 'the trade of Vinzek is 27.'
+    walk by relation: 88 d 0.93 'the 5 vzek is Vinzek.'; 76 d 0.94 'the trade of Vinzek is 16.'; 85 d 0.94 'the trade of Vinzek is 16.'; 2 d 0.97 'the trade of Vinzek is 27.'; 4 d 0.99 'the Scotch is 30.'; 57 d 0.99 'the 1 is Vinzek.'
+    candidates (filter logit): +8.5 'What is the trade of Vinzek?' | -5.7 'the 1 is Vinzek.' @57.0 | -5.8 'the trade of Vinzek is 16.' @76.0 | -5.8 'the trade of Vinzek is 16.' @85.0 | -5.8 'the 5 vzek is Vinzek.' @88.0 | -5.9 'the Scotch is 30.' @4.0 | -6.0 'the trade of Vinzek is 27.' @2.0 | -8.8 fn 4 | -9.4 fn 3 | -9.5 fn 9
+  fire 111: signal +1.00, function 1 (gates 1:1.16, 9:0.64, 0:0.24) | about: 'What is the trade of Vinzek?' | let through 1/17: work 'What is the trade of Vinzek?' | many 1, where 0, own error 3.51 (usual 2.67) | says: '10'
+    walk by label: 62 d 0.77 'by @bobobobobobobobobobobobobobobob'; 49 d 0.78 'by @bobobobobobobobobobobobobobobob'; 95 d 0.78 'by @bobobobobobobobobobobobobobobob'; 26 d 0.78 'by @bobobobobobobobobobobobobobobob'; 6 d 0.79 'by @bobobobobobobobobobobobobobobob'; 0 d 0.79 'by @bobobobobobobobobobobobobobobob'
+    walk by relation: 5 d 1.34 'the genre of Mumu is 2.'; 10 d 1.35 'the genre of Muur is Muur.'; 107 d 1.37 'the patient of Tordt is 12.'; 65 d 1.37 'the edition of Toror is 26.'; 69 d 1.38 'the meter of Muur is 26.'; 93 d 1.38 'the patient of Merlo is 30.'
+    candidates (filter logit): +5.7 '10' | +2.2 'by @bobobobobobobobobobobobobobobob' @0.0 | +2.2 'by @bobobobobobobobobobobobobobobob' @6.0 | +2.2 'by @bobobobobobobobobobobobobobobob' @95.0 | +2.2 'by @bobobobobobobobobobobobobobobob' @26.0 | +2.1 'by @bobobobobobobobobobobobobobobob' @62.0 | +2.1 'by @bobobobobobobobobobobobobobobob' @49.0 | -3.7 'the genre of Mumu is 2.' @5.0 | -3.9 'the meter of Muur is 26.' @69.0 | -4.1 'the genre of Muur is Muur.' @10.0
+  fire 112: signal +1.00, function 9 (gates 9:1.06, 1:0.74, 0:0.19) | about: '10' | let through 7/23: work '10'; entry 62.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 49.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 95.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 26.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 6.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 0.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo' | many 1, where 2, own error 3.10 (usual 0.96) | says: '10'
+    walk by label: 88 d 0.51 'the 5 vzek is Vinzek.'; 4 d 0.57 'the Scotch is 30.'; 57 d 0.59 'the 1 is Vinzek.'; 76 d 0.59 'the trade of Vinzek is 16.'; 85 d 0.59 'the trade of Vinzek is 16.'; 2 d 0.61 'the trade of Vinzek is 27.'
+    walk by relation: 88 d 0.93 'the 5 vzek is Vinzek.'; 76 d 0.94 'the trade of Vinzek is 16.'; 85 d 0.94 'the trade of Vinzek is 16.'; 2 d 0.97 'the trade of Vinzek is 27.'; 4 d 0.99 'the Scotch is 30.'; 57 d 0.99 'the 1 is Vinzek.'
+    candidates (filter logit): +8.7 '10' | +8.4 'What is the trade of Vinzek?' | -7.0 'the 1 is Vinzek.' @57.0 | -7.2 'the 5 vzek is Vinzek.' @88.0 | -7.2 'the Scotch is 30.' @4.0 | -7.2 'the trade of Vinzek is 16.' @76.0 | -7.2 'the trade of Vinzek is 16.' @85.0 | -7.4 'the trade of Vinzek is 27.' @2.0 | -8.9 fn 4 | -9.5 fn 3
+  fire 113: signal +1.00, function 1 (gates 1:1.16, 9:0.64, 0:0.25) | about: 'What is the trade of Vinzek?' + '10' | let through 2/18: work 'What is the trade of Vinzek?'; work '10' | many 1, where 2, own error 2.74 (usual 2.67) | says: '������������������������������������������������'
+  -> '������������������������������������������������' after 4 firings
+
+question (before) 'What was the color of Dunmu before?' truth '16'
+    walk by label: 9 d 0.61 'the color of the color of the roux '; 99 d 0.74 'the color of the last trade of the '; 28 d 0.83 'the first first is Mumu.'; 5 d 0.84 'the genre of Mumu is 2.'; 80 d 0.87 'the main slot of Mumu is 7.'; 10 d 0.88 'the genre of Muur is Muur.'
+    walk by relation: 5 d 1.00 'the genre of Mumu is 2.'; 10 d 1.04 'the genre of Muur is Muur.'; 9 d 1.10 'the color of the color of the roux '; 80 d 1.14 'the main slot of Mumu is 7.'; 28 d 1.16 'the first first is Mumu.'; 14 d 1.17 'the shelf of Dunild is 26.'
+    candidates (filter logit): +8.7 'What was the color of Dunmu before?' | -4.7 'the color of the color of the roux ' @9.0 | -5.2 'the color of the last trade of the ' @99.0 | -6.2 'the genre of Muur is Muur.' @10.0 | -6.4 'the genre of Mumu is 2.' @5.0 | -6.5 'the first first is Mumu.' @28.0 | -6.6 'the main slot of Mumu is 7.' @80.0 | -8.1 'the shelf of Dunild is 26.' @14.0 | -8.9 fn 4 | -9.4 fn 3
+  fire 114: signal +1.00, function 1 (gates 1:1.15, 9:0.62, 6:0.24) | about: 'What was the color of Dunmu before?' | let through 1/18: work 'What was the color of Dunmu before?' | many 1, where 0, own error 3.44 (usual 2.67) | says: '10'
+    walk by label: 62 d 0.69 'by @bobobobobobobobobobobobobobobob'; 49 d 0.70 'by @bobobobobobobobobobobobobobobob'; 95 d 0.70 'by @bobobobobobobobobobobobobobobob'; 26 d 0.71 'by @bobobobobobobobobobobobobobobob'; 6 d 0.71 'by @bobobobobobobobobobobobobobobob'; 0 d 0.71 'by @bobobobobobobobobobobobobobobob'
+    walk by relation: 5 d 1.34 'the genre of Mumu is 2.'; 10 d 1.35 'the genre of Muur is Muur.'; 107 d 1.37 'the patient of Tordt is 12.'; 65 d 1.38 'the edition of Toror is 26.'; 69 d 1.38 'the meter of Muur is 26.'; 93 d 1.38 'the patient of Merlo is 30.'
+    candidates (filter logit): +6.2 '10' | +2.2 'by @bobobobobobobobobobobobobobobob' @0.0 | +2.2 'by @bobobobobobobobobobobobobobobob' @6.0 | +2.2 'by @bobobobobobobobobobobobobobobob' @95.0 | +2.1 'by @bobobobobobobobobobobobobobobob' @26.0 | +2.1 'by @bobobobobobobobobobobobobobobob' @62.0 | +2.1 'by @bobobobobobobobobobobobobobobob' @49.0 | -3.9 'the genre of Mumu is 2.' @5.0 | -4.0 'the meter of Muur is 26.' @69.0 | -4.2 'the genre of Muur is Muur.' @10.0
+  fire 115: signal +1.00, function 9 (gates 9:1.04, 1:0.69, 0:0.16) | about: '10' | let through 7/23: work '10'; entry 62.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 49.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 95.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 26.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 6.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 0.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo' | many 1, where 2, own error 3.05 (usual 0.96) | says: '10'
+    walk by label: 9 d 0.61 'the color of the color of the roux '; 99 d 0.74 'the color of the last trade of the '; 28 d 0.83 'the first first is Mumu.'; 5 d 0.84 'the genre of Mumu is 2.'; 80 d 0.87 'the main slot of Mumu is 7.'; 10 d 0.88 'the genre of Muur is Muur.'
+    walk by relation: 5 d 1.00 'the genre of Mumu is 2.'; 10 d 1.04 'the genre of Muur is Muur.'; 9 d 1.10 'the color of the color of the roux '; 80 d 1.14 'the main slot of Mumu is 7.'; 28 d 1.16 'the first first is Mumu.'; 14 d 1.17 'the shelf of Dunild is 26.'
+    candidates (filter logit): +8.7 '10' | +8.6 'What was the color of Dunmu before?' | -6.3 'the color of the color of the roux ' @9.0 | -6.6 'the color of the last trade of the ' @99.0 | -7.1 'the genre of Muur is Muur.' @10.0 | -7.2 'the genre of Mumu is 2.' @5.0 | -7.3 'the first first is Mumu.' @28.0 | -7.3 'the main slot of Mumu is 7.' @80.0 | -8.7 'the shelf of Dunild is 26.' @14.0 | -9.0 fn 4
+  fire 116: signal +1.00, function 1 (gates 1:1.15, 9:0.63, 6:0.25) | about: 'What was the color of Dunmu before?' + '10' | let through 2/19: work 'What was the color of Dunmu before?'; work '10' | many 1, where 2, own error 2.64 (usual 2.67) | says: '������������������������������������������������'
+    walk by label: 62 d 1.01 'by @bobobobobobobobobobobobobobobob'; 95 d 1.02 'by @bobobobobobobobobobobobobobobob'; 26 d 1.02 'by @bobobobobobobobobobobobobobobob'; 6 d 1.02 'by @bobobobobobobobobobobobobobobob'; 49 d 1.02 'by @bobobobobobobobobobobobobobobob'; 0 d 1.02 'by @bobobobobobobobobobobobobobobob'
+    walk by relation: 10 d 1.35 'the genre of Muur is Muur.'; 5 d 1.35 'the genre of Mumu is 2.'; 65 d 1.37 'the edition of Toror is 26.'; 82 d 1.37 'the device of Kadun is 7.'; 52 d 1.38 'the vessel of Pelor is Pelor.'; 28 d 1.38 'the first first is Mumu.'
+    candidates (filter logit): +8.0 '�����������������������������������' | +1.3 'by @bobobobobobobobobobobobobobobob' @0.0 | +1.3 'by @bobobobobobobobobobobobobobobob' @6.0 | +1.3 'by @bobobobobobobobobobobobobobobob' @95.0 | +1.3 'by @bobobobobobobobobobobobobobobob' @26.0 | +1.2 'by @bobobobobobobobobobobobobobobob' @62.0 | +1.2 'by @bobobobobobobobobobobobobobobob' @49.0 | -5.0 'the vessel of Pelor is Pelor.' @52.0 | -5.8 'the genre of Mumu is 2.' @5.0 | -5.9 'the genre of Muur is Muur.' @10.0
+  fire 117: signal +1.00, function 9 (gates 9:1.11, 1:0.86, 0:0.26) | about: '������������������������������������������������' | let through 7/23: work '������������������������������������������������'; entry 62.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 95.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 26.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 6.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 49.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo'; entry 0.0 'by @bobobobobobobobobobobobobobobobobobobobobobobo' | many 1, where 2, own error 2.63 (usual 0.96) | says: '10'
+  -> '10' after 5 firings
+
+question (coexist) 'What is the sum of both values of the patient of Merlo?' truth '56'
+    walk by label: 93 d 0.56 'the patient of Merlo is 30.'; 64 d 0.60 'the patient of Merlumer is Merlumer'; 63 d 0.94 'the lesson of Merlo is 13.'; 97 d 1.04 'the son of Mumer is 13.'; 69 d 1.06 'the meter of Muur is 26.'; 17 d 1.07 'the fee of Samsa is Sapu.'
+    walk by relation: 93 d 0.94 'the patient of Merlo is 30.'; 64 d 0.99 'the patient of Merlumer is Merlumer'; 17 d 1.14 'the fee of Samsa is Sapu.'; 63 d 1.20 'the lesson of Merlo is 13.'; 84 d 1.21 'the country of Kamu is 29.'; 97 d 1.22 'the son of Mumer is 13.'
+    candidates (filter logit): +8.8 'What is the sum of both values of t' | -6.9 'the meter of Muur is 26.' @69.0 | -7.5 'the fee of Samsa is Sapu.' @17.0 | -7.6 'the patient of Merlo is 30.' @93.0 | -7.6 'the patient of Merlumer is Merlumer' @64.0 | -7.7 'the son of Mumer is 13.' @97.0 | -7.9 'the lesson of Merlo is 13.' @63.0 | -8.9 fn 4 | -8.9 'the country of Kamu is 29.' @84.0 | -9.5 fn 3
+  fire 118: signal +1.00, function 1 (gates 1:1.15, 9:0.62, 6:0.24) | about: 'What is the sum of both values of the patient of Merlo?' | let through 1/18: work 'What is the sum of both values of the patient of M' | many 1, where 0, own error 3.23 (usual 2.67) | says: 'the value of the previous owner'
+    walk by label: 108 d 1.07 'the last entry of Tordun is Tordun.'; 57 d 1.08 'the 1 is Vinzek.'; 15 d 1.10 'the lesson of Rildild is 10.'; 88 d 1.11 'the 5 vzek is Vinzek.'; 7 d 1.13 'the first camera of Gorvin is 11.'; 29 d 1.14 'the last entry of Dunr is Muld.'
+    walk by relation: 5 d 1.35 'the genre of Mumu is 2.'; 10 d 1.35 'the genre of Muur is Muur.'; 65 d 1.36 'the edition of Toror is 26.'; 39 d 1.37 'the account of Gorlo is 26.'; 94 d 1.37 'the account of Gorlo is 13.'; 32 d 1.37 'the account of Gorlo is 7.'
+    candidates (filter logit): +6.8 'the value of the previous owner' | +0.6 'the 5 vzek is Vinzek.' @88.0 | +0.6 'the 1 is Vinzek.' @57.0 | +0.2 'the first camera of Gorvin is 11.' @7.0 | -0.7 'the last entry of Dunr is Muld.' @29.0 | -0.7 'the last entry of Tordun is Tordun.' @108.0 | -1.3 'the lesson of Rildild is 10.' @15.0 | -4.9 'the genre of Mumu is 2.' @5.0 | -5.0 'the account of Gorlo is 26.' @39.0 | -5.2 'the genre of Muur is Muur.' @10.0
+  fire 119: signal +1.00, function 9 (gates 9:1.11, 1:0.98, 0:0.29) | about: 'the value of the previous owner' | let through 4/23: work 'the value of the previous owner'; entry 57.0 'the 1 is Vinzek.'; entry 88.0 'the 5 vzek is Vinzek.'; entry 7.0 'the first camera of Gorvin is 11.' | many 1, where 2, own error 0.90 (usual 0.96) | says: '5'
+    walk by label: 93 d 0.56 'the patient of Merlo is 30.'; 64 d 0.60 'the patient of Merlumer is Merlumer'; 63 d 0.94 'the lesson of Merlo is 13.'; 97 d 1.04 'the son of Mumer is 13.'; 69 d 1.06 'the meter of Muur is 26.'; 17 d 1.07 'the fee of Samsa is Sapu.'
+    walk by relation: 93 d 0.94 'the patient of Merlo is 30.'; 64 d 0.99 'the patient of Merlumer is Merlumer'; 17 d 1.14 'the fee of Samsa is Sapu.'; 63 d 1.20 'the lesson of Merlo is 13.'; 84 d 1.21 'the country of Kamu is 29.'; 97 d 1.22 'the son of Mumer is 13.'
+    candidates (filter logit): +8.7 '5' | +8.7 'What is the sum of both values of t' | -7.6 'the meter of Muur is 26.' @69.0 | -8.1 'the fee of Samsa is Sapu.' @17.0 | -8.1 'the patient of Merlo is 30.' @93.0 | -8.2 'the patient of Merlumer is Merlumer' @64.0 | -8.2 'the son of Mumer is 13.' @97.0 | -8.4 'the lesson of Merlo is 13.' @63.0 | -9.0 fn 4 | -9.1 'the country of Kamu is 29.' @84.0
+  fire 120: signal +1.00, function 1 (gates 1:1.15, 9:0.62, 6:0.25) | about: 'What is the sum of both values of the patient of Merlo?' + '5' | let through 2/19: work 'What is the sum of both values of the patient of M'; work '5' | many 1, where 2, own error 0.99 (usual 2.67) | says: '(1'
+    walk by label: 67 d 0.88 'the step of Kagor is 10.'; 92 d 0.89 'the amount of Vinne is 26.'; 99 d 0.90 'the color of the last trade of the '; 13 d 0.92 'the lane of Braba is 18.'; 45 d 0.94 'the step of Pelor is Pelor.'; 63 d 0.94 'the lesson of Merlo is 13.'
+    walk by relation: 10 d 1.35 'the genre of Muur is Muur.'; 5 d 1.35 'the genre of Mumu is 2.'; 82 d 1.36 'the device of Kadun is 7.'; 52 d 1.37 'the vessel of Pelor is Pelor.'; 65 d 1.37 'the edition of Toror is 26.'; 75 d 1.38 'the vessel of Oror is Goror.'
+    candidates (filter logit): +8.7 '(1' | -2.9 'the color of the last trade of the ' @99.0 | -4.1 'the step of Pelor is Pelor.' @45.0 | -4.8 'the step of Kagor is 10.' @67.0 | -5.1 'the amount of Vinne is 26.' @92.0 | -5.1 'the lane of Braba is 18.' @13.0 | -6.4 'the lesson of Merlo is 13.' @63.0 | -7.1 'the vessel of Oror is Goror.' @75.0 | -7.1 'the vessel of Pelor is Pelor.' @52.0 | -7.8 'the genre of Mumu is 2.' @5.0
+  fire 121: signal +1.00, function 1 (gates 1:1.16, 9:1.09, 0:0.34) | about: '(1' | let through 1/23: work '(1' | many 1, where 2, own error 1.74 (usual 2.67) | says: '9'
+  -> '9' after 5 firings
+
+question (chain) 'What is the report of the primary frame of Sapel?' truth '23'
+    walk by label: 3 d 0.80 'the frame of Vinzek is Chzek.'; 96 d 0.98 'the frame of Mulum is Moul.'; 54 d 1.04 'the frame of Goror is Goror.'; 38 d 1.08 'the post of Vinzek is 1.'; 58 d 1.11 'the report of Vinzek is 15.'; 1 d 1.13 'the post of Vinzek is 1.'
+    walk by relation: 3 d 1.06 'the frame of Vinzek is Chzek.'; 38 d 1.14 'the post of Vinzek is 1.'; 1 d 1.18 'the post of Vinzek is 1.'; 25 d 1.18 'Correction: Gororororororor is now '; 54 d 1.19 'the frame of Goror is Goror.'; 96 d 1.20 'the frame of Mulum is Moul.'
+    candidates (filter logit): +8.7 'What is the report of the primary f' | -6.9 'the post of Vinzek is 1.' @1.0 | -6.9 'the report of Vinzek is 15.' @58.0 | -6.9 'the frame of Vinzek is Chzek.' @3.0 | -7.0 'the post of Vinzek is 1.' @38.0 | -7.0 'the frame of Goror is Goror.' @54.0 | -7.1 'the frame of Mulum is Moul.' @96.0 | -8.3 'Correction: Gororororororor is now ' @25.1 | -8.8 fn 4 | -8.9 'the screen of Gororororor is 5.' @25.0
+  fire 122: signal +1.00, function 1 (gates 1:1.15, 9:0.62, 0:0.26) | about: 'What is the report of the primary frame of Sapel?' | let through 1/19: work 'What is the report of the primary frame of Sapel?' | many 1, where 0, own error 3.44 (usual 2.67) | says: 'the value of the previous owner'
+    walk by label: 108 d 1.04 'the last entry of Tordun is Tordun.'; 57 d 1.08 'the 1 is Vinzek.'; 88 d 1.11 'the 5 vzek is Vinzek.'; 15 d 1.11 'the lesson of Rildild is 10.'; 29 d 1.13 'the last entry of Dunr is Muld.'; 38 d 1.14 'the post of Vinzek is 1.'
+    walk by relation: 5 d 1.35 'the genre of Mumu is 2.'; 10 d 1.35 'the genre of Muur is Muur.'; 65 d 1.37 'the edition of Toror is 26.'; 107 d 1.38 'the patient of Tordt is 12.'; 28 d 1.38 'the first first is Mumu.'; 60 d 1.38 'the primary grade of Pelor is 4.'
+    candidates (filter logit): +6.7 'the value of the previous owner' | +0.7 'the 5 vzek is Vinzek.' @88.0 | +0.7 'the 1 is Vinzek.' @57.0 | -0.3 'the post of Vinzek is 1.' @38.0 | -0.6 'the last entry of Dunr is Muld.' @29.0 | -0.7 'the last entry of Tordun is Tordun.' @108.0 | -1.3 'the lesson of Rildild is 10.' @15.0 | -4.8 'the genre of Mumu is 2.' @5.0 | -5.1 'the genre of Muur is Muur.' @10.0 | -5.4 'the first first is Mumu.' @28.0
+  fire 123: signal +1.00, function 9 (gates 9:1.11, 1:0.93, 0:0.29) | about: 'the value of the previous owner' | let through 3/23: work 'the value of the previous owner'; entry 57.0 'the 1 is Vinzek.'; entry 88.0 'the 5 vzek is Vinzek.' | many 1, where 2, own error 0.27 (usual 0.96) | says: '5'
+    walk by label: 3 d 0.80 'the frame of Vinzek is Chzek.'; 96 d 0.98 'the frame of Mulum is Moul.'; 54 d 1.04 'the frame of Goror is Goror.'; 38 d 1.08 'the post of Vinzek is 1.'; 58 d 1.11 'the report of Vinzek is 15.'; 1 d 1.13 'the post of Vinzek is 1.'
+    walk by relation: 3 d 1.06 'the frame of Vinzek is Chzek.'; 38 d 1.14 'the post of Vinzek is 1.'; 1 d 1.18 'the post of Vinzek is 1.'; 25 d 1.18 'Correction: Gororororororor is now '; 54 d 1.19 'the frame of Goror is Goror.'; 96 d 1.20 'the frame of Mulum is Moul.'
+    candidates (filter logit): +8.7 '5' | +8.5 'What is the report of the primary f' | -7.9 'the frame of Vinzek is Chzek.' @3.0 | -7.9 'the frame of Goror is Goror.' @54.0 | -8.0 'the report of Vinzek is 15.' @58.0 | -8.0 'the post of Vinzek is 1.' @1.0 | -8.0 'the frame of Mulum is Moul.' @96.0 | -8.0 'the post of Vinzek is 1.' @38.0 | -8.8 'Correction: Gororororororor is now ' @25.1 | -8.9 fn 4
+  fire 124: signal +1.00, function 1 (gates 1:1.15, 9:0.62, 0:0.27) | about: 'What is the report of the primary frame of Sapel?' + '5' | let through 2/20: work 'What is the report of the primary frame of Sapel?'; work '5' | many 1, where 2, own error 0.92 (usual 2.67) | says: '������������������������������������������������'
+    walk by label: 99 d 0.90 'the color of the last trade of the '; 92 d 0.90 'the amount of Vinne is 26.'; 67 d 0.92 'the step of Kagor is 10.'; 94 d 0.93 'the account of Gorlo is 13.'; 13 d 0.94 'the lane of Braba is 18.'; 63 d 0.95 'the lesson of Merlo is 13.'
+    walk by relation: 10 d 1.35 'the genre of Muur is Muur.'; 5 d 1.35 'the genre of Mumu is 2.'; 82 d 1.37 'the device of Kadun is 7.'; 65 d 1.37 'the edition of Toror is 26.'; 52 d 1.37 'the vessel of Pelor is Pelor.'; 39 d 1.38 'the account of Gorlo is 26.'
+    candidates (filter logit): +8.6 '�����������������������������������' | -2.6 'the color of the last trade of the ' @99.0 | -4.4 'the account of Gorlo is 13.' @94.0 | -4.8 'the step of Kagor is 10.' @67.0 | -5.1 'the amount of Vinne is 26.' @92.0 | -5.1 'the lane of Braba is 18.' @13.0 | -6.4 'the lesson of Merlo is 13.' @63.0 | -6.9 'the vessel of Pelor is Pelor.' @52.0 | -7.4 'the account of Gorlo is 26.' @39.0 | -7.6 'the genre of Mumu is 2.' @5.0
+  fire 125: signal +1.00, function 9 (gates 9:1.14, 1:1.01, 0:0.33) | about: '������������������������������������������������' | let through 1/23: work '������������������������������������������������' | many 1, where 2, own error 1.96 (usual 0.96) | says: '5'
+  -> '5' after 5 firings
+
+question (ops) 'What is the sum of (the sum of the step of Rildun and the main slot of Dunmu) and the screen of Goror?' truth '35'
+    walk by label: 80 d 0.91 'the main slot of Mumu is 7.'; 73 d 0.95 'the primary slot of Muur is 25.'; 22 d 0.96 'the step of Rildru is 16.'; 28 d 1.05 'the first first is Mumu.'; 15 d 1.12 'the lesson of Rildild is 10.'; 67 d 1.13 'the step of Kagor is 10.'
+    walk by relation: 22 d 1.18 'the step of Rildru is 16.'; 73 d 1.18 'the primary slot of Muur is 25.'; 80 d 1.21 'the main slot of Mumu is 7.'; 15 d 1.24 'the lesson of Rildild is 10.'; 67 d 1.25 'the step of Kagor is 10.'; 14 d 1.25 'the shelf of Dunild is 26.'
+    candidates (filter logit): +8.5 'What is the sum of (the sum of the ' | -6.6 'the first first is Mumu.' @28.0 | -6.6 'the primary slot of Muur is 25.' @73.0 | -6.7 'the main slot of Mumu is 7.' @80.0 | -6.8 'the step of Kagor is 10.' @67.0 | -7.6 'the lesson of Rildild is 10.' @15.0 | -7.6 'the step of Rildru is 16.' @22.0 | -8.1 'the shelf of Dunild is 26.' @14.0 | -8.8 fn 4 | -9.5 fn 3
+  fire 126: signal +1.00, function 1 (gates 1:1.15, 9:0.62, 6:0.24) | about: 'What is the sum of (the sum of the step of Rildun and the ma' | let through 1/18: work 'What is the sum of (the sum of the step of Rildun ' | many 1, where 0, own error 4.08 (usual 2.67) | says: 'What is the value of the last level of the player?'
+    walk by label: 57 d 1.13 'the 1 is Vinzek.'; 108 d 1.13 'the last entry of Tordun is Tordun.'; 29 d 1.17 'the last entry of Dunr is Muld.'; 89 d 1.17 'the report of Vinzek is 7.'; 88 d 1.18 'the 5 vzek is Vinzek.'; 38 d 1.18 'the post of Vinzek is 1.'
+    walk by relation: 10 d 1.35 'the genre of Muur is Muur.'; 5 d 1.35 'the genre of Mumu is 2.'; 65 d 1.36 'the edition of Toror is 26.'; 39 d 1.37 'the account of Gorlo is 26.'; 94 d 1.37 'the account of Gorlo is 13.'; 32 d 1.37 'the account of Gorlo is 7.'
+    candidates (filter logit): +7.3 'What is the value of the last level' | +0.1 'the report of Vinzek is 7.' @89.0 | +0.1 'the 1 is Vinzek.' @57.0 | +0.1 'the 5 vzek is Vinzek.' @88.0 | -0.9 'the post of Vinzek is 1.' @38.0 | -1.2 'the last entry of Dunr is Muld.' @29.0 | -1.2 'the last entry of Tordun is Tordun.' @108.0 | -5.8 'the genre of Mumu is 2.' @5.0 | -5.8 'the account of Gorlo is 26.' @39.0 | -6.1 'the genre of Muur is Muur.' @10.0
+  fire 127: signal +1.00, function 1 (gates 1:1.19, 9:1.04, 0:0.27) | about: 'What is the value of the last level of the player?' | let through 4/23: work 'What is the value of the last level of the player?'; entry 57.0 'the 1 is Vinzek.'; entry 89.0 'the report of Vinzek is 7.'; entry 88.0 'the 5 vzek is Vinzek.' | many 1, where 2, own error 2.17 (usual 2.67) | says: '1'
+    walk by label: 80 d 0.91 'the main slot of Mumu is 7.'; 73 d 0.95 'the primary slot of Muur is 25.'; 22 d 0.96 'the step of Rildru is 16.'; 28 d 1.05 'the first first is Mumu.'; 15 d 1.12 'the lesson of Rildild is 10.'; 67 d 1.13 'the step of Kagor is 10.'
+    walk by relation: 22 d 1.18 'the step of Rildru is 16.'; 73 d 1.18 'the primary slot of Muur is 25.'; 80 d 1.21 'the main slot of Mumu is 7.'; 15 d 1.24 'the lesson of Rildild is 10.'; 67 d 1.25 'the step of Kagor is 10.'; 14 d 1.25 'the shelf of Dunild is 26.'
+    candidates (filter logit): +8.9 '1' | +8.4 'What is the sum of (the sum of the ' | -7.6 'the first first is Mumu.' @28.0 | -7.7 'the main slot of Mumu is 7.' @80.0 | -7.7 'the primary slot of Muur is 25.' @73.0 | -7.8 'the step of Kagor is 10.' @67.0 | -8.3 'the lesson of Rildild is 10.' @15.0 | -8.3 'the step of Rildru is 16.' @22.0 | -8.7 'the shelf of Dunild is 26.' @14.0 | -9.0 fn 4
+  fire 128: signal +1.00, function 1 (gates 1:1.15, 9:0.61, 6:0.25) | about: 'What is the sum of (the sum of the step of Rildun and the ma' + '1' | let through 2/19: work 'What is the sum of (the sum of the step of Rildun '; work '1' | many 1, where 2, own error 3.55 (usual 2.67) | says: 'What is the difference between the number of the number of t'
+    walk by label: 22 d 1.08 'the step of Rildru is 16.'; 63 d 1.11 'the lesson of Merlo is 13.'; 48 d 1.12 'the lesson of Samu is 17.'; 38 d 1.13 'the post of Vinzek is 1.'; 88 d 1.13 'the 5 vzek is Vinzek.'; 57 d 1.14 'the 1 is Vinzek.'
+    walk by relation: 10 d 1.35 'the genre of Muur is Muur.'; 5 d 1.35 'the genre of Mumu is 2.'; 65 d 1.37 'the edition of Toror is 26.'; 82 d 1.37 'the device of Kadun is 7.'; 39 d 1.37 'the account of Gorlo is 26.'; 94 d 1.38 'the account of Gorlo is 13.'
+    candidates (filter logit): +8.1 'What is the difference between the ' | -0.5 'the 1 is Vinzek.' @57.0 | -0.6 'the 5 vzek is Vinzek.' @88.0 | -1.0 'the lesson of Samu is 17.' @48.0 | -1.5 'the post of Vinzek is 1.' @38.0 | -2.5 'the lesson of Merlo is 13.' @63.0 | -2.9 'the step of Rildru is 16.' @22.0 | -6.3 'the account of Gorlo is 26.' @39.0 | -6.3 'the genre of Mumu is 2.' @5.0 | -6.6 'the account of Gorlo is 13.' @94.0
+  fire 129: signal +1.00, function 1 (gates 1:1.17, 9:0.67, 0:0.23) | about: 'What is the difference between the number of the number of t' | let through 1/23: work 'What is the difference between the number of the n' | many 1, where 0, own error 3.41 (usual 2.67) | says: 'the last'
+    walk by label: 88 d 1.00 'the 5 vzek is Vinzek.'; 15 d 1.04 'the lesson of Rildild is 10.'; 2 d 1.05 'the trade of Vinzek is 27.'; 57 d 1.06 'the 1 is Vinzek.'; 7 d 1.06 'the first camera of Gorvin is 11.'; 38 d 1.08 'the post of Vinzek is 1.'
+    walk by relation: 10 d 1.35 'the genre of Muur is Muur.'; 5 d 1.35 'the genre of Mumu is 2.'; 65 d 1.37 'the edition of Toror is 26.'; 39 d 1.37 'the account of Gorlo is 26.'; 94 d 1.37 'the account of Gorlo is 13.'; 32 d 1.37 'the account of Gorlo is 7.'
+    candidates (filter logit): +7.3 'the last' | +0.4 'the 5 vzek is Vinzek.' @88.0 | +0.4 'the 1 is Vinzek.' @57.0 | +0.0 'the first camera of Gorvin is 11.' @7.0 | -0.2 'the trade of Vinzek is 27.' @2.0 | -0.5 'the post of Vinzek is 1.' @38.0 | -1.5 'the lesson of Rildild is 10.' @15.0 | -5.0 'the genre of Mumu is 2.' @5.0 | -5.0 'the account of Gorlo is 26.' @39.0 | -5.3 'the genre of Muur is Muur.' @10.0
+  fire 130: signal +1.00, function 9 (gates 9:1.12, 1:0.92, 0:0.30) | about: 'the last' | let through 4/23: work 'the last'; entry 88.0 'the 5 vzek is Vinzek.'; entry 57.0 'the 1 is Vinzek.'; entry 7.0 'the first camera of Gorvin is 11.' | many 1, where 2, own error 0.65 (usual 0.96) | says: '5'
+    walk by label: 22 d 1.08 'the step of Rildru is 16.'; 63 d 1.11 'the lesson of Merlo is 13.'; 48 d 1.12 'the lesson of Samu is 17.'; 38 d 1.13 'the post of Vinzek is 1.'; 88 d 1.13 'the 5 vzek is Vinzek.'; 57 d 1.14 'the 1 is Vinzek.'
+    walk by relation: 10 d 1.35 'the genre of Muur is Muur.'; 5 d 1.35 'the genre of Mumu is 2.'; 65 d 1.37 'the edition of Toror is 26.'; 82 d 1.37 'the device of Kadun is 7.'; 39 d 1.37 'the account of Gorlo is 26.'; 94 d 1.38 'the account of Gorlo is 13.'
+    candidates (filter logit): +8.7 '5' | +8.1 'What is the difference between the ' | -7.7 'the 1 is Vinzek.' @57.0 | -7.7 'the post of Vinzek is 1.' @38.0 | -7.9 'the lesson of Samu is 17.' @48.0 | -7.9 'the 5 vzek is Vinzek.' @88.0 | -8.3 'the lesson of Merlo is 13.' @63.0 | -8.4 'the step of Rildru is 16.' @22.0 | -8.9 fn 4 | -8.9 'the account of Gorlo is 26.' @39.0
+  fire 131: signal +1.00, function 1 (gates 1:1.18, 9:0.68, 0:0.24) | about: 'What is the difference between the number of the number of t' + '5' | let through 2/24: work 'What is the difference between the number of the n'; work '5' | many 1, where 2, own error 1.06 (usual 2.67) | says: '������������������������������������������������'
+    walk by label: 67 d 0.92 'the step of Kagor is 10.'; 99 d 0.92 'the color of the last trade of the '; 13 d 0.93 'the lane of Braba is 18.'; 92 d 0.97 'the amount of Vinne is 26.'; 32 d 0.99 'the account of Gorlo is 7.'; 94 d 0.99 'the account of Gorlo is 13.'
+    walk by relation: 10 d 1.34 'the genre of Muur is Muur.'; 5 d 1.34 'the genre of Mumu is 2.'; 19 d 1.37 'the temp of Samu is 10.'; 82 d 1.37 'the device of Kadun is 7.'; 53 d 1.37 'the first camera of Gorvin is 11.'; 29 d 1.37 'the last entry of Dunr is Muld.'
+    candidates (filter logit): +8.8 '�����������������������������������' | -3.4 'the color of the last trade of the ' @99.0 | -5.4 'the account of Gorlo is 13.' @94.0 | -5.6 'the step of Kagor is 10.' @67.0 | -5.8 'the account of Gorlo is 7.' @32.0 | -5.9 'the amount of Vinne is 26.' @92.0 | -5.9 'the lane of Braba is 18.' @13.0 | -7.8 'the temp of Samu is 10.' @19.0 | -7.8 'the genre of Muur is Muur.' @10.0 | -7.8 'the genre of Mumu is 2.' @5.0
+  fire 132: signal +1.00, function 9 (gates 9:1.01, 1:0.83, 0:0.42) | about: '������������������������������������������������' | let through 1/23: work '������������������������������������������������' | many 1, where 2, own error 1.79 (usual 0.96) | says: '5'
+  -> '5' after 8 firings
