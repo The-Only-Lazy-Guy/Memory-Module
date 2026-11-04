@@ -887,7 +887,7 @@ class FM:
         self.dev = next(heads.parameters()).device
         self.g, self.signals, self.t, self.explore = Graph(bank.d), [], 0, 0.
         self.budget, self.look, self.newest, self.kappa, self.same = budget, look, newest, kappa, same
-        self.stats, self.firings, self.show, self.capture = {}, [], False, None
+        self.stats, self.firings, self.show, self.capture, self.said = {}, [], False, None, []
 
     def count(self, k, n=1):
         self.stats[k] = self.stats.get(k, 0) + n
@@ -1283,6 +1283,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     for j, (target, dest) in enumerate(outs):
         w = dest if isinstance(dest, int) else 2 + keys.index(key(dest))
         if isinstance(target, str):
+            fm.said.append(target)                     # what functions are asked to say: the round trip covers it too
             with torch.no_grad():
                 lab, rel = fm.tr.encode([target])[0], fm.tr.relation([target])[0]
                 T_ = min(int(fm.tr.content([target])[1].sum()), net.K)
@@ -1816,8 +1817,10 @@ def run_fm(A):
                 seen.append(ask_text(E))
         demo_functions(fm, Ls, A, st, rng)
         finish(fm, Ls, rng)
-        if seen:                                       # what it reads still says back as it was written
-            seen = rng.sample(seen, min(16, len(seen)))
+        seen += fm.said                                # what it reads and what functions say (typed values, parts,
+        fm.said = []                                   # filled questions) still says back as it was written
+        if seen:
+            seen = rng.sample(seen, min(24, len(seen)))
             Ls.add("round trip", tr.decode_loss(*tr.content(seen), seen))
         loss = Ls.total()
         opt.zero_grad()
