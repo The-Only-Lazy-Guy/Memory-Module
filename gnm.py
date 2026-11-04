@@ -1751,9 +1751,18 @@ def codec_check(A):
               f"{sum(x[6] for x in xs) / len(xs):.1f} | e.g. " + "; ".join(f"{x[1]!r} -> {x[2]!r}" for x in xs[:2]), flush=True)
 
 
+TRAINED = ("up.", "down.", "tokd.")             # the translator's own layers (text -> B, B -> text) learn with the
+#                                                rest; GPT-2 under them stays as it is (Walker's stand-in)
+
+
+def tr_params(tr):
+    return [p for k, p in tr.named_parameters() if k.startswith(TRAINED)]
+
+
 def save_fm(fm, path):
     torch.save({"n": len(fm.bank.nets), "bank": fm.bank.state_dict(), "heads": fm.heads.state_dict(),
-                "filt": fm.filt.state_dict(), "critic": fm.critic.state_dict()}, path)
+                "filt": fm.filt.state_dict(), "critic": fm.critic.state_dict(),
+                "tr": {k: v for k, v in fm.tr.state_dict().items() if k.startswith(TRAINED)}}, path)
 
 
 def load_fm(fm, path):
@@ -1762,6 +1771,8 @@ def load_fm(fm, path):
         fm.bank.nets.append(ToolNet(fm.bank.d, fm.bank.c).to(fm.dev))
     for k in ("bank", "heads", "filt", "critic"):
         getattr(fm, k).load_state_dict(s[k])
+    if "tr" in s:                                      # the translator as it had learned
+        fm.tr.load_state_dict(s["tr"], strict=False)
 
 
 def run_fm(A):
@@ -1772,14 +1783,18 @@ def run_fm(A):
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     tr.requires_grad_(False)
+    for p_ in tr_params(tr):                           # the encoder and the decoder learn from every signal too
+        p_.requires_grad_(True)
     fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
     rng = random.Random(A.seed)
     if A.load:
         load_fm(fm, A.load)
     else:
         train_codec(fm, A, rng, torch.optim.AdamW(fm.heads.parameters(), lr=A.lr))
-    params = lambda: [p for mod in (fm.bank, fm.heads, fm.filt, fm.critic) for p in mod.parameters()]
-    opt, st, t0 = torch.optim.AdamW(params(), lr=A.lr), {"step": 0, "last": -10 ** 9}, time.time()
+    own = lambda: [p for mod in (fm.bank, fm.heads, fm.filt, fm.critic) for p in mod.parameters()]
+    params = lambda: own() + tr_params(tr)
+    make = lambda: torch.optim.AdamW([{"params": own()}, {"params": tr_params(tr), "lr": A.lr_tr}], lr=A.lr)
+    opt, st, t0 = make(), {"step": 0, "last": -10 ** 9}, time.time()
     w = T = None
     for step in range(1, A.steps + 1):
         st.update(step=step, spawned=False)
@@ -1787,18 +1802,23 @@ def run_fm(A):
             w = new_world(rng)
             T = Teacher(w)
             fm.g = Graph(fm.bank.d)
-        Ls = Lesson()
+        Ls, seen = Lesson(), []
         for d in world_step(w, rng):
             o = d()
             side = w.side.get(id(o), {}) if o else {}
             for text, meta in said(o, w) if o else []:
                 demo_statement(fm, T, Ls, A, st, text, meta, side)
+                seen.append(text)
         for _ in range(A.qb):
             E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops", "ops"]), w, rng)
             if E is not None:
                 demo_question(fm, T, Ls, A, st, E)
+                seen.append(ask_text(E))
         demo_functions(fm, Ls, A, st, rng)
         finish(fm, Ls, rng)
+        if seen:                                       # what it reads still says back as it was written
+            seen = rng.sample(seen, min(16, len(seen)))
+            Ls.add("round trip", tr.decode_loss(*tr.content(seen), seen))
         loss = Ls.total()
         opt.zero_grad()
         loss.backward()
@@ -1808,7 +1828,7 @@ def run_fm(A):
         if gone:
             print(f"step {step}: functions {gone} idle {A.prune} steps -> removed", flush=True)
         if st["spawned"] or gone:
-            opt = torch.optim.AdamW(params(), lr=A.lr)
+            opt = make()
         if step % 50 == 0:
             parts = {}
             for k, x in Ls.parts:
@@ -1872,6 +1892,7 @@ if __name__ == "__main__":
     P.add_argument("--steps", type=int, default=3000)
     P.add_argument("--every", type=int, default=500)
     P.add_argument("--lr", type=float, default=2e-4)
+    P.add_argument("--lr_tr", type=float, default=5e-5, help="the translator's own layers (encoder, decoder)")
     P.add_argument("--qb", type=int, default=4, help="questions per step")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
