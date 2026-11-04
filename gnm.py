@@ -1296,6 +1296,10 @@ class FM:
         o = self.bank.run(actor, ins, q, v=sg.sign, hops=hops, sal=sal)
         many, err, where, isfn = o["many"], o["err"], o["where"], o["isfn"]
         made = [o["code"][j] if float(isfn[j]) > 0 else self.heads.reread(assemble(net, o, j)[0]) for j in range(int(many.argmax()) + 1)]
+        fslot = torch.tensor([False, False] + [n.kind == "fn" for n in ins[:net.R]], device=q.device)[:where.shape[-1]]
+        where = torch.stack([where[j] if float(isfn[j]) > 0 else where[j].masked_fill(fslot, -1e9) for j in range(len(where))])
+        #                                                words land in memory or the workspace, a program in a function
+        #                                                (fm18c trace: 289 of 297 statements went into a function: memory 0)
         take = [i in pick for i in range(len(C))]
         rec = {"actor": actor, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a_) for n, k, a_ in C], "take": take,
                "ins": ins, "hops": hops, "sign": sg.sign,
@@ -1750,7 +1754,10 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             if got is not None:
                 L, exact = L + got[0], exact and got[1]
             res.append((o["code"][j], None, True, None))
-        L = L + F.cross_entropy(o["where"][j][None], torch.tensor([w], device=dev))
+        wl = o["where"][j]
+        if isinstance(target, str):                    # words: never into a function's place (as when it lives)
+            wl = wl.masked_fill(torch.tensor([False, False] + [n.kind == "fn" for n in order[:net.R]], device=dev)[:len(wl)], -1e9)
+        L = L + F.cross_entropy(wl[None], torch.tensor([w], device=dev))
         L = L + F.binary_cross_entropy_with_logits(o["isfn"][j], torch.tensor(float(not isinstance(target, str)), device=dev))
     Ls.add("functions", L + F.mse_loss(o["err"], torch.log1p(L.detach())))   # its own guess of how wrong, on a log scale
     #                                                  (fm12: the raw loss squared swamped everything, 8233 of 8289)
