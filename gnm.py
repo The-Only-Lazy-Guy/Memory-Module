@@ -822,6 +822,7 @@ class Interpreter(nn.Module):
         return lg.masked_fill(bad, -1e9)
 
 
+UIDS = iter(range(10 ** 9))
 CALC = {"add": lambda a, b: a + b, "sub": lambda a, b: a - b, "max": max, "min": min, "mul": lambda a, b: a * b}
 
 
@@ -841,6 +842,7 @@ class ToolNet(nn.Module):
         self.au = nn.Parameter(torch.randn(c, interp.r) * .01)
         self.av = nn.Parameter(torch.randn(c, interp.r) * .01)
         self.calc = calc
+        self.uid = next(UIDS)                          # who it is (its record of what it does well is its own)
         object.__setattr__(self, "interp", interp)     # shared, not a part of this node
 
     K, M, S, G, R, L = (property(lambda self, k=k: getattr(self.interp, k)) for k in "KMSGRL")
@@ -918,12 +920,19 @@ def say_loss(fm, A, net, o, j, target, order):
     ends, how many latents a made piece keeps and how close they are to what the encoder makes of those words), and
     what the assembled node says. Returns (loss, decode loss, the node, the target's pieces, its tokens) or None when
     the target cannot be made of the pieces an output has"""
-    target = D(target)
-    tid = fm.tr.tok(target)["input_ids"]
-    plan = plan_pieces(tid, [(len(n.B[:net.L]), n.toks[:net.L] if n.toks is not None else None) for n in order[:net.R]], net.S, net.G)
-    if plan is None:
+    ins_t = [(len(n.B[:net.L]), n.toks[:net.L] if n.toks is not None else None) for n in order[:net.R]]
+    best = None
+    for spelled in dict.fromkeys([D(target), " " + D(target).lstrip()]):   # as written, or as it reads inside a
+        tid_ = fm.tr.tok(spelled)["input_ids"]                             # sentence: the one more of it is copied in
+        plan_ = plan_pieces(tid_, ins_t, net.S, net.G)
+        if plan_ is not None:
+            copied = sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span")
+            if best is None or copied > best[0]:
+                best = (copied, spelled, tid_, plan_)
+    if best is None:
         fm.count("cannot be made of pieces")
         return None
+    _, target, tid, plan = best
     dev = o["kind"].device
     with torch.no_grad():
         zt, mt = fm.tr.content([target])
@@ -946,7 +955,7 @@ def say_loss(fm, A, net, o, j, target, order):
     dl = fm.tr.decode_loss(z[None], torch.ones(1, len(z), dtype=torch.bool, device=dev), [target])
     with torch.no_grad():                              # exact = its own pieces are the target's, and what it makes says it
         exact = assemble(net, o, j)[1] == want_pcs and float(dl) < A.exact
-    return L + dl, exact, z, plan, tid
+    return L + dl, exact, z, plan, tid, target
 
 
 class ToolBank(nn.Module):
@@ -976,6 +985,7 @@ class ToolBank(nn.Module):
         if like is not None:
             net.load_state_dict(self.nets[like].state_dict())
             net.mu.fill_(2.), net.sd.fill_(1.)
+            net.uid = next(UIDS)
         with torch.no_grad():
             net.key.copy_(F.normalize(key, dim=0) / scope)
             if code is not None:
@@ -1533,6 +1543,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         print(f"step {st['step']}: no label relevant to a {purpose} want -> made function {t}", flush=True)
     net = bank.nets[t]
     net.used.fill_(st["step"])
+    fm.count("steps run")
     C = fm.cands(Signal(about, v))
     key = lambda n: ("e", n.place, n.idx) if n.kind == "entry" else ("f", n.fn) if n.kind == "fn" else id(n)
     want_in = {key(n) for n in ins}
@@ -1568,7 +1579,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                 res.append(None)
                 exact = False
                 continue
-            Lj, ok, z, plan, tid = got
+            Lj, ok, z, plan, tid, spelled = got
             L, exact, dl = L + Lj, exact and ok, float(Lj)
             fm.count(f"{purpose} exact", int(ok)), fm.count(f"{purpose} said", 1)
             if net.calc is not None and fm.calc_on:    # the calculator's own body: what goes on is its result when it
@@ -1576,7 +1587,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                     got_c = calculate(fm, net, order, sal)
                 fm.count("calculator right", int(got_c is not None and D(str(got_c)) == D(target))), fm.count("calculator", 1)
                 if got_c is not None and D(str(got_c)) == D(target):
-                    cz = fm.nodes([str(got_c)])[0]
+                    cz = fm.nodes([spelled])[0]
                     z, tid, ok = cz.B, cz.toks, True
             with torch.no_grad():
                 lab, rel = fm.tr.encode([target])[0], fm.tr.relation([target])[0]
@@ -1590,21 +1601,21 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                     fm.capture.append((purpose, D(target), told_[0], told_[1], dl, len(pcs), len(plan), t))
                 if fm.trace:
                     info.append((j, target, w, dl, told_, plan, pcs, tid))
-            res.append((z, tid, ok))
+            res.append((z, tid, ok, spelled))
         else:                                          # a function given back: judged by what it then does
             f, rins, rq, rtarget = target
             got = say_loss(fm, A, bank.nets[f], bank.nets[f]([n.B for n in rins], rq, code=o["code"][j]), 0, rtarget, rins)
             if got is not None:
                 L, exact = L + got[0], exact and got[1]
-            res.append((o["code"][j], None, True))
+            res.append((o["code"][j], None, True, None))
         L = L + F.cross_entropy(o["where"][j][None], torch.tensor([w], device=dev))
         L = L + F.binary_cross_entropy_with_logits(o["isfn"][j], torch.tensor(float(not isinstance(target, str)), device=dev))
     Ls.add("functions", L + F.mse_loss(o["err"], torch.log1p(L.detach())))   # its own guess of how wrong, on a log scale
     #                                                  (fm12: the raw loss squared swamped everything, 8233 of 8289)
     S, m = bank.gate(q[None])[0, t], .1                # the label: pushed off a purpose it does not do exactly while it
-    fk = (id(net), purpose)                            # does another one well; else pulled
+    fk = (net.uid, purpose)                            # does another one well; else pulled
     fm.fit[fk] = .9 * fm.fit.get(fk, 0.) + .1 * float(exact)
-    others = [x for (i, p_), x in fm.fit.items() if i == id(net) and p_ != purpose]
+    others = [x for (i, p_), x in fm.fit.items() if i == net.uid and p_ != purpose]
     push = not exact and bool(others) and max(others) > fm.fit[fk] + .3
     Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(1 + m - S))
     if not exact and fm.calc_on and outs and isinstance(outs[0][0], str) and num(D(outs[0][0])) is not None:
@@ -1691,12 +1702,12 @@ def demo_question(fm, T, Ls, A, st, E):
             return False
         if any(x is None for x in res):
             return False
-        for (text, w, name), (z, tid, ok) in zip(outs, res):
+        for (text, w, name), (z, tid, ok, spelled) in zip(outs, res):
             parent = ws["q"] if w == NEW_WORK else ws[name].parent
             if ok:                                     # exact: its own node goes on, as it is
                 ws[name] = fm.node(z, tid, parent=parent)
             else:                                      # not yet: what it should have said goes on (its tokens are then true)
-                ws[name] = fm.nodes([text])[0]
+                ws[name] = fm.nodes([spelled])[0]
                 ws[name].parent = parent
     Ls.none.append([ws["q"].B])                       # answered: its value asks for nothing more
     return True
@@ -1788,24 +1799,33 @@ def demo_functions(fm, Ls, A, st, rng):
         run_step(fm, Ls, A, st, "fedit" if edit else "fnew", ins[:1], ins, [((f, probe, rq, str(x + k)), ins[1] if edit else NEW_WORK)])
 
 
-def apart(q, kinds, tau=.1):
-    """wants of one purpose together, of others apart (the light supervision); 'none' is nobody's positive"""
-    ids = {k: i for i, k in enumerate(dict.fromkeys(kinds))}
-    lab = torch.tensor([ids[k] for k in kinds], device=q.device)
-    eye = torch.eye(len(kinds), dtype=torch.bool, device=q.device)
-    pos = (lab[:, None] == lab[None]) & ~eye & torch.tensor([k != "none" for k in kinds], device=q.device)[:, None]
-    lp = (q @ q.T / tau).masked_fill(eye, -1e9).log_softmax(1)
+def apart(q, kinds, tau=.1, aq=None, akinds=()):
+    """wants of one purpose together, of others apart (the light supervision); 'none' is nobody's positive. aq: recent
+    wants (detached) of akinds, compared against too"""
+    allq = torch.cat([q, aq.detach()]) if aq is not None and len(aq) else q
+    allk = list(kinds) + (list(akinds) if aq is not None and len(aq) else [])
+    ids = {k: i for i, k in enumerate(dict.fromkeys(allk))}
+    lab = torch.tensor([ids[k] for k in allk], device=q.device)
+    n = len(kinds)
+    eye = torch.eye(n, len(allk), dtype=torch.bool, device=q.device)
+    pos = (lab[:n, None] == lab[None]) & ~eye & torch.tensor([k != "none" for k in kinds], device=q.device)[:, None]
+    lp = (q @ allq.T / tau).masked_fill(eye, -1e9).log_softmax(1)
     has = pos.any(1)
     return -((lp * pos).sum(1)[has] / pos.sum(1)[has]).mean() if has.any() else q.sum() * 0
 
 
-def finish(fm, Ls, rng):
+def finish(fm, Ls, rng, recent=None):
     """the routing losses of a batch: wants of one purpose together; what asks nothing (talk, answered values) below
-    every label"""
+    every label. recent: [(want detached, purpose)] of the last updates, compared against (and extended)"""
     rows = Ls.none + [[fm.nodes([x])[0].B] for x in rng.sample(CHAT, 3) + [VAL(amount(rng)), VAL(_name(rng, 2))]]
     qn = fm.bank.want(rows)
     q = torch.stack(Ls.wants) if Ls.wants else qn[:0]
-    Ls.add("apart", apart(torch.cat([q, qn]), Ls.kinds + ["none"] * len(qn)))
+    kinds = Ls.kinds + ["none"] * len(qn)
+    aq = torch.stack([x for x, _ in recent]) if recent else None
+    Ls.add("apart", apart(torch.cat([q, qn]), kinds, aq=aq, akinds=[k for _, k in recent or []]))
+    if recent is not None:
+        recent.extend(zip(torch.cat([q, qn]).detach(), kinds))
+        del recent[:-256]
     if len(fm.bank.nets):
         Ls.add("asks nothing", F.relu(fm.bank.gate(qn) - .9).sum() / max(1, len(rows)))
 
@@ -2285,28 +2305,95 @@ def run_fm(A):
     own = lambda: [p for mod in (fm.bank, fm.heads, fm.filt, fm.critic) for p in mod.parameters()]
     params = lambda: own() + tr_params(tr)
     make = lambda: torch.optim.AdamW([{"params": own()}, {"params": tr_params(tr), "lr": A.lr_tr}], lr=A.lr)
-    opt, st, t0 = make(), {"step": 0, "last": -10 ** 9}, time.time()
+    O = {"opt": make()}
+
+    def remake():                                      # a function came or went: its params in, the moments kept
+        old, new = O["opt"], make()
+        for g_ in new.param_groups:
+            for p_ in g_["params"]:
+                if p_ in old.state:
+                    new.state[p_] = old.state[p_]
+        O["opt"] = new
+
+    def update(Ls, acc):
+        """one optimizer step on these losses (a chunk of the world step)"""
+        for k, x in Ls.parts:
+            acc[k] = acc.get(k, 0) + float(x)
+        if not Ls.parts:
+            return
+        loss = Ls.total()
+        if not torch.is_tensor(loss) or not loss.requires_grad:
+            return
+        opt = O["opt"]
+        opt.zero_grad()
+        bad = [k for k, x in Ls.parts if torch.is_tensor(x) and not bool(torch.isfinite(x).all())]
+        if bad:                                        # a batch that is not finite does not touch the weights
+            fm.count("skipped (not finite)")
+            if fm.stats["skipped (not finite)"] <= 5:
+                print(f"step {st['step']}: loss not finite in {sorted(set(bad))}", flush=True)
+            return
+        loss.backward()
+        norm = torch.nn.utils.clip_grad_norm_(params(), 1.)
+        if bool(torch.isfinite(norm)):
+            opt.step()
+            fm.count("updates")
+        else:
+            fm.count("skipped (gradient not finite)")
+            if fm.stats["skipped (gradient not finite)"] <= 5:
+                print(f"step {st['step']}: gradient not finite (loss {float(loss):.2f})", flush=True)
+        if st["spawned"]:
+            remake()
+            st["spawned"] = False
+
+    def spans(z, m, seen):
+        """the translator's round trip over pieces: a span of a text's rows, or two spans of two texts joined, says the
+        words those tokens are (a copied piece is only that; the decoder had met whole texts only)"""
+        rows = [(z[i][m[i]], tr.tok(t)["input_ids"]) for i, t in enumerate(seen)]
+        rows = [(r, ids) for r, ids in rows if len(ids) == len(r) and len(ids) > 1]
+
+        def cut(r, ids):
+            a = rng.randrange(len(ids))
+            b = min(len(ids) - 1, a + rng.randrange(8))
+            return r[a:b + 1], ids[a:b + 1]
+        xs, ts = [], []
+        for _ in range(min(16, len(rows))):
+            parts = [cut(*rng.choice(rows)) for _ in range(rng.choice([1, 1, 2]))]
+            xs.append(torch.cat([r for r, _ in parts]))
+            ts.append(tr.tok.decode([i for _, ids in parts for i in ids]))
+        if not xs:
+            return None
+        x, xm = pad(xs)
+        return tr.decode_loss(x, xm, ts)
+
+    st, t0, recent = {"step": 0, "last": -10 ** 9, "spawned": False}, time.time(), []
     w = T = None
     for step in range(1, A.steps + 1):
-        st.update(step=step, spawned=False)
+        st["step"] = step                              # (a function made in an update that was skipped still joins)
         if w is None or step % 150 == 1:               # a new world now and then: names, keys, numbers all new
             w = new_world(rng)
             T = Teacher(w)
             fm.g = Graph(fm.bank.d)
-        Ls, seen = Lesson(), []
+        acc, seen, n0 = {}, [], fm.stats.get("steps run", 0)
+        Ls = Lesson()                                  # the statements: one update
         for d in world_step(w, rng):
             o = d()
             side = w.side.get(id(o), {}) if o else {}
             for text, meta in said(o, w) if o else []:
                 demo_statement(fm, T, Ls, A, st, text, meta, side)
                 seen.append(text)
-        for _ in range(A.qb):
+        finish(fm, Ls, rng, recent)
+        update(Ls, acc)
+        for _ in range(A.qb):                          # each question: one update
             E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops", "ops"]), w, rng)
             if E is not None:
+                Ls = Lesson()
                 demo_question(fm, T, Ls, A, st, E)
                 seen.append(ask_text(E))
+                finish(fm, Ls, rng, recent)
+                update(Ls, acc)
+        Ls = Lesson()                                  # the functions on functions and the translator: one update
         demo_functions(fm, Ls, A, st, rng)
-        finish(fm, Ls, rng)
+        finish(fm, Ls, rng, recent)
         seen += fm.said                                # what it reads and what functions say (typed values, parts,
         fm.said = []                                   # filled questions) still says back as it was written, long
         for kind, ops in (("ops", (1, 3)), ("ops", (4, 6)), ("chain", 0), ("before", 0)) * 2:   # questions too
@@ -2315,33 +2402,23 @@ def run_fm(A):
                 seen.append(ask_text(E))
         if seen:
             seen = [D(x) for x in rng.sample(seen, min(32, len(seen)))]
-            Ls.add("round trip", tr.decode_loss(*tr.content(seen), seen))
-        loss = Ls.total()
-        opt.zero_grad()
-        bad = [k for k, x in Ls.parts if torch.is_tensor(x) and not bool(torch.isfinite(x).all())]
-        if bad:                                        # a batch that is not finite does not touch the weights
-            fm.count("skipped (not finite)")
-            if fm.stats["skipped (not finite)"] <= 5:
-                print(f"step {step}: loss not finite in {sorted(set(bad))}", flush=True)
-        else:
-            loss.backward()
-            norm = torch.nn.utils.clip_grad_norm_(params(), 1.)
-            if bool(torch.isfinite(norm)):
-                opt.step()
-            else:
-                fm.count("skipped (gradient not finite)")
-                if fm.stats["skipped (gradient not finite)"] <= 5:
-                    print(f"step {step}: gradient not finite (loss {float(loss):.2f})", flush=True)
+            z_, m_ = tr.content(seen)
+            Ls.add("round trip", tr.decode_loss(z_, m_, seen))
+            sp = spans(z_, m_, seen)
+            if sp is not None:
+                Ls.add("round trip (pieces)", sp)
+        update(Ls, acc)
         gone = fm.bank.prune(step, A.prune) if step % 50 == 0 else []
         if gone:
             print(f"step {step}: functions {gone} idle {A.prune} steps -> removed", flush=True)
-        if st["spawned"] or gone:
-            opt = make()
+            remake()
         if step % 50 == 0:
-            parts = {}
-            for k, x in Ls.parts:
-                parts[k] = parts.get(k, 0) + float(x)
-            print(f"step {step} loss {float(loss):.2f} [" + ", ".join(f"{k} {v:.2f}" for k, v in parts.items()) +
+            parts = acc
+            loss = sum(acc.values())
+            n_run = max(1, fm.stats.get("steps run", 0) - n0)
+            print(f"step {step} loss {loss:.2f} (functions per demo step {acc.get('functions', 0) / n_run:.2f}, "
+                  f"{fm.stats.get('updates', 0)} updates, {fm.stats.get('cannot be made of pieces', 0)} targets not made of pieces) [" +
+                  ", ".join(f"{k} {v:.2f}" for k, v in parts.items()) +
                   f"] functions {len(fm.bank.nets)} | exact: " + ", ".join(
                       f"{k[:-5]} {fm.stats.get(k[:-5] + ' exact', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" said")) +
                   " | inputs the walk brought: " + ", ".join(
@@ -2363,7 +2440,7 @@ def run_fm(A):
             if A.save:
                 save_fm(fm, A.save)
     if A.live:                                         # then it lives by itself, learning from signals only
-        live(fm, A, rng, opt, params)
+        live(fm, A, rng, O["opt"], params)
         for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
             mod.eval()
         snap = snapshot(fm.bank)
