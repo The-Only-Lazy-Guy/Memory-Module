@@ -2315,9 +2315,20 @@ def run_fm(A):
             Ls.add("round trip", tr.decode_loss(*tr.content(seen), seen))
         loss = Ls.total()
         opt.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(params(), 1.)
-        opt.step()
+        bad = [k for k, x in Ls.parts if torch.is_tensor(x) and not bool(torch.isfinite(x).all())]
+        if bad:                                        # a batch that is not finite does not touch the weights
+            fm.count("skipped (not finite)")
+            if fm.stats["skipped (not finite)"] <= 5:
+                print(f"step {step}: loss not finite in {sorted(set(bad))}", flush=True)
+        else:
+            loss.backward()
+            norm = torch.nn.utils.clip_grad_norm_(params(), 1.)
+            if bool(torch.isfinite(norm)):
+                opt.step()
+            else:
+                fm.count("skipped (gradient not finite)")
+                if fm.stats["skipped (gradient not finite)"] <= 5:
+                    print(f"step {step}: gradient not finite (loss {float(loss):.2f})", flush=True)
         gone = fm.bank.prune(step, A.prune) if step % 50 == 0 else []
         if gone:
             print(f"step {step}: functions {gone} idle {A.prune} steps -> removed", flush=True)
