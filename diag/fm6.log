@@ -52,3 +52,20 @@ step 500 loss 262.34 [filter 0.84, label of what it made 10.13, functions 214.80
 EVAL step 500: statements 268 [check fails 48, fires 269, rest 47] | answers: lookup 0/24 (4.8 firings) | before 0/24 (4.0 firings) | coexist 0/24 (5.2 firings) | chain 0/24 (4.5 firings) | ops 0/24 (4.4 firings) | long 0/24 (30.9 firings) | functions 12 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'fires': 1567, 'check fails': 48, 'rest': 122, 'no change': 98, 'budget out': 11, 'new functions': 1}
 step 550 loss 232.49 [filter 1.59, label of what it made 8.69, functions 177.14, labels 0.77, check 9.25, relation 32.73, apart 2.34, asks nothing 0.00] functions 12 | inputs the walk brought: add 66/66, before 38/117, both 42/115, copy 50/50, fedit 100/100, fill 826/826, fix 89/89, fnew 100/100, inc 100/100, lookup 300/572, max 29/29, min 29/29, split 413/413, store 975/992, sub 27/27 | 2238s
 step 559: no label relevant to a store want -> made function 12
+step 600 loss 362.11 [filter 1.69, relation 32.70, label of what it made 8.00, functions 307.79, labels 0.29, check 9.24, apart 2.40, asks nothing 0.00] functions 13 | inputs the walk brought: add 69/69, before 38/98, both 50/124, copy 32/32, fedit 100/100, fill 764/764, fix 118/118, fnew 100/100, inc 100/100, lookup 286/546, max 19/19, min 24/24, split 382/382, store 1069/1082, sub 31/31 | 2461s
+step 603: no label relevant to a store want -> made function 13
+step 623: no label relevant to a copy want -> made function 14
+step 643: no label relevant to a copy want -> made function 15
+step 650 loss 91.57 [filter 0.75, relation 12.82, label of what it made 2.60, functions 71.27, labels 0.01, check 2.81, apart 1.31, asks nothing 0.00] functions 16 | inputs the walk brought: add 60/60, before 119/130, both 91/111, copy 30/30, fedit 100/100, fill 800/800, fix 59/59, fnew 100/100, inc 100/100, lookup 367/550, max 34/34, min 26/26, split 401/401, store 723/728, sub 27/27 | 2669s
+step 665: no label relevant to a copy want -> made function 16
+step 685: no label relevant to a store want -> made function 17
+step 700 loss 249.10 [filter 2.00, relation 37.31, label of what it made 8.82, functions 192.26, labels 0.36, check 5.91, apart 2.45, asks nothing 0.00] functions 18 | inputs the walk brought: add 46/46, before 95/123, both 54/64, copy 48/48, fedit 100/100, fill 860/860, fix 102/102, fnew 100/100, inc 100/100, lookup 373/622, max 31/31, min 37/37, split 432/432, store 966/983, sub 37/37 | 2898s
+step 705: no label relevant to a store want -> made function 18
+step 732: no label relevant to a lookup want -> made function 19
+step 750 loss 192.32 [filter 1.04, relation 26.42, label of what it made 6.71, functions 151.91, labels 1.26, check 2.87, apart 2.11, asks nothing 0.00] functions 20 | inputs the walk brought: add 80/80, before 107/115, both 122/144, copy 56/56, fedit 100/100, fill 886/886, fix 131/131, fnew 100/100, inc 100/100, lookup 364/594, max 36/36, min 32/32, split 445/445, store 1162/1184, sub 36/36 | 3149s
+step 766: no label relevant to a lookup want -> made function 20
+step 787: no label relevant to a lookup want -> made function 21
+step 800: functions [0, 10, 11] idle 300 steps -> removed
+step 800 loss 219.31 [filter 1.57, relation 31.57, label of what it made 8.07, functions 170.66, labels 0.67, check 4.31, apart 2.46, asks nothing 0.00] functions 19 | inputs the walk brought: add 66/66, before 135/139, both 94/94, copy 26/26, fedit 100/100, fill 754/754, fix 58/58, fnew 100/100, inc 100/100, lookup 355/514, max 30/30, min 30/30, split 384/384, store 727/732, sub 16/16 | 3350s
+step 850 loss 154.07 [filter 1.02, relation 20.79, label of what it made 5.83, functions 120.11, labels 0.47, check 3.71, apart 2.14, asks nothing 0.00] functions 19 | inputs the walk brought: add 59/59, before 98/103, both 113/115, copy 20/20, fedit 100/100, fill 826/826, fix 91/91, fnew 100/100, inc 100/100, lookup 386/578, max 27/27, min 33/33, split 413/413, store 926/942, sub 31/31 | 3569s
+step 867: no label relevant to a lookup want -> made function 19
