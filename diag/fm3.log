@@ -89,3 +89,29 @@ step 960: no label relevant to a sub want -> made function 19
 step 986: no label relevant to a split want -> made function 20
 step 1000: functions [0, 6, 7, 8, 9] idle 300 steps -> removed
 step 1000 loss 321.89 [filter 0.92, relation 31.38, label of what it made 10.82, functions 272.14, labels 1.01, check 2.08, apart 3.54, asks nothing 0.00] functions 16 | inputs the walk brought: add 70/70, before 34/119, both 42/120, copy 18/18, fedit 100/100, fill 882/882, fnew 100/100, inc 100/100, lookup 316/612, max 36/36, min 29/29, split 447/447, store 937/990, sub 39/39 | 2484s
+EVAL step 1000: statements 303 [check fails 1, fires 303, rest 1, roundtrip 3] | answers: lookup 1/24 (4.0 firings) | before 0/24 (4.0 firings) | coexist 0/24 (55.6 firings) | chain 1/24 (7.0 firings) | ops 0/24 (9.5 firings) | long 0/24 (14.0 firings) | functions 16 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'fires': 2487, 'roundtrip': 665, 'check fails': 1, 'rest': 155, 'budget out': 22, 'edits': 16}
+step 1006: no label relevant to a copy want -> made function 16
+step 1045: no label relevant to a add want -> made function 17
+step 1050: functions [6] idle 300 steps -> removed
+step 1050 loss 206.62 [filter 0.81, relation 34.40, label of what it made 9.65, functions 150.21, labels 0.65, check 8.51, apart 2.36, asks nothing 0.02] functions 17 | inputs the walk brought: add 64/64, before 36/121, both 31/109, copy 28/28, fedit 100/100, fill 866/866, fnew 100/100, inc 100/100, lookup 309/614, max 38/38, min 27/27, split 439/439, store 1086/1146, sub 24/24 | 2691s
+step 1080: no label relevant to a add want -> made function 17
+step 1100: functions [6, 7] idle 300 steps -> removed
+step 1100 loss 132.06 [filter 0.51, label of what it made 7.08, functions 102.55, labels 0.25, check 0.19, relation 19.68, apart 1.79, asks nothing 0.00] functions 16 | inputs the walk brought: add 67/67, before 46/114, both 32/96, copy 14/14, fedit 100/100, fill 834/834, fnew 100/100, inc 100/100, lookup 345/580, max 23/23, min 39/39, split 419/419, store 678/682, sub 25/25 | 2822s
+step 1115: no label relevant to a add want -> made function 16
+step 1142: no label relevant to a sub want -> made function 17
+step 1150 loss 169.67 [filter 0.69, relation 23.61, label of what it made 7.11, functions 133.59, labels 1.09, check 1.69, apart 1.89, asks nothing 0.00] functions 18 | inputs the walk brought: add 65/65, before 48/156, both 35/100, copy 16/16, fedit 100/100, fill 832/832, fnew 100/100, inc 100/100, lookup 285/550, max 23/23, min 37/37, split 419/419, store 886/921, sub 33/33 | 2996s
+step 1168: no label relevant to a add want -> made function 18
+step 1200: functions [7] idle 300 steps -> removed
+step 1200 loss 182.88 [filter 1.05, relation 29.53, label of what it made 7.97, functions 134.03, labels 0.64, check 7.62, apart 2.02, asks nothing 0.03] functions 18 | inputs the walk brought: add 66/66, before 40/154, both 34/106, copy 34/34, fedit 100/100, fill 814/814, fnew 100/100, inc 100/100, lookup 279/552, max 26/26, min 28/28, split 409/409, store 1126/1188, sub 27/27 | 3169s
+step 1202: no label relevant to a add want -> made function 18
+step 1234: no label relevant to a add want -> made function 19
+step 1250: functions [6, 8] idle 300 steps -> removed
+step 1250 loss 190.42 [filter 1.04, relation 30.80, label of what it made 10.59, functions 144.13, labels 0.29, check 0.63, apart 2.93, asks nothing 0.00] functions 18 | inputs the walk brought: add 57/57, before 68/140, both 27/92, copy 22/22, fedit 100/100, fill 870/870, fnew 100/100, inc 100/100, lookup 368/612, max 23/23, min 35/35, split 438/438, store 682/691, sub 37/37 | 3363s
+step 1260: no label relevant to a max want -> made function 18
+step 1280: no label relevant to a lookup want -> made function 19
+step 1300: functions [8] idle 300 steps -> removed
+step 1300 loss 264.59 [filter 1.15, label of what it made 13.10, functions 204.20, labels 1.30, check 5.99, relation 36.48, apart 2.31, asks nothing 0.05] functions 19 | inputs the walk brought: add 57/57, before 44/132, both 40/101, copy 38/38, fedit 100/100, fill 808/808, fnew 100/100, inc 100/100, lookup 292/560, max 30/30, min 25/25, split 405/405, store 889/944, sub 33/33 | 3562s
+step 1307: no label relevant to a min want -> made function 19
+step 1350: no label relevant to a add want -> made function 20
+step 1350: functions [6, 8, 10] idle 300 steps -> removed
+step 1350 loss 220.95 [filter 1.01, relation 39.04, label of what it made 10.73, functions 161.73, labels 0.48, check 5.26, apart 2.70, asks nothing 0.02] functions 18 | inputs the walk brought: add 64/64, before 39/136, both 39/124, copy 28/28, fedit 100/100, fill 852/852, fnew 100/100, inc 100/100, lookup 297/582, max 35/35, min 32/32, split 428/428, store 1075/1124, sub 28/28 | 3778s
