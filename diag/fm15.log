@@ -1,0 +1,45 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4426.61it/s]
+/marimo/frozen/fm15/gnm.py:1943: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f}", flush=True)
+codec 100: label cos 0.280 relation err 0.0010
+codec 200: label cos 0.508 relation err 0.0007
+codec 300: label cos 0.669 relation err 0.0003
+codec 400: label cos 0.679 relation err 0.0012
+codec 500: label cos 0.757 relation err 0.0006
+codec 600: label cos 0.757 relation err 0.0011
+codec 700: label cos 0.781 relation err 0.0005
+codec 800: label cos 0.822 relation err 0.0016
+codec 900: label cos 0.819 relation err 0.0007
+codec 1000: label cos 0.844 relation err 0.0005
+codec 1100: label cos 0.838 relation err 0.0006
+codec 1200: label cos 0.851 relation err 0.0009
+codec 1300: label cos 0.843 relation err 0.0009
+codec 1400: label cos 0.855 relation err 0.0014
+codec 1500: label cos 0.881 relation err 0.0004
+step 1: no label meets a store want; the nearest (function 1 (calculator sub)) does another purpose -> made function 5
+step 23: no label meets a sub want; the nearest (function 5) does another purpose -> made function 6
+step 23: no label meets a add want; the nearest (function 5) does another purpose -> made function 7
+step 23: no label meets a inc want; the nearest (function 5) does another purpose -> made function 8
+step 23: no label meets a fedit want; the nearest (function 5) does another purpose -> made function 9
+step 23: no label meets a fnew want; the nearest (function 5) does another purpose -> made function 10
+step 27: no label meets a lookup want; the nearest (function 5) does another purpose -> made function 11
+step 27: no label meets a split want; the nearest (function 5) does another purpose -> made function 12
+step 30: no label meets a fix want; the nearest (function 5) does another purpose -> made function 13
+step 38: no label meets a operands want; the nearest (function 5) does another purpose -> made function 14
+step 39: no label meets a fix want; the nearest (function 11) does another purpose -> made function 15
+step 40: no label meets a lookup want; the nearest (function 11) does another purpose -> made function 16
+step 44: no label meets a both want; the nearest (function 11) does another purpose -> made function 17
+step 45: no label meets a max want; the nearest (function 0 (calculator add)) does another purpose -> made function 18
+step 46: no label meets a lookup want; the nearest (function 16) does another purpose -> made function 19
+step 50 loss 475.04 (functions per demo step 7.74, 298 updates, 5 targets not made of pieces) [salience hint 9.00, label of what it made 4.74, functions 410.03, labels 4.28, check 7.50, relation 15.34, apart 21.88, asks nothing 0.00, round trip 0.13, round trip (pieces) 2.14] made nodes that act 20 | who acts: by nearest 146, by new 15, by routed 1822, by tried 204,  function 1983,  read node 204 | exact: add 0/57, before 0/29, both 0/27, copy 0/9, fill 4/419, fix 1/27, inc 0/50, lookup 0/306, max 0/37, min 0/26, operands 0/312, split 8/424, store 126/479, sub 0/36 | inputs the walk brought: add 171/171, before 107/107, both 84/84, copy 18/18, fedit 100/100, fill 848/848, fix 256/256, fnew 100/100, inc 100/100, lookup 611/612, max 111/111, min 78/78, operands 156/156, split 424/424, store 710/730, sub 108/108 | 397s
+step 53: no label meets a both want; the nearest (function 17) does another purpose -> made function 20
+step 60: no label meets a max want; the nearest (function 0 (calculator add)) does another purpose -> made function 21
+step 71: no label meets a both want; the nearest (function 17) does another purpose -> made function 22
+step 88: no label meets a sub want; the nearest (function 0 (calculator add)) does another purpose -> made function 23
+step 100 loss 291.05 (functions per demo step 6.39, 300 updates, 5 targets not made of pieces) [salience hint 7.57, relation 17.70, label of what it made 3.14, functions 230.00, labels 1.47, check 9.55, apart 19.07, asks nothing 0.00, round trip 0.07, round trip (pieces) 2.48] made nodes that act 24 | who acts: by nearest 28, by new 4, by routed 1792, by tried 188,  function 1824,  read node 188 | exact: add 0/59, before 0/34, both 0/35, copy 0/4, fill 82/372, fix 0/33, inc 0/50, lookup 2/266, max 0/18, min 1/23, operands 3/254, split 21/377, store 272/482, sub 0/27 | inputs the walk brought: add 177/177, before 123/123, both 108/114, copy 8/8, fedit 100/100, fill 754/754, fix 420/420, fnew 100/100, inc 100/100, lookup 526/532, max 54/54, min 69/69, operands 127/127, split 377/377, store 825/920, sub 81/81 | 803s
+step 102: no label meets a split want; the nearest (function 12) does another purpose -> made function 24
+step 102: no label meets a operands want; the nearest (function 7) does another purpose -> made function 25
+step 119: no label meets a max want; the nearest (function 1 (calculator sub)) does another purpose -> made function 26
+step 148: no label meets a max want; the nearest (function 23) does another purpose -> made function 27
