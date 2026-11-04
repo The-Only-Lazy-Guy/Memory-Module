@@ -747,13 +747,14 @@ class ToolNet(nn.Module):
         self.code = nn.Parameter(torch.randn(K, c) * .02)
         self.me = nn.Parameter(torch.randn(c) * .02)
         self.wq = nn.Linear(d, c)
+        self.wv = nn.Linear(1, c)                              # the signal that fired it (its value: sign x strength)
         self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 1024, batch_first=True, activation="gelu"), 3)
         self.many, self.err, self.where, self.isfn = nn.Linear(c, M), nn.Linear(c, 1), nn.Linear(c, 2 + R), nn.Linear(c, 1)
         self.K, self.M, self.R, self.L = K, M, R, L
 
-    def forward(self, ins, q, code=None):
+    def forward(self, ins, q, code=None, v=1.):
         code = F.layer_norm(self.code if code is None else code, (self.code.shape[-1],))
-        parts = [self.out, code + self.me, self.wq(q)[None]]
+        parts = [self.out, code + self.me, self.wq(q)[None], self.wv(torch.tensor([float(v)], device=q.device))[None]]
         parts += [z[:self.L] + self.role[r] + self.pos[:len(z[:self.L])] for r, z in enumerate(ins[:self.R])]
         y = self.f(torch.cat(parts)[None])[0, :len(self.out)]
         y = F.layer_norm(y, (y.shape[-1],))
@@ -770,10 +771,14 @@ class ToolBank(nn.Module):
         super().__init__()
         self.nets, self.d, self.c, self.cap = nn.ModuleList(), d, c, cap
         self.wp = Pool(c, 1)
+        self.wv = nn.Linear(1, c)
         self.wo = nn.Sequential(nn.Linear(c, 512), nn.GELU(), nn.Linear(512, d))
 
-    def want(self, rows):
-        return F.normalize(self.wo(self.wp(rows)[:, 0]), dim=-1)
+    def want(self, rows, v=None):
+        """what a signal wants: from its nodes and its value (1 when not given)"""
+        y = self.wp(rows)[:, 0]
+        v = torch.ones(len(rows), 1, device=y.device) if v is None else torch.tensor(v, dtype=y.dtype, device=y.device).reshape(-1, 1)
+        return F.normalize(self.wo(y + self.wv(v)), dim=-1)
 
     def gate(self, q):                                 # every want against every label: > 1 = relevant
         return q @ torch.stack([t.key for t in self.nets]).T
@@ -850,6 +855,9 @@ class Node:
 
 
 class Signal:
+    """what fired: the nodes it is about, its value (sign x strength: +1 an arrival or a change; a check's failure is
+    negative) and its order (the newest first)"""
+
     def __init__(self, about, sign=1., strength=0.):
         self.about, self.sign, self.strength = about, sign, strength
 
@@ -920,7 +928,7 @@ class FM:
 
     # --- one firing
     def fire(self, sg):
-        q = self.bank.want([[n.B for n in sg.about]])[0]
+        q = self.bank.want([[n.B for n in sg.about]], [sg.sign])[0]
         t = self.route(q)
         if t < 0:
             self.count("rest")
@@ -930,14 +938,14 @@ class FM:
         lg = self.filt(net.key, net.code, q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C])
         take = (torch.rand_like(lg) < torch.sigmoid(lg)) if self.explore else lg > 0
         ins = [C[i][0] for i in range(len(C)) if take[i]][:net.R] or [sg.about[0]]
-        outs, many, err, where, isfn = net([n.B for n in ins], q)
+        outs, many, err, where, isfn = net([n.B for n in ins], q, v=sg.sign)
         rec = {"t": t, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a) for n, k, a in C], "take": take.tolist(),
                "ins": [n.B for n in ins], "sign": sg.sign}
         if self.show:                                  # --inspect: every firing, said
             g = self.bank.gate(q[None])[0]
             top = sorted(range(len(g)), key=lambda i: -float(g[i]))[:3]
             name = lambda n: {"entry": f"entry {n.place}.{n.idx}", "fn": f"function {n.fn}"}.get(n.kind, "work")
-            print(f"  fire {len(self.firings)}: function {t} (gates " + ", ".join(f"{i}:{float(g[i]):.2f}" for i in top) +
+            print(f"  fire {len(self.firings)}: signal {sg.sign:+.2f}, function {t} (gates " + ", ".join(f"{i}:{float(g[i]):.2f}" for i in top) +
                   ") | about: " + " + ".join(repr(self.say(n)[:60]) for n in sg.about) +
                   f" | let through {sum(take.tolist())}/{len(C)}: " + "; ".join(f"{name(n)} {self.say(n)[:50]!r}" for n in ins) +
                   f" | many {int(many.argmax()) + 1}, where " + ", ".join(str(int(where[j].argmax())) for j in range(int(many.argmax()) + 1)) +
@@ -994,8 +1002,9 @@ class FM:
         self.g.R[p] = n.R.detach().float().cpu().numpy()
         ok = float(torch.sigmoid(self.critic([x.B for x in ins], z)))     # the check: does what was kept pass?
         rec.setdefault("kept", []).append((j, ok))
-        if ok < .5:
-            self.count("check fails")
+        if ok < .5:                                    # a failure is a signal: its value the check's score, about the
+            self.count("check fails")                  # entry and what it was made from
+            self.signals.append(Signal([self.entry(p)] + [x for x in ins if x.kind != "fn"], 2 * ok - 1, self.t))
         for j in np.nonzero(self.g.R[:self.g.n] @ self.g.L[p] > RELATED)[0]:   # what relates to it hears; the function
             if j != p:                                                    # that fires reads the values: follow or not
                 self.signals.append(Signal([self.entry(int(j)), self.entry(p)], 1., self.t))
@@ -1204,7 +1213,7 @@ class Lesson:
         return sum(x for _, x in self.parts)
 
 
-def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=()):
+def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     """one demo step done by the model: its own want, its own routing (or a new function when no label is relevant),
     the candidates as the module itself lists them, the filter scored against the teacher's inputs (which go in, in
     the order the candidates list them, as when it lives), its outputs judged by what they say. outs: (what it should
@@ -1212,7 +1221,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=()):
     the signal's node relates to beyond its inputs (what a copy is the same as). Returns the
     output values (latents with their gradient: the next step reads them as they are) and the inputs in their order."""
     bank = fm.bank
-    q = bank.want([[n.B for n in about]])[0]
+    q = bank.want([[n.B for n in about]], [v])[0]
     Ls.wants.append(q)
     Ls.kinds.append(purpose)
     if len(bank.nets):
@@ -1229,7 +1238,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=()):
         print(f"step {st['step']}: no label relevant to a {purpose} want -> made function {t}", flush=True)
     net = bank.nets[t]
     net.used.fill_(st["step"])
-    C = fm.cands(Signal(about))
+    C = fm.cands(Signal(about, v))
     key = lambda n: ("e", n.place, n.idx) if n.kind == "entry" else ("f", n.fn) if n.kind == "fn" else id(n)
     want_in = {key(n) for n in ins}
     have = {key(n) for n, _, _ in C}
@@ -1244,7 +1253,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=()):
         if key(n) in want_in and key(n) not in seen:
             order.append(n)
             seen.add(key(n))
-    lg = fm.filt(net.key, net.code, q, 1., 0., [(n.B, n.L, k, a) for n, k, a in C])
+    lg = fm.filt(net.key, net.code, q, v, 0., [(n.B, n.L, k, a) for n, k, a in C])
     y = torch.tensor([float(key(n) in want_in) for n, _, _ in C], device=lg.device)
     Ls.add("filter", F.binary_cross_entropy_with_logits(lg, y))
     rel = sorted({n.place for n in ins if n.kind == "entry"} | set(also))
@@ -1253,7 +1262,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=()):
         lr = F.normalize(about[0].R, dim=0) @ torch.from_numpy(fm.g.L[places]).to(about[0].R.device).T / .1
         pos = torch.tensor([p in rel for p in places], device=lr.device)
         Ls.add("relation", -(lr.log_softmax(0)[pos]).mean())
-    o, many, err, where, isfn = net([n.B for n in order], q)
+    o, many, err, where, isfn = net([n.B for n in order], q, v=v)
     L = F.cross_entropy(many[None], torch.tensor([len(outs) - 1], device=many.device))
     res, keys = [], [key(n) for n in order]
     for j, (target, dest) in enumerate(outs):
@@ -1326,6 +1335,13 @@ def demo_statement(fm, T, Ls, A, st, text, meta, side):
         alt.discard(kept)
         for c, y in [(z, 1.)] + [(fm.nodes([a])[0].B, 0.) for a in alt]:
             Ls.add("check", F.binary_cross_entropy_with_logits(fm.critic([n.B for n in order], c), torch.tensor(y, device=z.device)))
+        if p is not None and alt and random.random() < A.fix:
+            fm.t += 1
+            fm.g.chain[p].append((fm.nodes([sorted(alt)[0]])[0].B.detach(), fm.t))   # kept wrong ...
+            bad = fm.entry(p)
+            about = [bad] + [x for x in order if x.kind != "fn"]
+            run_step(fm, Ls, A, st, "fix", about, about, [(kept, bad)], v=-1.)     # ... the check's failure: fixed
+            fm.g.chain[p].pop()
     if p is None:
         with torch.no_grad():
             p = fm.g.add_place(fm.heads([z])[0][0].float().cpu().numpy())
@@ -1516,7 +1532,7 @@ def imitate(fm, recs):
     loss = 0
     for r in recs:
         net = fm.bank.nets[r["t"]]
-        q = fm.bank.want([r["about"]])[0]
+        q = fm.bank.want([r["about"]], [r["sign"]])[0]
         loss = loss + F.relu(1.1 - fm.bank.gate(q[None])[0, r["t"]])
         lg = fm.filt(net.key, net.code, q.detach(), r["sign"], 0., r["C"])
         loss = loss + F.binary_cross_entropy_with_logits(lg, torch.tensor(r["take"], dtype=torch.float, device=lg.device))
@@ -1530,7 +1546,7 @@ def checked(fm, recs):
     loss, n = 0, 0
     for r in recs:
         for j, _ in r.get("kept", []):
-            o = fm.bank.nets[r["t"]](r["ins"], r["q"])[0]
+            o = fm.bank.nets[r["t"]](r["ins"], r["q"], v=r["sign"])[0]
             loss, n = loss - F.logsigmoid(fm.critic(r["ins"], o[j])), n + 1
     fm.critic.requires_grad_(True)
     return loss / max(1, n)
@@ -1757,6 +1773,7 @@ if __name__ == "__main__":
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
     P.add_argument("--cool", type=int, default=20, help="steps between two new functions")
+    P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
     P.add_argument("--prune", type=int, default=300, help="steps a function may go unfired before it is removed")
     P.add_argument("--own", type=int, default=600, help="after this step the demo memory holds what the store itself wrote")
     P.add_argument("--scope", type=float, default=.9)
