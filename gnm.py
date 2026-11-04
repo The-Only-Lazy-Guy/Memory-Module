@@ -762,12 +762,14 @@ class ToolNet(nn.Module):
         h = self.f(torch.cat(parts)[None])[0]
         y = F.layer_norm(h[:len(self.out)], (h.shape[-1],))
         toks = [z[:self.L] for z in ins[:self.R]]
+        self.seen = None
         if toks:                                       # what each slot takes from the inputs' tokens, as they are
             at = len(self.out) + self.K + 2
             ctx, raw = h[at:at + sum(len(z) for z in toks)], F.layer_norm(torch.cat(toks), (y.shape[-1],))
             a = (self.cq(y) @ self.ck(ctx).T / y.shape[-1] ** .5).softmax(-1)
             g = torch.sigmoid(self.cg(y))
             y = g * (a @ raw) + (1 - g) * y
+            self.seen = (a.detach(), g.detach().squeeze(-1), [len(z) for z in toks])
         outs = [y[j * self.K:(j + 1) * self.K] for j in range(self.M)]
         g = y.mean(0)
         return (outs, self.many(g), self.err(g).squeeze(-1), torch.stack([self.where(o.mean(0)) for o in outs]),
@@ -867,6 +869,7 @@ class Node:
 
     def __init__(self, B, L, R, kind="work", place=-1, idx=-1, parent=None, fn=-1):
         self.B, self.L, self.R, self.kind, self.place, self.idx, self.parent, self.fn = B, L, R, kind, place, idx, parent, fn
+        self.text = None                               # the text it was read from (traces only)
 
 
 class Signal:
@@ -887,7 +890,7 @@ class FM:
         self.dev = next(heads.parameters()).device
         self.g, self.signals, self.t, self.explore = Graph(bank.d), [], 0, 0.
         self.budget, self.look, self.newest, self.kappa, self.same = budget, look, newest, kappa, same
-        self.stats, self.firings, self.show, self.capture, self.said = {}, [], False, None, []
+        self.stats, self.firings, self.show, self.capture, self.said, self.trace, self.walks = {}, [], False, None, [], False, []
 
     def count(self, k, n=1):
         self.stats[k] = self.stats.get(k, 0) + n
@@ -898,7 +901,10 @@ class FM:
         z, m = self.tr.content(texts)
         B = [z[i][m[i]] for i in range(len(texts))]
         L, R = self.heads(B)
-        return [Node(b, l, r) for b, l, r in zip(B, L, R)]
+        out = [Node(b, l, r) for b, l, r in zip(B, L, R)]
+        for n, t in zip(out, texts):
+            n.text = t
+        return out
 
     def node(self, z, **kw):
         L, R = self.heads([z])
@@ -920,9 +926,12 @@ class FM:
     def cands(self, sg):
         out, seen = [(n, 0, 0) for n in sg.about], {(n.place, n.idx) for n in sg.about if n.kind == "entry"}
         x = sg.about[0]
+        self.walks = []
         if self.g.n:
             for kind, v in ((1, x.L), (3, F.normalize(x.R, dim=0))):
-                for _, p in self.g.search(v.detach().float().cpu().numpy())[:self.look]:
+                found = self.g.search(v.detach().float().cpu().numpy())[:self.look]
+                self.walks.append((kind, found))
+                for _, p in found:
                     for a in range(min(self.newest, len(self.g.chain[p]))):
                         i = len(self.g.chain[p]) - 1 - a
                         if (p, i) not in seen:
@@ -957,6 +966,12 @@ class FM:
         rec = {"t": t, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a) for n, k, a in C], "take": take.tolist(),
                "ins": [n.B for n in ins], "sign": sg.sign}
         if self.show:                                  # --inspect: every firing, said
+            for kind, found in self.walks:
+                print(f"    walk by {'label' if kind == 1 else 'relation'}: " + "; ".join(
+                    f"{p} d {d:.2f} {self.say(self.entry(p))[:35]!r}" for d, p in found), flush=True)
+            rows = sorted(range(len(C)), key=lambda i: -float(lg[i]))[:10]
+            print("    candidates (filter logit): " + " | ".join(f"{float(lg[i]):+.1f} " + (f"fn {C[i][0].fn}" if C[i][0].kind == "fn"
+                  else f"{self.say(C[i][0])[:35]!r}" + (f" @{C[i][0].place}.{C[i][0].idx}" if C[i][0].kind == "entry" else "")) for i in rows), flush=True)
             g = self.bank.gate(q[None])[0]
             top = sorted(range(len(g)), key=lambda i: -float(g[i]))[:3]
             name = lambda n: {"entry": f"entry {n.place}.{n.idx}", "fn": f"function {n.fn}"}.get(n.kind, "work")
@@ -1271,15 +1286,16 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     lg = fm.filt(net.key, net.code, q, v, 0., [(n.B, n.L, k, a) for n, k, a in C])
     y = torch.tensor([float(key(n) in want_in) for n, _, _ in C], device=lg.device)
     Ls.add("filter", F.binary_cross_entropy_with_logits(lg, y))
-    rel = sorted({n.place for n in ins if n.kind == "entry"} | set(also))
+    rel, rl = sorted({n.place for n in ins if n.kind == "entry"} | set(also)), None
     places = sorted({n.place for n, k, _ in C if n.kind == "entry"} | set(rel))
     if about[0].R.requires_grad and rel and len(places) > len(rel):
         lr = F.normalize(about[0].R, dim=0) @ torch.from_numpy(fm.g.L[places]).to(about[0].R.device).T / .1
         pos = torch.tensor([p in rel for p in places], device=lr.device)
-        Ls.add("relation", -(lr.log_softmax(0)[pos]).mean())
+        rl = -(lr.log_softmax(0)[pos]).mean()
+        Ls.add("relation", rl)
     o, many, err, where, isfn, keep = net([n.B for n in order], q, v=v)
     L = F.cross_entropy(many[None], torch.tensor([len(outs) - 1], device=many.device))
-    res, keys = [], [key(n) for n in order]
+    res, keys, info = [], [key(n) for n in order], []
     for j, (target, dest) in enumerate(outs):
         w = dest if isinstance(dest, int) else 2 + keys.index(key(dest))
         if isinstance(target, str):
@@ -1293,7 +1309,9 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             if fm.capture is not None:                 # --codec_check: what it says, at the right length and at its own
                 with torch.no_grad():
                     fm.capture.append((purpose, target, fm.say(Node(o[j][:T_], None, None)),
-                                       fm.say(Node(kept(o[j], keep[j]), None, None)), float(dl), int((keep[j] > 0).sum()), T_))
+                                       fm.say(Node(kept(o[j], keep[j]), None, None)), float(dl), int((keep[j] > 0).sum()), T_, t))
+            if fm.trace:
+                info.append((j, target, w, T_, float(dl)))
             L_, R_ = fm.heads([o[j][:T_]])
             Ls.add("label of what it made", (1 - (L_[0] * lab).sum()) * .5 + F.mse_loss(R_[0], rel) * 5)
         else:                                          # a function given back: judged by what it then does
@@ -1309,10 +1327,68 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     S, m = bank.gate(q[None])[0, t], .1                # the label: pulled when it did this as well as it usually does
     usual = max(float(net.mu + A.kappa * net.sd), A.tool_good)
     Ls.add("labels", F.relu(1 + m - S) if float(L) <= usual else F.relu(S - (1 - m)))
+    if fm.trace:
+        trace_step(fm, purpose, v, about, t, C, lg, y, order, o, many, err, where, isfn, keep, info, outs, net,
+                   float(S), usual, float(L), rl)
     with torch.no_grad():
         net.mu.mul_(.98).add_(.02 * L.detach())
         net.sd.mul_(.98).add_(.02 * (L.detach() - net.mu).abs())
     return res, order
+
+
+def told(fm, n, k=70):
+    """what a node says (the text it was read from, when it was)"""
+    return (n.text if n.text is not None else fm.say(n))[:k]
+
+
+@torch.no_grad()
+def copied(fm, net, order, j, T_):
+    """what each of an output's first slots took from the inputs: the token (gate >= .5) or ~token (it made its own)"""
+    if net.seen is None:
+        return "(no inputs)"
+    a, g, lens = net.seen
+    starts = np.cumsum([0] + lens)
+    out = []
+    for s_ in range(min(T_, net.K)):
+        i = j * net.K + s_
+        top = int(a[i].argmax())
+        r = int(np.searchsorted(starts, top, side="right") - 1)
+        pos = top - starts[r]
+        n = order[r]
+        tok = f"<{r}.{pos}>"
+        if n.text is not None:
+            ids = fm.tr.tok(n.text)["input_ids"]
+            if pos < len(ids):
+                tok = fm.tr.tok.decode([ids[pos]])
+        out.append((tok if float(g[i]) >= .5 else "~" + tok) + f"({float(a[i].max()):.1f})")
+    return " ".join(out)
+
+
+@torch.no_grad()
+def trace_step(fm, purpose, v, about, t, C, lg, y, order, o, many, err, where, isfn, keep, info, outs, net, S, usual, L, rl):
+    gates = fm.bank.gate(fm.bank.want([[n.B for n in about]], [v]))[0]
+    top = sorted(range(len(gates)), key=lambda i: -float(gates[i]))[:5]
+    print(f"\n== {purpose} (signal {v:+.1f}) | about: " + " + ".join(repr(told(fm, n)) for n in about), flush=True)
+    print(f"   want -> function {t}; gates " + ", ".join(f"{i}:{float(gates[i]):.2f}" for i in top), flush=True)
+    for kind, found in fm.walks:
+        print(f"   walk by {'label' if kind == 1 else 'relation'}: " + "; ".join(
+            f"place {p} d {d:.2f} {fm.say(fm.entry(p))[:40]!r}" for d, p in found), flush=True)
+    name = {0: "signal's", 1: "label walk", 2: "function", 3: "relation walk"}
+    rows = sorted(range(len(C)), key=lambda i: -float(lg[i]))
+    print(f"   candidates {len(C)} (filter logit, wanted): " + " | ".join(
+        f"{float(lg[i]):+.1f}{'*' if y[i] > 0 else ''} {name[C[i][1]]} " +
+        (f"fn {C[i][0].fn}" if C[i][0].kind == "fn" else f"{told(fm, C[i][0], 45)!r}" + (f" @{C[i][0].place}.{C[i][0].idx}" if C[i][0].kind == "entry" else ""))
+        for i in rows[:14]), flush=True)
+    print("   inputs in order: " + " | ".join(f"{r}: {told(fm, n, 50)!r}" for r, n in enumerate(order)), flush=True)
+    print(f"   many {int(many.argmax()) + 1} (target {len(outs)}), own error {float(err):.2f} (usual {float(net.mu):.2f})", flush=True)
+    for j, target, w, T_, dl in info:
+        wp = where[j].softmax(-1)
+        print(f"   out {j}: target {target!r}\n      said at its length {fm.say(Node(o[j][:T_], None, None))!r} | at its own "
+              f"({int((keep[j] > 0).sum())} slots kept, target {T_}) {fm.say(Node(kept(o[j], keep[j]), None, None))!r}\n"
+              f"      where {int(wp.argmax())} ({float(wp.max()):.2f}) target {w} | function? {float(torch.sigmoid(isfn[j])):.2f} | "
+              f"decode loss {dl:.2f}\n      slots took: {copied(fm, net, order, j, T_)}", flush=True)
+    print(f"   label gate {S:.2f}, step loss {L:.2f} vs usual {usual:.2f} -> {'pull' if L <= usual else 'push'}" +
+          (f" | relation loss {float(rl):.2f}" if rl is not None else ""), flush=True)
 
 
 def demo_question(fm, T, Ls, A, st, E):
@@ -1661,6 +1737,107 @@ def inspect(A):
 
 
 @torch.no_grad()
+def deep_trace(A):
+    """--trace --load X: everything, said. 1 the translator on every kind of text; 2 one batch of demos with every
+    step in full (want, gates, both walks, every candidate with the filter's score, inputs, every output against its
+    target at its length and its own, where / how many / kept, what each slot copied, the label's pull or push);
+    3 routing over many demo steps (purpose -> function, said exactly); 4 the module living by itself: the first
+    statements and one question of each kind with every firing, and its memory against the world's truth"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    fm = FM(tr, ToolBank().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    load_fm(fm, A.load)
+    for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
+        mod.eval()
+    print(f"=== 1. THE TRANSLATOR ({len(fm.bank.nets)} functions in the module)", flush=True)
+    translator_report(fm, random.Random(A.seed + 3))
+    print("\n=== 2. ONE BATCH OF DEMOS, EVERY STEP (memory written by the teacher, 12 ticks first)", flush=True)
+    A.cool, A.own = 10 ** 9, 10 ** 9
+    st, fm.g = {"step": 10 ** 9, "last": 10 ** 9}, Graph(fm.bank.d)
+    rng = random.Random(A.seed + 4)
+    w = new_world(rng)
+    T = Teacher(w)
+    for _ in range(max(2, A.trace_n // 2)):
+        for d in world_step(w, rng):
+            o = d()
+            side = w.side.get(id(o), {}) if o else {}
+            for text, meta in said(o, w) if o else []:
+                demo_statement(fm, T, Lesson(), A, st, text, meta, side)
+    fm.trace = True
+    for d in world_step(w, rng):
+        o = d()
+        side = w.side.get(id(o), {}) if o else {}
+        for text, meta in said(o, w) if o else []:
+            print(f"\n--- statement {text!r} (memory should keep {T.kept(text, meta, side)!r})", flush=True)
+            demo_statement(fm, T, Lesson(), A, st, text, meta, side)
+    for kind in ("lookup", "before", "coexist", "chain", "ops"):
+        E = q_expr(kind, w, rng)
+        if E is not None:
+            print(f"\n--- question ({kind}) {ask_text(E)!r} truth {VAL(truth_of(E, w))!r}", flush=True)
+            demo_question(fm, T, Lesson(), A, st, E)
+    print("\n--- functions on functions", flush=True)
+    demo_functions(fm, Lesson(), A, st, rng)
+    fm.trace = False
+    print("\n=== 3. ROUTING OVER MANY DEMO STEPS (purpose -> the function its want reaches; said exactly)", flush=True)
+    fm.capture = []
+    for _ in range(A.trace_n):
+        for d in world_step(w, rng):
+            o = d()
+            side = w.side.get(id(o), {}) if o else {}
+            for text, meta in said(o, w) if o else []:
+                demo_statement(fm, T, Lesson(), A, st, text, meta, side)
+        for kind in ("lookup", "before", "coexist", "chain", "ops"):
+            E = q_expr(kind, w, rng)
+            if E is not None:
+                demo_question(fm, T, Lesson(), A, st, E)
+        demo_functions(fm, Lesson(), A, st, rng)
+    by = {}
+    for x in fm.capture:
+        by.setdefault(x[0], []).append(x)
+    for k, xs in sorted(by.items()):
+        fns = {}
+        for x in xs:
+            fns[x[7]] = fns.get(x[7], 0) + 1
+        print(f"{k}: {len(xs)} steps -> functions " + ", ".join(f"{f}: {c}" for f, c in sorted(fns.items(), key=lambda z: -z[1])) +
+              f" | said exactly {sum(x[1] == x[2] for x in xs)} at its length, {sum(x[1] == x[3] for x in xs)} at its own", flush=True)
+    fm.capture = None
+    print("\n=== 4. LIVING BY ITSELF (a fresh world; nothing scripted)", flush=True)
+    rng = random.Random(A.seed + 5)
+    w = new_world(rng)
+    fm.g, fm.stats, n = Graph(fm.bank.d), {}, 0
+    for _ in range(A.ticks):
+        for d in world_step(w, rng):
+            o = d()
+            for text, _ in said(o, w) if o else []:
+                fm.show = n < 8
+                if fm.show:
+                    print(f"\nstatement {text!r}", flush=True)
+                fm.arrive(text)
+                n += 1
+    fm.show = False
+    newest = [fm.say(fm.entry(p)) for p in range(fm.g.n)]
+    truth = {f"{leaf(nm, k)} is {v}." for nm, e in w.ents.items() for k, v in e.items()}
+    subj = {}
+    for x in newest:
+        subj.setdefault(phrase_of(x) or x[:30], 0)
+        subj[phrase_of(x) or x[:30]] += 1
+    print(f"\nmemory: {fm.g.n} places from {n} statements, entries per place {sum(len(c) for c in fm.g.chain) / max(1, fm.g.n):.2f} | "
+          f"newest entries that are a true current fact {sum(x in truth for x in newest)}/{len(newest)} | facts held right somewhere "
+          f"{len(truth & set(newest))}/{len(truth)} | subjects with more than one place {sum(c > 1 for c in subj.values())} | {fm.stats}", flush=True)
+    print("   places: " + " | ".join(f"{p}: {x[:45]!r} ({len(fm.g.chain[p])})" for p, x in enumerate(newest[:40])), flush=True)
+    fm.show, fm.budget = True, 12
+    for kind in ("lookup", "before", "coexist", "chain", "ops"):
+        E = q_expr(kind, w, rng)
+        if E is None:
+            continue
+        print(f"\nquestion ({kind}) {ask_text(E)!r} truth {VAL(truth_of(E, w))!r}", flush=True)
+        got, k = fm.ask(ask_text(E))
+        print(f"  -> {got!r} after {k} firings", flush=True)
+
+
+@torch.no_grad()
 def eval_only(A):
     """--eval --load X: the saved module in a fresh world (the code as it is now)"""
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -1687,7 +1864,15 @@ def codec_check(A):
         load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
-    rng = random.Random(A.seed + 3)
+    translator_report(fm, random.Random(A.seed + 3))
+    if not A.load:
+        return
+    codec_functions(fm, A)
+
+
+@torch.no_grad()
+def translator_report(fm, rng):
+    tr = fm.tr
     w = new_world(rng)
     kinds = {}
     add = lambda k, t: kinds.setdefault(k, []).append(t)
@@ -1720,8 +1905,10 @@ def codec_check(A):
         near = float((((L @ lab.T).argmax(1)) == torch.arange(len(ts), device=L.device)).float().mean())
         bad = [f"{a!r} -> {b!r}" for a, b, o_ in zip(ts, dec, ok) if not o_][:2]
         print(f"{k}: round trip {sum(ok)}/{len(ts)} | heads label cos {cos:.3f}, nearest is its own {near:.2f} | " + "; ".join(bad), flush=True)
-    if not A.load:
-        return
+
+
+@torch.no_grad()
+def codec_functions(fm, A):
     print("=== each function on its demos (the teacher's inputs given)", flush=True)
     A.cool, A.own = 10 ** 9, 10 ** 9                  # no new function, memory = what the teacher keeps
     st, fm.capture, fm.g = {"step": 10 ** 9, "last": 10 ** 9}, [], Graph(fm.bank.d)
@@ -1888,6 +2075,8 @@ if __name__ == "__main__":
     P.add_argument("--fm", action="store_true", help="the function machine: codec stage 2, demos, then a world by itself")
     P.add_argument("--inspect", action="store_true", help="with --load: every firing of a few questions, said")
     P.add_argument("--eval", action="store_true", help="with --load: the saved module in a fresh world")
+    P.add_argument("--trace_n", type=int, default=25, help="demo ticks the trace's routing table runs")
+    P.add_argument("--trace", action="store_true", help="with --load: every trace, said (translator, demos, routing, living)")
     P.add_argument("--codec_check", action="store_true", help="the translator, the heads (and with --load each function) on every kind of text")
     P.add_argument("--same", type=float, default=.1, help="a node whose label moved less than this did not change: no signal")
     P.add_argument("--init", default="", help="translator weights (text -> B, B -> text)")
@@ -1916,4 +2105,4 @@ if __name__ == "__main__":
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
-    inspect(A) if A.inspect else eval_only(A) if A.eval else codec_check(A) if A.codec_check else run_fm(A)
+    (deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
