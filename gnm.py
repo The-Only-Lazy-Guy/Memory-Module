@@ -1692,9 +1692,11 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                 fm.made = True
                 print(f"step {st['step']}: the {purpose} skill gets its node -> function {t}", flush=True)
             fm.assign[purpose] = t
-        actor, how = fm.fnode(t), "assigned"
-        if not any(n.kind == "fn" and n.fn == t for n, _, _ in C):
+        actor = next((n for n, _, _ in C if n.kind == "fn" and n.fn == t), None)   # the candidate itself (the
+        if actor is None:                                                           # label losses find it by identity)
+            actor = fm.fnode(t)
             C.append((actor, 2, 0))
+        how = "assigned"
     free = [i for i, (n, _, _) in enumerate(C) if n.kind == "fn" and not specialized(fm, n, purpose)] if how == "nearest" else []
     if free:                                           # none meets the want: the nearest node not doing another purpose
         a = max(free, key=lambda i: float(s_all[i]))   # (fm17: making one whenever the nearest was busy made a node per
