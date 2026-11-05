@@ -794,6 +794,8 @@ class Interpreter(nn.Module):
         self.kind = nn.Linear(c, 3)                            # a piece: 0 no more pieces, 1 a span of an input, 2 made
         self.ps, self.pe, self.pk, self.px = nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c)
         self.pin = nn.Linear(c, c)                             # which input a span is taken from
+        self.sp = nn.Parameter(torch.tensor(1.))               # ... as much as it is salient (tr24: the right fact at
+        #                                                        input 1 every lookup, the number copied from input 2/7/8)
         self.gkeep = nn.Linear(c, 1)                           # how many latents a made piece keeps
         self.K, self.M, self.S, self.G, self.R, self.L, self.r = K, M, S, G, R, L, r
 
@@ -842,6 +844,8 @@ class Interpreter(nn.Module):
         if toks:
             each = torch.stack([o["keys"][o["owner"] == r].mean(0) for r in range(len(toks))])
             o["start"] = o["start"] + (self.pin(hs) @ each.T)[..., o["owner"]]     # + which input
+            ls = torch.log(torch.stack([torch.as_tensor(sv, dtype=h.dtype, device=dev).reshape(()) for sv in sal]).clamp_min(1e-4))
+            o["start"] = o["start"] + self.sp * ls[o["owner"]]   # + how salient it is (the copy's loss teaches perception too)
             if copy is not None:                       # a function's program is not words to copy
                 cm = torch.tensor(list(copy)[:len(toks)], dtype=torch.bool, device=dev)
                 o["start"] = o["start"].masked_fill(~cm[o["owner"]], -1e9)
@@ -1227,14 +1231,21 @@ class Filter(nn.Module):
         self.qry = nn.Sequential(nn.Linear(3 * d + 2 + c, c), nn.GELU(), nn.Linear(c, c))   # + what the signal is about
         self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 512, batch_first=True, activation="gelu"), 2)
         self.o = nn.Linear(c, 1)
+        self.dist = nn.Linear(2, c)                         # how near the walk found it (its label against the signal's)
+        self.nw = nn.Parameter(torch.tensor(3.))            # ... and how much that nearness counts, as it is
 
     def forward(self, key, code, q, sign, strength, cands, about=None):
         """about: the label of the node the signal is about (fm23 trace: the want, clustered by purpose, does not say WHICH
-        fact a lookup asks for -- the right fact scored +.9, others about the same subject +1.0)"""
+        fact a lookup asks for -- the right fact scored +.9, others about the same subject +1.0). Each thing a walk
+        brought comes with how near its label was (tr24: every entry scored -.6 to -.8 while the label walk had the
+        right fact at .27-.50 and the next at .8-1.0: perception had to learn the label match again, and had not)"""
         s = torch.tensor([sign, strength], dtype=q.dtype, device=q.device)
         qv = self.qry(torch.cat([key, q, s, code.mean(0), about if about is not None else torch.zeros_like(q)]))
-        cv = torch.stack([self.cand(torch.cat([B.mean(0), L])) + self.kind[k] + self.age[min(a, 7)] for B, L, k, a in cands])
-        return self.o(self.f(torch.cat([qv[None], cv])[None])[0, 1:]).squeeze(-1)
+        near = torch.tensor([[1. - x[4], 1.] if len(x) > 4 and x[4] is not None else [0., 0.] for x in cands],
+                            dtype=q.dtype, device=q.device)
+        cv = torch.stack([self.cand(torch.cat([x[0].mean(0), x[1]])) + self.kind[x[2]] + self.age[min(x[3], 7)] for x in cands])
+        cv = cv + self.dist(near)
+        return self.o(self.f(torch.cat([qv[None], cv])[None])[0, 1:]).squeeze(-1) + self.nw * near[:, 0] * near[:, 1]
 
 
 class Node:
@@ -1246,6 +1257,7 @@ class Node:
         self.B, self.L, self.R, self.kind, self.place, self.idx, self.parent, self.fn = B, L, R, kind, place, idx, parent, fn
         self.text = None                               # the text it was read from (traces only)
         self.toks = None                               # the token each row of B is (known when read from text, or in demos)
+        self.near = None                               # how far the walk that brought it was (its label, from the signal's)
 
 
 class Signal:
@@ -1335,12 +1347,14 @@ class FM:
                 v_ = v.detach().float().cpu().numpy()
                 found = self.g.access(v_, self.look) if kind == 1 else self.g.search(v_)[:self.look]
                 self.walks.append((kind, found))
-                for _, p in found:
+                for d_, p in found:
                     for a in range(min(self.newest, len(self.g.chain[p]))):
                         i = len(self.g.chain[p]) - 1 - a
                         if (p, i) not in seen:
                             seen.add((p, i))
-                            out.append((self.entry(p, i), kind, a))
+                            e_ = self.entry(p, i)
+                            e_.near = d_ if kind == 1 else None   # (the label walk: its label against the signal's)
+                            out.append((e_, kind, a))
             for _, p in (self.walks[0][1][:2] if self.walks else []):   # hop 2: what the nearest places relate to
                 y = self.entry(p)
                 if float(y.R.norm()) < .3:
@@ -1371,7 +1385,7 @@ class FM:
         salience; returns (nodes, hops, salience, all logits)"""
         net = self.bank.interp
         ab = sg.about[0].L if sg.about[0].L is not None else None
-        lg = self.filt(self.bank.key(actor), self.bank.program(actor), q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C],
+        lg = self.filt(self.bank.key(actor), self.bank.program(actor), q, sg.sign, 0., [(n.B, n.L, k, a, n.near) for n, k, a in C],
                        about=ab.detach() if ab is not None and ab.shape == q.shape else None)
         score = lg + torch.randn_like(lg) * explore if explore else lg
         first = [i for i, (n, k, _) in enumerate(C) if k == 0 or i in keep]
@@ -1417,7 +1431,7 @@ class FM:
         #                                                words land in memory or the workspace, a program in a function
         #                                                (fm18c trace: 289 of 297 statements went into a function: memory 0)
         take = [i in pick for i in range(len(C))]
-        rec = {"actor": actor, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a_) for n, k, a_ in C], "take": take,
+        rec = {"actor": actor, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a_, n.near) for n, k, a_ in C], "take": take,
                "ins": ins, "hops": hops, "sign": sg.sign,
                "walkq": sg.about[0].L.detach().float().cpu().numpy() if sg.about[0].L is not None else None,
                "aboutL": sg.about[0].L.detach() if sg.about[0].L is not None else None}
