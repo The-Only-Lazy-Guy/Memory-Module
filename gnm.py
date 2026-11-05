@@ -1221,13 +1221,15 @@ class Filter(nn.Module):
         #                                                     relation walk brought, 2 a function, 4 two hops away
         self.age = nn.Parameter(torch.randn(8, c) * .02)    # how many entries back in its place
         self.cand = nn.Sequential(nn.Linear(c + d, c), nn.GELU(), nn.Linear(c, c))
-        self.qry = nn.Sequential(nn.Linear(2 * d + 2 + c, c), nn.GELU(), nn.Linear(c, c))
+        self.qry = nn.Sequential(nn.Linear(3 * d + 2 + c, c), nn.GELU(), nn.Linear(c, c))   # + what the signal is about
         self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 512, batch_first=True, activation="gelu"), 2)
         self.o = nn.Linear(c, 1)
 
-    def forward(self, key, code, q, sign, strength, cands):
+    def forward(self, key, code, q, sign, strength, cands, about=None):
+        """about: the label of the node the signal is about (fm23 trace: the want, clustered by purpose, does not say WHICH
+        fact a lookup asks for -- the right fact scored +.9, others about the same subject +1.0)"""
         s = torch.tensor([sign, strength], dtype=q.dtype, device=q.device)
-        qv = self.qry(torch.cat([key, q, s, code.mean(0)]))
+        qv = self.qry(torch.cat([key, q, s, code.mean(0), about if about is not None else torch.zeros_like(q)]))
         cv = torch.stack([self.cand(torch.cat([B.mean(0), L])) + self.kind[k] + self.age[min(a, 7)] for B, L, k, a in cands])
         return self.o(self.f(torch.cat([qv[None], cv])[None])[0, 1:]).squeeze(-1)
 
@@ -1357,7 +1359,9 @@ class FM:
         """what the acting node takes in: the signal's nodes and the most salient of the rest (up to R), each with its
         salience; returns (nodes, hops, salience, all logits)"""
         net = self.bank.interp
-        lg = self.filt(self.bank.key(actor), self.bank.program(actor), q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C])
+        ab = sg.about[0].L if sg.about[0].L is not None else None
+        lg = self.filt(self.bank.key(actor), self.bank.program(actor), q, sg.sign, 0., [(n.B, n.L, k, a) for n, k, a in C],
+                       about=ab.detach() if ab is not None and ab.shape == q.shape else None)
         score = lg + torch.randn_like(lg) * explore if explore else lg
         first = [i for i, (n, k, _) in enumerate(C) if k == 0 or i in keep]
         rest = [i for i in sorted(range(len(C)), key=lambda i: -float(score[i])) if i not in first]
@@ -1404,7 +1408,8 @@ class FM:
         take = [i in pick for i in range(len(C))]
         rec = {"actor": actor, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a_) for n, k, a_ in C], "take": take,
                "ins": ins, "hops": hops, "sign": sg.sign,
-               "walkq": sg.about[0].L.detach().float().cpu().numpy() if sg.about[0].L is not None else None}
+               "walkq": sg.about[0].L.detach().float().cpu().numpy() if sg.about[0].L is not None else None,
+               "aboutL": sg.about[0].L.detach() if sg.about[0].L is not None else None}
         self.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
         calc = self.bank.calc_of(actor)
         if calc is not None and self.calc_on:          # the calculator: its own body answers; its mimic is checked
@@ -2304,7 +2309,8 @@ def imitate(fm, recs):
             continue
         q = fm.bank.want([r["about"]], [r["sign"]])[0]
         loss = loss + F.relu(1.1 - fm.bank.gate(q[None], [a])[0, 0])
-        lg = fm.filt(fm.bank.key(a).detach(), fm.bank.program(a).detach(), q.detach(), r["sign"], 0., r["C"])   # (codes change in place as it lives)
+        lg = fm.filt(fm.bank.key(a).detach(), fm.bank.program(a).detach(), q.detach(), r["sign"], 0., r["C"],
+                     about=r.get("aboutL"))   # (codes change in place as it lives)
         loss = loss + F.binary_cross_entropy_with_logits(lg, torch.tensor(r["take"], dtype=torch.float, device=lg.device))
     return loss / max(1, len(recs))
 
@@ -3059,7 +3065,7 @@ if __name__ == "__main__":
     P.add_argument("--qb", type=int, default=4, help="questions per step")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
-    P.add_argument("--sal_sup", type=float, default=.3, help="weight of the teacher's hint on what is salient")
+    P.add_argument("--sal_sup", type=float, default=1., help="weight of the teacher's hint on what is salient")
     P.add_argument("--exact", type=float, default=.3, help="decode loss under which an output counts as said exactly (labels)")
     P.add_argument("--mse", type=float, default=1., help="weight of a made piece's latents against the encoder's for those words")
     P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
