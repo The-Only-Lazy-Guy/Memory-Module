@@ -1,0 +1,135 @@
+Thu Nov  5 14:43:42 2026    /marimo/out/prof2.out
+
+         116943964 function calls (104721243 primitive calls) in 360.341 seconds
+
+   Ordered by: cumulative time
+   List reduced from 17938 to 70 due to restriction <70>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+3326/1735    0.061    0.000  260.546    0.150 /usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py:120(decorate_context)
+        2    0.237    0.118  247.779  123.889 gnm.py:2226(evaluate)
+3563556/323343    3.622    0.000  238.514    0.001 /usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py:1775(_wrapped_call_impl)
+3563556/323343    6.167    0.000  238.058    0.001 /usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py:1783(_call_impl)
+      328    0.005    0.000  226.990    0.692 gnm.py:1561(ask)
+     9558    7.795    0.001  210.074    0.022 gnm.py:1401(fire)
+      978    0.449    0.000  208.867    0.214 gnm.py:1544(run)
+     9427    0.509    0.000   95.290    0.010 gnm.py:1171(run)
+     9427   47.051    0.005   86.077    0.009 gnm.py:805(forward)
+    12957    0.160    0.000   62.319    0.005 /usr/local/lib/python3.13/site-packages/transformers/utils/generic.py:978(wrapper)
+    12957    0.185    0.000   61.822    0.005 /usr/local/lib/python3.13/site-packages/transformers/utils/output_capturing.py:231(wrapper)
+    12957    0.821    0.000   61.137    0.005 /usr/local/lib/python3.13/site-packages/transformers/models/gpt2/modeling_gpt2.py:512(forward)
+    41771    1.043    0.000   57.003    0.001 /usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:407(forward)
+   155484    0.241    0.000   54.205    0.000 /usr/local/lib/python3.13/site-packages/transformers/modeling_layers.py:76(__call__)
+   155484    2.851    0.000   53.097    0.000 /usr/local/lib/python3.13/site-packages/transformers/models/gpt2/modeling_gpt2.py:262(forward)
+    21659    1.610    0.000   50.714    0.002 gnm.py:731(forward)
+   111823    2.563    0.000   49.875    0.000 /usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:799(forward)
+      376    0.005    0.000   39.059    0.104 gnm.py:1322(say)
+      376    0.579    0.002   39.016    0.104 gnm.py:666(decode)
+      544    0.696    0.001   38.955    0.072 gnm.py:1775(run_step)
+   100771   33.926    0.000   33.926    0.000 {built-in method torch._transformer_encoder_layer_fwd}
+       48    0.117    0.002   32.756    0.682 gnm.py:2018(demo_question)
+    11457    0.517    0.000   30.236    0.003 gnm.py:763(forward)
+       80    0.808    0.010   28.861    0.361 gnm.py:2891(update)
+      602    0.006    0.000   28.813    0.048 gnm.py:1556(arrive)
+    10202    0.256    0.000   28.046    0.003 gnm.py:1130(want)
+     9387    0.522    0.000   26.935    0.003 gnm.py:1369(perceive)
+     8843    1.034    0.000   26.107    0.003 gnm.py:1487(write)
+     8871    0.073    0.000   25.042    0.003 gnm.py:1292(node)
+   155484    2.293    0.000   24.902    0.000 /usr/local/lib/python3.13/site-packages/transformers/models/gpt2/modeling_gpt2.py:144(forward)
+       75    0.002    0.000   23.574    0.314 /usr/local/lib/python3.13/site-packages/torch/_tensor.py:576(backward)
+       75    0.002    0.000   22.708    0.303 /usr/local/lib/python3.13/site-packages/torch/autograd/__init__.py:253(backward)
+       75    0.001    0.000   22.701    0.303 /usr/local/lib/python3.13/site-packages/torch/autograd/graph.py:860(_engine_run_backward)
+       75   22.700    0.303   22.700    0.303 {method 'run_backward' of 'torch._C._EngineBase' objects}
+     9387    3.678    0.000   21.842    0.002 gnm.py:1231(forward)
+   155484    0.696    0.000   18.844    0.000 /usr/local/lib/python3.13/site-packages/transformers/models/gpt2/modeling_gpt2.py:238(forward)
+     1836    0.495    0.000   17.827    0.010 gnm.py:1280(nodes)
+     2605    1.561    0.001   17.821    0.007 gnm.py:640(content)
+   860645    0.738    0.000   13.615    0.000 /usr/local/lib/python3.13/site-packages/torch/nn/modules/linear.py:130(forward)
+   621936    1.753    0.000   12.976    0.000 /usr/local/lib/python3.13/site-packages/transformers/pytorch_utils.py:119(forward)
+   882749   12.929    0.000   12.929    0.000 {built-in method torch._C._nn.linear}
+205291/205289   12.688    0.000   12.688    0.000 {built-in method torch.tensor}
+   246513    0.760    0.000   11.254    0.000 /usr/local/lib/python3.13/site-packages/torch/nn/modules/container.py:248(forward)
+      108    0.041    0.000   11.205    0.104 gnm.py:2043(demo_statement)
+      584    0.302    0.001   10.970    0.019 gnm.py:1053(say_loss)
+    10025    8.169    0.001   10.616    0.001 gnm.py:970(assemble)
+     9558    5.730    0.001   10.342    0.001 gnm.py:1383(choose)
+    56562    0.873    0.000   10.160    0.000 /usr/local/lib/python3.13/site-packages/torch/functional.py:176(einsum)
+        8    0.010    0.001    9.891    1.236 gnm.py:2329(free_question)
+    10102    0.623    0.000    9.780    0.001 gnm.py:1327(cands)
+   155484    6.772    0.000    9.101    0.000 /usr/local/lib/python3.13/site-packages/transformers/activations.py:65(forward)
+     1686    0.055    0.000    9.022    0.005 gnm.py:613(read)
+   159655    2.138    0.000    8.140    0.000 gnm.py:1157(action)
+   621936    7.729    0.000    7.729    0.000 {built-in method torch.addmm}
+   591682    0.922    0.000    7.555    0.000 /usr/local/lib/python3.13/site-packages/torch/nn/functional.py:2914(layer_norm)
+     1124    0.084    0.000    7.420    0.007 gnm.py:606(encode)
+      562    0.229    0.000    7.154    0.013 gnm.py:624(relation)
+ 17789252    6.954    0.000    6.954    0.000 /usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py:1955(__getattr__)
+   591682    6.224    0.000    6.224    0.000 {built-in method torch.layer_norm}
+    28281    1.204    0.000    6.184    0.000 /usr/local/lib/python3.13/site-packages/opt_einsum/contract.py:170(contract_path)
+   172406    0.521    0.000    5.999    0.000 gnm.py:1305(fnode)
+     9789    0.418    0.000    5.986    0.001 gnm.py:757(reread)
+71400/71317    5.732    0.000    5.762    0.000 {method 'to' of 'torch._C.TensorBase' objects}
+      778    0.117    0.000    5.711    0.007 gnm.py:654(decode_loss)
+   643741    5.565    0.000    5.565    0.000 {built-in method torch.cat}
+    19411    5.315    0.000    5.317    0.000 {built-in method torch._nested_tensor_from_mask}
+   116271    0.227    0.000    5.195    0.000 {built-in method builtins.sum}
+       12    0.001    0.000    5.032    0.419 /usr/local/lib/python3.13/site-packages/torch/_jit_internal.py:1046(_overload)
+   350320    0.347    0.000    4.971    0.000 /usr/local/lib/python3.13/site-packages/torch/nn/modules/normalization.py:228(forward)
+   159655    0.832    0.000    4.898    0.000 gnm.py:800(action_of)
+
+
+Thu Nov  5 14:43:42 2026    /marimo/out/prof2.out
+
+         116943964 function calls (104721243 primitive calls) in 360.341 seconds
+
+   Ordered by: internal time
+   List reduced from 17938 to 45 due to restriction <45>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+     9427   47.051    0.005   86.077    0.009 gnm.py:805(forward)
+   100771   33.926    0.000   33.926    0.000 {built-in method torch._transformer_encoder_layer_fwd}
+       75   22.700    0.303   22.700    0.303 {method 'run_backward' of 'torch._C._EngineBase' objects}
+   882749   12.929    0.000   12.929    0.000 {built-in method torch._C._nn.linear}
+205291/205289   12.688    0.000   12.688    0.000 {built-in method torch.tensor}
+    10025    8.169    0.001   10.616    0.001 gnm.py:970(assemble)
+     9558    7.795    0.001  210.074    0.022 gnm.py:1401(fire)
+   621936    7.729    0.000    7.729    0.000 {built-in method torch.addmm}
+ 17789252    6.954    0.000    6.954    0.000 /usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py:1955(__getattr__)
+   155484    6.772    0.000    9.101    0.000 /usr/local/lib/python3.13/site-packages/transformers/activations.py:65(forward)
+   591682    6.224    0.000    6.224    0.000 {built-in method torch.layer_norm}
+3563556/323343    6.167    0.000  238.058    0.001 /usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py:1783(_call_impl)
+71400/71317    5.732    0.000    5.762    0.000 {method 'to' of 'torch._C.TensorBase' objects}
+     9558    5.730    0.001   10.342    0.001 gnm.py:1383(choose)
+   643741    5.565    0.000    5.565    0.000 {built-in method torch.cat}
+    19411    5.315    0.000    5.317    0.000 {built-in method torch._nested_tensor_from_mask}
+    19411    4.776    0.000    4.776    0.000 {built-in method torch._nested_tensor_from_mask_left_aligned}
+   546356    4.098    0.000    4.098    0.000 {method 'mean' of 'torch._C.TensorBase' objects}
+  2038708    4.081    0.000    4.081    0.000 {method 'view' of 'torch._C.TensorBase' objects}
+     9387    3.678    0.000   21.842    0.002 gnm.py:1231(forward)
+3563556/323343    3.622    0.000  238.514    0.001 /usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py:1775(_wrapped_call_impl)
+   159655    3.602    0.000    3.602    0.000 gnm.py:817(<genexpr>)
+    19411    3.484    0.000    3.484    0.000 {method 'to_padded_tensor' of 'torch._C.TensorBase' objects}
+   177840    3.330    0.000    3.330    0.000 gnm.py:1378(<lambda>)
+      128    3.060    0.024    3.081    0.024 /usr/local/lib/python3.13/site-packages/torch/_library/custom_ops.py:607(_register_to_dispatcher)
+   166536    3.037    0.000    3.037    0.000 {built-in method torch._C._nn.scaled_dot_product_attention}
+    56562    2.859    0.000    2.859    0.000 {built-in method torch.einsum}
+   155484    2.851    0.000   53.097    0.000 /usr/local/lib/python3.13/site-packages/transformers/models/gpt2/modeling_gpt2.py:262(forward)
+   111823    2.563    0.000   49.875    0.000 /usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:799(forward)
+     8835    2.532    0.000    2.532    0.000 {method 'tolist' of 'torch._C.TensorBase' objects}
+   155484    2.293    0.000   24.902    0.000 /usr/local/lib/python3.13/site-packages/transformers/models/gpt2/modeling_gpt2.py:144(forward)
+   159655    2.138    0.000    8.140    0.000 gnm.py:1157(action)
+    12957    2.046    0.000    2.731    0.000 /usr/local/lib/python3.13/site-packages/transformers/masking_utils.py:235(_ignore_causal_mask_sdpa)
+    10358    1.975    0.000    1.975    0.000 {method 'cpu' of 'torch._C.TensorBase' objects}
+1812534/1086854    1.925    0.000    2.633    0.000 /usr/local/lib/python3.13/site-packages/transformers/integrations/heterogeneity/configuration_utils.py:259(__getattribute__)
+    44890    1.877    0.000    2.379    0.000 {built-in method posix.stat}
+3243291/1157706    1.874    0.000    2.241    0.000 /usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py:2837(named_modules)
+   257565    1.785    0.000    1.785    0.000 {built-in method torch._C._nn.gelu}
+   621936    1.753    0.000   12.976    0.000 /usr/local/lib/python3.13/site-packages/transformers/pytorch_utils.py:119(forward)
+    21659    1.610    0.000   50.714    0.002 gnm.py:731(forward)
+  4391719    1.576    0.000    1.576    0.000 {built-in method torch._C._get_tracing_state}
+     2605    1.561    0.001   17.821    0.007 gnm.py:640(content)
+8678282/7139645    1.488    0.000    3.535    0.000 {built-in method builtins.len}
+    87778    1.443    0.000    1.443    0.000 {built-in method torch.stack}
+   155484    1.389    0.000    1.389    0.000 {built-in method torch.pow}
+
+
