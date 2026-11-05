@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import pstats; s=pstats.Stats('/marimo/out/prof.out'); s.sort_stats('cumulative').print_stats(70); s.sort_stats('tottime').print_stats(45)
+                     ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/pstats.py", line 115, in __init__
+    self.init(arg)
+    ~~~~~~~~~^^^^^
+  File "/usr/local/lib/python3.13/pstats.py", line 129, in init
+    self.load_stats(arg)
+    ~~~~~~~~~~~~~~~^^^^^
+  File "/usr/local/lib/python3.13/pstats.py", line 142, in load_stats
+    with open(arg, 'rb') as f:
+         ~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/marimo/out/prof.out'
