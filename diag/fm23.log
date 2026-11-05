@@ -1,0 +1,39 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4349.72it/s]
+/marimo/frozen/fm23/gnm.py:2178: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f}", flush=True)
+codec 100: label cos 0.249 relation err 0.0008
+codec 200: label cos 0.536 relation err 0.0007
+codec 300: label cos 0.607 relation err 0.0001
+codec 400: label cos 0.745 relation err 0.0003
+codec 500: label cos 0.732 relation err 0.0005
+codec 600: label cos 0.774 relation err 0.0007
+codec 700: label cos 0.782 relation err 0.0012
+codec 800: label cos 0.799 relation err 0.0012
+codec 900: label cos 0.833 relation err 0.0006
+codec 1000: label cos 0.820 relation err 0.0002
+codec 1100: label cos 0.831 relation err 0.0012
+codec 1200: label cos 0.852 relation err 0.0005
+codec 1300: label cos 0.862 relation err 0.0000
+codec 1400: label cos 0.888 relation err 0.0006
+codec 1500: label cos 0.851 relation err 0.0004
+step 1: stage skills
+step 1: the store skill gets its node -> function 5
+step 1: the split skill gets its node -> function 6
+step 1: the lookup skill gets its node -> function 7
+step 1: the fill skill gets its node -> function 8
+step 1: the operands skill gets its node -> function 9
+step 1: the inc skill gets its node -> function 10
+step 1: the fedit skill gets its node -> function 11
+step 1: the fnew skill gets its node -> function 12
+step 3: the fix skill gets its node -> function 13
+step 6: the before skill gets its node -> function 14
+step 9: the both skill gets its node -> function 15
+step 12: the copy skill gets its node -> function 16
+step 50 loss 273.28 (functions per demo step 5.67, 295 updates, 0 targets not made of pieces) [route hint 4.28, salience hint 6.88, label of what it made 3.37, functions 221.30, labels 5.91, check 5.54, relation 8.50, apart 15.84, asks nothing 0.01, round trip 0.11, round trip (pieces) 0.70, re-read 0.85] made nodes that act 17 | who acts: by assigned 2051,  function 2051 | exact: add 0/64, before 4/35, both 0/31, copy 0/10, fill 93/382, fix 0/28, inc 0/50, lookup 34/269, max 4/25, min 6/35, operands 116/286, split 200/382, store 322/478, sub 0/19 | inputs the walk brought: add 192/192, before 131/131, both 98/98, copy 20/20, fedit 100/100, fill 764/764, fix 274/274, fnew 100/100, inc 100/100, lookup 537/538, max 75/75, min 105/105, operands 143/143, split 382/382, store 690/703, sub 57/57 | free questions right 0/0 (0.0 firings, 0 fixed by a try) | functions written 3505 (writer step [0.000203, 0.000205, 0.000205, 0.000201], gain [0.00099, 0.00101, 0.00101, 0.001]) | stage skills, routing reaches the skill's node 1614/2051 | 398s
+step 51: stage route
+step 100 loss 328.47 (functions per demo step 6.35, 300 updates, 2 targets not made of pieces) [route hint 9.21, salience hint 6.87, relation 24.20, label of what it made 4.39, functions 241.29, labels 7.24, check 17.03, apart 16.82, asks nothing 0.00, round trip 0.01, round trip (pieces) 0.55, re-read 0.84] made nodes that act 17 | who acts: by nearest 507, by routed 1496, by tried 199,  function 1992,  read node 210 | exact: add 1/62, before 2/37, both 0/33, copy 0/19, fill 157/423, fix 5/28, inc 0/50, lookup 43/290, max 7/28, min 6/33, operands 217/326, split 246/425, store 325/469, sub 0/40 | inputs the walk brought: add 186/186, before 143/143, both 102/106, copy 38/38, fedit 100/100, fill 850/850, fix 338/338, fnew 100/100, inc 100/100, lookup 580/580, max 84/84, min 99/99, operands 163/163, split 425/425, store 880/934, sub 120/120 | free questions right 0/0 (0.0 firings, 0 fixed by a try) | functions written 3740 (writer step [0.000207, 0.000213, 0.000213, 0.000202], gain [0.00099, 0.00103, 0.00104, 0.00101]) | stage route, routing reaches the skill's node 2033/2202 | 842s
+step 101: stage free
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
