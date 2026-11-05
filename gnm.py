@@ -883,7 +883,7 @@ class FnNode(nn.Module):
         """a weight as it is now: committed plus the pending change (which carries the writer's graph: the next use's
         loss judges the change, and trains the writer)"""
         x = getattr(self, name)
-        return x + self.pend[name] if self.pend is not None else x
+        return x + self.pend[name] if self.pend is not None and name in self.pend else x
 
 
 class UpdateWriter(nn.Module):
@@ -944,7 +944,7 @@ def write_fns(fm):
     function that acted (its weights got a gradient) gets a new change from the writer, judged by its next use"""
     for f in fm.bank.fns:
         ps = (f.code, f.au, f.av, f.key)
-        grads = [x.grad for x in ps]
+        grads = [x.grad for x in ps[:3]] + [None]      # the key is Adam's (routing)
         commit(f)
         if any(g is not None for g in grads):
             gr = [torch.zeros_like(x) if g is None else g.detach() for x, g in zip(ps, grads)]
@@ -953,9 +953,9 @@ def write_fns(fm):
                     v = f.v.get(k)                                  # the whole function left the key's step tiny -- the
                     f.v[k] = g * g if v is None else .99 * v + .01 * g * g   # keys never moved, nothing fired living)
                 gr = [g / (f.v[k].sqrt() + 1e-8) for k, g in zip(("code", "au", "av", "key"), gr)]
-                f.pend = fm.bank.writer(f, gr)
+                f.pend = {k: x for k, x in fm.bank.writer(f, gr).items() if k != "key"}
                 fm.count("functions written")
-        for x in ps:
+        for x in ps[:3]:
             x.grad = None
 
 
@@ -1476,7 +1476,7 @@ class FM:
             if x.kind == "fn" and isfn:                # an edited function: its code is now this
                 with torch.no_grad():
                     f_ = self.bank.fns[x.fn]                # (as it is now = z: the pending part stays)
-                    f_.code.copy_(z - f_.pend["code"].detach() if f_.pend is not None else z)
+                    f_.code.copy_(z - f_.pend["code"].detach() if f_.pend is not None and "code" in f_.pend else z)
                 self.count("edits")
             elif x.kind == "fn":                       # words aimed at a function: a program is not words (fm18c: 270 of
                 self.count("words aimed at a function")   # 346 statements overwrote a function) -> a new node
@@ -2855,7 +2855,8 @@ def run_fm(A):
         load_fm(fm, A.load)
     else:
         train_codec(fm, A, rng, torch.optim.AdamW(fm.heads.parameters(), lr=A.lr))
-    fnp = lambda: {id(p) for f in fm.bank.fns for p in (f.code, f.au, f.av, f.key)}
+    fnp = lambda: {id(p) for f in fm.bank.fns for p in (f.code, f.au, f.av)}   # (the keys stay on Adam: fm22, the
+    #                                                writer's keys never cleared the gate living -- 268/268 statements rested)
     own = lambda: [p for mod in (fm.bank, fm.heads, fm.filt, fm.critic) for p in mod.parameters()
                    if not (A.writer and id(p) in fnp())]   # functions' own weights: the update writer's (--writer)
     params = lambda: own() + tr_params(tr)
