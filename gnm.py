@@ -1721,9 +1721,10 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         if at is not None:
             fm.count("routing reaches the skill's node", int(int(s_all[:len(C)].argmax()) == at if at < len(s_all) else 0))
             fm.count("routing checked")
-            if fm.stage in ("skills", "route"):        # stage 1-2 (light): the want meets that node's label
-                g_ = bank.gate(q[None], [n for n, _, _ in C])[0]
-                Ls.add("route hint", F.cross_entropy((g_ / .1)[None], torch.tensor([at], device=g_.device)) * .5)
+            g_ = bank.gate(q[None], [n for n, _, _ in C])[0]   # light: the want meets that node's label (stage 1-2
+            Ls.add("route hint", F.cross_entropy((g_ / .1)[None], torch.tensor([at], device=g_.device)) *   # .5; after
+                   (.5 if fm.stage in ("skills", "route") else .1))    # .1: fm20, without it routing reached the skill's
+            #                                                            node 68/2240 and read nodes did 558 of 618 firings
     rd = [i for i, (n, _, _) in enumerate(C) if n.kind != "fn"]
     if how not in ("new", "assigned") and actor.kind == "fn" and rd and not fm.frozen and random.random() < A.try_read:
         a = max(rd, key=lambda i: float(s_all[i]))     # now and then the read node nearest the want tries (a rule
@@ -1795,7 +1796,9 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     S, m = bank.gate(q[None], [actor])[0, 0], .1       # the label: pushed off a purpose it does not do exactly while it
     fk = (who(fm, actor), purpose)                     # does another one well; else pulled
     fm.fit[fk] = .9 * fm.fit.get(fk, 0.) + .1 * float(exact)
-    push = not exact and how != "assigned" and (how == "tried" or specialized(fm, actor, purpose))
+    push = not exact and how != "assigned" and (actor.kind != "fn" or how == "tried" or specialized(fm, actor, purpose))
+    #        (a read node that acted and missed is pushed off this want, whatever the stage: fm20, read nodes out-bid
+    #        the skills' nodes, being pulled when a statement stored itself and seldom pushed)
     Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(1 + m - S))
     if exact and len(C) > 1:                           # it was right: among every node near the want, its label is the
         g_all = bank.gate(q[None], [n for n, _, _ in C])[0]    # one the want meets (all the others' move too)
