@@ -1057,8 +1057,12 @@ def say_loss(fm, A, net, o, j, target, order, prefer=None):
     for spelled in dict.fromkeys([D(target), " " + D(target).lstrip()]):   # as written, or as it reads inside a
         tid_ = fm.tr.tok(spelled)["input_ids"]                             # sentence: the one more of it is copied in
         plan_ = plan_pieces(tid_, ins_t, net.S, net.G, prefer)
-        if plan_ is not None:                                              # (more copied; then fewer pieces:
-            copied = (sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span"), -len(plan_))   # 'the' from an
+        if plan_ is not None:                                              # (more copied FROM THE INPUTS IT SHOULD
+            offs = np.cumsum([0] + [n for n, _ in ins_t])                  # READ (tr21: split's target came from a fact,
+            own_in = lambda a: prefer is None or int(np.searchsorted(offs, a, side="right") - 1) in set(prefer)  # the
+            copied = (sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span" and own_in(pc[1])),   # question's own
+                      sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span"), -len(plan_))   # ' the ...' was marked
+            #                                                                 wrong); then more copied, fewer pieces: 'the' from an
             if best is None or copied > best[0]:                           # unrelated fact + ' offer of Thasa'
                 best = (copied, spelled, tid_, plan_)                      # tied ' the offer of Thasa', inspection)
     if best is None:
@@ -1865,7 +1869,8 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             if fm.capture is not None or fm.trace:
                 with torch.no_grad():
                     own, pcs = assemble(net, o, j)
-                    told_ = (fm.say(Node(z, None, None)), fm.say(Node(own, None, None)))
+                    told_ = (fm.say(Node(z, None, None)), fm.say(Node(fm.heads.reread(own), None, None)))   # (read again,
+                    #                                                      as when it lives)
                 if fm.capture is not None:             # --codec_check: what it says, with the target's pieces and its own
                     fm.capture.append((purpose, D(target), told_[0], told_[1], dl, len(pcs), len(plan), fm.name(actor)[:30]))
                 if fm.trace:
