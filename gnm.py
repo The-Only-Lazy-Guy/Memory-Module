@@ -1172,7 +1172,8 @@ class FM:
         self.stats, self.firings, self.show, self.capture, self.said, self.trace, self.walks = {}, [], False, None, [], False, []
         self.fit = {}                                  # (function, purpose) -> how often it did that exactly (labels)
         self.calc_on, self.news = True, []             # the calculator's own body answers (False: removed, its mimic does)
-        self.made, self.frozen, self.tune = False, False, .1          # a node that acts was made (the optimizer takes it in); frozen:
+        self.made, self.frozen, self.tune = False, False, .1
+        self.stage, self.assign = "free", {}           # the training stage; purpose -> the node that learned it          # a node that acts was made (the optimizer takes it in); frozen:
         #                                                no new one (checks)
 
     def count(self, k, n=1):
@@ -1682,6 +1683,18 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     s_all = bank.gate(q[None], [n for n, _, _ in C])[0]
     a = int(s_all.argmax())
     actor, how = C[a][0], "routed" if float(s_all[a]) > 1 else "nearest"
+    if fm.stage == "skills" and not fm.frozen:         # stage 1: the skill's own node does it (a calculator its own
+        t = fm.assign.get(purpose)                     # operation; else one made for the purpose, the first time)
+        if t is None:
+            t = next((i for i, f in enumerate(bank.fns) if f.calc == purpose), None)
+            if t is None:
+                t = bank.make(q.detach(), scope=A.scope)
+                fm.made = True
+                print(f"step {st['step']}: the {purpose} skill gets its node -> function {t}", flush=True)
+            fm.assign[purpose] = t
+        actor, how = fm.fnode(t), "assigned"
+        if not any(n.kind == "fn" and n.fn == t for n, _, _ in C):
+            C.append((actor, 2, 0))
     free = [i for i, (n, _, _) in enumerate(C) if n.kind == "fn" and not specialized(fm, n, purpose)] if how == "nearest" else []
     if free:                                           # none meets the want: the nearest node not doing another purpose
         a = max(free, key=lambda i: float(s_all[i]))   # (fm17: making one whenever the nearest was busy made a node per
@@ -1693,8 +1706,16 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
               f"-> made function {t}", flush=True)
         actor = fm.fnode(t)
         C.append((actor, 2, 0))
+    if purpose in fm.assign and fm.assign[purpose] < len(bank.fns):   # does routing reach the skill's node
+        at = next((i for i, (n, _, _) in enumerate(C) if n.kind == "fn" and n.fn == fm.assign[purpose]), None)
+        if at is not None:
+            fm.count("routing reaches the skill's node", int(int(s_all[:len(C)].argmax()) == at if at < len(s_all) else 0))
+            fm.count("routing checked")
+            if fm.stage in ("skills", "route"):        # stage 1-2 (light): the want meets that node's label
+                g_ = bank.gate(q[None], [n for n, _, _ in C])[0]
+                Ls.add("route hint", F.cross_entropy((g_ / .1)[None], torch.tensor([at], device=g_.device)) * .5)
     rd = [i for i, (n, _, _) in enumerate(C) if n.kind != "fn"]
-    if how != "new" and actor.kind == "fn" and rd and not fm.frozen and random.random() < A.try_read:
+    if how not in ("new", "assigned") and actor.kind == "fn" and rd and not fm.frozen and random.random() < A.try_read:
         a = max(rd, key=lambda i: float(s_all[i]))     # now and then the read node nearest the want tries (a rule
         actor, how = C[a][0], "tried"                  # read as a program): its label learns from how it turns out
     fm.count(f"acts by {how}"), fm.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
@@ -1764,7 +1785,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     S, m = bank.gate(q[None], [actor])[0, 0], .1       # the label: pushed off a purpose it does not do exactly while it
     fk = (who(fm, actor), purpose)                     # does another one well; else pulled
     fm.fit[fk] = .9 * fm.fit.get(fk, 0.) + .1 * float(exact)
-    push = not exact and (how == "tried" or specialized(fm, actor, purpose))
+    push = not exact and how != "assigned" and (how == "tried" or specialized(fm, actor, purpose))
     Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(1 + m - S))
     if exact and len(C) > 1:                           # it was right: among every node near the want, its label is the
         g_all = bank.gate(q[None], [n for n, _, _ in C])[0]    # one the want meets (all the others' move too)
@@ -1979,6 +2000,8 @@ def demo_functions(fm, Ls, A, st, rng):
 @torch.no_grad()
 def inc_fn(fm):
     """the made node (not a calculator) an add-one want meets most, or None"""
+    if fm.assign.get("inc") is not None and fm.assign["inc"] < len(fm.bank.fns):
+        return fm.assign["inc"]                        # the add-one skill's node
     made = [t for t, f in enumerate(fm.bank.fns) if f.calc is None]
     if not made:
         return None
@@ -2678,6 +2701,10 @@ def run_fm(A):
             T = Teacher(w)
             fm.g = Graph(fm.bank.d)
         acc, seen, n0 = {}, [], fm.stats.get("steps run", 0)
+        stage = "skills" if step <= A.skill else "route" if step <= A.skill + A.route else "free"
+        if stage != fm.stage or step == 1:
+            print(f"step {step}: stage {stage}", flush=True)
+        fm.stage = stage
         Ls = Lesson()                                  # the statements: one update
         for d in world_step(w, rng):
             o = d()
@@ -2695,7 +2722,7 @@ def run_fm(A):
                 seen.append(ask_text(E))
                 finish(fm, Ls, rng, recent)
                 update(Ls, acc)
-        for _ in range(A.free):                        # questions it answers by itself: one update each
+        for _ in range(A.free if fm.stage == "free" else 0):   # questions it answers by itself: one update each
             Ls = Lesson()
             Ls.add("free question", free_question(fm, A, w, rng))
             update(Ls, acc)
@@ -2731,7 +2758,8 @@ def run_fm(A):
                       f"{k[:-3]} {fm.stats.get(k[:-3] + ' walked', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" in")) +
                   f" | free questions right {fm.stats.get('free right', 0)}/{fm.stats.get('free questions', 0)} "
                   f"({fm.stats.get('free firings', 0) / max(1, fm.stats.get('free questions', 0)):.1f} firings, "
-                  f"{fm.stats.get('free fixed by a try', 0)} fixed by a try) | {time.time() - t0:.0f}s", flush=True)
+                  f"{fm.stats.get('free fixed by a try', 0)} fixed by a try) | stage {fm.stage}, routing reaches the skill's node "
+                  f"{fm.stats.get('routing reaches the skill' + chr(39) + 's node', 0)}/{fm.stats.get('routing checked', 0)} | {time.time() - t0:.0f}s", flush=True)
             fm.stats = {}
         if step % A.every == 0 or step == A.steps:
             for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
@@ -2802,6 +2830,8 @@ if __name__ == "__main__":
     P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
     P.add_argument("--own", type=int, default=600, help="after this step the demo memory holds what the store itself wrote")
     P.add_argument("--scope", type=float, default=.9)
+    P.add_argument("--skill", type=int, default=50, help="steps of stage 1: the teacher says which node does a purpose")
+    P.add_argument("--route", type=int, default=50, help="steps of stage 2: routing chooses, a light hint toward that node")
     P.add_argument("--free", type=int, default=2, help="questions per step it answers by itself (truth after)")
     P.add_argument("--tune", type=float, default=.1, help="how far a place's access key moves per use")
     P.add_argument("--try_read", type=float, default=.1, help="share of demo steps where the read node nearest the want acts instead")
