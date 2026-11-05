@@ -815,11 +815,14 @@ class Interpreter(nn.Module):
         acts = list(acts)[:len(toks)] if acts is not None else [self.action_of(z) for z in toks]
         h = torch.cat(parts)
         total = 1 + sum(float(sv) for sv in sal)
+        if acts:                                       # the inputs' actions, stacked: (N, c, r) and their salience
+            Us, Vs = torch.stack([u for u, _ in acts]), torch.stack([v_ for _, v_ in acts])
+            ws = torch.stack([torch.as_tensor(sv, dtype=h.dtype, device=dev).reshape(()) for sv in sal[:len(acts)]]) / total
         for li, layer in enumerate(self.layers):       # layer li reads what lies up to li hops away (and all its own)
             h = layer(h[None], src_key_padding_mask=(reach > li)[None])[0]
             d = (h @ action[0]) @ action[1].T if action is not None else 0   # the acting node's action multiplies into
-            for (U, V), sv in zip(acts, sal):          # and adds to the states; so does every input's, as much as it is
-                d = d + sv * ((h @ U) @ V.T) / total   # salient (averaged by salience)
+            if acts:                                   # and adds to the states; so does every input's, as much as it
+                d = d + torch.einsum("n,ntr,ncr->tc", ws, torch.einsum("tc,ncr->ntr", h, Us), Vs)   # is salient (averaged)
             h = F.layer_norm(h + .1 * d, (c,))         # (normalized again: added unnormalized, the states grew every
             #                                            layer until the loss was 1e29 by step 32, fm12)
         a, b = self.M * self.K, self.M * self.S
@@ -1308,6 +1311,14 @@ class FM:
             return f"function {n.fn}" + (f" (calculator {c})" if c else "")
         return (f"entry {n.place}.{n.idx} " if n.kind == "entry" else "node ") + repr((n.text or self.say(n))[:40])
 
+    def text_of(self, n):
+        """what a node says: the text it was read from, its tokens when they are known (no decoding), else decoded"""
+        if n.text is not None:
+            return n.text
+        if n.toks is not None:
+            return self.tr.tok.decode(list(n.toks)).strip()
+        return self.say(n)
+
     def say(self, n):
         return self.tr.decode(n.B[None], torch.ones(1, len(n.B), dtype=torch.bool, device=self.dev))[0].strip()
 
@@ -1512,7 +1523,7 @@ class FM:
 
     def memorize(self, p, z, ins, rec, j):
         n = self.node(z)
-        if self.g.chain[p] and self.say(Node(z, None, None)) == self.say(self.entry(p)):
+        if self.g.chain[p] and self.say(Node(z, None, None)) == self.text_of(self.entry(p)):
             self.count("no change")                    # it says what the place says now: nothing new, nothing to hear
             return                                     # (a fact's label does not move with its value: said, compared)
         self.g.chain[p].append((z.detach(), self.t, None))
@@ -1739,7 +1750,7 @@ class Lesson:
 def number_of(fm, n):
     """the number a node says (decoded once, then kept on the node), or None"""
     if not hasattr(n, "_num"):
-        n._num = num(n.text) if n.text is not None else None if n.kind == "fn" else num(fm.say(n))
+        n._num = num(n.text) if n.text is not None else None if n.kind == "fn" else num(fm.text_of(n))
     return n._num
 
 
