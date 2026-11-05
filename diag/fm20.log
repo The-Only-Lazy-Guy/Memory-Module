@@ -45,3 +45,35 @@ step 350 loss 231.09 (functions per demo step 3.10, 309 updates, 1 targets not m
 step 400 loss 338.81 (functions per demo step 3.25, 312 updates, 0 targets not made of pieces) [salience hint 16.96, relation 17.75, label of what it made 5.45, functions 243.44, labels 22.98, check 11.57, apart 19.80, asks nothing 0.01, free question 0.00, round trip 0.02, round trip (pieces) 0.35, re-read 0.48] made nodes that act 17 | who acts: by nearest 164, by routed 2058, by tried 127,  function 2003,  read node 2156 | exact: add 1/67, before 5/36, both 0/30, copy 0/16, fill 272/457, fix 6/32, inc 1/50, lookup 55/313, max 15/38, min 14/35, operands 304/358, split 155/457, store 443/500, sub 1/39 | inputs the walk brought: add 201/201, before 119/127, both 102/102, copy 32/32, fedit 100/100, fill 914/914, fix 294/294, fnew 100/100, inc 100/100, lookup 623/626, max 114/114, min 105/105, operands 179/179, split 457/457, store 921/961, sub 117/117 | free questions right 1/100 (3.6 firings, 11 fixed by a try) | stage free, routing reaches the skill's node 529/2349 | 3300s
 step 411: no label meets a add want; the nearest (function 16) does another purpose -> made function 17
 step 450 loss 203.38 (functions per demo step 4.12, 312 updates, 1 targets not made of pieces) [salience hint 8.48, relation 12.97, label of what it made 1.83, functions 144.17, labels 7.46, check 9.19, apart 18.49, asks nothing 0.03, free question 0.00, round trip 0.05, round trip (pieces) 0.17, re-read 0.53] made nodes that act 18 | who acts: by nearest 139, by new 1, by routed 2193, by tried 106,  function 2124,  read node 2866 | exact: add 0/77, before 4/32, both 1/33, copy 0/13, fill 264/487, fix 6/32, inc 2/50, lookup 66/331, max 9/41, min 15/41, operands 354/394, split 172/488, store 363/478, sub 0/38 | inputs the walk brought: add 231/231, before 121/121, both 107/109, copy 26/26, fedit 100/100, fill 976/976, fix 269/269, fnew 100/100, inc 100/100, lookup 656/662, max 123/123, min 123/123, operands 197/197, split 488/488, store 1038/1096, sub 114/114 | free questions right 3/100 (5.8 firings, 9 fixed by a try) | stage free, routing reaches the skill's node 205/2439 | 3767s
+step 500 loss 217.87 (functions per demo step 3.44, 311 updates, 1 targets not made of pieces) [salience hint 6.04, label of what it made 3.40, functions 144.38, labels 19.71, check 9.28, relation 16.00, apart 18.34, asks nothing 0.00, free question 0.00, round trip 0.01, round trip (pieces) 0.20, re-read 0.51] made nodes that act 18 | who acts: by nearest 64, by routed 2056, by tried 120,  function 2494,  read node 2325 | exact: add 0/76, before 8/36, both 1/40, copy 0/9, fill 253/427, fix 2/18, inc 0/50, lookup 38/286, max 8/31, min 9/36, operands 309/346, split 174/428, store 469/499, sub 0/30 | inputs the walk brought: add 228/228, before 113/113, both 121/121, copy 18/18, fedit 100/100, fill 856/856, fix 160/160, fnew 100/100, inc 100/100, lookup 568/572, max 93/93, min 108/108, operands 173/173, split 428/428, store 734/743, sub 90/90 | free questions right 7/100 (5.4 firings, 4 fixed by a try) | stage free, routing reaches the skill's node 68/2240 | 4217s
+EVAL step 500: statements 268 [acts: read node 266, fires 266, rest 2] | answers: lookup 0/24 (2.1 firings) | before 3/24 (4.9 firings) | coexist 3/24 (5.4 firings) | chain 0/24 (3.0 firings) | ops 0/24 (2.1 firings) | long 0/24 (3.0 firings) | made nodes that act 18 | add one in place 0/32 | edited to add 3: 2/8 | edited to add 6: 1/8 | {'rest': 188, 'acts: read node': 558, 'fires': 618, 'acts: function': 60, 'no change': 5, 'budget out': 1, 'calculator': 21, 'mimic agrees': 0, 'calculator read no numbers': 2}
+EVAL step 500, calculator removed (its mimic answers): statements 268 [acts: read node 266, fires 266, rest 2] | answers: lookup 0/24 (2.1 firings) | before 3/24 (4.9 firings) | coexist 2/24 (5.4 firings) | chain 0/24 (3.0 firings) | ops 0/24 (2.1 firings) | long 0/24 (2.6 firings) | made nodes that act 18
+step 531: no label meets a fnew want; the nearest (function 17) does another purpose -> made function 18
+/pytorch/aten/src/ATen/native/cuda/TensorCompare.cu:109: _assert_async_cuda_kernel: block: [0,0,0], thread: [0,0,0] Assertion `probability tensor contains either `inf`, `nan` or element < 0` failed.
+Traceback (most recent call last):
+  File "/marimo/frozen/fm20/gnm.py", line 2848, in <module>
+    (deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/marimo/frozen/fm20/gnm.py", line 2729, in run_fm
+    Ls.add("free question", free_question(fm, A, w, rng))
+                            ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/marimo/frozen/fm20/gnm.py", line 2228, in free_question
+    got, _ = fm.ask(ask_text(E))
+             ~~~~~~^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/marimo/frozen/fm20/gnm.py", line 1446, in ask
+    n = self.run()
+  File "/marimo/frozen/fm20/gnm.py", line 1430, in run
+    self.fire(sg)
+    ~~~~~~~~~^^^^
+  File "/marimo/frozen/fm20/gnm.py", line 1289, in fire
+    a = self.choose(q, C)
+  File "/marimo/frozen/fm20/gnm.py", line 1282, in choose
+    return int(torch.multinomial(F.softmax(s.masked_fill(s <= 1, -1e9) / self.explore, -1), 1))
+torch.AcceleratorError: CUDA error: device-side assert triggered
+Search for `cudaErrorAssert' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
