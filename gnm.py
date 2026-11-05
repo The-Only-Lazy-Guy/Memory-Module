@@ -6,6 +6,7 @@ recipient; text becomes a node once, when it arrives.
 """
 import argparse
 import copy
+import math
 import random
 import re
 import time
@@ -875,6 +876,87 @@ class FnNode(nn.Module):
         self.av = nn.Parameter(torch.randn(c, r) * .01)
         self.calc = calc
         self.uid = next(UIDS)                          # who it is (its record of what it does well is its own)
+        self.pend, self.last_ctx = None, None          # the update writer's change, not yet committed; what it last did
+
+    def w(self, name):
+        """a weight as it is now: committed plus the pending change (which carries the writer's graph: the next use's
+        loss judges the change, and trains the writer)"""
+        x = getattr(self, name)
+        return x + self.pend[name] if self.pend is not None else x
+
+
+class UpdateWriter(nn.Module):
+    """user 11-05: a model that reads the nodes AND the gradient and writes the edited update (prototype: nodes +
+    gradient learned fastest and stayed stable where gradient-only was slow and nodes-only diverged). A function's own
+    weights (code rows, its action's columns, its key) are rows; with each, its gradient (scaled, sign-log); and the
+    firing it learned from (the want, the inputs, its loss, exact or not). Out: a change per row = a learned step on the
+    scaled gradient + what it writes (zero at first). Trained by the function's next use (learning speed)"""
+
+    def __init__(self, c=256, d=128, D=128):
+        super().__init__()
+        self.c, self.d = c, d
+        self.row = nn.Linear(3 * c, D)
+        self.grp = nn.Parameter(torch.randn(4, D) * .02)          # code / au / av / key
+        self.ctx = nn.Linear(c, D)
+        self.qx = nn.Linear(d, D)
+        self.sc = nn.Linear(2, D)
+        self.f = nn.TransformerEncoder(nn.TransformerEncoderLayer(D, 4, 2 * D, batch_first=True, activation="gelu"), 2)
+        self.out = nn.Linear(D, c)
+        nn.init.zeros_(self.out.weight), nn.init.zeros_(self.out.bias)
+        self.lr = nn.Parameter(torch.log(torch.full((4,), 2e-4)))   # the step on the scaled gradient (as Adam's at first)
+        self.gain = nn.Parameter(torch.full((4,), math.log(1e-3)))  # how much of what it writes
+
+    def rows(self, f, code, au, av, key):
+        k = torch.zeros(1, self.c, device=key.device, dtype=key.dtype)
+        k[0, :len(key)] = key
+        return torch.cat([code, au.T, av.T, k])
+
+    def forward(self, f, grads):
+        dev = f.code.device
+        P = self.rows(f, f.code.detach(), f.au.detach(), f.av.detach(), f.key.detach())
+        G = self.rows(f, *grads)
+        ids = torch.tensor([0] * len(f.code) + [1] * f.au.shape[1] + [2] * f.av.shape[1] + [3], device=dev)
+        rms = G.pow(2).mean().sqrt() + 1e-12
+        g = G / rms
+        t = self.row(torch.cat([P, g, torch.sign(g) * torch.log1p(g.abs())], -1)) + self.grp[ids]
+        ctx = []
+        if f.last_ctx is not None:
+            q, ins, loss, exact = f.last_ctx
+            ctx = [self.qx(q)[None], self.ctx(ins), self.sc(torch.tensor([[loss, exact]], device=dev, dtype=t.dtype))]
+        y = self.f(torch.cat([t] + ctx)[None])[0][:len(P)]
+        dl = -torch.exp(self.lr)[ids, None] * g + torch.exp(self.gain)[ids, None] * self.out(y)
+        K, r = len(f.code), f.au.shape[1]
+        return {"code": dl[:K], "au": dl[K:K + r].T, "av": dl[K + r:K + 2 * r].T, "key": dl[-1, :len(f.key)]}
+
+
+@torch.no_grad()
+def commit(f):
+    """a pending change becomes the function's weights"""
+    if f.pend is not None:
+        for k, x in f.pend.items():
+            getattr(f, k).add_(x.detach())
+        f.pend = None
+
+
+def write_fns(fm):
+    """after an update: every function's pending change is committed (none outlives a step of the optimizer); each
+    function that acted (its weights got a gradient) gets a new change from the writer, judged by its next use"""
+    for f in fm.bank.fns:
+        ps = (f.code, f.au, f.av, f.key)
+        grads = [x.grad for x in ps]
+        commit(f)
+        if any(g is not None for g in grads):
+            gr = [torch.zeros_like(x) if g is None else g.detach() for x, g in zip(ps, grads)]
+            if all(bool(torch.isfinite(g).all()) for g in gr):
+                f.pend = fm.bank.writer(f, gr)
+                fm.count("functions written")
+        for x in ps:
+            x.grad = None
+
+
+def commit_all(fm):
+    for f in fm.bank.fns:
+        commit(f)
 
 
 def assemble(net, o, j, plan=None):
@@ -1029,6 +1111,7 @@ class Acting(nn.Module):
         nn.init.constant_(self.wk[-1].bias, -1.)       # (at first little: softplus(-1) = .31, below a made label)
         self.kq = nn.Sequential(nn.Linear(c, 256), nn.GELU(), nn.Linear(256, d))   # ... and which wants it answers:
         nn.init.zeros_(self.kq[-1].weight), nn.init.zeros_(self.kq[-1].bias)     # from its value, starting at its label
+        self.writer = UpdateWriter(c, d)                # writes the functions' own updates
         self.register_buffer("mu", torch.tensor(2.))     # the error read nodes usually get when they act
         self.register_buffer("sd", torch.tensor(1.))
 
@@ -1041,12 +1124,12 @@ class Acting(nn.Module):
     def key(self, n):
         """the label a want meets: a made node's own; a read node's label, as long as its value says it acts"""
         if n.kind == "fn":
-            return self.fns[n.fn].key
+            return self.fns[n.fn].w("key")
         m = n.B.mean(0)
         return F.normalize(n.L + self.kq(m), dim=-1) * F.softplus(self.wk(m)).squeeze(-1)
 
     def gate(self, q, nodes):                          # every want against every node's label: > 1 = relevant
-        keys = [self.fns[n.fn].key if n.kind == "fn" else None for n in nodes]
+        keys = [self.fns[n.fn].w("key") if n.kind == "fn" else None for n in nodes]
         rd = [i for i, n in enumerate(nodes) if n.kind != "fn"]
         if rd:                                         # the read nodes' together (one pass)
             m = torch.stack([nodes[i].B.mean(0) for i in rd])
@@ -1057,14 +1140,14 @@ class Acting(nn.Module):
 
     def program(self, n):
         """what the interpreter reads as the acting node's program: its value"""
-        return self.fns[n.fn].code if n.kind == "fn" else n.B[:self.interp.L]
+        return self.fns[n.fn].w("code") if n.kind == "fn" else n.B[:self.interp.L]
 
     def action(self, n, program=None):
         """the node's action A (U, V): from its value; a made node adds its own"""
         if n.kind == "fn":
             f = self.fns[n.fn]
-            U, V = self.interp.action_of(f.code if program is None else program)
-            return U + f.au, V + f.av
+            U, V = self.interp.action_of(f.w("code") if program is None else program)
+            return U + f.w("au"), V + f.w("av")
         return self.interp.action_of(n.B if program is None else program)
 
     def stats_of(self, n):                             # whose usual error
@@ -1086,7 +1169,7 @@ class Acting(nn.Module):
         with torch.no_grad():
             if like is not None and like.kind == "fn":
                 src = self.fns[like.fn]
-                f.code.copy_(src.code), f.au.copy_(src.au), f.av.copy_(src.av)
+                f.code.copy_(src.w("code")), f.au.copy_(src.w("au")), f.av.copy_(src.w("av"))
             elif like is not None:
                 rows = like.B.detach()
                 f.code.copy_(rows[torch.arange(self.interp.K, device=rows.device) % len(rows)])
@@ -1097,7 +1180,7 @@ class Acting(nn.Module):
         return len(self.fns) - 1
 
     def as_node(self, t):                              # made node t's value (being read does not change it)
-        return F.layer_norm(self.fns[t].code.detach(), (self.c,))
+        return F.layer_norm(self.fns[t].w("code").detach(), (self.c,))
 
 
 class Critic(nn.Module):
@@ -1206,7 +1289,7 @@ class FM:
         return n
 
     def fnode(self, t):
-        return Node(self.bank.as_node(t), self.bank.fns[t].key.detach(), torch.zeros(self.bank.d, device=self.dev), "fn", fn=t)
+        return Node(self.bank.as_node(t), self.bank.fns[t].w("key").detach(), torch.zeros(self.bank.d, device=self.dev), "fn", fn=t)
 
     def name(self, n):
         if n.kind == "fn":
@@ -1381,7 +1464,8 @@ class FM:
             x = ins[w - 2]
             if x.kind == "fn" and isfn:                # an edited function: its code is now this
                 with torch.no_grad():
-                    self.bank.fns[x.fn].code.copy_(z)
+                    f_ = self.bank.fns[x.fn]                # (as it is now = z: the pending part stays)
+                    f_.code.copy_(z - f_.pend["code"].detach() if f_.pend is not None else z)
                 self.count("edits")
             elif x.kind == "fn":                       # words aimed at a function: a program is not words (fm18c: 270 of
                 self.count("words aimed at a function")   # 346 statements overwrote a function) -> a new node
@@ -1827,6 +1911,9 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                 break
     if fm.trace:
         trace_step(fm, purpose, v, about, actor, how, C, s_all, lg, y, order, o, info, outs, net, float(S), push, exact, float(L), rl)
+    if actor.kind == "fn" and order:                   # what the update writer reads with this function's gradient
+        bank.fns[actor.fn].last_ctx = (q.detach(), torch.stack([n.B.mean(0).detach() for n in order[:8]]),
+                                       float(torch.log1p(L.detach())), float(exact))
     with torch.no_grad():
         st_ = bank.stats_of(actor)
         st_.mu.mul_(.98).add_(.02 * torch.log1p(L.detach()))
@@ -2311,6 +2398,8 @@ def live(fm, A, rng, O, params, remake):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params(), 1.)
             O["opt"].step()
+            if A.writer:
+                write_fns(fm)
             tally["updates"] += 1
 
     for tick in range(1, A.live + 1):
@@ -2752,7 +2841,9 @@ def run_fm(A):
         load_fm(fm, A.load)
     else:
         train_codec(fm, A, rng, torch.optim.AdamW(fm.heads.parameters(), lr=A.lr))
-    own = lambda: [p for mod in (fm.bank, fm.heads, fm.filt, fm.critic) for p in mod.parameters()]
+    fnp = lambda: {id(p) for f in fm.bank.fns for p in (f.code, f.au, f.av, f.key)}
+    own = lambda: [p for mod in (fm.bank, fm.heads, fm.filt, fm.critic) for p in mod.parameters()
+                   if not (A.writer and id(p) in fnp())]   # functions' own weights: the update writer's (--writer)
     params = lambda: own() + tr_params(tr)
     make = lambda: torch.optim.AdamW([{"params": own()}, {"params": tr_params(tr), "lr": A.lr_tr}], lr=A.lr)
     O = {"opt": make()}
@@ -2790,6 +2881,8 @@ def run_fm(A):
         if bool(torch.isfinite(norm)):
             O["opt"].step()
             fm.count("updates")
+            if A.writer:                               # the functions' own weights: written, not stepped by Adam
+                write_fns(fm)
         else:
             fm.count("skipped (gradient not finite)")
             if fm.stats["skipped (gradient not finite)"] <= 5:
@@ -2881,10 +2974,13 @@ def run_fm(A):
                       f"{k[:-3]} {fm.stats.get(k[:-3] + ' walked', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" in")) +
                   f" | free questions right {fm.stats.get('free right', 0)}/{fm.stats.get('free questions', 0)} "
                   f"({fm.stats.get('free firings', 0) / max(1, fm.stats.get('free questions', 0)):.1f} firings, "
-                  f"{fm.stats.get('free fixed by a try', 0)} fixed by a try) | stage {fm.stage}, routing reaches the skill's node "
+                  f"{fm.stats.get('free fixed by a try', 0)} fixed by a try) | functions written {fm.stats.get('functions written', 0)}"
+                  + (f" (writer step {[round(float(x), 6) for x in torch.exp(fm.bank.writer.lr)]}, gain {[round(float(x), 5) for x in torch.exp(fm.bank.writer.gain)]})" if A.writer else "")
+                  + f" | stage {fm.stage}, routing reaches the skill's node "
                   f"{fm.stats.get('routing reaches the skill' + chr(39) + 's node', 0)}/{fm.stats.get('routing checked', 0)} | {time.time() - t0:.0f}s", flush=True)
             fm.stats = {}
         if step % A.every == 0 or step == A.steps:
+            commit_all(fm)                             # what is pending becomes the weights before it is judged / saved
             for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
                 mod.eval()
             keep, snap = (fm.g, fm.stats), snapshot(fm.bank)
@@ -2956,6 +3052,7 @@ if __name__ == "__main__":
     P.add_argument("--scope", type=float, default=.9)
     P.add_argument("--skill", type=int, default=50, help="steps of stage 1: the teacher says which node does a purpose")
     P.add_argument("--route", type=int, default=50, help="steps of stage 2: routing chooses, a light hint toward that node")
+    P.add_argument("--writer", type=int, default=1, help="1: the functions' own weights are written by the update writer")
     P.add_argument("--free", type=int, default=2, help="questions per step it answers by itself (truth after)")
     P.add_argument("--tune", type=float, default=.1, help="how far a place's access key moves per use")
     P.add_argument("--try_read", type=float, default=.1, help="share of demo steps where the read node nearest the want acts instead")
