@@ -877,6 +877,7 @@ class FnNode(nn.Module):
         self.calc = calc
         self.uid = next(UIDS)                          # who it is (its record of what it does well is its own)
         self.pend, self.last_ctx = None, None          # the update writer's change, not yet committed; what it last did
+        self.v = {}                                    # each weight's running gradient size (its own scale, as Adam's)
 
     def w(self, name):
         """a weight as it is now: committed plus the pending change (which carries the writer's graph: the next use's
@@ -948,6 +949,10 @@ def write_fns(fm):
         if any(g is not None for g in grads):
             gr = [torch.zeros_like(x) if g is None else g.detach() for x, g in zip(ps, grads)]
             if all(bool(torch.isfinite(g).all()) for g in gr):
+                for k, g in zip(("code", "au", "av", "key"), gr):   # each weight on its own scale (fm22c: one scale for
+                    v = f.v.get(k)                                  # the whole function left the key's step tiny -- the
+                    f.v[k] = g * g if v is None else .99 * v + .01 * g * g   # keys never moved, nothing fired living)
+                gr = [g / (f.v[k].sqrt() + 1e-8) for k, g in zip(("code", "au", "av", "key"), gr)]
                 f.pend = fm.bank.writer(f, gr)
                 fm.count("functions written")
         for x in ps:
