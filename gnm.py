@@ -970,10 +970,10 @@ def say_loss(fm, A, net, o, j, target, order, prefer=None):
     for spelled in dict.fromkeys([D(target), " " + D(target).lstrip()]):   # as written, or as it reads inside a
         tid_ = fm.tr.tok(spelled)["input_ids"]                             # sentence: the one more of it is copied in
         plan_ = plan_pieces(tid_, ins_t, net.S, net.G, prefer)
-        if plan_ is not None:
-            copied = sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span")
-            if best is None or copied > best[0]:
-                best = (copied, spelled, tid_, plan_)
+        if plan_ is not None:                                              # (more copied; then fewer pieces:
+            copied = (sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span"), -len(plan_))   # 'the' from an
+            if best is None or copied > best[0]:                           # unrelated fact + ' offer of Thasa'
+                best = (copied, spelled, tid_, plan_)                      # tied ' the offer of Thasa', inspection)
     if best is None:
         fm.count("cannot be made of pieces")
         return None
@@ -1276,6 +1276,14 @@ class FM:
     def choose(self, q, C):
         """which node acts: the one whose label the want meets (any node near the signal, or a made one); -1 = rest"""
         s = self.bank.gate(q[None], [n for n, _, _ in C])[0]
+        if not bool(torch.isfinite(s).all()):          # (fm20 step 531: a gate not finite crashed a sampled try)
+            self.count("gate not finite")
+            if self.stats["gate not finite"] <= 3:
+                bad = [i for i in range(len(s)) if not bool(torch.isfinite(s[i]))]
+                print(f"gate not finite: want finite {bool(torch.isfinite(q).all())}, nodes " + ", ".join(
+                    f"{C[i][0].kind}{C[i][0].fn if C[i][0].kind == 'fn' else ''} (value finite {bool(torch.isfinite(C[i][0].B).all())}, "
+                    f"label finite {C[i][0].L is not None and bool(torch.isfinite(C[i][0].L).all())})" for i in bad[:6]), flush=True)
+            s = torch.nan_to_num(s, nan=-1e9, posinf=-1e9, neginf=-1e9)
         if float(s.max()) <= 1:
             return -1
         if self.explore:
@@ -2597,6 +2605,116 @@ def tr_params(tr):
     return [p for k, p in tr.named_parameters() if k.startswith(TRAINED)]
 
 
+def overfit(A):
+    """--overfit N: can the learning path memorize one fixed batch (a few statements, 8 questions, on a fixed teacher
+    memory, skills stage)? Everything per iteration: each loss part, exact per purpose, said with the target's pieces
+    and its own, gradient norm and weight change per module, each function node's own gradients; a full trace of one
+    question at the start and the end. A path that works memorizes it; one that cannot has a bug"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    if A.init:
+        tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
+    tr.requires_grad_(False)
+    for p_ in tr_params(tr):
+        p_.requires_grad_(True)
+    fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm.tune = A.tune
+    rng, t0 = random.Random(A.seed), time.time()
+    train_codec(fm, A, rng, torch.optim.AdamW(fm.heads.parameters(), lr=A.lr))
+    print(f"codec done {time.time() - t0:.0f}s", flush=True)
+    fm.stage = "skills"
+    w = new_world(rng)
+    T = Teacher(w)
+    fm.g = Graph(fm.bank.d)
+    st = {"step": 1}
+    for _ in range(6):
+        for d in world_step(w, rng):
+            o = d()
+            side = w.side.get(id(o), {}) if o else {}
+            for text, meta in said(o, w) if o else []:
+                with torch.no_grad():
+                    demo_statement(fm, T, Lesson(), A, st, text, meta, side)
+    stmts = []
+    for d in world_step(w, rng):
+        o = d()
+        side = w.side.get(id(o), {}) if o else {}
+        stmts += [(text, meta, side) for text, meta in (said(o, w) if o else [])]
+    stmts = stmts[:8]
+    Es = [e for e in (q_expr(k, w, rng) for k in ["lookup"] * 3 + ["chain"] * 2 + ["ops"] * 2 + ["before"]) if e is not None]
+    print(f"memory {fm.g.n} places; batch: {len(stmts)} statements, {len(Es)} questions", flush=True)
+    for E in Es:
+        print("  Q:", ask_text(E), "| truth", truth_of(E, w), "| plan:", [s_[0] for s_ in plan(T, E)[0] or []], flush=True)
+    g0 = clone_graph(fm.g)
+    own = lambda: [p for mod in (fm.bank, fm.heads, fm.filt, fm.critic) for p in mod.parameters()]
+    params = lambda: own() + tr_params(tr)
+    make = lambda: torch.optim.AdamW([{"params": own()}, {"params": tr_params(tr), "lr": A.lr_tr}], lr=A.lr)
+    opt = make()
+    mods = {"interp": fm.bank.interp, "want": nn.ModuleList([fm.bank.wp, fm.bank.wv, fm.bank.wo]),
+            "readkey": nn.ModuleList([fm.bank.wk, fm.bank.kq]), "fns": fm.bank.fns, "heads": fm.heads,
+            "filter": fm.filt, "critic": fm.critic}
+    norm = lambda ps: float(torch.sqrt(torch.as_tensor(sum((p.grad.float() ** 2).sum() for p in ps if p.grad is not None), dtype=torch.float)))
+
+    def one(cap, trace):
+        fm.g = clone_graph(g0)
+        Tc = copy.copy(T)
+        Tc.place, Tc.texts = dict(T.place), {k: list(v) for k, v in T.texts.items()}
+        Ls, fm.stats, fm.capture, fm.said = Lesson(), {}, ([] if cap else None), []
+        for text, meta, side in stmts:
+            demo_statement(fm, Tc, Ls, A, st, text, meta, side)
+        for i, E in enumerate(Es):
+            fm.trace = trace and i == 0
+            if fm.trace:
+                print(f"\n######## TRACE question {ask_text(E)!r} truth {truth_of(E, w)}", flush=True)
+            demo_question(fm, Tc, Ls, A, st, E)
+        fm.trace = False
+        seen = [D(x) for x in [t for t, _, _ in stmts] + [ask_text(E) for E in Es] + fm.said]
+        z_, m_ = tr.content(seen)
+        Ls.add("round trip", tr.decode_loss(z_, m_, seen))
+        Ls.add("re-read", reread_loss(fm, z_, m_, seen, rng))
+        return Ls
+
+    for it in range(A.overfit + 1):
+        ti, cap = time.time(), it % 10 == 0 or it == A.overfit
+        before = {k: [p.detach().clone() for p in m.parameters()] for k, m in mods.items()} if it % 10 == 0 else None
+        Ls = one(cap, it in (0, A.overfit))
+        loss = Ls.total()
+        if fm.made:
+            old, opt = opt, make()
+            for g_ in opt.param_groups:
+                for p_ in g_["params"]:
+                    if p_ in old.state:
+                        opt.state[p_] = old.state[p_]
+            fm.made = False
+        opt.zero_grad()
+        loss.backward()
+        gn = {k: norm(m.parameters()) for k, m in mods.items()}
+        gn["translator"] = norm(tr_params(tr))
+        fg = [(t, f.calc, *[float(x.grad.norm()) if x.grad is not None else 0. for x in (f.key, f.code, f.au, f.av)]) for t, f in enumerate(fm.bank.fns)]
+        total = float(torch.nn.utils.clip_grad_norm_(params(), 1.))
+        opt.step()
+        parts = {}
+        for k, x in Ls.parts:
+            parts[k] = parts.get(k, 0) + float(x)
+        print(f"\n=== iter {it} ({time.time() - ti:.0f}s) loss {float(loss):.2f} grad-norm {total:.1f} | " +
+              ", ".join(f"{k} {v:.2f}" for k, v in parts.items()), flush=True)
+        print("   exact (own pieces): " + ", ".join(f"{k[:-5]} {fm.stats.get(k[:-5] + ' exact', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" said")), flush=True)
+        if cap:
+            by = {}
+            for c in fm.capture:
+                b = by.setdefault(c[0], [0, 0, 0., 0])
+                b[0] += 1; b[1] += int(c[1] == c[3]); b[2] += c[4]; b[3] += int(c[1] == c[2])
+            print("   said (outputs: with its own pieces / with the target's pieces, mean output loss): " + " | ".join(
+                f"{k} {v[0]}: own {v[1]} tgt {v[3]} loss {v[2] / v[0]:.2f}" for k, v in sorted(by.items())), flush=True)
+            print("   e.g.: " + " || ".join(f"{c[0]}: want {c[1]!r} tgt-pieces {c[2]!r} own {c[3]!r}" for c in fm.capture[:14]), flush=True)
+        print("   grad norm per module: " + ", ".join(f"{k} {v:.3g}" for k, v in gn.items()), flush=True)
+        if before is not None:
+            print("   weight change: " + ", ".join(f"{k} {float(torch.sqrt(sum(((a - b) ** 2).sum() for a, b in zip(m.parameters(), before[k])))):.3g}"
+                                              for k, m in mods.items()), flush=True)
+            print("   function nodes (t, calc, grad key/code/au/av): " + "; ".join(
+                f"{t} {c or '-'} {a:.2g}/{b:.2g}/{c_:.2g}/{d_:.2g}" for t, c, a, b, c_, d_ in fg), flush=True)
+    print(f"done {time.time() - t0:.0f}s", flush=True)
+
+
 def save_fm(fm, path):
     torch.save({"n": len(fm.bank.fns), "calc": [t.calc for t in fm.bank.fns], "bank": fm.bank.state_dict(), "heads": fm.heads.state_dict(),
                 "filt": fm.filt.state_dict(), "critic": fm.critic.state_dict(),
@@ -2810,6 +2928,7 @@ if __name__ == "__main__":
     P.add_argument("--inspect", action="store_true", help="with --load: every firing of a few questions, said")
     P.add_argument("--eval", action="store_true", help="with --load: the saved module in a fresh world")
     P.add_argument("--trace_n", type=int, default=25, help="demo ticks the trace's routing table runs")
+    P.add_argument("--overfit", type=int, default=0, help="iterations of the fixed-batch memorization test")
     P.add_argument("--trace", action="store_true", help="with --load: every trace, said (translator, demos, routing, living)")
     P.add_argument("--codec_check", action="store_true", help="the translator, the heads (and with --load each function) on every kind of text")
     P.add_argument("--same", type=float, default=.1, help="a node whose label moved less than this did not change: no signal")
@@ -2845,4 +2964,4 @@ if __name__ == "__main__":
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
-    (deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
+    (overfit if A.overfit else deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
