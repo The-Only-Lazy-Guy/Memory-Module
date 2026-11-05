@@ -2826,7 +2826,9 @@ def load_fm(fm, path):
     for op in s["calc"]:
         fm.bank.fns.append(FnNode(fm.bank.interp.K, fm.bank.d, fm.bank.c, fm.bank.interp.r, calc=op).to(fm.dev))
     for k in ("bank", "heads", "filt", "critic"):
-        getattr(fm, k).load_state_dict(s[k])
+        r = getattr(fm, k).load_state_dict(s[k], strict=False)   # (a checkpoint from before a part existed: the
+        if r.missing_keys or r.unexpected_keys:                   # part starts fresh, said here)
+            print(f"load {k}: {len(r.missing_keys)} missing (e.g. {r.missing_keys[:2]}), {len(r.unexpected_keys)} unexpected", flush=True)
     if "tr" in s:                                      # the translator as it had learned
         fm.tr.load_state_dict(s["tr"], strict=False)
 
