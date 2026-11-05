@@ -1433,8 +1433,10 @@ class FM:
         self.news = []
         for j, z in enumerate(made):
             if drift:                                  # its own guess: unusually wrong -> said and read again
-                z = self.nodes([self.say(Node(z, None, None))])[0].B
-                self.count("roundtrip")
+                said_ = self.say(Node(z, None, None))
+                if said_.strip():                      # (said as nothing, it stays as it was: read again, nothing is
+                    z = self.nodes([said_])[0].B       # a node of no rows, its mean not a number -- fm21's gates)
+                    self.count("roundtrip")
             self.write(z, int(where[j].argmax()), ins, sg, float(isfn[j]) > 0, rec, j)
         if len(self.news) == 1:                        # a new node is heard by itself; several made at once are heard
             self.signals.append(Signal(self.news, 1., self.t))   # together, with what they came from
