@@ -1,0 +1,26 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3622.74it/s]
+step 1: stage skills
+/marimo/frozen/ck25/gnm.py:1818: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  actor, how = C[a][0], "routed" if float(s_all[a]) > 1 else "nearest"
+step 1: the store skill gets its node -> function 5
+step 1: the split skill gets its node -> function 6
+step 1: the lookup skill gets its node -> function 7
+step 1: the fill skill gets its node -> function 8
+step 1: the inc skill gets its node -> function 9
+step 1: the fedit skill gets its node -> function 10
+step 1: the fnew skill gets its node -> function 11
+step 2: the fix skill gets its node -> function 12
+step 2: the operands skill gets its node -> function 13
+step 3: the both skill gets its node -> function 14
+step 3: the before skill gets its node -> function 15
+step 4: the copy skill gets its node -> function 16
+step 21: stage route
+step 36: stage free
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+step 50 loss 227.34 (functions per demo step 6.03, 299 updates, 1 targets not made of pieces) [route hint 0.99, salience hint 0.38, label of what it made 7.57, functions 174.77, labels 4.91, check 6.67, relation 10.49, apart 17.27, asks nothing 0.00, free question 0.00, round trip 0.17, round trip (pieces) 1.62, re-read 2.51] made nodes that act 17 | who acts: by assigned 866, by nearest 558, by routed 602, by tried 125,  function 2655,  read node 131 | exact: add 0/54, before 5/32, both 0/28, copy 0/20, fill 40/415, fix 2/23, inc 1/50, lookup 61/300, max 2/26, min 0/29, operands 47/290, split 158/416, store 359/476, sub 0/36 | inputs the walk brought: add 162/162, before 35/124, both 28/88, copy 40/40, fedit 100/100, fill 832/832, fix 179/179, fnew 100/100, inc 100/100, lookup 321/600, max 78/78, min 87/87, operands 145/145, split 416/416, store 489/711, sub 108/108 | free questions right 0/30 (6.3 firings, 1 fixed by a try) | functions written 4578 (writer step [0.000204, 0.000205, 0.000206, 0.000201], gain [0.001, 0.00101, 0.00101, 0.001]) | stage free, routing reaches the skill's node 1632/2151 | 265s
+EVAL step 50: statements 286 [acts: function 15, fires 15, rest 271] | answers: lookup 0/24 (37.2 firings) | before 0/24 (2.0 firings) | coexist 0/24 (4.0 firings) | chain 0/24 (42.0 firings) | ops 0/24 (36.7 firings) | long 0/24 (16.7 firings) | made nodes that act 17 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'rest': 338, 'acts: function': 3335, 'fires': 3335, 'budget out': 50, 'no change': 59, 'edits': 16}
+EVAL step 50, calculator removed (its mimic answers): statements 286 [acts: function 15, fires 15, rest 271] | answers: lookup 0/24 (37.2 firings) | before 0/24 (2.0 firings) | coexist 0/24 (4.0 firings) | chain 0/24 (42.0 firings) | ops 0/24 (36.7 firings) | long 0/24 (16.7 firings) | made nodes that act 17
+EVAL after living: statements 308 [acts: function 188, fires 188, rest 120] | answers: lookup 0/24 (50.7 firings) | before 0/24 (2.0 firings) | coexist 0/24 (55.2 firings) | chain 0/24 (60.0 firings) | ops 0/24 (36.2 firings) | long 0/24 (41.5 firings) | made nodes that act 17 | add one in place 4/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'rest': 173, 'acts: function': 6106, 'fires': 6106, 'no change': 26, 'budget out': 96, 'edits': 16}
