@@ -1426,6 +1426,11 @@ class FM:
         a = self.choose(q, C)
         if a < 0:
             self.count("rest")
+            if self.show:                              # --inspect / --trace: why it rested (fm32 @50: 280 of 286
+                g = self.bank.gate(q[None], [n for n, _, _ in C])[0]   # statements in a fresh world rested)
+                top = sorted(range(len(g)), key=lambda i: -float(g[i]))[:4]
+                print("  rest: about " + " + ".join(repr(self.say(n)[:50]) for n in sg.about) + " | gates " +
+                      ", ".join(f"{self.name(C[i][0])[:30]} {float(g[i]):.2f}" for i in top), flush=True)
             return None
         actor = C[a][0]
         C = self.around(actor, C)
