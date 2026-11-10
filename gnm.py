@@ -3131,10 +3131,12 @@ def run_fm(A):
                 Ls.add("round trip (pieces)", sp)
             Ls.add("re-read", reread_loss(fm, z_, m_, seen, rng))
         update(Ls, acc)
-        for _ in range(A.replay if step <= A.demo else 0):   # the demos' routing, again (one small update each; after
-            Lr = Lesson()                                    # the step's last update: fm33 replayed while the functions'
-            Lr.add("route replay", route_replay(fm, rng))    # lesson still waited for its backward)
-            update(Lr, acc)
+        for _ in range(A.replay if step <= A.demo else A.replay_live):   # the demos' routing, again (one small update
+            Lr = Lesson()                                    # each; after the step's last update: fm33 replayed while the
+            Lr.add("route replay", route_replay(fm, rng))    # functions' lesson still waited for its backward). Living too
+            update(Lr, acc)                                  # (fm34: @50 statements stored, questions fired; living's only
+            #                                                  signal was its statements (questions 0/199), and @100 every
+            #                                                  question rested again -- the demos anchor what living lacks)
         if step % 50 == 0 and step > A.demo:
             print(f"step {step} living: {living_line(tally)} [" + ", ".join(f"{k} {v:.2f}" for k, v in acc.items()) +
                   f"] made nodes that act {len(fm.bank.fns)} | " + ", ".join(
@@ -3233,6 +3235,7 @@ if __name__ == "__main__":
     P.add_argument("--warm", type=int, default=50, help="steps of the warm start: a batch of lookups an update")
     P.add_argument("--warm_q", type=int, default=16, help="lookups in each warm-start update")
     P.add_argument("--replay", type=int, default=20, help="routing replays after each demo step (want reader + labels)")
+    P.add_argument("--replay_live", type=int, default=5, help="routing replays of the demos after each living step")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
     P.add_argument("--sal_sup", type=float, default=1., help="weight of the teacher's hint on what is salient")
