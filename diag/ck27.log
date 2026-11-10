@@ -1,0 +1,25 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4103.91it/s]
+step 1: stage skills
+/marimo/frozen/ck27/gnm.py:1832: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  actor, how = C[a][0], "routed" if float(s_all[a]) > 1 else "nearest"
+step 1: the store skill gets its node -> function 5
+step 1: the split skill gets its node -> function 6
+step 1: the lookup skill gets its node -> function 7
+step 1: the fill skill gets its node -> function 8
+step 1: the operands skill gets its node -> function 9
+step 1: the inc skill gets its node -> function 10
+step 1: the fedit skill gets its node -> function 11
+step 1: the fnew skill gets its node -> function 12
+step 2: the fix skill gets its node -> function 13
+step 3: the both skill gets its node -> function 14
+step 4: the before skill gets its node -> function 15
+step 11: stage route
+step 16: the demos end; it lives by itself (signals only)
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+step 50 living: statements kept 335/341 (+0 by a try) | questions right 0/140 (+0 by a try) [check 3.99, kept 0.00, round trip 0.03, round trip (pieces) 1.32, re-read 1.80] made nodes that act 16 | fires 1035, rest 30, updates 468 | 179s
+EVAL step 55: statements 286 [acts: function 286, fires 286] | memory: facts held right 102/136, places 286, entries per place 1.00 | answers: lookup 0/24 (1.0 firings) | before 0/24 (1.0 firings) | coexist 0/24 (1.0 firings) | chain 0/24 (1.0 firings) | ops 0/24 (1.0 firings) | long 0/24 (1.0 firings) | made nodes that act 16 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'acts: function': 476, 'fires': 476, 'rest': 2}
+EVAL step 55, calculator removed (its mimic answers): statements 286 [acts: function 286, fires 286] | memory: facts held right 102/136, places 286, entries per place 1.00 | answers: lookup 0/24 (1.0 firings) | before 0/24 (1.0 firings) | coexist 0/24 (1.0 firings) | chain 0/24 (1.0 firings) | ops 0/24 (1.0 firings) | long 0/24 (1.0 firings) | made nodes that act 16
+EVAL after living: statements 308 [acts: function 308, fires 308] | memory: facts held right 128/172, places 308, entries per place 1.00 | answers: lookup 0/24 (1.0 firings) | before 0/24 (1.0 firings) | coexist 0/24 (1.0 firings) | chain 0/24 (1.0 firings) | ops 0/24 (1.0 firings) | long 0/24 (1.0 firings) | made nodes that act 16 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'acts: function': 500, 'fires': 500}
