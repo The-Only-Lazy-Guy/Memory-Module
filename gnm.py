@@ -2397,8 +2397,10 @@ def imitate(fm, recs):
         a = r["actor"]
         if a.kind == "fn" and a.fn >= len(fm.bank.fns):   # a node the try made, gone with the try
             continue
-        q = fm.bank.want([r["about"]], [r["sign"]])[0]
-        loss = loss + F.relu(1.1 - fm.bank.gate(q[None], [a])[0, 0])
+        q = fm.bank.want([r["about"]], [r["sign"]])[0].detach()   # the label moves, the shared want reader does not
+        loss = loss + F.relu(1.1 - fm.bank.gate(q[None], [a])[0, 0])   # (tr30: imitating ~500 statement runs pulled every
+        #                                                    want toward the store's label; questions then rested or were
+        #                                                    stored as facts -- as signalled(), fm17c)
         lg = fm.filt(fm.bank.key(a).detach(), fm.bank.program(a).detach(), q.detach(), r["sign"], 0., r["C"],
                      about=r.get("aboutL"))   # (codes change in place as it lives)
         loss = loss + F.binary_cross_entropy_with_logits(lg, torch.tensor(r["take"], dtype=torch.float, device=lg.device))
