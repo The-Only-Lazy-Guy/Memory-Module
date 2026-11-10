@@ -739,6 +739,9 @@ class Pool(nn.Module):
         return y[:, :self.k]
 
 
+LAB_POOL = "gate"                                      # --lab_pool: the label head (probe 11-11)
+
+
 class Heads(nn.Module):
     """the encoder's second stage: a node's label and relation from its value alone, so a node a function made gets
     both without being said and read again"""
@@ -753,6 +756,8 @@ class Heads(nn.Module):
         self.rpos = nn.Parameter(torch.randn(96, c) * .02)
         self.ro = nn.Linear(c, c)                      # the re-reader's change (zero at first: it starts as it is)
         nn.init.zeros_(self.ro.weight), nn.init.zeros_(self.ro.bias)
+        self.lg = nn.Sequential(nn.Linear(c, 256), nn.GELU(), nn.Linear(256, 1))   # the label as the encoder makes it: the
+        self.lp = nn.Sequential(nn.Linear(c, 512), nn.GELU(), nn.Linear(512, d))   # rows that name the thing, pooled
 
     def reread(self, z):
         """a node a function made (pieces from several texts, each still carrying its sentence) read again, latent, as
@@ -762,7 +767,13 @@ class Heads(nn.Module):
 
     def forward(self, zs):
         y = self.p([[z] for z in zs])
-        return F.normalize(self.lab(y[:, 0]), dim=-1), F.normalize(self.rel(y[:, 1]), dim=-1) * torch.sigmoid(self.how(y[:, 2])) / .9
+        if LAB_POOL == "gate":                         # (probe 11-11: the encoder's label is value-free -- 'the trade of
+            x, m = pad(zs)                             # Vinzek' and '... is 2 7.' 0.00 apart -- by a token gate; the
+            g_ = torch.sigmoid(self.lg(x)).squeeze(-1) * m   # CLS pool missed it: the same fact .34 apart, cos .85-.89)
+            lab = F.normalize(self.lp((g_[..., None] * x).sum(1) / g_.sum(1, keepdim=True).clamp(min=1e-6)), dim=-1)
+        else:
+            lab = F.normalize(self.lab(y[:, 0]), dim=-1)
+        return lab, F.normalize(self.rel(y[:, 1]), dim=-1) * torch.sigmoid(self.how(y[:, 2])) / .9
 
 
 class Interpreter(nn.Module):
@@ -2228,7 +2239,32 @@ def train_codec(fm, A, rng, opt):
         loss.backward()
         opt.step()
         if step % 100 == 0:
-            print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f}", flush=True)
+            print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f} | "
+                  f"{label_probe(fm, random.Random(7))}", flush=True)
+
+
+@torch.no_grad()
+def label_probe(fm, rng, n=12):
+    """a place is what a fact is about: the same fact with another value should get the same label, another fact a far
+    one. Distances by the label head (and by the encoder, its target)"""
+    w = new_world(rng)
+    for _ in range(6):
+        for d in world_step(w, rng):
+            d()
+    facts = [(nm, k, v) for nm, e in sorted(w.ents.items()) for k, v in sorted(e.items())][:n]
+    names = sorted(w.ents)
+    a = [D(f"{leaf(nm, k)} is {v}.") for nm, k, v in facts]
+    b = [D(f"{leaf(nm, k)} is {v + 7 if isinstance(v, int) else next(x for x in names if x != v)}.") for nm, k, v in facts]
+    z, m = fm.tr.content(a + b)
+    L, _ = fm.heads([z[i][m[i]] for i in range(len(a + b))])
+    E = fm.tr.encode(a + b)
+    out = []
+    for name, X in (("heads", L), ("encoder", E)):
+        same = (X[:len(a)] - X[len(a):]).norm(dim=-1).mean()
+        dd = torch.cdist(X[:len(a)], X[:len(a)])
+        other = dd.sum() / (len(a) * (len(a) - 1))
+        out.append(f"{name}: same fact {float(same):.2f}, other fact {float(other):.2f}")
+    return "; ".join(out)
 
 
 def reread_loss(fm, z, m, texts, rng, n=12):
@@ -3168,6 +3204,7 @@ if __name__ == "__main__":
     P.add_argument("--scope", type=float, default=.9)
     P.add_argument("--skill", type=int, default=35, help="steps of stage 1: the teacher says which node does a purpose")
     P.add_argument("--route", type=int, default=15, help="steps of stage 2: routing chooses, a light hint toward that node")
+    P.add_argument("--lab_pool", default="gate", help="the label head: gate (rows that name it, pooled) or cls (probe 11-11)")
     P.add_argument("--demo", type=int, default=50, help="steps with demos (user 11-10: ~50); after them it lives, signals only")
     P.add_argument("--writer", type=int, default=1, help="1: the functions' own weights are written by the update writer")
     P.add_argument("--tune", type=float, default=.1, help="how far a place's access key moves per use")
@@ -3179,5 +3216,6 @@ if __name__ == "__main__":
     P.add_argument("--tries", type=int, default=4, help="sampled tries for a wrong answer")
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
+    LAB_POOL = A.lab_pool
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
     (overfit if A.overfit else deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
