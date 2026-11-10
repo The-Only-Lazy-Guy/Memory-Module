@@ -1,0 +1,40 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3989.62it/s]
+/marimo/frozen/fm32/gnm.py:2245: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f} | "
+codec 100: label cos 0.278 relation err 0.0009 | heads: same fact 0.10 (max 0.24), other fact 0.39 (nearest 0.20); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 200: label cos 0.609 relation err 0.0008 | heads: same fact 0.21 (max 0.68), other fact 1.29 (nearest 0.80); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 300: label cos 0.661 relation err 0.0001 | heads: same fact 0.20 (max 0.67), other fact 1.32 (nearest 0.83); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 400: label cos 0.770 relation err 0.0003 | heads: same fact 0.20 (max 0.65), other fact 1.31 (nearest 0.84); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 500: label cos 0.743 relation err 0.0004 | heads: same fact 0.19 (max 0.65), other fact 1.33 (nearest 0.90); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 600: label cos 0.772 relation err 0.0006 | heads: same fact 0.19 (max 0.67), other fact 1.33 (nearest 0.92); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 700: label cos 0.785 relation err 0.0012 | heads: same fact 0.19 (max 0.65), other fact 1.33 (nearest 0.92); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 800: label cos 0.813 relation err 0.0012 | heads: same fact 0.18 (max 0.60), other fact 1.33 (nearest 0.92); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 900: label cos 0.825 relation err 0.0006 | heads: same fact 0.18 (max 0.60), other fact 1.35 (nearest 0.93); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 1000: label cos 0.819 relation err 0.0002 | heads: same fact 0.17 (max 0.55), other fact 1.33 (nearest 0.94); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 1100: label cos 0.830 relation err 0.0012 | heads: same fact 0.18 (max 0.58), other fact 1.35 (nearest 0.93); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 1200: label cos 0.842 relation err 0.0005 | heads: same fact 0.19 (max 0.61), other fact 1.34 (nearest 0.91); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 1300: label cos 0.835 relation err 0.0000 | heads: same fact 0.17 (max 0.54), other fact 1.34 (nearest 0.87); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 1400: label cos 0.879 relation err 0.0006 | heads: same fact 0.16 (max 0.57), other fact 1.34 (nearest 0.90); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 1500: label cos 0.844 relation err 0.0003 | heads: same fact 0.13 (max 0.45), other fact 1.34 (nearest 0.91); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+step 1: stage skills
+step 1: the store skill gets its node -> function 5
+step 1: the split skill gets its node -> function 6
+step 1: the lookup skill gets its node -> function 7
+step 1: the fill skill gets its node -> function 8
+step 1: the operands skill gets its node -> function 9
+step 1: the inc skill gets its node -> function 10
+step 1: the fedit skill gets its node -> function 11
+step 1: the fnew skill gets its node -> function 12
+step 2: the both skill gets its node -> function 13
+step 3: the fix skill gets its node -> function 14
+step 4: the before skill gets its node -> function 15
+step 6: the copy skill gets its node -> function 16
+step 36: stage route
+step 50 loss 460.86 (functions per demo step 3.32, 330 updates, 1 targets not made of pieces) [route hint 43.56, salience hint 8.79, label of what it made 5.02, functions 271.86, labels 45.88, check 12.07, relation 48.28, apart 22.55, asks nothing 0.01, round trip 0.24, round trip (pieces) 1.65, re-read 0.94] made nodes that act 17 | who acts: by assigned 3166, by nearest 215, by routed 908, by tried 119,  function 4252,  read node 156 | exact: add 1/58, before 11/28, both 0/21, copy 0/8, fill 559/1189, fix 2/20, inc 0/50, lookup 621/1082, max 13/29, min 6/29, operands 94/284, split 882/1190, store 324/435, sub 0/26 (lookup chance 41%) | where right: add 51/58, before 27/28, both 19/21, copy 0/8, fedit 48/50, fill 1148/1189, fix 2/20, fnew 46/50, inc 48/50, lookup 1043/1082, max 22/29, min 22/29, operands 258/284, split 1114/1190, store 207/435, sub 20/26 | inputs the walk brought: add 174/174, before 91/91, both 64/64, copy 16/16, fedit 100/100, fill 2380/2380, fix 106/106, fnew 100/100, inc 100/100, lookup 2164/2164, max 87/87, min 87/87, operands 142/142, split 1190/1190, store 561/561, sub 78/78 | functions written 5312 (writer step [0.000205, 0.000206, 0.000207, 0.000201], gain [0.001, 0.001, 0.00102, 0.001]) | stage route, routing reaches the skill's node 3752/4408 | 380s
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+EVAL step 50: statements 286 [acts: function 6, fires 6, no change 6, rest 280] | memory: facts held right 0/146, places 0, entries per place 0.00 | answers: lookup 0/24 (11.9 firings) | before 0/24 (2.0 firings) | coexist 0/24 (15.5 firings) | chain 1/24 (32.0 firings) | ops 0/24 (24.3 firings) | long 0/24 (12.0 firings) | made nodes that act 17 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'rest': 414, 'acts: function': 2265, 'fires': 2265, 'no change': 18, 'budget out': 26, 'roundtrip': 458}
+EVAL step 50, calculator removed (its mimic answers): statements 286 [acts: function 6, fires 6, no change 6, rest 280] | memory: facts held right 0/146, places 0, entries per place 0.00 | answers: lookup 0/24 (11.9 firings) | before 0/24 (2.0 firings) | coexist 0/24 (15.5 firings) | chain 1/24 (32.0 firings) | ops 0/24 (24.3 firings) | long 0/24 (12.0 firings) | made nodes that act 17
+step 51: the demos end; it lives by itself (signals only)
