@@ -3116,10 +3116,6 @@ def run_fm(A):
             Ls = Lesson()                              # the functions on functions and the translator: one update
             demo_functions(fm, Ls, A, st, rng)
             finish(fm, Ls, rng, recent)
-            for _ in range(A.replay):                  # the demos' routing, again (one small update each)
-                Lr = Lesson()
-                Lr.add("route replay", route_replay(fm, rng))
-                update(Lr, acc)
         seen += fm.said                                # what it reads and what functions say (typed values, parts,
         fm.said = []                                   # filled questions) still says back as it was written, long
         for kind, ops in (("ops", (1, 3)), ("ops", (4, 6)), ("chain", 0), ("before", 0)) * 2:   # questions too
@@ -3135,6 +3131,10 @@ def run_fm(A):
                 Ls.add("round trip (pieces)", sp)
             Ls.add("re-read", reread_loss(fm, z_, m_, seen, rng))
         update(Ls, acc)
+        for _ in range(A.replay if step <= A.demo else 0):   # the demos' routing, again (one small update each; after
+            Lr = Lesson()                                    # the step's last update: fm33 replayed while the functions'
+            Lr.add("route replay", route_replay(fm, rng))    # lesson still waited for its backward)
+            update(Lr, acc)
         if step % 50 == 0 and step > A.demo:
             print(f"step {step} living: {living_line(tally)} [" + ", ".join(f"{k} {v:.2f}" for k, v in acc.items()) +
                   f"] made nodes that act {len(fm.bank.fns)} | " + ", ".join(
