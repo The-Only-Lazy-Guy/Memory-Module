@@ -1859,7 +1859,8 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     keep = [i for i, (n, _, _) in enumerate(C) if key(n) in want_in]
     order, hops, sal, lg, pick = fm.perceive(actor, q, Signal(about, v), C, keep)
     if purpose == "lookup":                            # chance: a number taken from any input that has one
-        fm.count("lookup chance", 1 / max(1, sum(1 for n in order if n.kind == "entry" and number_of(fm, n) is not None)))
+        vs_ = [value_in(fm.text_of(n)) for n in order if n.kind == "entry"]   # (the teacher's reading: "is 2 9." -> 29)
+        fm.count("lookup chance", 1 / max(1, sum(1 for x in vs_ if x is not None and num(str(x)) is not None)))
     y = torch.tensor([float(key(n) in want_in) for n, _, _ in C], device=lg.device)
     wanted = y > 0                                     # a light hint: the teacher's inputs salient, the rest less so
     Ls.add("salience hint", A.sal_sup * sum(F.binary_cross_entropy_with_logits(lg[m_], y[m_]) for m_ in (wanted, ~wanted) if bool(m_.any())))
