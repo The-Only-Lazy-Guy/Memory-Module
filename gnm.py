@@ -573,6 +573,9 @@ class Graph:
             self.adj[j].append(i)
 
 
+PULL = 1.5                      # a label is pulled until the want meets it this far above 1 (relevant): room for wants it
+#                                 has not met (fm31 @50, dm29: pulled to 1.1, in a fresh world every statement rested --
+#                                 new names put the gates just under 1); pushes stay at .9
 REACH = .75                     # a place's reach: the same fact with another value lies within .61 of it, the nearest other
                                 # fact at .91 (fm28 codec 1200, gated label head; 11-11)
 
@@ -1956,7 +1959,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     push = not exact and how != "assigned" and (actor.kind != "fn" or how == "tried" or specialized(fm, actor, purpose))
     #        (a read node that acted and missed is pushed off this want, whatever the stage: fm20, read nodes out-bid
     #        the skills' nodes, being pulled when a statement stored itself and seldom pushed)
-    Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(1 + m - S))
+    Ls.add("labels", F.relu(S - (1 - m)) if push else F.relu(PULL - S))
     if exact and len(C) > 1:                           # it was right: among every node near the want, its label is the
         g_all = bank.gate(q[None], [n for n, _, _ in C])[0]    # one the want meets (all the others' move too)
         at = next(i for i, (n, _, _) in enumerate(C) if n is actor)
@@ -1979,7 +1982,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             with torch.no_grad():
                 got_c = calculate(fm, c_net.calc, order, sal)
             if got_c is not None and D(str(got_c)) == D(outs[0][0]):
-                Ls.add("labels", F.relu(1 + m - bank.gate(q[None], [fm.fnode(c_i)])[0, 0]) + F.relu(S - (1 - m)))   # its label here,
+                Ls.add("labels", F.relu(PULL - bank.gate(q[None], [fm.fnode(c_i)])[0, 0]) + F.relu(S - (1 - m)))   # its label here,
                 fm.count("calculator found by trying")                                             # the one that missed off
                 break
     if fm.trace:
@@ -2398,7 +2401,7 @@ def imitate(fm, recs):
         if a.kind == "fn" and a.fn >= len(fm.bank.fns):   # a node the try made, gone with the try
             continue
         q = fm.bank.want([r["about"]], [r["sign"]])[0].detach()   # the label moves, the shared want reader does not
-        loss = loss + F.relu(1.1 - fm.bank.gate(q[None], [a])[0, 0])   # (tr30: imitating ~500 statement runs pulled every
+        loss = loss + F.relu(PULL - fm.bank.gate(q[None], [a])[0, 0])   # (tr30: imitating ~500 statement runs pulled every
         #                                                    want toward the store's label; questions then rested or were
         #                                                    stored as facts -- as signalled(), fm17c)
         lg = fm.filt(fm.bank.key(a).detach(), fm.bank.program(a).detach(), q.detach(), r["sign"], 0., r["C"],
@@ -2466,7 +2469,7 @@ def signalled(fm, recs, sign):
             continue
         q = fm.bank.want([r["about"]], [r["sign"]])[0].detach()
         S = fm.bank.gate(q[None], [a])[0, 0]
-        loss, n = loss + (F.relu(1.1 - S) if sign > 0 else F.relu(S - .9)), n + 1
+        loss, n = loss + (F.relu(PULL - S) if sign > 0 else F.relu(S - .9)), n + 1
     return loss / max(1, n)
 
 
