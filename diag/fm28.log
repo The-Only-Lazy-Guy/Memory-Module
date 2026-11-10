@@ -38,3 +38,4 @@ step 51: the demos end; it lives by itself (signals only)
   output = torch._nested_tensor_from_mask(
 step 100 living: statements kept 507/512 (+1 by a try) | questions right 1/200 (+0 by a try) [kept 0.89, round trip 0.03, round trip (pieces) 0.58, re-read 0.57] made nodes that act 17 | budget out 7, check fails 20, fires 2043, no change 475, rest 28, roundtrip 16, updates 559 | 604s
 step 150 living: statements kept 476/478 (+2 by a try) | questions right 0/200 (+0 by a try) [kept 0.49, check 1.49, round trip 0.01, round trip (pieces) 0.50, re-read 0.58] made nodes that act 17 | check fails 153, edits 50, fires 1652, new functions 15, no change 807, updates 528 | 830s
+step 200 living: statements kept 473/473 (+0 by a try) | questions right 0/200 (+0 by a try) [kept 0.61, round trip 0.00, round trip (pieces) 0.36, re-read 0.53] made nodes that act 17 | check fails 229, fires 1702, no change 1306, updates 523 | 1011s
