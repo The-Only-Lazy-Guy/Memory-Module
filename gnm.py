@@ -1289,6 +1289,7 @@ class FM:
         self.fit = {}                                  # (function, purpose) -> how often it did that exactly (labels)
         self.calc_on, self.news = True, []             # the calculator's own body answers (False: removed, its mimic does)
         self.made, self.frozen, self.tune = False, False, .1
+        self.routes = []                               # the demos' routing examples (signal's nodes, sign, purpose)
         self.stage, self.assign = "free", {}           # the training stage; purpose -> the node that learned it          # a node that acts was made (the optimizer takes it in); frozen:
         #                                                no new one (checks)
 
@@ -1831,6 +1832,8 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     bank, net = fm.bank, fm.bank.interp
     q = bank.want([[n.B for n in about]], [v])[0]
     Ls.wants.append(q)
+    fm.routes.append(([n.B.detach() for n in about], v, purpose))   # (replayed: route_replay)
+    del fm.routes[:-2000]
     Ls.kinds.append(purpose)
     fm.count("steps run")
     C = fm.cands(Signal(about, v))
@@ -2206,6 +2209,22 @@ def apart(q, kinds, tau=.1, aq=None, akinds=()):
     lp = (q @ allq.T / tau).masked_fill(eye, -1e9).log_softmax(1)
     has = pos.any(1)
     return -((lp * pos).sum(1)[has] / pos.sum(1)[has]).mean() if has.any() else q.sum() * 0
+
+
+def route_replay(fm, rng, n=64):
+    """the demos' routing examples again (no interpreter, no new demo): each signal's want apart from other purposes'
+    and toward the node that learned its purpose (fm32 @50: a statement's want and its subject's .91 cos -- the store's
+    and the lookup's labels met just under 1 and both rested; ~250 updates in 50 demo steps were not enough to part them)"""
+    xs = [x for x in fm.routes if x[2] in fm.assign and fm.assign[x[2]] < len(fm.bank.fns)]
+    if len(xs) < 8:
+        return 0
+    xs = rng.sample(xs, min(n, len(xs)))
+    q = fm.bank.want([r for r, _, _ in xs], [v for _, v, _ in xs])
+    fns = [fm.fnode(t) for t in range(len(fm.bank.fns))]
+    g = fm.bank.gate(q, fns)
+    tgt = torch.tensor([fm.assign[k] for _, _, k in xs], device=q.device)
+    own = g.gather(1, tgt[:, None]).squeeze(1)
+    return apart(q, [k for _, _, k in xs]) + F.cross_entropy(g / .1, tgt) + F.relu(PULL - own).mean()
 
 
 def finish(fm, Ls, rng, recent=None):
@@ -3097,6 +3116,10 @@ def run_fm(A):
             Ls = Lesson()                              # the functions on functions and the translator: one update
             demo_functions(fm, Ls, A, st, rng)
             finish(fm, Ls, rng, recent)
+            for _ in range(A.replay):                  # the demos' routing, again (one small update each)
+                Lr = Lesson()
+                Lr.add("route replay", route_replay(fm, rng))
+                update(Lr, acc)
         seen += fm.said                                # what it reads and what functions say (typed values, parts,
         fm.said = []                                   # filled questions) still says back as it was written, long
         for kind, ops in (("ops", (1, 3)), ("ops", (4, 6)), ("chain", 0), ("before", 0)) * 2:   # questions too
@@ -3209,6 +3232,7 @@ if __name__ == "__main__":
     P.add_argument("--qb", type=int, default=4, help="questions per step")
     P.add_argument("--warm", type=int, default=50, help="steps of the warm start: a batch of lookups an update")
     P.add_argument("--warm_q", type=int, default=16, help="lookups in each warm-start update")
+    P.add_argument("--replay", type=int, default=20, help="routing replays after each demo step (want reader + labels)")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
     P.add_argument("--sal_sup", type=float, default=1., help="weight of the teacher's hint on what is salient")
