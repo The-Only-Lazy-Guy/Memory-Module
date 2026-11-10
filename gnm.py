@@ -739,9 +739,6 @@ class Pool(nn.Module):
         return y[:, :self.k]
 
 
-LAB_POOL = "gate"                                      # --lab_pool: the label head (probe 11-11)
-
-
 class Heads(nn.Module):
     """the encoder's second stage: a node's label and relation from its value alone, so a node a function made gets
     both without being said and read again"""
@@ -749,7 +746,6 @@ class Heads(nn.Module):
     def __init__(self, c=256, d=128):
         super().__init__()
         self.p = Pool(c, 3)
-        self.lab = nn.Sequential(nn.Linear(c, 512), nn.GELU(), nn.Linear(512, d))
         self.rel = nn.Sequential(nn.Linear(c, 512), nn.GELU(), nn.Linear(512, d))
         self.how = nn.Linear(c, 1)
         self.rr = nn.TransformerEncoder(nn.TransformerEncoderLayer(c, 8, 512, batch_first=True, activation="gelu"), 2)
@@ -767,12 +763,9 @@ class Heads(nn.Module):
 
     def forward(self, zs):
         y = self.p([[z] for z in zs])
-        if LAB_POOL == "gate":                         # (probe 11-11: the encoder's label is value-free -- 'the trade of
-            x, m = pad(zs)                             # Vinzek' and '... is 2 7.' 0.00 apart -- by a token gate; the
-            g_ = torch.sigmoid(self.lg(x)).squeeze(-1) * m   # CLS pool missed it: the same fact .34 apart, cos .85-.89)
-            lab = F.normalize(self.lp((g_[..., None] * x).sum(1) / g_.sum(1, keepdim=True).clamp(min=1e-6)), dim=-1)
-        else:
-            lab = F.normalize(self.lab(y[:, 0]), dim=-1)
+        x, m = pad(zs)                                 # the label: the rows that name the thing, pooled, as the encoder
+        g_ = torch.sigmoid(self.lg(x)).squeeze(-1) * m   # makes it (lp11: the CLS pool put the same fact .51 apart at
+        lab = F.normalize(self.lp((g_[..., None] * x).sum(1) / g_.sum(1, keepdim=True).clamp(min=1e-6)), dim=-1)   # codec
         return lab, F.normalize(self.rel(y[:, 1]), dim=-1) * torch.sigmoid(self.how(y[:, 2])) / .9
 
 
@@ -1516,11 +1509,13 @@ class FM:
         self.t += 1
         self.g.chain[p].append((n.B.detach(), self.t, n.toks))
 
-    def find_place(self, L):
+    def find_place(self, L, reach=False):
+        """the place this label names: within that place's reach (storing), or within .1 (the calculator's memo: a result
+        about 'the sum of X and 5' must not join X's place)"""
         if not self.g.n:
             return -1
         d, p = self.g.search(L.detach().float().cpu().numpy())[0]
-        return p if d < .1 else -1
+        return p if d < (float(self.g.S[p]) if reach else .1) else -1
 
     def write(self, z, w, ins, sg, isfn, rec, j):
         """where an output lands, and what that change signals"""
@@ -1540,11 +1535,10 @@ class FM:
                 self.memorize(x.place, z, ins, rec, j)
             else:                                      # a workspace node's value changed: the node that asked for it hears
                 n = self.node(z)
-                moved = float((n.L - x.L).norm())
+                if self.say(n) == self.text_of(x):     # no change, no signal: it says what it said (11-11: by what it
+                    self.count("no change")            # says, not by its label -- a fact's label is value-free now,
+                    return                             # so a filled-in value barely moves it)
                 x.B, x.L, x.R = n.B, n.L, n.R
-                if moved < self.same:                  # no change, no signal: it is still the node it was
-                    self.count("no change")
-                    return
                 self.signals.append(Signal([x.parent, x] if x.parent is not None else [x], 1., self.t))
             return
         if isfn and not self.frozen:                   # a new node that acts (a function), made like an input function
@@ -1554,8 +1548,13 @@ class FM:
             self.count("new functions")
             return
         n = self.node(z, parent=sg.about[0])
-        if w == NEW_PLACE:
-            self.memorize(self.g.add_place(n.L.detach().float().cpu().numpy()), z, ins, rec, j)
+        if w == NEW_PLACE:                             # a place is what it is about: one already there within its reach
+            p = self.find_place(n.L, reach=True)       # takes it (A to be B: its chain grows; tr24/ck27: 1.00 entry
+            if p < 0:                                  # per place, the history never formed, 'before' impossible)
+                p = self.g.add_place(n.L.detach().float().cpu().numpy())
+            else:
+                self.count("found its place")
+            self.memorize(p, z, ins, rec, j)
         else:
             self.news.append(n)
 
@@ -2260,10 +2259,12 @@ def label_probe(fm, rng, n=12):
     E = fm.tr.encode(a + b)
     out = []
     for name, X in (("heads", L), ("encoder", E)):
-        same = (X[:len(a)] - X[len(a):]).norm(dim=-1).mean()
+        same = (X[:len(a)] - X[len(a):]).norm(dim=-1)
         dd = torch.cdist(X[:len(a)], X[:len(a)])
         other = dd.sum() / (len(a) * (len(a) - 1))
-        out.append(f"{name}: same fact {float(same):.2f}, other fact {float(other):.2f}")
+        near = (dd + torch.eye(len(a), device=dd.device) * 9).min()
+        out.append(f"{name}: same fact {float(same.mean()):.2f} (max {float(same.max()):.2f}), other fact {float(other):.2f} "
+                   f"(nearest {float(near):.2f})")
     return "; ".join(out)
 
 
@@ -3204,7 +3205,6 @@ if __name__ == "__main__":
     P.add_argument("--scope", type=float, default=.9)
     P.add_argument("--skill", type=int, default=35, help="steps of stage 1: the teacher says which node does a purpose")
     P.add_argument("--route", type=int, default=15, help="steps of stage 2: routing chooses, a light hint toward that node")
-    P.add_argument("--lab_pool", default="gate", help="the label head: gate (rows that name it, pooled) or cls (probe 11-11)")
     P.add_argument("--demo", type=int, default=50, help="steps with demos (user 11-10: ~50); after them it lives, signals only")
     P.add_argument("--writer", type=int, default=1, help="1: the functions' own weights are written by the update writer")
     P.add_argument("--tune", type=float, default=.1, help="how far a place's access key moves per use")
@@ -3216,6 +3216,5 @@ if __name__ == "__main__":
     P.add_argument("--tries", type=int, default=4, help="sampled tries for a wrong answer")
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
-    LAB_POOL = A.lab_pool
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
     (overfit if A.overfit else deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
