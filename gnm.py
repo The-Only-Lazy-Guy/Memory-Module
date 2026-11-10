@@ -1858,6 +1858,8 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     C = fm.around(actor, C)
     keep = [i for i, (n, _, _) in enumerate(C) if key(n) in want_in]
     order, hops, sal, lg, pick = fm.perceive(actor, q, Signal(about, v), C, keep)
+    if purpose == "lookup":                            # chance: a number taken from any input that has one
+        fm.count("lookup chance", 1 / max(1, sum(1 for n in order if n.kind == "entry" and number_of(fm, n) is not None)))
     y = torch.tensor([float(key(n) in want_in) for n, _, _ in C], device=lg.device)
     wanted = y > 0                                     # a light hint: the teacher's inputs salient, the rest less so
     Ls.add("salience hint", A.sal_sup * sum(F.binary_cross_entropy_with_logits(lg[m_], y[m_]) for m_ in (wanted, ~wanted) if bool(m_.any())))
@@ -2976,6 +2978,18 @@ def run_fm(A):
                 seen.append(text)
         finish(fm, Ls, rng, recent)
         update(Ls, acc)
+        if step <= A.warm:                             # warm start (REALM's retriever warm start; induction-head
+            fm.look = min(6, 2 + 4 * step // max(1, A.warm))   # plateaus need many examples): lookups in a batch, one
+            Ls = Lesson()                                      # update; the walk brings 2 places at first, 6 at the end
+            for _ in range(A.warm_q):                          # (fewer look-alikes first). fm24: ~6 lookups an update,
+                E = q_expr("lookup", w, rng)                   # stuck at 16-21% = picking among the subject's facts
+                if E is not None:
+                    demo_question(fm, T, Ls, A, st, E)
+                    seen.append(ask_text(E))
+            finish(fm, Ls, rng, recent)
+            update(Ls, acc)
+        elif step == A.warm + 1:
+            fm.look = 6
         for _ in range(A.qb):                          # each question: one update
             E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops", "ops"]), w, rng)
             if E is not None:
@@ -3016,6 +3030,7 @@ def run_fm(A):
                   f"] made nodes that act {len(fm.bank.fns)} | who acts: " + ", ".join(
                       f"{k[5:]} {v}" for k, v in sorted(fm.stats.items()) if k.startswith("acts")) + " | exact: " + ", ".join(
                       f"{k[:-5]} {fm.stats.get(k[:-5] + ' exact', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" said")) +
+                  f" (lookup chance {100 * fm.stats.get('lookup chance', 0) / max(1, fm.stats.get('lookup said', 0)):.0f}%)" +
                   " | inputs the walk brought: " + ", ".join(
                       f"{k[:-3]} {fm.stats.get(k[:-3] + ' walked', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" in")) +
                   f" | free questions right {fm.stats.get('free right', 0)}/{fm.stats.get('free questions', 0)} "
@@ -3088,6 +3103,8 @@ if __name__ == "__main__":
     P.add_argument("--lr", type=float, default=2e-4)
     P.add_argument("--lr_tr", type=float, default=2e-5, help="the translator's own layers (encoder, decoder)")
     P.add_argument("--qb", type=int, default=4, help="questions per step")
+    P.add_argument("--warm", type=int, default=50, help="steps of the warm start: a batch of lookups an update")
+    P.add_argument("--warm_q", type=int, default=16, help="lookups in each warm-start update")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
     P.add_argument("--sal_sup", type=float, default=1., help="weight of the teacher's hint on what is salient")
