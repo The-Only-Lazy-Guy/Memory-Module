@@ -1498,7 +1498,9 @@ class FM:
                     if x.kind == "entry":                                   # onto itself, the re-read moved its label, and
                         rec["same"] = True                                  # it fired 6-9 times; 1315 firings for 297)
                     continue
-            if drift:                                  # its own guess: unusually wrong -> said and read again
+            if drift and not fj:                       # its own guess: unusually wrong -> said and read again (words
+            #                                            only: a program read back as text gave make() 46 rows for 16,
+            #                                            fm35 living crash)
                 said_ = self.say(Node(z, None, None))
                 if said_.strip():                      # (said as nothing, it stays as it was: read again, nothing is
                     z = self.nodes([said_])[0].B       # a node of no rows, its mean not a number -- fm21's gates)
