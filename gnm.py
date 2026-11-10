@@ -573,8 +573,8 @@ class Graph:
             self.adj[j].append(i)
 
 
-REACH = .5                      # a place's first reach: statements about one subject lie within .485 of each other, the
-                                # nearest other subject at >= .365 (p5 .675) (trace of a 402-place memory, 11-03); lessons move it
+REACH = .75                     # a place's reach: the same fact with another value lies within .61 of it, the nearest other
+                                # fact at .91 (fm28 codec 1200, gated label head; 11-11)
 
 
 # ====================================================================== the translator (encoder stage 1 + decoder)
@@ -1409,10 +1409,11 @@ class FM:
                     f"{C[i][0].kind}{C[i][0].fn if C[i][0].kind == 'fn' else ''} (value finite {bool(torch.isfinite(C[i][0].B).all())}, "
                     f"label finite {C[i][0].L is not None and bool(torch.isfinite(C[i][0].L).all())})" for i in bad[:6]), flush=True)
             s = torch.nan_to_num(s, nan=-1e9, posinf=-1e9, neginf=-1e9)
-        if float(s.max()) <= 1:
+        if float(s.max()) <= 1 and not self.explore:
             return -1
-        if self.explore:
-            return int(torch.multinomial(F.softmax(s.masked_fill(s <= 1, -1e9) / self.explore, -1), 1))
+        if self.explore:                               # a try: what meets the want, or when nothing does, any node by how
+            s_ = s.masked_fill(s <= 1, -1e9) if float(s.max()) > 1 else s   # near it is (tr29: 284 of 297 statements in
+            return int(torch.multinomial(F.softmax(s_ / self.explore, -1), 1))   # a fresh world rested, and so did every try)
         return int(s.argmax())
 
     # --- one firing
@@ -3037,7 +3038,10 @@ def run_fm(A):
     w = T = None
     for step in range(1, A.steps + 1):
         st["step"] = step
-        if w is None or step % 150 == 1:               # a new world now and then: names, keys, numbers all new
+        if w is None or (step <= A.demo and (step - 1) % A.world == 0) or (step > A.demo and (step - A.demo - 1) % 150 == 0):
+            #                                            a new world now and then: names, keys, numbers all new (demos:
+            #                                            every --world steps -- dm29: one world in 50 demo steps, and a
+            #                                            fresh world's statements all rested; living: a fresh one first)
             w = new_world(rng)
             T = Teacher(w)
             fm.g = Graph(fm.bank.d)
@@ -3205,6 +3209,7 @@ if __name__ == "__main__":
     P.add_argument("--scope", type=float, default=.9)
     P.add_argument("--skill", type=int, default=35, help="steps of stage 1: the teacher says which node does a purpose")
     P.add_argument("--route", type=int, default=15, help="steps of stage 2: routing chooses, a light hint toward that node")
+    P.add_argument("--world", type=int, default=5, help="demo steps per world (a new world: names, keys, numbers)")
     P.add_argument("--demo", type=int, default=50, help="steps with demos (user 11-10: ~50); after them it lives, signals only")
     P.add_argument("--writer", type=int, default=1, help="1: the functions' own weights are written by the update writer")
     P.add_argument("--tune", type=float, default=.1, help="how far a place's access key moves per use")
