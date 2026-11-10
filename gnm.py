@@ -1434,6 +1434,7 @@ class FM:
         rec = {"actor": actor, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a_, n.near) for n, k, a_ in C], "take": take,
                "ins": ins, "hops": hops, "sign": sg.sign,
                "walkq": sg.about[0].L.detach().float().cpu().numpy() if sg.about[0].L is not None else None,
+               "sal": [float(x) for x in sal], "outs": [],
                "aboutL": sg.about[0].L.detach() if sg.about[0].L is not None else None}
         self.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
         calc = self.bank.calc_of(actor)
@@ -1470,13 +1471,25 @@ class FM:
         self.count("fires")
         drift = float(err) > float(st_.mu + self.kappa * st_.sd)
         self.news = []
+        flat = [t for n in ins[:net.R] for t in (list(n.toks[:net.L]) if n.toks is not None else [None] * len(n.B[:net.L]))]
         for j, z in enumerate(made):
+            wj, fj = int(where[j].argmax()), float(isfn[j]) > 0
+            pcs = [] if fj else assemble(net, o, j)[1]
+            rec["outs"].append((pcs, wj, fj))          # (what it made: its pieces, where it went, words or a function)
+            x = ins[wj - 2] if 2 <= wj < 2 + len(ins) else None
+            if not fj and x is not None and x.kind != "fn" and x.toks is not None and pcs and all(pc[0] == "span" for pc in pcs):
+                said_t = [t for pc in pcs for t in flat[pc[1]:pc[2] + 1]]
+                if None not in said_t and said_t == list(x.toks[:net.L]):   # it says exactly what it replaces: no change,
+                    self.count("no change")                                 # no signal (tr24: the store wrote the statement
+                    if x.kind == "entry":                                   # onto itself, the re-read moved its label, and
+                        rec["same"] = True                                  # it fired 6-9 times; 1315 firings for 297)
+                    continue
             if drift:                                  # its own guess: unusually wrong -> said and read again
                 said_ = self.say(Node(z, None, None))
                 if said_.strip():                      # (said as nothing, it stays as it was: read again, nothing is
                     z = self.nodes([said_])[0].B       # a node of no rows, its mean not a number -- fm21's gates)
                     self.count("roundtrip")
-            self.write(z, int(where[j].argmax()), ins, sg, float(isfn[j]) > 0, rec, j)
+            self.write(z, wj, ins, sg, fj, rec, j)
         if len(self.news) == 1:                        # a new node is heard by itself; several made at once are heard
             self.signals.append(Signal(self.news, 1., self.t))   # together, with what they came from
         elif self.news:
@@ -1539,6 +1552,7 @@ class FM:
         n = self.node(z)
         if self.g.chain[p] and self.say(Node(z, None, None)) == self.text_of(self.entry(p)):
             self.count("no change")                    # it says what the place says now: nothing new, nothing to hear
+            rec["same"] = True                         # (the memory holds it already)
             return                                     # (a fact's label does not move with its value: said, compared)
         self.g.chain[p].append((z.detach(), self.t, None))
         self.g.R[p] = n.R.detach().float().cpu().numpy()
@@ -1919,6 +1933,9 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         if isinstance(target, str):                    # words: never into a function's place (as when it lives)
             wl = wl.masked_fill(torch.tensor([False, False] + [n.kind == "fn" for n in order[:net.R]], device=dev)[:len(wl)], -1e9)
         L = L + F.cross_entropy(wl[None], torch.tensor([w], device=dev))
+        w_ok = int(wl.argmax()) == w                   # where it lands is part of exact (tr24: store said right 95%,
+        exact = exact and w_ok                         # living it wrote every statement onto itself)
+        fm.count(f"{purpose} where", 1), fm.count(f"{purpose} where right", int(w_ok))
         L = L + F.binary_cross_entropy_with_logits(o["isfn"][j], torch.tensor(float(not isinstance(target, str)), device=dev))
     Ls.add("functions", L + F.mse_loss(o["err"], torch.log1p(L.detach())))   # its own guess of how wrong, on a log scale
     #                                                  (fm12: the raw loss squared swamped everything, 8233 of 8289)
@@ -2022,7 +2039,10 @@ def trace_step(fm, purpose, v, about, actor, how, C, gates, lg, y, order, o, inf
     print("   inputs in order: " + " | ".join(f"{r}: {told(fm, n, 50)!r}" for r, n in enumerate(order)), flush=True)
     print(f"   many {int(o['many'].argmax()) + 1} (target {len(outs)}), own error {float(o['err']):.2f} (usual {float(fm.bank.stats_of(actor).mu):.2f})", flush=True)
     for j, target, w, dl, told_, plan, pcs, tid in info:
-        wp = o["where"][j].softmax(-1)
+        wp = o["where"][j]
+        if isinstance(target, str):                    # (as it is used: words never into a function's place)
+            wp = wp.masked_fill(torch.tensor([False, False] + [n.kind == "fn" for n in order[:net.R]], device=wp.device)[:len(wp)], -1e9)
+        wp = wp.softmax(-1)
         print(f"   out {j}: target {target!r}\n      target's pieces: {pieces_said(fm, order, net, o, j, plan, tid)}\n"
               f"      its own pieces:  {pieces_said(fm, order, net, o, j, pcs)}\n"
               f"      said with the target's pieces {told_[0]!r} | with its own {told_[1]!r}\n"
@@ -2255,6 +2275,10 @@ def evaluate(fm, A, seed):
                 fm.arrive(text)
                 nstat += 1
     mem = dict(fm.stats)
+    newest = {D(fm.text_of(fm.entry(p))) for p in range(fm.g.n)}   # the memory it wrote itself, against the world
+    truth = {D(f"{leaf(nm, k)} is {v}.") for nm, e in w.ents.items() for k, v in e.items()}
+    held = (f"memory: facts held right {len(truth & newest)}/{len(truth)}, places {fm.g.n}, entries per place "
+            f"{sum(len(c) for c in fm.g.chain) / max(1, fm.g.n):.2f}")
     line = []
     for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6))):
         hit = n = steps = 0
@@ -2268,7 +2292,7 @@ def evaluate(fm, A, seed):
             hit += got == D(VAL(truth_of(E, w)))
         line.append(f"{kind} {hit}/{n} ({steps / max(1, n):.1f} firings)")
     stats = ", ".join(f"{k} {v}" for k, v in sorted(mem.items()))
-    return f"statements {nstat} [{stats}] | answers: " + " | ".join(line) + f" | made nodes that act {len(fm.bank.fns)}"
+    return f"statements {nstat} [{stats}] | {held} | answers: " + " | ".join(line) + f" | made nodes that act {len(fm.bank.fns)}"
 
 
 @torch.no_grad()
@@ -2343,46 +2367,53 @@ def imitate(fm, recs):
     return loss / max(1, len(recs))
 
 
-def free_question(fm, A, w, rng):
-    """the module answers a question by itself (nothing scripted) on the memory as it is; the truth arrives after: right:
-    + on its firings, the places it read easier to reach; wrong: the cheapest right one of a few sampled tries is what
-    its choices learn. Returns the loss"""
-    E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops"]), w, rng)
-    if E is None or not fm.g.n:
-        return 0
-    mods = (fm.bank, fm.heads, fm.filt, fm.critic)
-    for mod in mods:
-        mod.eval()
-    truth, g0, snap, budget = D(VAL(truth_of(E, w))), fm.g, snapshot(fm.bank), fm.budget
-    fm.budget = 16
-    fm.g, fm.firings = clone_graph(g0), []
-    got, _ = fm.ask(ask_text(E))
-    recs = list(fm.firings)
-    restore(fm.bank, snap)
-    fm.g = g0
-    fm.count("free questions"), fm.count("free right", int(got == truth)), fm.count("free firings", len(recs))
-    loss = 0
-    if got == truth:
-        tuned(g0, recs, A.tune)
-        loss = signalled(fm, recs, 1)
-    else:
-        best, fm.explore = None, A.explore
-        for _ in range(A.tries):
-            fm.g, fm.firings = clone_graph(g0), []
-            got, _ = fm.ask(ask_text(E))
-            restore(fm.bank, snap)
-            if got == truth and (best is None or len(fm.firings) < len(best)):
-                best = list(fm.firings)
-        fm.explore, fm.g = 0., g0
-        tuned(g0, recs, -A.tune / 2)
-        if best:
-            fm.count("free fixed by a try")
-            tuned(g0, best, A.tune)
-            loss = imitate(fm, best)
-    fm.budget = budget
-    for mod in mods:
-        mod.train()
-    return loss
+def tries(fm, A, g0, snap, act, good):
+    """sampled tries from the same start (memory g0, functions as in snap): the cheapest one that turns out right ->
+    (its firings, its memory), else None. Nothing a try makes stays in the functions"""
+    best, fm.explore = None, A.explore
+    for _ in range(A.tries):
+        fm.g, fm.firings = clone_graph(g0), []
+        ok = good(act())
+        if ok and (best is None or len(fm.firings) < len(best[0])):
+            best = (list(fm.firings), fm.g)
+        restore(fm.bank, snap)
+    fm.explore = 0.
+    return best
+
+
+def kept_well(recs):
+    """a statement was kept: a firing kept it and the check passes what was kept, or the memory says it already"""
+    return any(r.get("same") for r in recs) or any(r.get("kept") and all(ok >= .5 for _, ok in r["kept"]) for r in recs)
+
+
+def relive(fm, recs):
+    """a run that turned out right is its own demonstration: each firing's outputs as it made them (its pieces, where
+    each went, how many, words or a function) are what that node learns to make from those inputs (user: CoT is
+    imitation; after the first demos, the only teacher is the outcome)"""
+    net, loss, n = fm.bank.interp, 0, 0
+    for r in recs:
+        a, outs = r["actor"], r.get("outs")
+        if not outs or (a.kind == "fn" and a.fn >= len(fm.bank.fns)):   # (a calculator's own body; a node gone)
+            continue
+        o = fm.bank.run(a, r["ins"], r["q"], v=r["sign"], hops=r["hops"], sal=r["sal"])
+        dev = o["many"].device
+        L = F.cross_entropy(o["many"][None], torch.tensor([min(len(outs), net.M) - 1], device=dev))
+        fslot = torch.tensor([False, False] + [x.kind == "fn" for x in r["ins"][:net.R]], device=dev)
+        for j, (pcs, w, isfn) in enumerate(outs[:net.M]):
+            for s_ in range(min(len(pcs) + 1, net.S) if not isfn else 0):
+                k = 0 if s_ == len(pcs) else 1 if pcs[s_][0] == "span" else 2
+                L = L + F.cross_entropy(o["kind"][j, s_][None], torch.tensor([k], device=dev))
+                if k == 1:
+                    a_, b_ = pcs[s_][1], pcs[s_][2]
+                    L = L + F.cross_entropy(o["start"][j, s_][None], torch.tensor([a_], device=dev)) + \
+                        F.cross_entropy(net.end_logits(o, j, s_, a_)[None], torch.tensor([b_], device=dev))
+                elif k == 2:
+                    L = L + F.binary_cross_entropy_with_logits(o["gkeep"][j, s_], (torch.arange(net.G, device=dev) < pcs[s_][1]).float())
+            wl = o["where"][j] if isfn else o["where"][j].masked_fill(fslot[:len(o["where"][j])], -1e9)
+            L = L + F.cross_entropy(wl[None], torch.tensor([w], device=dev))
+            L = L + F.binary_cross_entropy_with_logits(o["isfn"][j], torch.tensor(float(isfn), device=dev))
+        loss, n = loss + L, n + 1
+    return loss / max(1, n)
 
 
 def signalled(fm, recs, sign):
@@ -2425,74 +2456,81 @@ def checked(fm, recs):
     return loss / max(1, n)
 
 
-def live(fm, A, rng, O, params, remake):
-    """the module lives in a fresh world by itself: nothing is scripted and no demo is shown. Lessons come only from
-    signals, and each lands at once (an update after the statements of a tick and after each question): the check's
-    score on what it kept (+ / - on those firings: their actors' labels, the places they read); a question's outcome
-    when the truth arrives (right: + on every firing of it; wrong: a light - on them, and the cheapest right one of a
-    few sampled tries is imitated, + on its firings)"""
-    w = new_world(rng)
-    fm.g, t0 = Graph(fm.bank.d), time.time()
-    tally = {"asked": 0, "right": 0, "fixed by a try": 0, "updates": 0}
-
-    def step(loss):
-        if fm.made:                                    # nodes it made while living join the optimizer
-            remake()
-            fm.made = False
-        if torch.is_tensor(loss) and loss.requires_grad:
-            O["opt"].zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(params(), 1.)
-            O["opt"].step()
-            if A.writer:
-                write_fns(fm)
-            tally["updates"] += 1
-
-    for tick in range(1, A.live + 1):
-        fm.firings = []
-        for d in world_step(w, rng):
-            o = d()
-            for text, _ in said(o, w) if o else []:
-                fm.arrive(text)
-        stored = [r for r in fm.firings if r.get("kept")]
-        good = [r for r in stored if all(ok >= .5 for _, ok in r["kept"])]
-        step(checked(fm, stored[-16:]) + signalled(fm, good, 1))   # (a fail is the check's own gradient; a - on the
-        #                                                    label silenced the module in 3 ticks, fm17c)
-        for _ in range(A.lq):
-            E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops"]), w, rng)
-            if E is None:
-                continue
-            truth, g0, snap = D(VAL(truth_of(E, w))), fm.g, snapshot(fm.bank)
-            tally["asked"] += 1
-            fm.g, fm.firings = clone_graph(g0), []
-            got, _ = fm.ask(ask_text(E))
+def live_tick(fm, A, w, rng, upd, tally):
+    """one tick of living: nothing scripted, no demo. What arrives is stored by the module itself; a statement that
+    nothing kept (or whose kept value the check fails) is wrong: a few sampled tries from where it was, and the cheapest
+    one that keeps it is imitated and its memory stays. Questions: the truth arrives after; right -> what its run made or
+    edited on the way stays (accumulated) and the run is imitated; wrong -> rolled back, the cheapest right try imitated.
+    No push on a wrong one's labels (fm17c: that silenced the module in 3 ticks). Returns the texts it read"""
+    mods = (fm.bank, fm.heads, fm.filt, fm.critic)
+    seen = []
+    for d in world_step(w, rng):
+        o = d()
+        for text, _ in said(o, w) if o else []:
+            seen.append(text)
+            for mod in mods:
+                mod.eval()
+            g0, snap = clone_graph(fm.g), snapshot(fm.bank)
+            fm.firings = []
+            fm.arrive(text)
             recs = list(fm.firings)
-            restore(fm.bank, snap)
-            fm.g = g0                                  # asking leaves the memory as it was (its access keys learn)
-            if got == truth:
-                tally["right"] += 1
-                tuned(g0, recs, A.tune)
-                step(signalled(fm, recs, 1))
-                continue
-            best, fm.explore = None, A.explore
-            for _ in range(A.tries):
-                fm.g, fm.firings = clone_graph(g0), []
-                got, _ = fm.ask(ask_text(E))
-                restore(fm.bank, snap)
-                if got == truth and (best is None or len(fm.firings) < len(best)):
-                    best = list(fm.firings)
-            fm.explore, fm.g = 0., g0
-            tuned(g0, recs, -A.tune / 2)
-            loss = 0                                   # wrong: no push on the labels (which one was wrong is not known);
-            #                                            the cheapest right try is what the choices learn
+            tally["statements"] += 1
+            if kept_well(recs):
+                tally["kept"] += 1
+                best = recs
+            else:
+                g_own = fm.g
+                b = tries(fm, A, g0, snap, lambda: fm.arrive(text), lambda _: kept_well(fm.firings))
+                fm.g, best = (b[1], b[0]) if b else (g_own, None)
+                tally["kept by a try"] += int(b is not None)
+            for mod in mods:
+                mod.train()
+            Ls = Lesson()
+            stored = [r for r in recs if r.get("kept")]
+            if stored:                                 # the check's score reaches the function that kept it
+                Ls.add("check", checked(fm, stored[-16:]))
             if best:
-                tally["fixed by a try"] += 1
+                Ls.add("kept", imitate(fm, best) + relive(fm, best))
+            upd(Ls)
+    for _ in range(A.lq):
+        E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops"]), w, rng)
+        if E is None or not fm.g.n:
+            continue
+        for mod in mods:
+            mod.eval()
+        truth, g0, snap = D(VAL(truth_of(E, w))), fm.g, snapshot(fm.bank)
+        fm.g, fm.firings = clone_graph(g0), []
+        got, _ = fm.ask(ask_text(E))
+        recs = list(fm.firings)
+        fm.g = g0                                      # asking leaves the memory as it was (its access keys learn)
+        tally["asked"] += 1
+        if got == truth:                               # what it made or edited on the way stays: accumulated
+            tally["right"] += 1
+            tuned(g0, recs, A.tune)
+            best = recs
+        else:
+            restore(fm.bank, snap)
+            tuned(g0, recs, -A.tune / 2)
+            b = tries(fm, A, g0, snap, lambda: fm.ask(ask_text(E))[0], lambda got_: got_ == truth)
+            fm.g, best = g0, (b[0] if b else None)
+            if best:
+                tally["right by a try"] += 1
                 tuned(g0, best, A.tune)
-                loss = loss + imitate(fm, best)
-            step(loss)
-        if tick % 25 == 0:
-            print(f"live {tick}: {tally} | {dict(fm.stats)} | {time.time() - t0:.0f}s", flush=True)
-            tally, fm.stats = {"asked": 0, "right": 0, "fixed by a try": 0, "updates": 0}, {}
+        for mod in mods:
+            mod.train()
+        if best:
+            Ls = Lesson()
+            Ls.add("right", imitate(fm, best) + relive(fm, best))
+            upd(Ls)
+    return seen
+
+
+def living_line(tally):
+    return (f"statements kept {tally['kept']}/{tally['statements']} (+{tally['kept by a try']} by a try) | questions right "
+            f"{tally['right']}/{tally['asked']} (+{tally['right by a try']} by a try)")
+
+
+TALLY = lambda: {"statements": 0, "kept": 0, "kept by a try": 0, "asked": 0, "right": 0, "right by a try": 0}
 
 
 @torch.no_grad()
@@ -2612,7 +2650,8 @@ def deep_trace(A):
                 n += 1
     fm.show = False
     newest = [fm.say(fm.entry(p)) for p in range(fm.g.n)]
-    truth = {f"{leaf(nm, k)} is {v}." for nm, e in w.ents.items() for k, v in e.items()}
+    truth = {D(f"{leaf(nm, k)} is {v}.") for nm, e in w.ents.items() for k, v in e.items()}
+    newest = [D(x) for x in newest]
     subj = {}
     for x in newest:
         subj.setdefault(phrase_of(x) or x[:30], 0)
@@ -2957,7 +2996,7 @@ def run_fm(A):
         x, xm = pad([fm.heads.reread(r) for r in xs])
         return tr.decode_loss(x, xm, ts)
 
-    st, t0, recent = {"step": 0}, time.time(), []
+    st, t0, recent, tally = {"step": 0}, time.time(), [], TALLY()
     w = T = None
     for step in range(1, A.steps + 1):
         st["step"] = step
@@ -2967,45 +3006,46 @@ def run_fm(A):
             fm.g = Graph(fm.bank.d)
         acc, seen, n0 = {}, [], fm.stats.get("steps run", 0)
         stage = "skills" if step <= A.skill else "route" if step <= A.skill + A.route else "free"
-        if stage != fm.stage or step == 1:
+        if step <= A.demo and (stage != fm.stage or step == 1):
             print(f"step {step}: stage {stage}", flush=True)
         fm.stage = stage
-        Ls = Lesson()                                  # the statements: one update
-        for d in world_step(w, rng):
-            o = d()
-            side = w.side.get(id(o), {}) if o else {}
-            for text, meta in said(o, w) if o else []:
-                demo_statement(fm, T, Ls, A, st, text, meta, side)
-                seen.append(text)
-        finish(fm, Ls, rng, recent)
-        update(Ls, acc)
-        if step <= A.warm:                             # warm start (REALM's retriever warm start; induction-head
-            fm.look = min(6, 2 + 4 * step // max(1, A.warm))   # plateaus need many examples): lookups in a batch, one
-            Ls = Lesson()                                      # update; the walk brings 2 places at first, 6 at the end
-            for _ in range(A.warm_q):                          # (fewer look-alikes first). fm24: ~6 lookups an update,
-                E = q_expr("lookup", w, rng)                   # stuck at 16-21% = picking among the subject's facts
-                if E is not None:
-                    demo_question(fm, T, Ls, A, st, E)
-                    seen.append(ask_text(E))
+        if step > A.demo:                              # user 11-10: as little supervision as possible, ~50 steps of
+            if step == A.demo + 1:                     # demos; then it lives: the outcome is the only teacher
+                print(f"step {step}: the demos end; it lives by itself (signals only)", flush=True)
+                fm.look = 6
+            seen += live_tick(fm, A, w, rng, lambda Ls_: update(Ls_, acc), tally)
+            Ls = Lesson()                              # (the translator still reads back what it read)
+        else:
+            Ls = Lesson()                              # the statements: one update
+            for d in world_step(w, rng):
+                o = d()
+                side = w.side.get(id(o), {}) if o else {}
+                for text, meta in said(o, w) if o else []:
+                    demo_statement(fm, T, Ls, A, st, text, meta, side)
+                    seen.append(text)
             finish(fm, Ls, rng, recent)
             update(Ls, acc)
-        elif step == A.warm + 1:
-            fm.look = 6
-        for _ in range(A.qb):                          # each question: one update
-            E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops", "ops"]), w, rng)
-            if E is not None:
-                Ls = Lesson()
-                demo_question(fm, T, Ls, A, st, E)
-                seen.append(ask_text(E))
+            if step <= A.warm:                         # warm start (REALM's retriever warm start; induction-head
+                fm.look = min(6, 2 + 4 * step // max(1, A.warm))   # plateaus need many examples): lookups in a batch,
+                Ls = Lesson()                                      # one update; the walk brings 2 places at first, 6 at
+                for _ in range(A.warm_q):                          # the end (fewer look-alikes first). fm24: ~6 lookups
+                    E = q_expr("lookup", w, rng)                   # an update, stuck at 16-21% = chance
+                    if E is not None:
+                        demo_question(fm, T, Ls, A, st, E)
+                        seen.append(ask_text(E))
                 finish(fm, Ls, rng, recent)
                 update(Ls, acc)
-        for _ in range(A.free if fm.stage == "free" else 0):   # questions it answers by itself: one update each
-            Ls = Lesson()
-            Ls.add("free question", free_question(fm, A, w, rng))
-            update(Ls, acc)
-        Ls = Lesson()                                  # the functions on functions and the translator: one update
-        demo_functions(fm, Ls, A, st, rng)
-        finish(fm, Ls, rng, recent)
+            for _ in range(A.qb):                      # each question: one update
+                E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops", "ops"]), w, rng)
+                if E is not None:
+                    Ls = Lesson()
+                    demo_question(fm, T, Ls, A, st, E)
+                    seen.append(ask_text(E))
+                    finish(fm, Ls, rng, recent)
+                    update(Ls, acc)
+            Ls = Lesson()                              # the functions on functions and the translator: one update
+            demo_functions(fm, Ls, A, st, rng)
+            finish(fm, Ls, rng, recent)
         seen += fm.said                                # what it reads and what functions say (typed values, parts,
         fm.said = []                                   # filled questions) still says back as it was written, long
         for kind, ops in (("ops", (1, 3)), ("ops", (4, 6)), ("chain", 0), ("before", 0)) * 2:   # questions too
@@ -3021,7 +3061,14 @@ def run_fm(A):
                 Ls.add("round trip (pieces)", sp)
             Ls.add("re-read", reread_loss(fm, z_, m_, seen, rng))
         update(Ls, acc)
-        if step % 50 == 0:
+        if step % 50 == 0 and step > A.demo:
+            print(f"step {step} living: {living_line(tally)} [" + ", ".join(f"{k} {v:.2f}" for k, v in acc.items()) +
+                  f"] made nodes that act {len(fm.bank.fns)} | " + ", ".join(
+                      f"{k} {v}" for k, v in sorted(fm.stats.items()) if k in ("fires", "rest", "no change", "budget out", "check fails",
+                                                                         "new functions", "edits", "updates", "roundtrip"))
+                  + f" | {time.time() - t0:.0f}s", flush=True)
+            fm.stats, tally = {}, TALLY()
+        elif step % 50 == 0:
             parts = acc
             loss = sum(acc.values())
             n_run = max(1, fm.stats.get("steps run", 0) - n0)
@@ -3032,11 +3079,11 @@ def run_fm(A):
                       f"{k[5:]} {v}" for k, v in sorted(fm.stats.items()) if k.startswith("acts")) + " | exact: " + ", ".join(
                       f"{k[:-5]} {fm.stats.get(k[:-5] + ' exact', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" said")) +
                   f" (lookup chance {100 * fm.stats.get('lookup chance', 0) / max(1, fm.stats.get('lookup said', 0)):.0f}%)" +
+                  " | where right: " + ", ".join(
+                      f"{k[:-6]} {fm.stats.get(k + ' right', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" where")) +
                   " | inputs the walk brought: " + ", ".join(
                       f"{k[:-3]} {fm.stats.get(k[:-3] + ' walked', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" in")) +
-                  f" | free questions right {fm.stats.get('free right', 0)}/{fm.stats.get('free questions', 0)} "
-                  f"({fm.stats.get('free firings', 0) / max(1, fm.stats.get('free questions', 0)):.1f} firings, "
-                  f"{fm.stats.get('free fixed by a try', 0)} fixed by a try) | functions written {fm.stats.get('functions written', 0)}"
+                  f" | functions written {fm.stats.get('functions written', 0)}"
                   + (f" (writer step {[round(float(x), 6) for x in torch.exp(fm.bank.writer.lr)]}, gain {[round(float(x), 5) for x in torch.exp(fm.bank.writer.gain)]})" if A.writer else "")
                   + f" | stage {fm.stage}, routing reaches the skill's node "
                   f"{fm.stats.get('routing reaches the skill' + chr(39) + 's node', 0)}/{fm.stats.get('routing checked', 0)} | {time.time() - t0:.0f}s", flush=True)
@@ -3056,8 +3103,13 @@ def run_fm(A):
                 mod.train()
             if A.save:
                 save_fm(fm, A.save)
-    if A.live:                                         # then it lives by itself, learning from signals only
-        live(fm, A, rng, O, params, remake)
+    if A.live:                                         # then a fresh world it lives in by itself (signals only)
+        w, fm.g, acc, tally = new_world(rng), Graph(fm.bank.d), {}, TALLY()
+        for tick in range(1, A.live + 1):
+            live_tick(fm, A, w, rng, lambda Ls_: update(Ls_, acc), tally)
+            if tick % 25 == 0:
+                print(f"live {tick}: {living_line(tally)} | {time.time() - t0:.0f}s", flush=True)
+                tally, acc = TALLY(), {}
         for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
             mod.eval()
         snap = snapshot(fm.bank)
@@ -3114,15 +3166,15 @@ if __name__ == "__main__":
     P.add_argument("--fix", type=float, default=.15, help="share of stored facts shown a check's failure and its fix")
     P.add_argument("--own", type=int, default=600, help="after this step the demo memory holds what the store itself wrote")
     P.add_argument("--scope", type=float, default=.9)
-    P.add_argument("--skill", type=int, default=50, help="steps of stage 1: the teacher says which node does a purpose")
-    P.add_argument("--route", type=int, default=50, help="steps of stage 2: routing chooses, a light hint toward that node")
+    P.add_argument("--skill", type=int, default=35, help="steps of stage 1: the teacher says which node does a purpose")
+    P.add_argument("--route", type=int, default=15, help="steps of stage 2: routing chooses, a light hint toward that node")
+    P.add_argument("--demo", type=int, default=50, help="steps with demos (user 11-10: ~50); after them it lives, signals only")
     P.add_argument("--writer", type=int, default=1, help="1: the functions' own weights are written by the update writer")
-    P.add_argument("--free", type=int, default=2, help="questions per step it answers by itself (truth after)")
     P.add_argument("--tune", type=float, default=.1, help="how far a place's access key moves per use")
     P.add_argument("--try_read", type=float, default=.1, help="share of demo steps where the read node nearest the want acts instead")
     P.add_argument("--kappa", type=float, default=2.)
     P.add_argument("--tool_good", type=float, default=.3)
-    P.add_argument("--live", type=int, default=300, help="ticks it then lives by itself (signals only)")
+    P.add_argument("--live", type=int, default=100, help="ticks it then lives in a fresh world (signals only)")
     P.add_argument("--lq", type=int, default=4, help="questions per living tick")
     P.add_argument("--tries", type=int, default=4, help="sampled tries for a wrong answer")
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
