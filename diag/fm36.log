@@ -44,3 +44,30 @@ EVAL step 100, calculator removed (its mimic answers): statements 290 [acts: fun
 step 150 living: statements kept 507/508 (+1 by a try) | questions right 0/200 (+0 by a try) [check 5.06, kept 0.23, round trip 0.01, round trip (pieces) 0.99, re-read 0.81, route replay 13.07] made nodes that act 17 | check fails 527, edits 550, fires 2305, new functions 468, no change 793, updates 808 | 2809s
 EVAL step 150: statements 276 [acts: function 537, check fails 261, fires 537, found its place 269, no change 269] | memory: facts held right 0/145, places 7, entries per place 75.57 | answers: lookup 0/24 (2.0 firings) | before 0/24 (1.0 firings) | coexist 0/24 (1.0 firings) | chain 0/24 (1.0 firings) | ops 0/24 (1.0 firings) | long 0/24 (1.0 firings) | made nodes that act 177 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'acts: function': 752, 'fires': 752, 'check fails': 284, 'no change': 443, 'found its place': 291, 'edits': 16, 'new functions': 160}
 EVAL step 150, calculator removed (its mimic answers): statements 276 [acts: function 319, check fails 44, fires 319, found its place 314, no change 263, rest 2] | memory: facts held right 0/145, places 4, entries per place 13.75 | answers: lookup 0/24 (1.0 firings) | before 0/24 (1.0 firings) | coexist 0/24 (1.0 firings) | chain 0/24 (1.0 firings) | ops 0/24 (1.0 firings) | long 0/24 (1.0 firings) | made nodes that act 185
+step 200 living: statements kept 503/509 (+5 by a try) | questions right 0/200 (+0 by a try) [check 2.24, kept 0.10, round trip 0.00, round trip (pieces) 0.17, re-read 0.45, route replay 12.56] made nodes that act 17 | check fails 550, edits 1946, fires 2106, new functions 40, no change 589, updates 808 | 3806s
+EVAL step 200: statements 298 [acts: function 449, check fails 151, fires 449, found its place 318, no change 304] | memory: facts held right 0/155, places 3, entries per place 91.00 | answers: lookup 0/24 (1.0 firings) | before 0/24 (1.0 firings) | coexist 0/24 (1.0 firings) | chain 0/24 (1.0 firings) | ops 0/24 (1.0 firings) | long 0/24 (1.0 firings) | made nodes that act 109 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'acts: function': 652, 'fires': 652, 'check fails': 152, 'no change': 595, 'found its place': 328, 'new functions': 92, 'edits': 2}
+EVAL step 200, calculator removed (its mimic answers): statements 298 [acts: function 439, check fails 141, fires 439, found its place 306, no change 298] | memory: facts held right 0/155, places 1, entries per place 257.00 | answers: lookup 0/24 (1.0 firings) | before 0/24 (1.0 firings) | coexist 0/24 (1.0 firings) | chain 0/24 (1.0 firings) | ops 0/24 (1.0 firings) | long 0/24 (1.0 firings) | made nodes that act 167
+Traceback (most recent call last):
+  File "/marimo/frozen/fm36/gnm.py", line 3264, in <module>
+    (overfit if A.overfit else deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/marimo/frozen/fm36/gnm.py", line 3088, in run_fm
+    seen += live_tick(fm, A, w, rng, lambda Ls_: update(Ls_, acc), tally)
+            ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/frozen/fm36/gnm.py", line 2562, in live_tick
+    Ls.add("kept", imitate(fm, best) + relive(fm, best))
+                                       ~~~~~~^^^^^^^^^^
+  File "/marimo/frozen/fm36/gnm.py", line 2467, in relive
+    o = fm.bank.run(a, r["ins"], r["q"], v=r["sign"], hops=r["hops"], sal=r["sal"])
+  File "/marimo/frozen/fm36/gnm.py", line 1185, in run
+    self.action(actor, program), v, hops, sal, acts=[self.action(n) for n in ins[:self.interp.R]],
+                                                     ~~~~~~~~~~~^^^
+  File "/marimo/frozen/fm36/gnm.py", line 1171, in action
+    f = self.fns[n.fn]
+        ~~~~~~~~^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/container.py", line 386, in __getitem__
+    return self._modules[self._get_abs_string_index(idx)]
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/container.py", line 370, in _get_abs_string_index
+    raise IndexError(f"index {idx} is out of range")
+IndexError: index 17 is out of range
