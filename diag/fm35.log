@@ -38,3 +38,30 @@ step 50 loss 341.51 (functions per demo step 2.37, 1329 updates, 1 targets not m
 EVAL step 50: statements 286 [acts: function 286, calculator read no numbers 1, fires 286, found its place 204, no change 113, rest 21] | memory: facts held right 40/146, places 60, entries per place 2.53 | answers: lookup 7/24 (4.8 firings) | before 1/24 (4.4 firings) | coexist 0/24 (6.0 firings) | chain 1/24 (4.7 firings) | ops 0/24 (2.5 firings) | long 0/24 (2.5 firings) | made nodes that act 17 | add one in place 0/32 | edited to add 3: 0/8 | edited to add 6: 0/8 | {'acts: function': 830, 'fires': 830, 'found its place': 224, 'calculator read no numbers': 17, 'rest': 145, 'no change': 129, 'calculator': 38, 'mimic agrees': 1, 'roundtrip': 65, 'edits': 16}
 EVAL step 50, calculator removed (its mimic answers): statements 286 [acts: function 286, fires 286, found its place 204, no change 113, rest 21] | memory: facts held right 40/146, places 60, entries per place 2.53 | answers: lookup 7/24 (4.0 firings) | before 2/24 (4.0 firings) | coexist 0/24 (6.0 firings) | chain 1/24 (4.0 firings) | ops 0/24 (2.5 firings) | long 0/24 (4.7 firings) | made nodes that act 17
 step 51: the demos end; it lives by itself (signals only)
+Traceback (most recent call last):
+  File "/marimo/frozen/fm35/gnm.py", line 3262, in <module>
+    (overfit if A.overfit else deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/marimo/frozen/fm35/gnm.py", line 3086, in run_fm
+    seen += live_tick(fm, A, w, rng, lambda Ls_: update(Ls_, acc), tally)
+            ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/frozen/fm35/gnm.py", line 2570, in live_tick
+    got, _ = fm.ask(ask_text(E))
+             ~~~~~~^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/marimo/frozen/fm35/gnm.py", line 1613, in ask
+    n = self.run()
+  File "/marimo/frozen/fm35/gnm.py", line 1597, in run
+    self.fire(sg)
+    ~~~~~~~~~^^^^
+  File "/marimo/frozen/fm35/gnm.py", line 1506, in fire
+    self.write(z, wj, ins, sg, fj, rec, j)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/frozen/fm35/gnm.py", line 1556, in write
+    self.bank.make(self.bank.want([[z]])[0].detach(), like, code=z.detach())
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/frozen/fm35/gnm.py", line 1200, in make
+    f.code.copy_(code)
+    ~~~~~~~~~~~~^^^^^^
+RuntimeError: The size of tensor a (16) must match the size of tensor b (46) at non-singleton dimension 0
