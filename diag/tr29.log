@@ -1,0 +1,638 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4920.39it/s]
+=== 1. THE TRANSLATOR (17 made nodes that act in the module)
+=== text -> B -> text (the translator), and the heads' label against the translator's
+/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
+  output = torch._nested_tensor_from_mask(
+rule: round trip 8/8 | heads label cos 0.690, nearest is its own 0.62 | 
+fact: round trip 40/40 | heads label cos 0.680, nearest is its own 0.80 | 
+copy: round trip 11/12 | heads label cos 0.654, nearest is its own 1.00 | 'the primary branch of Sagor is 1 1 (same as the main pool of Rillo).' -> 'the primary branch of Sagor is 1 (same as the main pool of Rillo).'
+correction: round trip 9/12 | heads label cos 0.704, nearest is its own 0.83 | 'Correction: the net cycle of Gorba is now 2 2.' -> 'Correction: the net cycle of Gorba is now 2.'; 'Correction: the base report of Thapel is now 2 2.' -> 'Correction: the base report of Thapel is now 2.'
+question lookup: round trip 8/8 | heads label cos 0.500, nearest is its own 1.00 | 
+part: round trip 29/38 | heads label cos 0.671, nearest is its own 0.97 | 'the pilot of Lozek before' -> 'the event'; 'the primary cycle of Mergor before' -> 'the primary cycle of Mergor'
+question before: round trip 5/5 | heads label cos 0.506, nearest is its own 1.00 | 
+question coexist: round trip 5/5 | heads label cos 0.453, nearest is its own 1.00 | 
+question chain: round trip 8/8 | heads label cos 0.510, nearest is its own 1.00 | 
+question ops: round trip 15/16 | heads label cos 0.537, nearest is its own 0.88 | 'What is the smaller of the main offer of Lodun and (the larger of (the sum of the fee of Nelo and the category of Torka) and the fee of Muzek)?' -> 'What is the smaller of the main offer of Lodun and (the larger of (the fee of Nelo and the category of Torka) and the fee of Muzek)?'
+value: round trip 9/27 | heads label cos 0.684, nearest is its own 0.07 | '1 7 2' -> '1'; '8 4' -> ''
+typed string: round trip 0/30 | heads label cos 0.712, nearest is its own 0.93 | 'string Gorka' -> 'string Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorkastring Gorka'; 'string Mervin' -> 'String MervinString MervinString MervinString MervinString MervinString MervinString MervinString MervinString MervinString MervinString MervinString Mervin'
+chatter: round trip 12/12 | heads label cos 0.703, nearest is its own 1.00 | 
+
+=== 2. ONE BATCH OF DEMOS, EVERY STEP (memory written by the teacher, 12 ticks first)
+
+--- statement 'rule: incoming log numbers increase the log by that much' (memory should keep 'rule: incoming log numbers increase the log by that much')
+
+== store (signal +1.0) | about: 'rule: incoming log numbers increase the log by that much'
+   acts: function 5 (nearest); gates function 5 0.88, function 7 0.64, function 16 0.57, function 8 0.56, function 12 0.50
+   walk by label: place 7 d 0.27 'note: later log values replace the old l'; place 6 d 1.04 'the medal of Zekdun is 2 0.'; place 22 d 1.12 'Correction: the cart of Torne is now 2 7'; place 2 d 1.16 'the step of Zekdun is 1 7.'; place 10 d 1.17 'the tax of Neba is Zekdun.'; place 3 d 1.17 'the cycle of Zekdun is 1 4.'
+   candidates 25 (filter logit, wanted): +7.6* label walk 'note: later log values replace the old log' @7.0 | +5.1* signal's 'rule: incoming log numbers increase the log b' | -8.3 function fn 10 | -8.7 function fn 0 | -8.7 function fn 4 | -8.7 function fn 11 | -8.7 function fn 12 | -8.8 function fn 9 | -8.8 function fn 8 | -8.8 function fn 7 | -8.8 function fn 15 | -8.8 function fn 1 | -8.8 function fn 6 | -8.8 function fn 2
+   inputs in order: 0: 'rule: incoming log numbers increase the log by tha' | 1: 'note: later log values replace the old log' | 2: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 3: '' | 4: 'ago' | 5: '' | 6: 'OriginalContentPostThanks for the feedback!' | 7: '' | 8: '' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 1.13 (usual 1.25)
+   out 0: target 'rule: incoming log numbers increase the log by that much'
+      target's pieces: span 0:0-10 'rule: incoming log numbers increase the log by that much'
+      its own pieces:  span 1:0-8 'note: later log values replace the old log'
+      said with the target's pieces 'rule: incoming log numbers increase the log by that much' | with its own 'note: later log values replace the old log'
+      where 1 (0.53) target 3 | function? 0.03 | loss of this output 3.89
+   label gate 0.88, step loss 5.20, exact False -> pull
+
+--- statement 'the genre of Thaor is 4.' (memory should keep 'the genre of Thaor is 4.')
+
+== store (signal +1.0) | about: 'the genre of Thaor is 4.'
+   acts: function 5 (nearest); gates function 5 0.97, function 7 0.64, function 8 0.60, function 16 0.58, function 9 0.55
+   walk by label: place 13 d 0.15 'the genre of Thaor is 4 (same as the ter'; place 19 d 0.53 'the genre of Kagor is 1 6 (same as the s'; place 18 d 0.94 'the mode of Dunka is 2 3.'; place 16 d 0.94 'the period of Kagor is 2 9.'; place 12 d 0.98 'the shelf of Thaor is 2 1.'; place 11 d 1.00 'the daily profile of Thaor is Zekdun.'
+   candidates 24 (filter logit, wanted): +7.4* label walk 'the genre of Thaor is 4 (same as the term of ' @13.0 | +0.5* signal's 'the genre of Thaor is 4.' | -6.1 label walk 'the genre of Kagor is 1 6 (same as the store ' @19.0 | -8.4 function fn 10 | -8.7 label walk 'the mode of Dunka is 2 3.' @18.0 | -8.7 function fn 0 | -8.7 label walk 'the period of Kagor is 2 9.' @16.0 | -8.7 function fn 4 | -8.7 function fn 11 | -8.7 function fn 12 | -8.7 function fn 9 | -8.8 function fn 8 | -8.8 function fn 1 | -8.8 label walk 'the shelf of Thaor is 2 1.' @12.0
+   inputs in order: 0: 'the genre of Thaor is 4.' | 1: 'the genre of Thaor is 4 (same as the term of Neba)' | 2: 'the genre of Kagor is 1 6 (same as the store of Du' | 3: 'the mode of Dunka is 2 3.' | 4: 'the period of Kagor is 2 9.' | 5: 'the shelf of Thaor is 2 1.' | 6: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 7: '' | 8: 'OriginalContentPostThanks for the feedback!' | 9: '' | 10: '' | 11: '' | 12: 'ism' | 13: '' | 14: 'iconnection' | 15: ''
+   many 1 (target 1), own error 0.81 (usual 1.27)
+   out 0: target 'the genre of Thaor is 4.'
+      target's pieces: span 0:0-8 'the genre of Thaor is 4.'
+      its own pieces:  span 0:0-8 'the genre of Thaor is 4.'
+      said with the target's pieces 'the genre of Thaor is 4.' | with its own 'the genre of Thaor is 4.'
+      where 5 (0.18) target 3 | function? 0.01 | loss of this output 0.77
+   label gate 0.97, step loss 2.76, exact False -> pull
+
+--- statement 'the genre of Torne is 29.' (memory should keep 'the genre of Torne is 29.')
+
+== store (signal +1.0) | about: 'the genre of Torne is 2 9.'
+   acts: function 5 (nearest); gates function 5 0.97, function 7 0.64, function 8 0.60, function 16 0.59, function 9 0.56
+   walk by label: place 13 d 0.84 'the genre of Thaor is 4.'; place 19 d 0.85 'the genre of Kagor is 1 6 (same as the s'; place 22 d 0.95 'Correction: the cart of Torne is now 2 7'; place 18 d 1.06 'the mode of Dunka is 2 3.'; place 9 d 1.06 'the motor of Neba is 2 9.'; place 21 d 1.10 'the frame of Kagor is 4 (same as the ter'
+   candidates 26 (filter logit, wanted): +6.6* signal's 'the genre of Torne is 2 9.' | -4.2 function fn 10 | -5.4 label walk 'the genre of Thaor is 4.' @13.1 | -5.7 label walk 'the genre of Kagor is 1 6 (same as the store ' @19.0 | -6.4 label walk 'the genre of Thaor is 4 (same as the term of ' @13.0 | -7.2 label walk 'Correction: the cart of Torne is now 2 7.' @22.1 | -7.4 function fn 4 | -7.5 function fn 0 | -7.5 function fn 12 | -7.5 label walk 'the cart of Torne is 3.' @22.0 | -7.5 function fn 11 | -7.7 function fn 9 | -7.7 function fn 8 | -7.8 function fn 5
+   inputs in order: 0: 'the genre of Torne is 2 9.' | 1: 'the genre of Thaor is 4.' | 2: 'the genre of Thaor is 4 (same as the term of Neba)' | 3: 'the genre of Kagor is 1 6 (same as the store of Du' | 4: 'Correction: the cart of Torne is now 2 7.' | 5: 'the cart of Torne is 3.' | 6: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: ''
+   many 1 (target 1), own error 0.90 (usual 1.27)
+   out 0: target 'the genre of Torne is 29.'
+      target's pieces: span 0:0-8 'the genre of Torne is 2 9.'
+      its own pieces:  span 0:0-8 'the genre of Torne is 2 9.'
+      said with the target's pieces 'the genre of Torne is 2 9.' | with its own 'the genre of Torne is 2 9.'
+      where 2 (0.30) target 1 | function? 0.02 | loss of this output 0.13
+   label gate 0.97, step loss 3.54, exact False -> pull
+
+--- statement 'the base cart of Nesa is 3.' (memory should keep 'the base cart of Nesa is 3.')
+
+== store (signal +1.0) | about: 'the base cart of Nesa is 3.'
+   acts: function 5 (nearest); gates function 5 0.98, function 7 0.68, function 8 0.61, function 16 0.60, function 9 0.57
+   walk by label: place 22 d 0.79 'Correction: the cart of Torne is now 2 7'; place 1 d 1.06 'the branch of Neba is 1 3.'; place 21 d 1.06 'the frame of Kagor is 4 (same as the ter'; place 15 d 1.08 'the main department of Neba is Dunka.'; place 9 d 1.09 'the motor of Neba is 2 9.'; place 14 d 1.11 'the store of Dunka is 1 6.'
+   candidates 27 (filter logit, wanted): +6.9* signal's 'the base cart of Nesa is 3.' | -4.0 function fn 10 | -4.1 label walk 'Correction: the cart of Torne is now 2 7.' @22.1 | -5.4 label walk 'the cart of Torne is 3.' @22.0 | -7.5 function fn 4 | -7.6 function fn 0 | -7.6 function fn 11 | -7.6 function fn 12 | -7.8 function fn 9 | -7.8 function fn 8 | -7.9 function fn 5 | -7.9 function fn 2 | -7.9 function fn 13 | -7.9 function fn 15
+   inputs in order: 0: 'the base cart of Nesa is 3.' | 1: 'Correction: the cart of Torne is now 2 7.' | 2: 'the cart of Torne is 3.' | 3: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 4: 'ago' | 5: 'OriginalContentPostThanks for the feedback!' | 6: '' | 7: '' | 8: '' | 9: '' | 10: 'ism' | 11: '' | 12: 'iconnection' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.90 (usual 1.27)
+   out 0: target 'the base cart of Nesa is 3.'
+      target's pieces: span 0:0-8 'the base cart of Nesa is 3.'
+      its own pieces:  span 0:0-8 'the base cart of Nesa is 3.'
+      said with the target's pieces 'the base cart of Nesa is 3.' | with its own 'the base cart of Nesa is 3.'
+      where 2 (0.40) target 1 | function? 0.02 | loss of this output 0.12
+   label gate 0.98, step loss 2.52, exact False -> pull
+
+--- statement 'the last layer of Nesa is 26.' (memory should keep 'the last layer of Nesa is 26.')
+
+== store (signal +1.0) | about: 'the last layer of Nesa is 2 6.'
+   acts: function 5 (nearest); gates function 5 0.97, function 7 0.67, function 8 0.62, function 9 0.61, function 16 0.61
+   walk by label: place 0 d 0.83 'any further last layer count as incremen'; place 24 d 1.05 'the base cart of Nesa is 3.'; place 20 d 1.18 'the next part of Kagor is 4.'; place 23 d 1.24 'the genre of Torne is 2 9.'; place 15 d 1.24 'the main department of Neba is Dunka.'; place 1 d 1.26 'the branch of Neba is 1 3.'
+   candidates 25 (filter logit, wanted): +7.1* signal's 'the last layer of Nesa is 2 6.' | -3.6* label walk 'any further last layer count as increments to' @0.0 | -3.7 function fn 10 | -7.6 function fn 4 | -7.6 function fn 0 | -7.7 function fn 11 | -7.7 function fn 12 | -7.9 function fn 9 | -7.9 function fn 8 | -8.0 function fn 5 | -8.0 function fn 15 | -8.0 function fn 13 | -8.0 function fn 2 | -8.0 function fn 16
+   inputs in order: 0: 'the last layer of Nesa is 2 6.' | 1: 'any further last layer count as increments to the ' | 2: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 3: 'ago' | 4: 'OriginalContentPostThanks for the feedback!' | 5: '' | 6: '' | 7: '' | 8: '' | 9: 'ism' | 10: '' | 11: 'iconnection' | 12: '' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.90 (usual 1.27)
+   out 0: target 'the last layer of Nesa is 26.'
+      target's pieces: span 0:0-9 'the last layer of Nesa is 2 6.'
+      its own pieces:  span 0:0-9 'the last layer of Nesa is 2 6.'
+      said with the target's pieces 'the last layer of Nesa is 2 6.' | with its own 'the last layer of Nesa is 2 6.'
+      where 2 (0.75) target 1 | function? 0.02 | loss of this output 0.12
+   label gate 0.97, step loss 2.95, exact False -> pull
+
+--- statement 'the cart of Torne is 27.' (memory should keep 'the cart of Torne is 27.')
+
+== store (signal +1.0) | about: 'the cart of Torne is 2 7.'
+   acts: function 5 (nearest); gates function 5 0.96, function 7 0.63, function 8 0.60, function 16 0.59, function 9 0.56
+   walk by label: place 22 d 0.01 'Correction: the cart of Torne is now 2 7'; place 24 d 0.79 'the base cart of Nesa is 3.'; place 23 d 0.94 'the genre of Torne is 2 9.'; place 9 d 1.01 'the motor of Neba is 2 9.'; place 10 d 1.02 'the tax of Neba is Zekdun.'; place 7 d 1.08 'rule: incoming log numbers increase the '
+   candidates 26 (filter logit, wanted): +8.2* label walk 'Correction: the cart of Torne is now 2 7.' @22.1 | +7.9 label walk 'the cart of Torne is 3.' @22.0 | -2.1* signal's 'the cart of Torne is 2 7.' | -8.2 label walk 'the base cart of Nesa is 3.' @24.0 | -8.4 function fn 10 | -8.6 label walk 'the genre of Torne is 2 9.' @23.0 | -8.6 function fn 0 | -8.7 function fn 4 | -8.7 function fn 11 | -8.7 function fn 12 | -8.7 function fn 9 | -8.7 function fn 8 | -8.7 function fn 1 | -8.7 function fn 7
+   inputs in order: 0: 'the cart of Torne is 2 7.' | 1: 'Correction: the cart of Torne is now 2 7.' | 2: 'the cart of Torne is 3.' | 3: 'the base cart of Nesa is 3.' | 4: 'the genre of Torne is 2 9.' | 5: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 6: '' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: '' | 12: 'ism' | 13: '' | 14: 'iconnection' | 15: ''
+   many 1 (target 1), own error 0.90 (usual 1.27)
+   out 0: target 'the cart of Torne is 27.'
+      target's pieces: span 0:0-8 'the cart of Torne is 2 7.'
+      its own pieces:  span 1:0-11 'Correction: the cart of Torne is now 2 7.'
+      said with the target's pieces 'the cart of Torne is 2 7.' | with its own 'Correction: the cart of Torne is now 2 7.'
+      where 2 (0.24) target 3 | function? 0.02 | loss of this output 2.20
+   label gate 0.96, step loss 3.91, exact False -> pull
+
+--- statement 'the log of Torne is 9.' (memory should keep 'the log of Torne is 9.')
+
+== store (signal +1.0) | about: 'the log of Torne is 9.'
+   acts: function 5 (nearest); gates function 5 0.95, function 7 0.63, function 8 0.58, function 16 0.58, function 9 0.53
+   walk by label: place 7 d 0.65 'rule: incoming log numbers increase the '; place 22 d 0.77 'the cart of Torne is 2 7.'; place 23 d 0.91 'the genre of Torne is 2 9.'; place 10 d 1.05 'the tax of Neba is Zekdun.'; place 6 d 1.10 'the medal of Zekdun is 2 0.'; place 2 d 1.11 'the step of Zekdun is 1 7.'
+   candidates 27 (filter logit, wanted): +6.3* signal's 'the log of Torne is 9.' | -2.0* label walk 'rule: incoming log numbers increase the log b' @7.1 | -3.4 label walk 'note: later log values replace the old log' @7.0 | -6.8 function fn 10 | -7.2 label walk 'the cart of Torne is 2 7.' @22.2 | -7.6 label walk 'the cart of Torne is 3.' @22.0 | -7.6 label walk 'Correction: the cart of Torne is now 2 7.' @22.1 | -8.3 label walk 'the genre of Torne is 2 9.' @23.0 | -8.4 function fn 0 | -8.4 function fn 4 | -8.4 function fn 11 | -8.4 function fn 12 | -8.5 function fn 9 | -8.5 function fn 8
+   inputs in order: 0: 'the log of Torne is 9.' | 1: 'rule: incoming log numbers increase the log by tha' | 2: 'note: later log values replace the old log' | 3: 'the cart of Torne is 2 7.' | 4: 'Correction: the cart of Torne is now 2 7.' | 5: 'the cart of Torne is 3.' | 6: 'the genre of Torne is 2 9.' | 7: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 8: 'OriginalContentPostThanks for the feedback!' | 9: '' | 10: '' | 11: '' | 12: 'ism' | 13: '' | 14: 'iconnection' | 15: ''
+   many 1 (target 1), own error 0.92 (usual 1.28)
+   out 0: target 'the log of Torne is 9.'
+      target's pieces: span 0:0-7 'the log of Torne is 9.'
+      its own pieces:  span 0:0-7 'the log of Torne is 9.'
+      said with the target's pieces 'the log of Torne is 9.' | with its own 'the log of Torne is 9.'
+      where 5 (0.21) target 1 | function? 0.02 | loss of this output 0.14
+   label gate 0.95, step loss 2.94, exact False -> pull
+
+--- statement 'the mode of Torne is 26.' (memory should keep 'the mode of Torne is 26.')
+
+== store (signal +1.0) | about: 'the mode of Torne is 2 6.'
+   acts: function 5 (nearest); gates function 5 0.96, function 7 0.65, function 16 0.59, function 8 0.59, function 9 0.57
+   walk by label: place 23 d 0.60 'the genre of Torne is 2 9.'; place 18 d 0.90 'the mode of Dunka is 2 3.'; place 22 d 0.95 'the cart of Torne is 2 7.'; place 26 d 0.96 'the log of Torne is 9.'; place 13 d 0.98 'the genre of Thaor is 4.'; place 19 d 1.02 'the genre of Kagor is 1 6 (same as the s'
+   candidates 27 (filter logit, wanted): +5.9* signal's 'the mode of Torne is 2 6.' | -0.6 label walk 'the genre of Torne is 2 9.' @23.0 | -7.1 function fn 10 | -8.5 label walk 'the mode of Dunka is 2 3.' @18.0 | -8.5 function fn 0 | -8.5 function fn 4 | -8.5 function fn 11 | -8.5 function fn 12 | -8.6 function fn 9 | -8.6 label walk 'the log of Torne is 9.' @26.0 | -8.6 function fn 8 | -8.6 label walk 'the cart of Torne is 2 7.' @22.2 | -8.6 function fn 15 | -8.6 function fn 7
+   inputs in order: 0: 'the mode of Torne is 2 6.' | 1: 'the genre of Torne is 2 9.' | 2: 'the mode of Dunka is 2 3.' | 3: 'the cart of Torne is 2 7.' | 4: 'the log of Torne is 9.' | 5: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 6: 'ago' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.90 (usual 1.28)
+   out 0: target 'the mode of Torne is 26.'
+      target's pieces: span 0:0-8 'the mode of Torne is 2 6.'
+      its own pieces:  span 0:0-8 'the mode of Torne is 2 6.'
+      said with the target's pieces 'the mode of Torne is 2 6.' | with its own 'the mode of Torne is 2 6.'
+      where 2 (0.29) target 1 | function? 0.02 | loss of this output 0.18
+   label gate 0.96, step loss 4.01, exact False -> pull
+
+--- statement 'the cart of Pello is 22.' (memory should keep 'the cart of Pello is 22.')
+
+== store (signal +1.0) | about: 'the cart of Pello is 2 2.'
+   acts: function 5 (nearest); gates function 5 0.96, function 7 0.62, function 16 0.59, function 8 0.59, function 9 0.58
+   walk by label: place 22 d 0.81 'the cart of Torne is 2 7.'; place 24 d 0.89 'the base cart of Nesa is 3.'; place 9 d 1.09 'the motor of Neba is 2 9.'; place 21 d 1.13 'the frame of Kagor is 4 (same as the ter'; place 14 d 1.16 'the store of Dunka is 1 6.'; place 26 d 1.16 'the log of Torne is 9.'
+   candidates 27 (filter logit, wanted): +6.1* signal's 'the cart of Pello is 2 2.' | -3.7 function fn 10 | -4.8 label walk 'the cart of Torne is 2 7.' @22.2 | -5.8 label walk 'the cart of Torne is 3.' @22.0 | -5.8 label walk 'Correction: the cart of Torne is now 2 7.' @22.1 | -6.2 label walk 'the base cart of Nesa is 3.' @24.0 | -7.4 function fn 4 | -7.4 function fn 0 | -7.5 function fn 12 | -7.5 function fn 11 | -7.7 function fn 9 | -7.7 function fn 8 | -7.7 function fn 5 | -7.8 function fn 13
+   inputs in order: 0: 'the cart of Pello is 2 2.' | 1: 'the cart of Torne is 2 7.' | 2: 'Correction: the cart of Torne is now 2 7.' | 3: 'the cart of Torne is 3.' | 4: 'the base cart of Nesa is 3.' | 5: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 6: 'ago' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: ''
+   many 1 (target 1), own error 0.97 (usual 1.29)
+   out 0: target 'the cart of Pello is 22.'
+      target's pieces: span 0:0-8 'the cart of Pello is 2 2.'
+      its own pieces:  span 0:0-8 'the cart of Pello is 2 2.'
+      said with the target's pieces 'the cart of Pello is 2 2.' | with its own 'the cart of Pello is 2 2.'
+      where 2 (0.27) target 1 | function? 0.02 | loss of this output 0.12
+   label gate 0.96, step loss 3.61, exact False -> pull
+
+--- statement 'the market of Pello is Thaor.' (memory should keep 'the market of Pello is Thaor.')
+
+== store (signal +1.0) | about: 'the market of Pello is Thaor.'
+   acts: function 5 (nearest); gates function 5 0.96, function 7 0.66, function 16 0.57, function 8 0.56, function 6 0.55
+   walk by label: place 13 d 0.92 'the genre of Thaor is 4.'; place 8 d 0.92 'the term of Neba is 4.'; place 28 d 0.95 'the cart of Pello is 2.'; place 19 d 0.96 'the genre of Kagor is 1 6 (same as the s'; place 9 d 0.98 'the motor of Neba is 2 9.'; place 21 d 1.00 'the frame of Kagor is 4 (same as the ter'
+   candidates 25 (filter logit, wanted): +7.0* signal's 'the market of Pello is Thaor.' | -2.9 function fn 10 | -5.9 label walk 'the genre of Thaor is 4.' @13.1 | -6.4 label walk 'the term of Neba is 4.' @8.0 | -6.6 label walk 'the genre of Kagor is 1 6 (same as the store ' @19.0 | -6.6 label walk 'the genre of Thaor is 4 (same as the term of ' @13.0 | -6.9 function fn 4 | -7.0 label walk 'the cart of Pello is 2.' @28.0 | -7.0 function fn 0 | -7.1 function fn 12 | -7.1 label walk 'the frame of Kagor is 4 (same as the term of ' @21.0 | -7.1 function fn 11 | -7.3 label walk 'the motor of Neba is 2 9.' @9.0 | -7.3 function fn 9
+   inputs in order: 0: 'the market of Pello is Thaor.' | 1: 'the genre of Thaor is 4.' | 2: 'the genre of Thaor is 4 (same as the term of Neba)' | 3: 'the term of Neba is 4.' | 4: 'the cart of Pello is 2.' | 5: 'the genre of Kagor is 1 6 (same as the store of Du' | 6: 'the motor of Neba is 2 9.' | 7: 'the frame of Kagor is 4 (same as the term of Neba)' | 8: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 9: 'OriginalContentPostThanks for the feedback!' | 10: '' | 11: '' | 12: '' | 13: 'ism' | 14: '' | 15: 'iconnection'
+   many 1 (target 1), own error 0.87 (usual 1.29)
+   out 0: target 'the market of Pello is Thaor.'
+      target's pieces: span 0:0-9 'the market of Pello is Thaor.'
+      its own pieces:  span 0:0-9 'the market of Pello is Thaor.'
+      said with the target's pieces 'the market of Pello is Thaor.' | with its own 'the market of Pello is Thaor.'
+      where 5 (0.16) target 1 | function? 0.01 | loss of this output 0.13
+   label gate 0.96, step loss 2.27, exact False -> pull
+
+--- statement 'the locale of Neka is Neba.' (memory should keep 'the locale of Neka is Neba.')
+
+== store (signal +1.0) | about: 'the locale of Neka is Neba.'
+   acts: function 5 (nearest); gates function 5 0.97, function 7 0.69, function 8 0.60, function 16 0.59, function 15 0.57
+   walk by label: place 10 d 0.87 'the tax of Neba is Zekdun.'; place 8 d 0.90 'the term of Neba is 4.'; place 18 d 0.95 'the mode of Dunka is 2 3.'; place 15 d 0.98 'the main department of Neba is Dunka.'; place 9 d 1.00 'the motor of Neba is 2 9.'; place 1 d 1.01 'the branch of Neba is 1 3.'
+   candidates 25 (filter logit, wanted): +6.6* signal's 'the locale of Neka is Neba.' | -2.8 function fn 10 | -5.3 label walk 'the tax of Neba is Zekdun.' @10.0 | -6.1 label walk 'the term of Neba is 4.' @8.0 | -6.8 label walk 'the main department of Neba is Dunka.' @15.0 | -6.9 label walk 'the mode of Dunka is 2 3.' @18.0 | -6.9 function fn 4 | -7.0 function fn 0 | -7.1 function fn 11 | -7.1 function fn 12 | -7.3 function fn 9 | -7.4 function fn 8 | -7.4 function fn 5 | -7.4 function fn 13
+   inputs in order: 0: 'the locale of Neka is Neba.' | 1: 'the tax of Neba is Zekdun.' | 2: 'the term of Neba is 4.' | 3: 'the mode of Dunka is 2 3.' | 4: 'the main department of Neba is Dunka.' | 5: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 6: 'ago' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: ''
+   many 1 (target 1), own error 0.84 (usual 1.29)
+   out 0: target 'the locale of Neka is Neba.'
+      target's pieces: span 0:0-8 'the locale of Neka is Neba.'
+      its own pieces:  span 0:0-8 'the locale of Neka is Neba.'
+      said with the target's pieces 'the locale of Neka is Neba.' | with its own 'the locale of Neka is Neba.'
+      where 4 (0.29) target 1 | function? 0.01 | loss of this output 0.12
+   label gate 0.97, step loss 2.48, exact False -> pull
+
+--- statement 'Correction: the part of Zekdun is now 5.' (memory should keep 'Correction: the part of Zekdun is now 5.')
+
+== store (signal +1.0) | about: 'Correction: the part of Zekdun is now 5.'
+   acts: function 5 (nearest); gates function 5 0.95, function 7 0.71, function 16 0.58, function 15 0.56, function 8 0.56
+   walk by label: place 5 d 0.41 'the part of Zekdun is 1 7.'; place 2 d 0.74 'the step of Zekdun is 1 7.'; place 6 d 0.85 'the medal of Zekdun is 2 0.'; place 4 d 0.94 'the daily profile of Zekdun is Neba.'; place 11 d 1.00 'the daily profile of Thaor is Zekdun.'; place 3 d 1.02 'the cycle of Zekdun is 1 4.'
+   candidates 24 (filter logit, wanted): +4.2* label walk 'the part of Zekdun is 1 7.' @5.0 | +3.4* signal's 'Correction: the part of Zekdun is now 5.' | -8.0 label walk 'the step of Zekdun is 1 7.' @2.0 | -8.1 function fn 10 | -8.5 label walk 'the medal of Zekdun is 2 0.' @6.0 | -8.7 function fn 0 | -8.7 function fn 4 | -8.7 function fn 11 | -8.7 label walk 'the daily profile of Zekdun is Neba.' @4.0 | -8.7 function fn 12 | -8.8 function fn 9 | -8.8 function fn 8 | -8.8 function fn 15 | -8.8 function fn 7
+   inputs in order: 0: 'Correction: the part of Zekdun is now 5.' | 1: 'the part of Zekdun is 1 7.' | 2: 'the step of Zekdun is 1 7.' | 3: 'the medal of Zekdun is 2 0.' | 4: 'the daily profile of Zekdun is Neba.' | 5: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 6: '' | 7: 'ago' | 8: 'OriginalContentPostThanks for the feedback!' | 9: '' | 10: '' | 11: '' | 12: 'ism' | 13: '' | 14: 'iconnection' | 15: ''
+   many 1 (target 1), own error 0.92 (usual 1.29)
+   out 0: target 'Correction: the part of Zekdun is now 5.'
+      target's pieces: span 0:0-12 'Correction: the part of Zekdun is now 5.'
+      its own pieces:  span 0:0-12 'Correction: the part of Zekdun is now 5.'
+      said with the target's pieces 'Correction: the part of Zekdun is now 5.' | with its own 'Correction: the part of Zekdun is now 5.'
+      where 3 (0.28) target 3 | function? 0.02 | loss of this output 0.25
+   label gate 0.95, step loss 1.52, exact True -> pull
+
+--- question (lookup) 'What is the genre of Torne?' truth '29'
+
+== split (signal +1.0) | about: 'What is the genre of Torne?'
+   acts: function 6 (routed); gates function 6 1.10, function 7 0.82, function 15 0.70, function 5 0.62, entry 19.0 'the genre of Kagor 0.61
+   walk by label: place 23 d 0.46 'the genre of Torne is 2 9.'; place 27 d 0.68 'the mode of Torne is 2 6.'; place 22 d 0.87 'the cart of Torne is 2 7.'; place 26 d 0.87 'the log of Torne is 9.'; place 19 d 0.93 'the genre of Kagor is 1 6 (same as the s'; place 13 d 0.97 'the genre of Thaor is 4.'
+   candidates 27 (filter logit, wanted): +7.4* signal's 'What is the genre of Torne?' | -2.1 label walk 'the genre of Torne is 2 9.' @23.0 | -7.3 label walk 'the mode of Torne is 2 6.' @27.0 | -8.0 function fn 10 | -8.4 label walk 'the log of Torne is 9.' @26.0 | -8.4 label walk 'the cart of Torne is 2 7.' @22.2 | -8.4 label walk 'the cart of Torne is 3.' @22.0 | -8.5 label walk 'Correction: the cart of Torne is now 2 7.' @22.1 | -8.6 label walk 'the genre of Kagor is 1 6 (same as the store ' @19.0 | -8.6 function fn 0 | -8.6 function fn 4 | -8.6 function fn 11 | -8.6 function fn 12 | -8.7 function fn 9
+   inputs in order: 0: 'What is the genre of Torne?' | 1: 'the genre of Torne is 2 9.' | 2: 'the mode of Torne is 2 6.' | 3: 'the cart of Torne is 2 7.' | 4: 'Correction: the cart of Torne is now 2 7.' | 5: 'the cart of Torne is 3.' | 6: 'the log of Torne is 9.' | 7: 'the genre of Kagor is 1 6 (same as the store of Du' | 8: 'the genre of Thaor is 4.' | 9: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 10: 'OriginalContentPostThanks for the feedback!' | 11: '' | 12: '' | 13: 'ism' | 14: '' | 15: 'iconnection'
+   many 1 (target 1), own error 0.24 (usual 0.45)
+   out 0: target 'the genre of Torne'
+      target's pieces: span 0:2-6 ' the genre of Torne'
+      its own pieces:  span 0:2-6 ' the genre of Torne'
+      said with the target's pieces 'the genre of Torne' | with its own 'the genre of Torne'
+      where 0 (0.99) target 0 | function? 0.00 | loss of this output 0.13
+   label gate 1.10, step loss 0.15, exact True -> pull
+
+== lookup (signal +1.0) | about: 'the genre of Torne'
+   acts: function 7 (routed); gates function 7 1.10, function 15 0.75, function 13 0.68, function 8 0.64, function 5 0.63
+   walk by label: place 23 d 0.58 'the genre of Torne is 2 9.'; place 27 d 0.79 'the mode of Torne is 2 6.'; place 26 d 1.04 'the log of Torne is 9.'; place 13 d 1.09 'the genre of Thaor is 4.'; place 22 d 1.10 'the cart of Torne is 2 7.'; place 30 d 1.11 'the locale of Neka is Neba.'
+   candidates 27 (filter logit, wanted): +7.2* signal's 'the genre of Torne' | +3.0* label walk 'the genre of Torne is 2 9.' @23.0 | -7.1 function fn 10 | -7.8 label walk 'the mode of Torne is 2 6.' @27.0 | -8.5 function fn 0 | -8.6 function fn 4 | -8.6 function fn 11 | -8.6 function fn 12 | -8.7 function fn 9 | -8.7 function fn 8 | -8.7 function fn 7 | -8.7 function fn 15 | -8.7 function fn 2 | -8.7 function fn 16
+   inputs in order: 0: 'the genre of Torne' | 1: 'the genre of Torne is 2 9.' | 2: 'the mode of Torne is 2 6.' | 3: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 4: 'ago' | 5: 'OriginalContentPostThanks for the feedback!' | 6: '' | 7: '' | 8: '' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.76 (usual 0.79)
+   out 0: target '29'
+      target's pieces: span 1:6-7 ' 2 9'
+      its own pieces:  span 1:6-7 ' 2 9'
+      said with the target's pieces '2 9' | with its own '2 9'
+      where 2 (1.00) target 2 | function? 0.00 | loss of this output 0.35
+   label gate 1.10, step loss 0.36, exact True -> pull
+
+== fill (signal +1.0) | about: 'What is the genre of Torne?' + '2 9'
+   acts: function 8 (routed); gates function 8 1.18, function 7 0.75, function 6 0.70, function 5 0.68, function 9 0.64
+   walk by label: place 23 d 0.48 'the genre of Torne is 2 9.'; place 27 d 0.68 'the mode of Torne is 2 6.'; place 22 d 0.87 'the cart of Torne is 2 7.'; place 26 d 0.87 'the log of Torne is 9.'; place 19 d 0.93 'the genre of Kagor is 1 6 (same as the s'; place 13 d 0.97 'the genre of Thaor is 4.'
+   candidates 28 (filter logit, wanted): +7.5* signal's 'What is the genre of Torne?' | +5.7* signal's '2 9' | -4.4 label walk 'the genre of Torne is 2 9.' @23.0 | -7.3 label walk 'the mode of Torne is 2 6.' @27.0 | -8.1 function fn 10 | -8.3 label walk 'the log of Torne is 9.' @26.0 | -8.3 label walk 'the cart of Torne is 2 7.' @22.2 | -8.4 label walk 'the cart of Torne is 3.' @22.0 | -8.4 label walk 'Correction: the cart of Torne is now 2 7.' @22.1 | -8.5 label walk 'the genre of Kagor is 1 6 (same as the store ' @19.0 | -8.6 function fn 0 | -8.6 function fn 4 | -8.6 function fn 11 | -8.6 function fn 12
+   inputs in order: 0: 'What is the genre of Torne?' | 1: '2 9' | 2: 'the genre of Torne is 2 9.' | 3: 'the mode of Torne is 2 6.' | 4: 'the cart of Torne is 2 7.' | 5: 'Correction: the cart of Torne is now 2 7.' | 6: 'the cart of Torne is 3.' | 7: 'the log of Torne is 9.' | 8: 'the genre of Kagor is 1 6 (same as the store of Du' | 9: 'the genre of Thaor is 4.' | 10: 'the genre of Thaor is 4 (same as the term of Neba)' | 11: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 12: 'OriginalContentPostThanks for the feedback!' | 13: 'ism' | 14: '' | 15: 'iconnection'
+   many 1 (target 1), own error 0.37 (usual 0.97)
+   out 0: target '29'
+      target's pieces: span 1:0-1 ' 2 9'
+      its own pieces:  span 1:0-1 ' 2 9'
+      said with the target's pieces '2 9' | with its own '2 9'
+      where 2 (1.00) target 2 | function? 0.01 | loss of this output 0.44
+   label gate 1.18, step loss 0.45, exact True -> pull
+
+--- question (before) 'What was the store of Dunka before?' truth '20'
+
+== split (signal +1.0) | about: 'What was the store of Dunka before?'
+   acts: function 6 (routed); gates function 6 1.08, function 7 0.80, function 15 0.70, function 5 0.63, entry 14.1 'the store of Dunka 0.61
+   walk by label: place 14 d 0.57 'the store of Dunka is 1 6.'; place 17 d 0.78 'the tax of Dunka is Kagor.'; place 15 d 0.83 'the main department of Neba is Dunka.'; place 18 d 0.97 'the mode of Dunka is 2 3.'; place 1 d 1.01 'the branch of Neba is 1 3.'; place 10 d 1.04 'the tax of Neba is Zekdun.'
+   candidates 26 (filter logit, wanted): +7.2* signal's 'What was the store of Dunka before?' | -5.2 label walk 'the store of Dunka is 1 6.' @14.1 | -6.0 label walk 'the store of Dunka is 2 0 (same as the medal ' @14.0 | -7.6 label walk 'the tax of Dunka is Kagor.' @17.0 | -7.6 function fn 10 | -7.9 label walk 'the main department of Neba is Dunka.' @15.0 | -8.4 function fn 0 | -8.5 function fn 4 | -8.5 function fn 12 | -8.5 function fn 11 | -8.6 function fn 9 | -8.6 label walk 'the mode of Dunka is 2 3.' @18.0 | -8.6 function fn 8 | -8.6 function fn 15
+   inputs in order: 0: 'What was the store of Dunka before?' | 1: 'the store of Dunka is 1 6.' | 2: 'the store of Dunka is 2 0 (same as the medal of Ze' | 3: 'the tax of Dunka is Kagor.' | 4: 'the main department of Neba is Dunka.' | 5: 'the mode of Dunka is 2 3.' | 6: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.30 (usual 0.45)
+   out 0: target 'the store of Dunka before'
+      target's pieces: span 0:2-7 ' the store of Dunka before'
+      its own pieces:  span 0:2-7 ' the store of Dunka before'
+      said with the target's pieces 'the store of Dunka before' | with its own 'the store of Dunka before'
+      where 0 (0.99) target 0 | function? 0.00 | loss of this output 0.13
+   label gate 1.08, step loss 0.14, exact True -> pull
+
+== before (signal +1.0) | about: 'the store of Dunka before'
+   acts: function 7 (routed); gates function 7 1.07, function 15 0.81, function 13 0.64, function 6 0.61, function 5 0.60
+   walk by label: place 14 d 0.76 'the store of Dunka is 1 6.'; place 17 d 0.98 'the tax of Dunka is Kagor.'; place 18 d 1.06 'the mode of Dunka is 2 3.'; place 15 d 1.13 'the main department of Neba is Dunka.'; place 1 d 1.17 'the branch of Neba is 1 3.'; place 10 d 1.20 'the tax of Neba is Zekdun.'
+   candidates 26 (filter logit, wanted): +7.1* signal's 'the store of Dunka before' | -3.0* label walk 'the store of Dunka is 1 6.' @14.1 | -3.4 function fn 10 | -5.0* label walk 'the store of Dunka is 2 0 (same as the medal ' @14.0 | -7.6 function fn 4 | -7.6 function fn 0 | -7.7 function fn 11 | -7.7 function fn 12 | -7.9 function fn 9 | -7.9 function fn 8 | -7.9 label walk 'the tax of Dunka is Kagor.' @17.0 | -7.9 function fn 2 | -7.9 function fn 5 | -7.9 function fn 13
+   inputs in order: 0: 'the store of Dunka before' | 1: 'the store of Dunka is 1 6.' | 2: 'the store of Dunka is 2 0 (same as the medal of Ze' | 3: 'the tax of Dunka is Kagor.' | 4: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 5: 'ago' | 6: 'OriginalContentPostThanks for the feedback!' | 7: '' | 8: '' | 9: '' | 10: 'ism' | 11: '' | 12: 'iconnection' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.83 (usual 0.78)
+   out 0: target '20'
+      target's pieces: span 2:6-7 ' 2 0'
+      its own pieces:  span 1:6-7 ' 1 6'
+      said with the target's pieces '2 0' | with its own '1 6'
+      where 2 (1.00) target 2 | function? 0.00 | loss of this output 4.13
+   label gate 1.07, step loss 4.14, exact False -> pull
+
+== fill (signal +1.0) | about: 'What was the store of Dunka before?' + ' 2 0'
+   acts: function 8 (routed); gates function 8 1.18, function 7 0.74, function 6 0.71, function 5 0.69, function 9 0.65
+   walk by label: place 14 d 0.56 'the store of Dunka is 1 6.'; place 17 d 0.78 'the tax of Dunka is Kagor.'; place 15 d 0.83 'the main department of Neba is Dunka.'; place 18 d 0.97 'the mode of Dunka is 2 3.'; place 1 d 1.01 'the branch of Neba is 1 3.'; place 10 d 1.04 'the tax of Neba is Zekdun.'
+   candidates 27 (filter logit, wanted): +7.2* signal's 'What was the store of Dunka before?' | +6.8* signal's ' 2 0' | -6.1 label walk 'the store of Dunka is 1 6.' @14.1 | -6.6 label walk 'the store of Dunka is 2 0 (same as the medal ' @14.0 | -7.8 label walk 'the tax of Dunka is Kagor.' @17.0 | -7.9 function fn 10 | -8.0 label walk 'the main department of Neba is Dunka.' @15.0 | -8.5 function fn 0 | -8.5 function fn 4 | -8.5 function fn 12 | -8.5 function fn 11 | -8.5 label walk 'the mode of Dunka is 2 3.' @18.0 | -8.6 function fn 9 | -8.6 function fn 8
+   inputs in order: 0: 'What was the store of Dunka before?' | 1: ' 2 0' | 2: 'the store of Dunka is 1 6.' | 3: 'the store of Dunka is 2 0 (same as the medal of Ze' | 4: 'the tax of Dunka is Kagor.' | 5: 'the main department of Neba is Dunka.' | 6: 'the mode of Dunka is 2 3.' | 7: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 8: 'OriginalContentPostThanks for the feedback!' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.28 (usual 0.96)
+   out 0: target '20'
+      target's pieces: span 1:0-1 ' 2 0'
+      its own pieces:  span 1:0-1 ' 2 0'
+      said with the target's pieces '2 0' | with its own '2 0'
+      where 2 (1.00) target 2 | function? 0.01 | loss of this output 0.37
+   label gate 1.18, step loss 0.38, exact True -> pull
+
+--- question (chain) 'What is the cycle of the daily profile of Thaor?' truth '14'
+
+== split (signal +1.0) | about: 'What is the cycle of the daily profile of Thaor?'
+   acts: function 6 (routed); gates function 6 1.10, function 7 0.86, function 15 0.73, entry 3.0 'the cycle of Zekdun 0.65, function 5 0.64
+   walk by label: place 11 d 0.71 'the daily profile of Thaor is Zekdun.'; place 4 d 0.91 'the daily profile of Zekdun is Neba.'; place 3 d 0.91 'the cycle of Zekdun is 1 4.'; place 12 d 0.92 'the shelf of Thaor is 2 1.'; place 21 d 0.94 'the frame of Kagor is 4 (same as the ter'; place 24 d 1.01 'the base cart of Nesa is 3.'
+   candidates 24 (filter logit, wanted): +7.6* signal's 'What is the cycle of the daily profile of Tha' | -6.3 label walk 'the daily profile of Thaor is Zekdun.' @11.0 | -7.1 function fn 10 | -8.0 label walk 'the daily profile of Zekdun is Neba.' @4.0 | -8.1 label walk 'the cycle of Zekdun is 1 4.' @3.0 | -8.2 label walk 'the shelf of Thaor is 2 1.' @12.0 | -8.2 label walk 'the frame of Kagor is 4 (same as the term of ' @21.0 | -8.3 function fn 0 | -8.3 function fn 4 | -8.4 function fn 12 | -8.4 function fn 11 | -8.4 function fn 9 | -8.5 function fn 8 | -8.5 label walk 'the base cart of Nesa is 3.' @24.0
+   inputs in order: 0: 'What is the cycle of the daily profile of Thaor?' | 1: 'the daily profile of Thaor is Zekdun.' | 2: 'the daily profile of Zekdun is Neba.' | 3: 'the cycle of Zekdun is 1 4.' | 4: 'the shelf of Thaor is 2 1.' | 5: 'the frame of Kagor is 4 (same as the term of Neba)' | 6: 'the base cart of Nesa is 3.' | 7: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 8: 'OriginalContentPostThanks for the feedback!' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.29 (usual 0.44)
+   out 0: target 'the daily profile of Thaor'
+      target's pieces: span 0:5-11 ' the daily profile of Thaor'
+      its own pieces:  span 0:5-10 ' the daily profile of Tha'
+      said with the target's pieces 'the daily profile of Thaor' | with its own 'the daily profile of Tha'
+      where 0 (0.99) target 0 | function? 0.00 | loss of this output 2.90
+   label gate 1.10, step loss 2.92, exact False -> pull
+
+== lookup (signal +1.0) | about: ' the daily profile of Thaor'
+   acts: function 7 (routed); gates function 7 1.11, function 15 0.77, function 13 0.73, function 5 0.72, function 8 0.66
+   walk by label: place 11 d 0.41 'the daily profile of Thaor is Zekdun.'; place 4 d 0.70 'the daily profile of Zekdun is Neba.'; place 12 d 0.93 'the shelf of Thaor is 2 1.'; place 13 d 1.02 'the genre of Thaor is 4.'; place 15 d 1.02 'the main department of Neba is Dunka.'; place 17 d 1.03 'the tax of Dunka is Kagor.'
+   candidates 25 (filter logit, wanted): +6.2* label walk 'the daily profile of Thaor is Zekdun.' @11.0 | +5.6* signal's ' the daily profile of Thaor' | -7.5 label walk 'the daily profile of Zekdun is Neba.' @4.0 | -8.1 function fn 10 | -8.7 function fn 0 | -8.7 label walk 'the shelf of Thaor is 2 1.' @12.0 | -8.7 function fn 4 | -8.7 function fn 11 | -8.7 function fn 12 | -8.8 function fn 9 | -8.8 function fn 8 | -8.8 function fn 7 | -8.8 function fn 15 | -8.8 function fn 1
+   inputs in order: 0: ' the daily profile of Thaor' | 1: 'the daily profile of Thaor is Zekdun.' | 2: 'the daily profile of Zekdun is Neba.' | 3: 'the shelf of Thaor is 2 1.' | 4: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 5: '' | 6: 'ago' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: '' | 12: 'ism' | 13: '' | 14: 'iconnection' | 15: ''
+   many 1 (target 1), own error 0.87 (usual 0.80)
+   out 0: target 'string Zekdun'
+      target's pieces: made 1 'string' + span 1:8-11 ' Zekdun'
+      its own pieces:  span 1:0-5 'the daily profile of Tha'
+      said with the target's pieces 'string Zekdun' | with its own 'the daily profile of Tha'
+      where 2 (0.99) target 2 | function? 0.00 | loss of this output 10.02
+   label gate 1.11, step loss 10.03, exact False -> pull
+
+== fill (signal +1.0) | about: 'What is the cycle of the daily profile of Thaor?' + 'string Zekdun'
+   acts: function 8 (routed); gates function 8 1.15, function 7 0.75, function 5 0.71, function 6 0.66, function 16 0.65
+   walk by label: place 11 d 0.70 'the daily profile of Thaor is Zekdun.'; place 4 d 0.91 'the daily profile of Zekdun is Neba.'; place 3 d 0.91 'the cycle of Zekdun is 1 4.'; place 12 d 0.92 'the shelf of Thaor is 2 1.'; place 21 d 0.94 'the frame of Kagor is 4 (same as the ter'; place 24 d 1.01 'the base cart of Nesa is 3.'
+   candidates 25 (filter logit, wanted): +7.5* signal's 'What is the cycle of the daily profile of Tha' | +6.5* signal's 'string Zekdun' | -6.9 label walk 'the daily profile of Thaor is Zekdun.' @11.0 | -7.6 function fn 10 | -8.2 label walk 'the daily profile of Zekdun is Neba.' @4.0 | -8.2 label walk 'the cycle of Zekdun is 1 4.' @3.0 | -8.3 label walk 'the shelf of Thaor is 2 1.' @12.0 | -8.3 label walk 'the frame of Kagor is 4 (same as the term of ' @21.0 | -8.4 function fn 0 | -8.4 function fn 4 | -8.4 function fn 12 | -8.5 function fn 11 | -8.5 label walk 'the base cart of Nesa is 3.' @24.0 | -8.5 function fn 9
+   inputs in order: 0: 'What is the cycle of the daily profile of Thaor?' | 1: 'string Zekdun' | 2: 'the daily profile of Thaor is Zekdun.' | 3: 'the daily profile of Zekdun is Neba.' | 4: 'the cycle of Zekdun is 1 4.' | 5: 'the shelf of Thaor is 2 1.' | 6: 'the frame of Kagor is 4 (same as the term of Neba)' | 7: 'the base cart of Nesa is 3.' | 8: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 9: 'OriginalContentPostThanks for the feedback!' | 10: '' | 11: '' | 12: 'ism' | 13: '' | 14: 'iconnection' | 15: ''
+   many 1 (target 1), own error 0.69 (usual 0.94)
+   out 0: target 'What is the cycle of Zekdun?'
+      target's pieces: span 0:0-4 'What is the cycle of' + span 1:1-4 ' Zekdun' + span 0:12-12 '?'
+      its own pieces:  span 0:0-4 'What is the cycle of' + span 1:1-4 ' Zekdun' + span 0:12-12 '?'
+      said with the target's pieces 'What is the cycle of Zekdun?' | with its own 'What is the cycle of Zekdun?'
+      where 2 (0.99) target 2 | function? 0.02 | loss of this output 0.69
+   label gate 1.15, step loss 0.71, exact True -> pull
+
+== split (signal +1.0) | about: 'What is the cycle of Zekdun?'
+   acts: function 6 (routed); gates function 6 1.08, function 7 0.84, function 15 0.71, entry 2.0 'the step of Zekdun  0.65, entry 6.0 'the medal of Zekdun 0.64
+   walk by label: place 3 d 0.62 'the cycle of Zekdun is 1 4.'; place 2 d 0.98 'the step of Zekdun is 1 7.'; place 6 d 1.01 'the medal of Zekdun is 2 0.'; place 4 d 1.04 'the daily profile of Zekdun is Neba.'; place 21 d 1.09 'the frame of Kagor is 4 (same as the ter'; place 11 d 1.12 'the daily profile of Thaor is Zekdun.'
+   candidates 24 (filter logit, wanted): +6.5* signal's 'What is the cycle of Zekdun?' | -4.1 label walk 'the cycle of Zekdun is 1 4.' @3.0 | -7.3 function fn 10 | -8.5 function fn 0 | -8.5 function fn 4 | -8.5 function fn 11 | -8.5 function fn 12 | -8.6 function fn 9 | -8.6 function fn 8 | -8.6 label walk 'the step of Zekdun is 1 7.' @2.0 | -8.6 function fn 15 | -8.7 function fn 16 | -8.7 function fn 7 | -8.7 function fn 2
+   inputs in order: 0: 'What is the cycle of Zekdun?' | 1: 'the cycle of Zekdun is 1 4.' | 2: 'the step of Zekdun is 1 7.' | 3: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 4: 'ago' | 5: 'OriginalContentPostThanks for the feedback!' | 6: '' | 7: '' | 8: '' | 9: '' | 10: 'ism' | 11: '' | 12: 'iconnection' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.27 (usual 0.46)
+   out 0: target 'the cycle of Zekdun'
+      target's pieces: span 0:2-8 ' the cycle of Zekdun'
+      its own pieces:  span 1:0-10 'the cycle of Zekdun is 1 4.'
+      said with the target's pieces 'the cycle of Zekdun' | with its own 'the cycle of Zekdun is 1 4.'
+      where 0 (0.99) target 0 | function? 0.00 | loss of this output 3.31
+   label gate 1.08, step loss 3.32, exact False -> pull
+
+== lookup (signal +1.0) | about: ' the cycle of Zekdun'
+   acts: function 7 (routed); gates function 7 1.10, function 5 0.81, function 15 0.77, function 13 0.73, function 8 0.67
+   walk by label: place 3 d 0.15 'the cycle of Zekdun is 1 4.'; place 6 d 0.90 'the medal of Zekdun is 2 0.'; place 2 d 0.91 'the step of Zekdun is 1 7.'; place 4 d 0.98 'the daily profile of Zekdun is Neba.'; place 11 d 1.05 'the daily profile of Thaor is Zekdun.'; place 21 d 1.06 'the frame of Kagor is 4 (same as the ter'
+   candidates 24 (filter logit, wanted): +8.2* label walk 'the cycle of Zekdun is 1 4.' @3.0 | +4.3* signal's ' the cycle of Zekdun' | -8.3 function fn 10 | -8.6 label walk 'the medal of Zekdun is 2 0.' @6.0 | -8.6 label walk 'the step of Zekdun is 1 7.' @2.0 | -8.7 function fn 0 | -8.7 function fn 4 | -8.7 function fn 11 | -8.7 function fn 12 | -8.8 function fn 9 | -8.8 function fn 8 | -8.8 function fn 7 | -8.8 function fn 1 | -8.8 function fn 15
+   inputs in order: 0: ' the cycle of Zekdun' | 1: 'the cycle of Zekdun is 1 4.' | 2: 'the medal of Zekdun is 2 0.' | 3: 'the step of Zekdun is 1 7.' | 4: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 5: '' | 6: 'ago' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: '' | 12: 'ism' | 13: '' | 14: 'iconnection' | 15: ''
+   many 1 (target 1), own error 0.90 (usual 0.83)
+   out 0: target '14'
+      target's pieces: span 1:8-9 ' 1 4'
+      its own pieces:  span 1:8-9 ' 1 4'
+      said with the target's pieces '1 4' | with its own '1 4'
+      where 2 (0.99) target 2 | function? 0.00 | loss of this output 0.44
+   label gate 1.10, step loss 0.46, exact True -> pull
+
+== fill (signal +1.0) | about: 'What is the cycle of Zekdun?' + '1 4'
+   acts: function 8 (routed); gates function 8 1.18, function 7 0.74, function 6 0.71, function 5 0.69, function 16 0.65
+   walk by label: place 3 d 0.61 'the cycle of Zekdun is 1 4.'; place 2 d 0.98 'the step of Zekdun is 1 7.'; place 6 d 1.01 'the medal of Zekdun is 2 0.'; place 4 d 1.04 'the daily profile of Zekdun is Neba.'; place 21 d 1.09 'the frame of Kagor is 4 (same as the ter'; place 11 d 1.12 'the daily profile of Thaor is Zekdun.'
+   candidates 25 (filter logit, wanted): +7.2* signal's '1 4' | +6.5* signal's 'What is the cycle of Zekdun?' | -5.8 label walk 'the cycle of Zekdun is 1 4.' @3.0 | -7.7 function fn 10 | -8.5 function fn 0 | -8.5 function fn 4 | -8.5 function fn 11 | -8.5 function fn 12 | -8.5 label walk 'the step of Zekdun is 1 7.' @2.0 | -8.6 function fn 9 | -8.6 function fn 8 | -8.7 function fn 15 | -8.7 function fn 16 | -8.7 label walk 'the medal of Zekdun is 2 0.' @6.0
+   inputs in order: 0: 'What is the cycle of Zekdun?' | 1: '1 4' | 2: 'the cycle of Zekdun is 1 4.' | 3: 'the step of Zekdun is 1 7.' | 4: 'the medal of Zekdun is 2 0.' | 5: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 6: 'ago' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.29 (usual 0.94)
+   out 0: target '14'
+      target's pieces: span 1:0-1 ' 1 4'
+      its own pieces:  span 1:0-1 ' 1 4'
+      said with the target's pieces '1 4' | with its own '1 4'
+      where 2 (1.00) target 2 | function? 0.00 | loss of this output 0.42
+   label gate 1.18, step loss 0.42, exact True -> pull
+
+--- question (ops) 'What is the larger of the last layer of Nesa and the part of Zekdun?' truth '26'
+
+== split (signal +1.0) | about: 'What is the larger of the last layer of Nesa and the part of Zekdun?'
+   acts: function 6 (routed); gates function 6 1.10, function 7 0.86, function 15 0.72, entry 0.0 'any further last la 0.67, function 5 0.65
+   walk by label: place 25 d 0.64 'the last layer of Nesa is 2 6.'; place 0 d 0.66 'any further last layer count as incremen'; place 5 d 1.03 'Correction: the part of Zekdun is now 5.'; place 24 d 1.05 'the base cart of Nesa is 3.'; place 15 d 1.05 'the main department of Neba is Dunka.'; place 11 d 1.06 'the daily profile of Thaor is Zekdun.'
+   candidates 25 (filter logit, wanted): +7.2* signal's 'What is the larger of the last layer of Nesa ' | -5.1 label walk 'any further last layer count as increments to' @0.0 | -5.4 label walk 'the last layer of Nesa is 2 6.' @25.0 | -7.3 function fn 10 | -8.4 function fn 0 | -8.4 function fn 4 | -8.5 function fn 11 | -8.5 function fn 12 | -8.6 function fn 9 | -8.6 function fn 8 | -8.6 function fn 15 | -8.6 function fn 7 | -8.6 function fn 16 | -8.6 function fn 2
+   inputs in order: 0: 'What is the larger of the last layer of Nesa and t' | 1: 'the last layer of Nesa is 2 6.' | 2: 'any further last layer count as increments to the ' | 3: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 4: 'ago' | 5: 'OriginalContentPostThanks for the feedback!' | 6: '' | 7: '' | 8: '' | 9: '' | 10: 'ism' | 11: '' | 12: 'iconnection' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.47 (usual 0.48)
+   out 0: target 'the last layer of Nesa'
+      target's pieces: span 0:5-10 ' the last layer of Nesa'
+      its own pieces:  span 0:5-10 ' the last layer of Nesa'
+      said with the target's pieces 'the last layer of Nesa' | with its own 'the last layer of Nesa'
+      where 0 (0.99) target 0 | function? 0.01 | loss of this output 0.22
+   label gate 1.10, step loss 0.23, exact True -> pull
+
+== lookup (signal +1.0) | about: 'the last layer of Nesa'
+   acts: function 7 (routed); gates function 7 1.10, function 15 0.73, function 13 0.68, function 8 0.66, function 5 0.64
+   walk by label: place 25 d 0.65 'the last layer of Nesa is 2 6.'; place 0 d 0.93 'any further last layer count as incremen'; place 24 d 1.30 'the base cart of Nesa is 3.'; place 27 d 1.35 'the mode of Torne is 2 6.'; place 30 d 1.35 'the locale of Neka is Neba.'; place 20 d 1.36 'the next part of Kagor is 4.'
+   candidates 24 (filter logit, wanted): +7.2* signal's 'the last layer of Nesa' | +1.7* label walk 'the last layer of Nesa is 2 6.' @25.0 | -6.2 function fn 10 | -8.2 label walk 'any further last layer count as increments to' @0.0 | -8.4 function fn 0 | -8.5 function fn 4 | -8.5 function fn 11 | -8.5 function fn 12 | -8.6 function fn 9 | -8.6 function fn 8 | -8.6 function fn 2 | -8.6 function fn 15 | -8.6 function fn 7 | -8.7 function fn 16
+   inputs in order: 0: 'the last layer of Nesa' | 1: 'the last layer of Nesa is 2 6.' | 2: 'any further last layer count as increments to the ' | 3: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 4: 'ago' | 5: 'OriginalContentPostThanks for the feedback!' | 6: '' | 7: '' | 8: '' | 9: '' | 10: 'ism' | 11: '' | 12: 'iconnection' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.77 (usual 0.82)
+   out 0: target '26'
+      target's pieces: span 1:7-8 ' 2 6'
+      its own pieces:  span 1:7-8 ' 2 6'
+      said with the target's pieces '2 6' | with its own '2 6'
+      where 2 (1.00) target 2 | function? 0.00 | loss of this output 0.47
+   label gate 1.10, step loss 0.47, exact True -> pull
+
+== fill (signal +1.0) | about: 'What is the larger of the last layer of Nesa and the part of Zekdun?' + '2 6'
+   acts: function 8 (routed); gates function 8 1.19, function 7 0.76, function 6 0.72, function 5 0.70, function 16 0.65
+   walk by label: place 0 d 0.66 'any further last layer count as incremen'; place 25 d 0.67 'the last layer of Nesa is 2 6.'; place 5 d 1.03 'Correction: the part of Zekdun is now 5.'; place 24 d 1.05 'the base cart of Nesa is 3.'; place 15 d 1.05 'the main department of Neba is Dunka.'; place 11 d 1.06 'the daily profile of Thaor is Zekdun.'
+   candidates 26 (filter logit, wanted): +7.3* signal's 'What is the larger of the last layer of Nesa ' | +6.9* signal's '2 6' | -6.3 label walk 'any further last layer count as increments to' @0.0 | -6.8 label walk 'the last layer of Nesa is 2 6.' @25.0 | -7.7 function fn 10 | -8.4 function fn 0 | -8.5 function fn 4 | -8.5 function fn 12 | -8.5 function fn 11 | -8.6 function fn 9 | -8.6 function fn 8 | -8.6 function fn 15 | -8.6 function fn 16 | -8.6 function fn 7
+   inputs in order: 0: 'What is the larger of the last layer of Nesa and t' | 1: '2 6' | 2: 'any further last layer count as increments to the ' | 3: 'the last layer of Nesa is 2 6.' | 4: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 5: '' | 6: 'ago' | 7: 'OriginalContentPostThanks for the feedback!' | 8: '' | 9: '' | 10: '' | 11: 'ism' | 12: '' | 13: 'iconnection' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 0.76 (usual 0.92)
+   out 0: target 'What is the larger of 26 and the part of Zekdun?'
+      target's pieces: span 0:0-4 'What is the larger of' + span 1:0-1 ' 2 6' + span 0:11-19 ' and the part of Zekdun?'
+      its own pieces:  span 1:0-1 ' 2 6' + span 1:0-1 ' 2 6' + span 1:0-1 ' 2 6'
+      said with the target's pieces 'What is the larger of 2 6 and the part of Zekdun?' | with its own '2 6'
+      where 2 (0.95) target 2 | function? 0.01 | loss of this output 7.30
+   label gate 1.19, step loss 7.37, exact False -> pull
+
+== split (signal +1.0) | about: 'What is the larger of 2 6 and the part of Zekdun?'
+   acts: function 6 (routed); gates function 6 1.13, function 7 0.87, function 15 0.73, function 5 0.70, function 9 0.67
+   walk by label: place 5 d 0.70 'Correction: the part of Zekdun is now 5.'; place 2 d 0.80 'the step of Zekdun is 1 7.'; place 4 d 0.97 'the daily profile of Zekdun is Neba.'; place 11 d 0.98 'the daily profile of Thaor is Zekdun.'; place 20 d 1.02 'the next part of Kagor is 4.'; place 15 d 1.08 'the main department of Neba is Dunka.'
+   candidates 25 (filter logit, wanted): +7.2* signal's 'What is the larger of 2 6 and the part of Zek' | -6.5 label walk 'Correction: the part of Zekdun is now 5.' @5.1 | -6.9 function fn 10 | -7.0 label walk 'the part of Zekdun is 1 7.' @5.0 | -7.4 label walk 'the step of Zekdun is 1 7.' @2.0 | -8.2 function fn 0 | -8.2 function fn 4 | -8.2 label walk 'the daily profile of Zekdun is Neba.' @4.0 | -8.2 label walk 'the daily profile of Thaor is Zekdun.' @11.0 | -8.3 function fn 12 | -8.3 function fn 11 | -8.4 function fn 9 | -8.4 function fn 8 | -8.4 label walk 'the next part of Kagor is 4.' @20.0
+   inputs in order: 0: 'What is the larger of 2 6 and the part of Zekdun?' | 1: 'Correction: the part of Zekdun is now 5.' | 2: 'the part of Zekdun is 1 7.' | 3: 'the step of Zekdun is 1 7.' | 4: 'the daily profile of Zekdun is Neba.' | 5: 'the daily profile of Thaor is Zekdun.' | 6: 'the next part of Kagor is 4.' | 7: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 8: 'OriginalContentPostThanks for the feedback!' | 9: '' | 10: '' | 11: '' | 12: 'ism' | 13: '' | 14: 'iconnection' | 15: ''
+   many 1 (target 1), own error 0.48 (usual 0.47)
+   out 0: target 'the part of Zekdun'
+      target's pieces: span 0:8-14 ' the part of Zekdun'
+      its own pieces:  span 0:8-14 ' the part of Zekdun'
+      said with the target's pieces 'the part of Zekdun' | with its own 'the part of Zekdun'
+      where 0 (0.99) target 0 | function? 0.01 | loss of this output 0.30
+   label gate 1.13, step loss 0.32, exact True -> pull
+
+== lookup (signal +1.0) | about: 'the part of Zekdun'
+   acts: function 7 (routed); gates function 7 1.11, function 15 0.74, function 13 0.69, function 5 0.68, function 8 0.67
+   walk by label: place 5 d 0.75 'Correction: the part of Zekdun is now 5.'; place 2 d 1.01 'the step of Zekdun is 1 7.'; place 6 d 1.14 'the medal of Zekdun is 2 0.'; place 3 d 1.17 'the cycle of Zekdun is 1 4.'; place 4 d 1.23 'the daily profile of Zekdun is Neba.'; place 11 d 1.32 'the daily profile of Thaor is Zekdun.'
+   candidates 25 (filter logit, wanted): +7.0* signal's 'the part of Zekdun' | -2.1* label walk 'Correction: the part of Zekdun is now 5.' @5.1 | -3.8 function fn 10 | -5.5 label walk 'the part of Zekdun is 1 7.' @5.0 | -7.8 function fn 4 | -7.8 function fn 0 | -7.9 function fn 11 | -7.9 function fn 12 | -8.0 function fn 9 | -8.1 function fn 8 | -8.1 function fn 2 | -8.1 function fn 5 | -8.1 function fn 15 | -8.1 function fn 13
+   inputs in order: 0: 'the part of Zekdun' | 1: 'Correction: the part of Zekdun is now 5.' | 2: 'the part of Zekdun is 1 7.' | 3: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 4: 'ago' | 5: 'OriginalContentPostThanks for the feedback!' | 6: '' | 7: '' | 8: '' | 9: '' | 10: 'ism' | 11: '' | 12: 'iconnection' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 1.05 (usual 0.81)
+   out 0: target '5'
+      target's pieces: span 1:11-11 ' 5'
+      its own pieces:  span 1:11-11 ' 5'
+      said with the target's pieces '5' | with its own '5'
+      where 2 (1.00) target 2 | function? 0.00 | loss of this output 0.89
+   label gate 1.11, step loss 0.90, exact True -> pull
+
+== fill (signal +1.0) | about: 'What is the larger of 2 6 and the part of Zekdun?' + '5'
+   acts: function 8 (routed); gates function 8 1.18, function 7 0.74, function 5 0.71, function 6 0.70, function 9 0.67
+   walk by label: place 5 d 0.73 'Correction: the part of Zekdun is now 5.'; place 2 d 0.80 'the step of Zekdun is 1 7.'; place 4 d 0.97 'the daily profile of Zekdun is Neba.'; place 11 d 0.98 'the daily profile of Thaor is Zekdun.'; place 20 d 1.02 'the next part of Kagor is 4.'; place 15 d 1.08 'the main department of Neba is Dunka.'
+   candidates 26 (filter logit, wanted): +7.4* signal's '5' | +7.2* signal's 'What is the larger of 2 6 and the part of Zek' | -7.4 label walk 'Correction: the part of Zekdun is now 5.' @5.1 | -7.6 function fn 10 | -7.6 label walk 'the part of Zekdun is 1 7.' @5.0 | -7.8 label walk 'the step of Zekdun is 1 7.' @2.0 | -8.3 function fn 0 | -8.3 function fn 4 | -8.4 label walk 'the daily profile of Zekdun is Neba.' @4.0 | -8.4 function fn 12 | -8.4 label walk 'the daily profile of Thaor is Zekdun.' @11.0 | -8.4 function fn 11 | -8.5 label walk 'the next part of Kagor is 4.' @20.0 | -8.5 function fn 9
+   inputs in order: 0: 'What is the larger of 2 6 and the part of Zekdun?' | 1: '5' | 2: 'Correction: the part of Zekdun is now 5.' | 3: 'the part of Zekdun is 1 7.' | 4: 'the step of Zekdun is 1 7.' | 5: 'the daily profile of Zekdun is Neba.' | 6: 'the daily profile of Thaor is Zekdun.' | 7: 'the next part of Kagor is 4.' | 8: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 9: 'OriginalContentPostThanks for the feedback!' | 10: '' | 11: '' | 12: '' | 13: 'ism' | 14: '' | 15: 'iconnection'
+   many 1 (target 1), own error 0.81 (usual 0.95)
+   out 0: target 'What is the larger of 26 and 5?'
+      target's pieces: span 0:0-7 'What is the larger of 2 6 and' + span 1:0-0 ' 5' + span 0:15-15 '?'
+      its own pieces:  span 0:0-7 'What is the larger of 2 6 and' + span 1:0-0 ' 5' + span 1:0-0 ' 5'
+      said with the target's pieces 'What is the larger of 2 6 and 5?' | with its own '?'
+      where 2 (0.98) target 2 | function? 0.01 | loss of this output 2.75
+   label gate 1.18, step loss 2.78, exact False -> pull
+
+== operands (signal +1.0) | about: 'What is the larger of 2 6 and 5?'
+   acts: function 9 (nearest); gates function 9 0.70, function 12 0.39, function 11 0.39, function 5 0.38, function 8 0.36
+   walk by label: place 20 d 1.10 'the next part of Kagor is 4.'; place 24 d 1.11 'the base cart of Nesa is 3.'; place 25 d 1.13 'the last layer of Nesa is 2 6.'; place 2 d 1.20 'the step of Zekdun is 1 7.'; place 5 d 1.21 'Correction: the part of Zekdun is now 5.'; place 12 d 1.24 'the shelf of Thaor is 2 1.'
+   candidates 25 (filter logit, wanted): +7.7* signal's 'What is the larger of 2 6 and 5?' | -2.0 function fn 10 | -6.4 function fn 4 | -6.5 function fn 0 | -6.6 function fn 12 | -6.6 function fn 11 | -6.9 function fn 9 | -7.0 function fn 8 | -7.0 function fn 5 | -7.0 function fn 13 | -7.1 function fn 15 | -7.1 function fn 2 | -7.1 function fn 16 | -7.1 function fn 7
+   inputs in order: 0: 'What is the larger of 2 6 and 5?' | 1: 'the next part of Kagor is 4.' | 2: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 3: 'ago' | 4: 'OriginalContentPostThanks for the feedback!' | 5: '' | 6: '' | 7: '' | 8: '' | 9: 'ism' | 10: '' | 11: 'iconnection' | 12: '' | 13: '' | 14: '' | 15: 'Last'
+   many 2 (target 2), own error 1.15 (usual 1.57)
+   out 0: target ' 26'
+      target's pieces: span 0:5-6 ' 2 6'
+      its own pieces:  span 0:5-6 ' 2 6'
+      said with the target's pieces '2 6' | with its own '2 6'
+      where 0 (0.99) target 0 | function? 0.03 | loss of this output 0.17
+   out 1: target ' 5'
+      target's pieces: span 0:8-8 ' 5'
+      its own pieces:  span 0:8-8 ' 5'
+      said with the target's pieces '5' | with its own '5'
+      where 0 (1.00) target 0 | function? 0.01 | loss of this output 0.59
+   label gate 0.70, step loss 0.85, exact True -> pull
+
+== max (signal +1.0) | about: 'What is the larger of 2 6 and 5?' + '2 6' + '5'
+   acts: function 9 (nearest); gates function 3 (calculator min) 0.48, function 0 (calculator add) 0.42, function 1 (calculator sub) 0.41, function 9 0.31, function 2 (calculator max) 0.30
+   walk by label: place 20 d 1.10 'the next part of Kagor is 4.'; place 24 d 1.11 'the base cart of Nesa is 3.'; place 25 d 1.13 'the last layer of Nesa is 2 6.'; place 2 d 1.20 'the step of Zekdun is 1 7.'; place 5 d 1.21 'Correction: the part of Zekdun is now 5.'; place 12 d 1.24 'the shelf of Thaor is 2 1.'
+   candidates 27 (filter logit, wanted): +7.7* signal's 'What is the larger of 2 6 and 5?' | +7.7* signal's '5' | +7.4* signal's '2 6' | -2.4 function fn 10 | -6.5 function fn 4 | -6.6 function fn 0 | -6.7 function fn 12 | -6.7 function fn 11 | -7.0 function fn 9 | -7.1 function fn 8 | -7.1 label walk 'the next part of Kagor is 4.' @20.0 | -7.1 function fn 5 | -7.2 function fn 13 | -7.2 function fn 2
+   inputs in order: 0: 'What is the larger of 2 6 and 5?' | 1: '2 6' | 2: '5' | 3: 'the next part of Kagor is 4.' | 4: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 5: 'ago' | 6: 'OriginalContentPostThanks for the feedback!' | 7: '' | 8: '' | 9: '' | 10: 'ism' | 11: '' | 12: 'iconnection' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 1.13 (usual 1.55)
+   out 0: target '26'
+      target's pieces: span 0:5-6 ' 2 6'
+      its own pieces:  span 1:0-1 ' 2 6'
+      said with the target's pieces '2 6' | with its own '2 6'
+      where 2 (0.97) target 2 | function? 0.01 | loss of this output 0.89
+   label gate 0.31, step loss 1.10, exact True -> pull
+
+--- functions on functions
+
+== inc (signal +1.0) | about: 'add one to it' + '5 8'
+   acts: function 10 (nearest); gates function 10 0.90, function 12 0.60, function 11 0.58, function 6 0.48, function 8 0.45
+   walk by label: place 5 d 1.21 'Correction: the part of Zekdun is now 5.'; place 20 d 1.25 'the next part of Kagor is 4.'; place 2 d 1.28 'the step of Zekdun is 1 7.'; place 11 d 1.28 'the daily profile of Thaor is Zekdun.'; place 4 d 1.29 'the daily profile of Zekdun is Neba.'; place 24 d 1.30 'the base cart of Nesa is 3.'
+   candidates 26 (filter logit, wanted): +7.6* signal's 'add one to it' | +7.1* signal's '5 8' | +0.5 function fn 10 | -5.5 function fn 4 | -5.7 function fn 0 | -5.8 function fn 11 | -5.8 function fn 12 | -6.1 function fn 9 | -6.2 function fn 8 | -6.2 function fn 5 | -6.3 function fn 13 | -6.3 function fn 2 | -6.3 function fn 15 | -6.3 function fn 16
+   inputs in order: 0: 'add one to it' | 1: '5 8' | 2: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 3: 'ago' | 4: 'OriginalContentPostThanks for the feedback!' | 5: '' | 6: '' | 7: '' | 8: '' | 9: 'ism' | 10: '' | 11: 'iconnection' | 12: '' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 1.67 (usual 2.11)
+   out 0: target '59'
+      target's pieces: span 1:0-0 '5' + made 1 ' 9'
+      its own pieces:  span 1:0-0 '5' + span 1:0-0 '5'
+      said with the target's pieces '5 5' | with its own '5'
+      where 3 (0.98) target 3 | function? 0.03 | loss of this output 4.38
+   label gate 0.90, step loss 4.44, exact False -> pull
+
+== fedit (signal +1.0) | about: 'make it add 2 instead'
+   acts: function 11 (nearest); gates function 11 0.94, function 12 0.60, function 10 0.54, function 6 0.42, function 9 0.41
+   walk by label: place 7 d 1.28 'rule: incoming log numbers increase the '; place 24 d 1.28 'the base cart of Nesa is 3.'; place 25 d 1.28 'the last layer of Nesa is 2 6.'; place 2 d 1.29 'the step of Zekdun is 1 7.'; place 26 d 1.30 'the log of Torne is 9.'; place 5 d 1.30 'Correction: the part of Zekdun is now 5.'
+   candidates 26 (filter logit, wanted): +7.5* signal's 'make it add 2 instead' | +2.1* function fn 10 | -4.4 function fn 4 | -4.7 function fn 0 | -4.9 function fn 11 | -4.9 function fn 12 | -5.3 function fn 9 | -5.4 function fn 8 | -5.4 function fn 5 | -5.4 function fn 13 | -5.5 function fn 2 | -5.5 function fn 15 | -5.5 function fn 16 | -5.6 function fn 14
+   inputs in order: 0: 'make it add 2 instead' | 1: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 2: 'ago' | 3: '' | 4: 'OriginalContentPostThanks for the feedback!' | 5: '' | 6: '' | 7: '' | 8: '' | 9: 'ism' | 10: '' | 11: 'iconnection' | 12: '' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 2.11 (usual 2.20)
+   label gate 0.94, step loss 5.92, exact False -> pull
+
+== fnew (signal +1.0) | about: 'make a new one that adds 2'
+   acts: function 12 (nearest); gates function 12 0.90, function 11 0.65, function 10 0.60, function 7 0.50, function 8 0.49
+   walk by label: place 5 d 1.17 'Correction: the part of Zekdun is now 5.'; place 20 d 1.25 'the next part of Kagor is 4.'; place 2 d 1.29 'the step of Zekdun is 1 7.'; place 4 d 1.30 'the daily profile of Zekdun is Neba.'; place 25 d 1.32 'the last layer of Nesa is 2 6.'; place 11 d 1.34 'the daily profile of Thaor is Zekdun.'
+   candidates 25 (filter logit, wanted): +7.3* signal's 'make a new one that adds 2' | +1.7* function fn 10 | -4.8 function fn 4 | -5.0 function fn 0 | -5.1 function fn 11 | -5.2 function fn 12 | -5.6 function fn 9 | -5.6 function fn 8 | -5.7 function fn 5 | -5.7 function fn 13 | -5.8 function fn 2 | -5.8 function fn 15 | -5.8 function fn 16 | -5.9 function fn 14
+   inputs in order: 0: 'make a new one that adds 2' | 1: 'ianEditEditEditEditEditEditEditEditEditEditEditEdi' | 2: 'ago' | 3: '' | 4: 'OriginalContentPostThanks for the feedback!' | 5: '' | 6: '' | 7: '' | 8: '' | 9: 'ism' | 10: '' | 11: 'iconnection' | 12: '' | 13: '' | 14: '' | 15: 'Last'
+   many 1 (target 1), own error 1.99 (usual 2.18)
+   label gate 0.90, step loss 6.04, exact False -> pull
+
+=== 3. ROUTING OVER MANY DEMO STEPS (purpose -> the function its want reaches; said exactly)
+add: 7 steps -> acting nodes function 11: 5, function 9: 2 | said exactly 0 with the target's pieces, 0 with its own
+before: 6 steps -> acting nodes function 7: 6 | said exactly 6 with the target's pieces, 0 with its own
+both: 6 steps -> acting nodes function 7: 6 | said exactly 0 with the target's pieces, 0 with its own
+copy: 1 steps -> acting nodes function 5: 1 | said exactly 1 with the target's pieces, 0 with its own
+fill: 60 steps -> acting nodes function 8: 60 | said exactly 46 with the target's pieces, 23 with its own
+fix: 6 steps -> acting nodes function 14: 6 | said exactly 6 with the target's pieces, 0 with its own
+inc: 6 steps -> acting nodes function 10: 6 | said exactly 0 with the target's pieces, 0 with its own
+lookup: 39 steps -> acting nodes function 7: 39 | said exactly 39 with the target's pieces, 29 with its own
+max: 4 steps -> acting nodes function 11: 3, function 9: 1 | said exactly 4 with the target's pieces, 3 with its own
+min: 4 steps -> acting nodes function 9: 2, function 11: 2 | said exactly 4 with the target's pieces, 2 with its own
+operands: 42 steps -> acting nodes function 9: 36, function 5: 6 | said exactly 0 with the target's pieces, 0 with its own
+split: 60 steps -> acting nodes function 6: 59, function 9: 1 | said exactly 59 with the target's pieces, 38 with its own
+store: 60 steps -> acting nodes function 5: 60 | said exactly 58 with the target's pieces, 47 with its own
+sub: 6 steps -> acting nodes function 9: 3, function 11: 3 | said exactly 0 with the target's pieces, 0 with its own
+
+=== 4. LIVING BY ITSELF (a fresh world; nothing scripted)
+
+statement 'from now on, each new color are amounts to add to the current color'
+
+statement 'the post of Vinzek is 8.'
+
+statement 'the trade of Vinzek is 27.'
+
+statement 'the primary frame of Sapel is Vinzek.'
+
+statement 'the trade of Vinzek is 29.'
+
+statement 'the genre of Dunmu is 8.'
+
+statement 'from now on, country figures that arrive later are the new country; discard the old one'
+
+statement 'the first camera of Gorvin is 12.'
+
+memory: 13 places from 297 statements, entries per place 1.00 | newest entries that are a true current fact 0/13 | facts held right somewhere 0/164 | subjects with more than one place 0 | {'rest': 284, 'acts: function': 13, 'fires': 13}
+   places: 0: 'the color of Dunmu is 2 9 (same as the trade ' (1) | 1: 'the main birth of Merba is 3 0 (same as the s' (1) | 2: 'the main birth of Goror is 3 0 (same as the p' (1) | 3: 'the first camera of Tordun is 2 1 (same as th' (1) | 4: 'the trade of Batha is 5 (same as the color of' (1) | 5: 'the cycle of Gorzek is 1 0 (same as the trade' (1) | 6: 'the main birth of Tordun is 1 5 (same as the ' (1) | 7: 'the grade of Gorne is 1 5 (same as the bundle' (1) | 8: 'the lesson of Gorne is 3 (same as the step of' (1) | 9: 'the old slot of Thatha is 2 4 (same as the me' (1) | 10: 'the first device of Saril is 2 7 (same as the' (1) | 11: 'the lane of Thapel is 8 (same as the color of' (1) | 12: 'the main birth of Gorba is 2 3 (same as the c' (1)
+
+question (lookup) 'What is the main birth of Tordun?' truth '15'
+    walk by label: 6 d 0.58 'the main birth of Tordun is 1 5 (sa'; 2 d 0.83 'the main birth of Goror is 3 0 (sam'; 12 d 0.91 'the main birth of Gorba is 2 3 (sam'; 1 d 1.07 'the main birth of Merba is 3 0 (sam'; 3 d 1.07 'the first camera of Tordun is 2 1 ('; 8 d 1.11 'the lesson of Gorne is 3 (same as t'
+    candidates (salience logit): +7.6 node 'What is the main birth of Tordun?' | -5.1 entry 6.0 'the main birth of Tordun is 1 5 (s | -7.7 function 10 | -8.0 entry 2.0 'the main birth of Goror is 3 0 (sa | -8.4 entry 12.0 'the main birth of Gorba is 2 3 (s | -8.5 function 0 (calculator add) | -8.5 function 4 (calculator mul) | -8.6 function 11 | -8.6 function 12 | -8.6 function 9
+  fire 13: signal +1.00, acts: function 6 (gates function 6 1.10, function 7 0.81, function 15 0.69) | about: 'What is the main birth of Tordun?' | takes in 16/24: node 'What is the main birth of Tordun?' (1.00); entry 6.0 'the main birth of Tordun is 1 5 (s (0.01); entry 2.0 'the main birth of Goror is 3 0 (sa (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); function 0 (calculator add) (0.00); function 1 (calculator sub) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 0, own error 0.27 (usual 0.66) | says: 'the main birth of Tordun' | pieces [('span', 2, 8)]
+    walk by label: 6 d 0.72 'the main birth of Tordun is 1 5 (sa'; 12 d 1.07 'the main birth of Gorba is 2 3 (sam'; 2 d 1.08 'the main birth of Goror is 3 0 (sam'; 3 d 1.16 'the first camera of Tordun is 2 1 ('; 1 d 1.18 'the main birth of Merba is 3 0 (sam'; 8 d 1.19 'the lesson of Gorne is 3 (same as t'
+    candidates (salience logit): +7.2 node 'the main birth of Tordun' | -1.9 entry 6.0 'the main birth of Tordun is 1 5 (s | -4.4 function 10 | -8.0 function 0 (calculator add) | -8.1 function 4 (calculator mul) | -8.1 function 11 | -8.1 function 12 | -8.3 function 9 | -8.3 function 8 | -8.3 function 2 (calculator max)
+  fire 14: signal +1.00, acts: function 7 (gates function 7 1.10, function 15 0.74, function 13 0.68) | about: 'the main birth of Tordun' | takes in 16/24: node 'the main birth of Tordun' (1.00); entry 6.0 'the main birth of Tordun is 1 5 (s (0.13); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.01); function 11 (0.00); function 12 (0.00); function 13 (0.00); function 14 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 0.82 (usual 0.93) | says: '1 5' | pieces [('span', 15, 16)]
+    walk by label: 6 d 0.58 'the main birth of Tordun is 1 5 (sa'; 2 d 0.83 'the main birth of Goror is 3 0 (sam'; 12 d 0.91 'the main birth of Gorba is 2 3 (sam'; 1 d 1.07 'the main birth of Merba is 3 0 (sam'; 3 d 1.07 'the first camera of Tordun is 2 1 ('; 8 d 1.11 'the lesson of Gorne is 3 (same as t'
+    candidates (salience logit): +7.5 node 'What is the main birth of Tordun?' | +6.4 node '1 5' | -6.2 entry 6.0 'the main birth of Tordun is 1 5 (s | -7.9 function 10 | -8.0 entry 2.0 'the main birth of Goror is 3 0 (sa | -8.3 entry 12.0 'the main birth of Gorba is 2 3 (s | -8.5 function 0 (calculator add) | -8.5 function 4 (calculator mul) | -8.6 function 11 | -8.6 function 12
+  fire 15: signal +1.00, acts: function 8 (gates function 8 1.18, function 7 0.72, function 6 0.71) | about: 'What is the main birth of Tordun?' + '1 5' | takes in 16/25: node 'What is the main birth of Tordun?' (1.00); node '1 5' (1.00); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 0.34 (usual 1.28) | says: '1 5' | pieces [('span', 10, 11)]
+  -> '1 5' after 4 firings
+
+question (before) 'What was the trade of Vinzek before?' truth '16'
+    walk by label: 0 d 0.89 'the color of Dunmu is 2 9 (same as '; 2 d 0.96 'the main birth of Goror is 3 0 (sam'; 5 d 1.02 'the cycle of Gorzek is 1 0 (same as'; 4 d 1.06 'the trade of Batha is 5 (same as th'; 6 d 1.15 'the main birth of Tordun is 1 5 (sa'; 9 d 1.15 'the old slot of Thatha is 2 4 (same'
+    candidates (salience logit): +7.7 node 'What was the trade of Vinzek before?' | -6.3 function 10 | -7.7 entry 0.0 'the color of Dunmu is 2 9 (same as | -7.9 function 0 (calculator add) | -7.9 function 4 (calculator mul) | -7.9 entry 2.0 'the main birth of Goror is 3 0 (sa | -7.9 function 12 | -8.0 function 11 | -8.1 function 9 | -8.1 entry 5.0 'the cycle of Gorzek is 1 0 (same a
+  fire 16: signal +1.00, acts: function 6 (gates function 6 1.09, function 7 0.81, function 15 0.70) | about: 'What was the trade of Vinzek before?' | takes in 16/24: node 'What was the trade of Vinzek before?' (1.00); entry 0.0 'the color of Dunmu is 2 9 (same as (0.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.00); entry 5.0 'the cycle of Gorzek is 1 0 (same a (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 0, own error 0.27 (usual 0.66) | says: 'the trade of Vinzek before' | pieces [('span', 2, 7)]
+    walk by label: 0 d 0.96 'the color of Dunmu is 2 9 (same as '; 5 d 1.02 'the cycle of Gorzek is 1 0 (same as'; 4 d 1.10 'the trade of Batha is 5 (same as th'; 2 d 1.20 'the main birth of Goror is 3 0 (sam'; 7 d 1.26 'the grade of Gorne is 1 5 (same as '; 8 d 1.27 'the lesson of Gorne is 3 (same as t'
+    candidates (salience logit): +7.3 node 'the trade of Vinzek before' | +0.7 function 10 | -5.3 entry 0.0 'the color of Dunmu is 2 9 (same as | -5.5 function 4 (calculator mul) | -5.7 function 0 (calculator add) | -5.8 function 11 | -5.8 function 12 | -6.1 function 9 | -6.2 function 8 | -6.2 entry 5.0 'the cycle of Gorzek is 1 0 (same a
+  fire 17: signal +1.00, acts: function 7 (gates function 7 1.07, function 15 0.81, function 13 0.65) | about: 'the trade of Vinzek before' | takes in 16/24: node 'the trade of Vinzek before' (1.00); entry 0.0 'the color of Dunmu is 2 9 (same as (0.00); entry 5.0 'the cycle of Gorzek is 1 0 (same a (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.67); function 11 (0.00); function 12 (0.00); function 13 (0.00); function 14 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 0.75 (usual 0.93) | says: '2 9' | pieces [('span', 12, 13)]
+    walk by label: 0 d 0.89 'the color of Dunmu is 2 9 (same as '; 2 d 0.96 'the main birth of Goror is 3 0 (sam'; 5 d 1.02 'the cycle of Gorzek is 1 0 (same as'; 4 d 1.06 'the trade of Batha is 5 (same as th'; 6 d 1.15 'the main birth of Tordun is 1 5 (sa'; 9 d 1.15 'the old slot of Thatha is 2 4 (same'
+    candidates (salience logit): +7.7 node 'What was the trade of Vinzek before?' | +7.0 node '2 9' | -7.7 function 10 | -8.2 entry 0.0 'the color of Dunmu is 2 9 (same as | -8.4 function 0 (calculator add) | -8.4 entry 2.0 'the main birth of Goror is 3 0 (sa | -8.4 function 4 (calculator mul) | -8.5 function 12 | -8.5 function 11 | -8.5 function 9
+  fire 18: signal +1.00, acts: function 8 (gates function 8 1.18, function 7 0.73, function 6 0.72) | about: 'What was the trade of Vinzek before?' + '2 9' | takes in 16/25: node 'What was the trade of Vinzek before?' (1.00); node '2 9' (1.00); entry 0.0 'the color of Dunmu is 2 9 (same as (0.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.00); entry 5.0 'the cycle of Gorzek is 1 0 (same a (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 0.42 (usual 1.28) | says: '2 9' | pieces [('span', 9, 10)]
+  -> '2 9' after 4 firings
+
+question (coexist) 'What is the sum of both values of the worker of Gorzek?' truth '15'
+    walk by label: 2 d 0.84 'the main birth of Goror is 3 0 (sam'; 5 d 1.05 'the cycle of Gorzek is 1 0 (same as'; 0 d 1.05 'the color of Dunmu is 2 9 (same as '; 6 d 1.06 'the main birth of Tordun is 1 5 (sa'; 12 d 1.06 'the main birth of Gorba is 2 3 (sam'; 8 d 1.10 'the lesson of Gorne is 3 (same as t'
+    candidates (salience logit): +7.6 node 'What is the sum of both values of the w | -6.3 function 10 | -7.4 entry 2.0 'the main birth of Goror is 3 0 (sa | -7.9 function 4 (calculator mul) | -7.9 function 0 (calculator add) | -8.0 function 12 | -8.0 function 11 | -8.1 function 9 | -8.2 function 8 | -8.2 function 7
+  fire 19: signal +1.00, acts: function 6 (gates function 6 1.10, function 7 0.85, function 15 0.71) | about: 'What is the sum of both values of the worker of Gorzek?' | takes in 16/24: node 'What is the sum of both values of the w (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.00); entry 5.0 'the cycle of Gorzek is 1 0 (same a (0.00); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 0, own error 0.35 (usual 0.66) | says: 'alone' | pieces [('span', 5, 12)]
+    walk by label: 5 d 1.01 'the cycle of Gorzek is 1 0 (same as'; 2 d 1.12 'the main birth of Goror is 3 0 (sam'; 8 d 1.23 'the lesson of Gorne is 3 (same as t'; 0 d 1.23 'the color of Dunmu is 2 9 (same as '; 12 d 1.26 'the main birth of Gorba is 2 3 (sam'; 1 d 1.30 'the main birth of Merba is 3 0 (sam'
+    candidates (salience logit): +7.2 node 'alone' | +1.6 function 10 | -4.9 function 4 (calculator mul) | -5.2 function 0 (calculator add) | -5.3 function 11 | -5.3 function 12 | -5.4 entry 5.0 'the cycle of Gorzek is 1 0 (same a | -5.7 function 9 | -5.7 function 8 | -5.8 function 5
+  fire 20: signal +1.00, acts: function 7 (gates function 7 1.09, function 15 0.72, function 13 0.72) | about: 'alone' | takes in 16/24: node 'alone' (1.00); entry 5.0 'the cycle of Gorzek is 1 0 (same a (0.00); function 0 (calculator add) (0.01); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.01); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.83); function 11 (0.01); function 12 (0.01); function 13 (0.00); function 14 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 0.87 (usual 0.93) | says: '1 0' | pieces [('span', 14, 15)]
+    walk by label: 2 d 0.84 'the main birth of Goror is 3 0 (sam'; 5 d 1.05 'the cycle of Gorzek is 1 0 (same as'; 0 d 1.05 'the color of Dunmu is 2 9 (same as '; 6 d 1.06 'the main birth of Tordun is 1 5 (sa'; 12 d 1.06 'the main birth of Gorba is 2 3 (sam'; 8 d 1.10 'the lesson of Gorne is 3 (same as t'
+    candidates (salience logit): +7.5 node 'What is the sum of both values of the w | +7.3 node '1 0' | -7.6 function 10 | -7.9 entry 2.0 'the main birth of Goror is 3 0 (sa | -8.4 function 0 (calculator add) | -8.4 function 4 (calculator mul) | -8.4 function 12 | -8.4 function 11 | -8.5 function 9 | -8.6 function 8
+  fire 21: signal +1.00, acts: function 8 (gates function 8 1.19, function 7 0.75, function 6 0.72) | about: 'What is the sum of both values of the worker of Gorzek?' + '1 0' | takes in 16/25: node 'What is the sum of both values of the w (1.00); node '1 0' (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.00); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); function 0 (calculator add) (0.00); function 1 (calculator sub) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 0.54 (usual 1.28) | says: 'what is this?' | pieces [('span', 14, 15), ('span', 14, 15), ('span', 13, 13)]
+  -> 'what is this?' after 4 firings
+
+question (chain) 'What is the lesson of the last entry of Dunmu?' truth '6'
+    walk by label: 0 d 0.97 'the color of Dunmu is 2 9 (same as '; 2 d 1.03 'the main birth of Goror is 3 0 (sam'; 8 d 1.04 'the lesson of Gorne is 3 (same as t'; 3 d 1.04 'the first camera of Tordun is 2 1 ('; 6 d 1.04 'the main birth of Tordun is 1 5 (sa'; 4 d 1.11 'the trade of Batha is 5 (same as th'
+    candidates (salience logit): +7.8 node 'What is the lesson of the last entry of | -6.1 function 10 | -7.8 function 4 (calculator mul) | -7.8 function 0 (calculator add) | -7.8 function 12 | -7.9 function 11 | -7.9 entry 0.0 'the color of Dunmu is 2 9 (same as | -8.0 entry 3.0 'the first camera of Tordun is 2 1  | -8.0 entry 8.0 'the lesson of Gorne is 3 (same as  | -8.0 function 9
+  fire 22: signal +1.00, acts: function 6 (gates function 6 1.10, function 7 0.86, function 15 0.72) | about: 'What is the lesson of the last entry of Dunmu?' | takes in 16/24: node 'What is the lesson of the last entry of (1.00); entry 0.0 'the color of Dunmu is 2 9 (same as (0.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.00); entry 8.0 'the lesson of Gorne is 3 (same as  (0.00); entry 3.0 'the first camera of Tordun is 2 1  (0.00); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00) | many 1, where 0, own error 0.23 (usual 0.66) | says: 'the last entry of Dunmu' | pieces [('span', 5, 10)]
+    walk by label: 0 d 1.06 'the color of Dunmu is 2 9 (same as '; 4 d 1.19 'the trade of Batha is 5 (same as th'; 3 d 1.28 'the first camera of Tordun is 2 1 ('; 8 d 1.29 'the lesson of Gorne is 3 (same as t'; 7 d 1.31 'the grade of Gorne is 1 5 (same as '; 6 d 1.34 'the main birth of Tordun is 1 5 (sa'
+    candidates (salience logit): +7.6 node 'the last entry of Dunmu' | +1.7 function 10 | -4.8 function 4 (calculator mul) | -5.1 function 0 (calculator add) | -5.2 function 11 | -5.2 function 12 | -5.6 function 9 | -5.7 function 8 | -5.7 function 5 | -5.7 function 13
+  fire 23: signal +1.00, acts: function 7 (gates function 7 1.10, function 15 0.74, function 13 0.68) | about: 'the last entry of Dunmu' | takes in 16/24: node 'the last entry of Dunmu' (1.00); function 0 (calculator add) (0.01); function 2 (calculator max) (0.00); function 3 (calculator min) (0.00); function 4 (calculator mul) (0.01); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.84); function 11 (0.01); function 12 (0.01); function 13 (0.00); function 14 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 0.78 (usual 0.93) | says: '' | pieces [('span', 4, 5)]
+    walk by label: 0 d 0.97 'the color of Dunmu is 2 9 (same as '; 2 d 1.03 'the main birth of Goror is 3 0 (sam'; 8 d 1.04 'the lesson of Gorne is 3 (same as t'; 3 d 1.04 'the first camera of Tordun is 2 1 ('; 6 d 1.04 'the main birth of Tordun is 1 5 (sa'; 4 d 1.11 'the trade of Batha is 5 (same as th'
+    candidates (salience logit): +7.8 node 'What is the lesson of the last entry of | +7.3 node '' | -7.2 function 10 | -8.2 function 0 (calculator add) | -8.2 function 4 (calculator mul) | -8.2 function 12 | -8.3 function 11 | -8.3 entry 0.0 'the color of Dunmu is 2 9 (same as | -8.3 entry 3.0 'the first camera of Tordun is 2 1  | -8.3 entry 8.0 'the lesson of Gorne is 3 (same as 
+  fire 24: signal +1.00, acts: function 8 (gates function 8 1.20, function 7 0.96, function 6 0.85) | about: 'What is the lesson of the last entry of Dunmu?' + '' | takes in 16/25: node 'What is the lesson of the last entry of (1.00); node '' (1.00); entry 0.0 'the color of Dunmu is 2 9 (same as (0.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.00); entry 8.0 'the lesson of Gorne is 3 (same as  (0.00); entry 3.0 'the first camera of Tordun is 2 1  (0.00); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); function 0 (calculator add) (0.00); function 4 (calculator mul) (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00) | many 1, where 2, own error 0.59 (usual 1.28) | says: 'What is the lesson of Dunwi?' | pieces [('span', 0, 4), ('span', 12, 13), ('span', 11, 11)]
+    walk by label: 0 d 0.82 'the color of Dunmu is 2 9 (same as '; 8 d 0.97 'the lesson of Gorne is 3 (same as t'; 4 d 1.00 'the trade of Batha is 5 (same as th'; 7 d 1.13 'the grade of Gorne is 1 5 (same as '; 2 d 1.13 'the main birth of Goror is 3 0 (sam'; 6 d 1.14 'the main birth of Tordun is 1 5 (sa'
+    candidates (salience logit): +7.2 node 'What is the lesson of the last entry of | -5.4 function 10 | -6.8 entry 0.0 'the color of Dunmu is 2 9 (same as | -7.7 function 4 (calculator mul) | -7.7 entry 8.0 'the lesson of Gorne is 3 (same as  | -7.7 function 0 (calculator add) | -7.8 function 12 | -7.8 function 11 | -7.9 function 9 | -8.0 entry 4.0 'the trade of Batha is 5 (same as t
+  fire 25: signal +1.00, acts: function 6 (gates function 6 1.08, function 7 0.86, function 15 0.72) | about: 'What is the lesson of Dunwi?' | takes in 16/24: node 'What is the lesson of the last entry of (1.00); entry 0.0 'the color of Dunmu is 2 9 (same as (0.00); entry 8.0 'the lesson of Gorne is 3 (same as  (0.00); entry 4.0 'the trade of Batha is 5 (same as t (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 0, own error 0.21 (usual 0.66) | says: 'the lesson of Dunwi' | pieces [('span', 2, 6)]
+    walk by label: 0 d 1.01 'the color of Dunmu is 2 9 (same as '; 8 d 1.06 'the lesson of Gorne is 3 (same as t'; 4 d 1.14 'the trade of Batha is 5 (same as th'; 7 d 1.17 'the grade of Gorne is 1 5 (same as '; 11 d 1.25 'the lane of Thapel is 8 (same as th'; 3 d 1.27 'the first camera of Tordun is 2 1 ('
+    candidates (salience logit): +6.5 node 'the lesson of Dunwi' | +1.4 function 10 | -5.0 function 4 (calculator mul) | -5.2 function 0 (calculator add) | -5.3 function 11 | -5.3 function 12 | -5.6 entry 0.0 'the color of Dunmu is 2 9 (same as | -5.7 function 9 | -5.8 function 8 | -5.8 function 13
+  fire 26: signal +1.00, acts: function 7 (gates function 7 1.10, function 15 0.74, function 13 0.67) | about: 'the lesson of Dunwi' | takes in 16/24: node 'the lesson of Dunwi' (1.00); entry 0.0 'the color of Dunmu is 2 9 (same as (0.00); function 0 (calculator add) (0.01); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.01); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.80); function 11 (0.00); function 12 (0.00); function 13 (0.00); function 14 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 0.65 (usual 0.93) | says: '2 9' | pieces [('span', 11, 12)]
+    walk by label: 0 d 0.82 'the color of Dunmu is 2 9 (same as '; 8 d 0.97 'the lesson of Gorne is 3 (same as t'; 4 d 1.00 'the trade of Batha is 5 (same as th'; 7 d 1.13 'the grade of Gorne is 1 5 (same as '; 2 d 1.13 'the main birth of Goror is 3 0 (sam'; 6 d 1.14 'the main birth of Tordun is 1 5 (sa'
+    candidates (salience logit): +7.2 node 'What is the lesson of the last entry of | +6.9 node '2 9' | -7.2 function 10 | -7.7 entry 0.0 'the color of Dunmu is 2 9 (same as | -8.2 function 0 (calculator add) | -8.2 entry 8.0 'the lesson of Gorne is 3 (same as  | -8.2 function 4 (calculator mul) | -8.3 function 12 | -8.3 function 11 | -8.4 entry 4.0 'the trade of Batha is 5 (same as t
+  fire 27: signal +1.00, acts: function 8 (gates function 8 1.17, function 7 0.75, function 6 0.70) | about: 'What is the lesson of Dunwi?' + '2 9' | takes in 16/25: node 'What is the lesson of the last entry of (1.00); node '2 9' (1.00); entry 0.0 'the color of Dunmu is 2 9 (same as (0.00); entry 8.0 'the lesson of Gorne is 3 (same as  (0.00); entry 4.0 'the trade of Batha is 5 (same as t (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 0.38 (usual 1.28) | says: '2 9' | pieces [('span', 8, 9)]
+  -> '2 9' after 7 firings
+
+question (ops) 'What is the sum of (the difference between the main slot of Bane and the main slot of Nezek) and (the larger of the trade of Samu and the amount of Orsa)?' truth '26'
+    walk by label: 2 d 0.81 'the main birth of Goror is 3 0 (sam'; 6 d 0.91 'the main birth of Tordun is 1 5 (sa'; 12 d 0.99 'the main birth of Gorba is 2 3 (sam'; 9 d 1.02 'the old slot of Thatha is 2 4 (same'; 0 d 1.11 'the color of Dunmu is 2 9 (same as '; 1 d 1.11 'the main birth of Merba is 3 0 (sam'
+    candidates (salience logit): +6.9 node 'What is the sum of (the difference betw | -6.6 function 10 | -7.4 entry 2.0 'the main birth of Goror is 3 0 (sa | -7.8 entry 6.0 'the main birth of Tordun is 1 5 (s | -8.0 function 0 (calculator add) | -8.0 function 4 (calculator mul) | -8.1 function 12 | -8.1 function 11 | -8.1 entry 12.0 'the main birth of Gorba is 2 3 (s | -8.2 entry 9.0 'the old slot of Thatha is 2 4 (sam
+  fire 28: signal +1.00, acts: function 6 (gates function 6 1.11, function 7 0.85, function 15 0.72) | about: 'What is the sum of (the difference between the main slot of ' | takes in 16/24: node 'What is the sum of (the difference betw (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.00); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); entry 9.0 'the old slot of Thatha is 2 4 (sam (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.00); function 11 (0.00); function 12 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 0, own error 0.88 (usual 0.66) | says: 'the main slot of Bane and the main slot of Nezek)' | pieces [('span', 9, 37)]
+    walk by label: 5 d 1.06 'the cycle of Gorzek is 1 0 (same as'; 2 d 1.06 'the main birth of Goror is 3 0 (sam'; 9 d 1.13 'the old slot of Thatha is 2 4 (same'; 1 d 1.18 'the main birth of Merba is 3 0 (sam'; 6 d 1.20 'the main birth of Tordun is 1 5 (sa'; 0 d 1.20 'the color of Dunmu is 2 9 (same as '
+    candidates (salience logit): +7.2 node 'the main slot of Bane and the main slot | +1.2 function 10 | -5.1 function 4 (calculator mul) | -5.3 function 0 (calculator add) | -5.4 function 11 | -5.4 function 12 | -5.8 function 9 | -5.8 function 8 | -5.9 function 5 | -5.9 function 13
+  fire 29: signal +1.00, acts: function 7 (gates function 7 1.12, function 15 0.77, function 13 0.74) | about: 'the main slot of Bane and the main slot of Nezek)' | takes in 16/24: node 'the main slot of Bane and the main slot (1.00); entry 5.0 'the cycle of Gorzek is 1 0 (same a (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.01); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.76); function 11 (0.00); function 12 (0.00); function 13 (0.00); function 14 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 1.13 (usual 0.93) | says: 'the main slot of Bane and the main slot of Nezek' | pieces [('span', 0, 28), ('span', 27, 28), ('span', 12, 12)]
+    walk by label: 2 d 0.81 'the main birth of Goror is 3 0 (sam'; 6 d 0.91 'the main birth of Tordun is 1 5 (sa'; 12 d 0.99 'the main birth of Gorba is 2 3 (sam'; 9 d 1.02 'the old slot of Thatha is 2 4 (same'; 0 d 1.11 'the color of Dunmu is 2 9 (same as '; 1 d 1.11 'the main birth of Merba is 3 0 (sam'
+    candidates (salience logit): +7.0 node 'What is the sum of (the difference betw | +6.1 node 'the main slot of Bane and the main slot | -3.5 function 10 | -4.7 entry 2.0 'the main birth of Goror is 3 0 (sa | -6.6 entry 6.0 'the main birth of Tordun is 1 5 (s | -7.3 function 4 (calculator mul) | -7.4 function 0 (calculator add) | -7.5 function 11 | -7.5 function 12 | -7.6 entry 12.0 'the main birth of Gorba is 2 3 (s
+  fire 30: signal +1.00, acts: function 7 (gates function 7 1.16, function 8 1.07, function 6 0.90) | about: 'What is the sum of (the difference between the main slot of ' + 'the main slot of Bane and the main slot of Nezek' | takes in 16/25: node 'What is the sum of (the difference betw (1.00); node 'the main slot of Bane and the main slot (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.01); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); entry 9.0 'the old slot of Thatha is 2 4 (sam (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.03); function 11 (0.00); function 12 (0.00); function 13 (0.00) | many 1, where 3, own error 1.09 (usual 0.93) | says: 'the main slot of Bane and the main slot of Nezek) and (the m' | pieces [('span', 9, 37), ('span', 5, 37), ('span', 5, 37)]
+    walk by label: 2 d 0.81 'the main birth of Goror is 3 0 (sam'; 6 d 0.91 'the main birth of Tordun is 1 5 (sa'; 12 d 0.99 'the main birth of Gorba is 2 3 (sam'; 9 d 1.02 'the old slot of Thatha is 2 4 (same'; 0 d 1.11 'the color of Dunmu is 2 9 (same as '; 1 d 1.11 'the main birth of Merba is 3 0 (sam'
+    candidates (salience logit): +7.0 node 'the main slot of Bane and the main slot | +7.0 node 'What is the sum of (the difference betw | -3.4 function 10 | -4.7 entry 2.0 'the main birth of Goror is 3 0 (sa | -6.6 entry 6.0 'the main birth of Tordun is 1 5 (s | -7.3 function 4 (calculator mul) | -7.4 function 0 (calculator add) | -7.5 function 11 | -7.5 function 12 | -7.5 entry 12.0 'the main birth of Gorba is 2 3 (s
+  fire 31: signal +1.00, acts: function 7 (gates function 7 1.17, function 8 1.05, function 6 0.87) | about: 'What is the sum of (the difference between the main slot of ' + 'the main slot of Bane and the main slot of Nezek) and (the m' | takes in 16/25: node 'What is the sum of (the difference betw (1.00); node 'the main slot of Bane and the main slot (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.01); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); entry 9.0 'the old slot of Thatha is 2 4 (sam (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.03); function 11 (0.00); function 12 (0.00); function 13 (0.00) | many 1, where 0, own error 1.19 (usual 0.93) | says: 'the main slot of Bane and the main slot of Nezek) and (the l' | pieces [('span', 9, 37), ('span', 9, 37), ('span', 33, 37)]
+    walk by label: 5 d 1.05 'the cycle of Gorzek is 1 0 (same as'; 2 d 1.09 'the main birth of Goror is 3 0 (sam'; 9 d 1.15 'the old slot of Thatha is 2 4 (same'; 1 d 1.19 'the main birth of Merba is 3 0 (sam'; 0 d 1.22 'the color of Dunmu is 2 9 (same as '; 12 d 1.24 'the main birth of Gorba is 2 3 (sam'
+    candidates (salience logit): +7.3 node 'the main slot of Bane and the main slot | +1.4 function 10 | -5.0 function 4 (calculator mul) | -5.2 function 0 (calculator add) | -5.3 function 11 | -5.3 function 12 | -5.7 function 9 | -5.8 function 8 | -5.8 function 5 | -5.8 function 13
+  fire 32: signal +1.00, acts: function 7 (gates function 7 1.12, function 15 0.76, function 13 0.74) | about: 'the main slot of Bane and the main slot of Nezek) and (the l' | takes in 16/24: node 'the main slot of Bane and the main slot (1.00); entry 5.0 'the cycle of Gorzek is 1 0 (same a (0.00); function 0 (calculator add) (0.01); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.01); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.80); function 11 (0.00); function 12 (0.00); function 13 (0.00); function 14 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 1.23 (usual 0.93) | says: 'the main slot of Bane' | pieces [('span', 0, 57), ('span', 61, 62), ('span', 12, 12)]
+    walk by label: 2 d 0.81 'the main birth of Goror is 3 0 (sam'; 6 d 0.91 'the main birth of Tordun is 1 5 (sa'; 12 d 0.99 'the main birth of Gorba is 2 3 (sam'; 9 d 1.02 'the old slot of Thatha is 2 4 (same'; 0 d 1.11 'the color of Dunmu is 2 9 (same as '; 1 d 1.11 'the main birth of Merba is 3 0 (sam'
+    candidates (salience logit): +7.0 node 'What is the sum of (the difference betw | +6.2 node 'the main slot of Bane' | -3.1 function 10 | -4.4 entry 2.0 'the main birth of Goror is 3 0 (sa | -6.5 entry 6.0 'the main birth of Tordun is 1 5 (s | -7.2 function 4 (calculator mul) | -7.3 function 0 (calculator add) | -7.4 function 11 | -7.4 function 12 | -7.5 entry 12.0 'the main birth of Gorba is 2 3 (s
+  fire 33: signal +1.00, acts: function 7 (gates function 7 1.15, function 8 0.98, function 15 0.80) | about: 'What is the sum of (the difference between the main slot of ' + 'the main slot of Bane' | takes in 16/25: node 'What is the sum of (the difference betw (1.00); node 'the main slot of Bane' (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.01); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); entry 9.0 'the old slot of Thatha is 2 4 (sam (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.04); function 11 (0.00); function 12 (0.00); function 13 (0.00) | many 1, where 3, own error 1.09 (usual 0.93) | says: 'the main slot of Bane and the main slot of Nezek) and (the m' | pieces [('span', 9, 37), ('span', 5, 37), ('span', 5, 37)]
+    walk by label: 2 d 0.81 'the main birth of Goror is 3 0 (sam'; 6 d 0.91 'the main birth of Tordun is 1 5 (sa'; 12 d 0.99 'the main birth of Gorba is 2 3 (sam'; 9 d 1.02 'the old slot of Thatha is 2 4 (same'; 0 d 1.11 'the color of Dunmu is 2 9 (same as '; 1 d 1.11 'the main birth of Merba is 3 0 (sam'
+    candidates (salience logit): +7.0 node 'the main slot of Bane and the main slot | +7.0 node 'What is the sum of (the difference betw | -3.4 function 10 | -4.7 entry 2.0 'the main birth of Goror is 3 0 (sa | -6.6 entry 6.0 'the main birth of Tordun is 1 5 (s | -7.3 function 4 (calculator mul) | -7.4 function 0 (calculator add) | -7.5 function 11 | -7.5 function 12 | -7.5 entry 12.0 'the main birth of Gorba is 2 3 (s
+  fire 34: signal +1.00, acts: function 7 (gates function 7 1.17, function 8 1.05, function 6 0.87) | about: 'What is the sum of (the difference between the main slot of ' + 'the main slot of Bane and the main slot of Nezek) and (the m' | takes in 16/25: node 'What is the sum of (the difference betw (1.00); node 'the main slot of Bane and the main slot (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.01); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); entry 9.0 'the old slot of Thatha is 2 4 (sam (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.03); function 11 (0.00); function 12 (0.00); function 13 (0.00) | many 1, where 0, own error 1.19 (usual 0.93) | says: 'the main slot of Bane and the main slot of Nezek) and (the l' | pieces [('span', 9, 37), ('span', 9, 37), ('span', 33, 37)]
+    walk by label: 5 d 1.05 'the cycle of Gorzek is 1 0 (same as'; 2 d 1.09 'the main birth of Goror is 3 0 (sam'; 9 d 1.15 'the old slot of Thatha is 2 4 (same'; 1 d 1.19 'the main birth of Merba is 3 0 (sam'; 0 d 1.22 'the color of Dunmu is 2 9 (same as '; 12 d 1.24 'the main birth of Gorba is 2 3 (sam'
+    candidates (salience logit): +7.3 node 'the main slot of Bane and the main slot | +1.4 function 10 | -5.0 function 4 (calculator mul) | -5.2 function 0 (calculator add) | -5.3 function 11 | -5.3 function 12 | -5.7 function 9 | -5.8 function 8 | -5.8 function 5 | -5.8 function 13
+  fire 35: signal +1.00, acts: function 7 (gates function 7 1.12, function 15 0.76, function 13 0.74) | about: 'the main slot of Bane and the main slot of Nezek) and (the l' | takes in 16/24: node 'the main slot of Bane and the main slot (1.00); entry 5.0 'the cycle of Gorzek is 1 0 (same a (0.00); function 0 (calculator add) (0.01); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.01); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.80); function 11 (0.00); function 12 (0.00); function 13 (0.00); function 14 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 1.23 (usual 0.93) | says: 'the main slot of Bane' | pieces [('span', 0, 57), ('span', 61, 62), ('span', 12, 12)]
+    walk by label: 2 d 0.81 'the main birth of Goror is 3 0 (sam'; 6 d 0.91 'the main birth of Tordun is 1 5 (sa'; 12 d 0.99 'the main birth of Gorba is 2 3 (sam'; 9 d 1.02 'the old slot of Thatha is 2 4 (same'; 0 d 1.11 'the color of Dunmu is 2 9 (same as '; 1 d 1.11 'the main birth of Merba is 3 0 (sam'
+    candidates (salience logit): +7.0 node 'What is the sum of (the difference betw | +6.2 node 'the main slot of Bane' | -3.1 function 10 | -4.4 entry 2.0 'the main birth of Goror is 3 0 (sa | -6.5 entry 6.0 'the main birth of Tordun is 1 5 (s | -7.2 function 4 (calculator mul) | -7.3 function 0 (calculator add) | -7.4 function 11 | -7.4 function 12 | -7.5 entry 12.0 'the main birth of Gorba is 2 3 (s
+  fire 36: signal +1.00, acts: function 7 (gates function 7 1.15, function 8 0.98, function 15 0.80) | about: 'What is the sum of (the difference between the main slot of ' + 'the main slot of Bane' | takes in 16/25: node 'What is the sum of (the difference betw (1.00); node 'the main slot of Bane' (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.01); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); entry 9.0 'the old slot of Thatha is 2 4 (sam (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.04); function 11 (0.00); function 12 (0.00); function 13 (0.00) | many 1, where 3, own error 1.09 (usual 0.93) | says: 'the main slot of Bane and the main slot of Nezek) and (the m' | pieces [('span', 9, 37), ('span', 5, 37), ('span', 5, 37)]
+    walk by label: 2 d 0.81 'the main birth of Goror is 3 0 (sam'; 6 d 0.91 'the main birth of Tordun is 1 5 (sa'; 12 d 0.99 'the main birth of Gorba is 2 3 (sam'; 9 d 1.02 'the old slot of Thatha is 2 4 (same'; 0 d 1.11 'the color of Dunmu is 2 9 (same as '; 1 d 1.11 'the main birth of Merba is 3 0 (sam'
+    candidates (salience logit): +7.0 node 'the main slot of Bane and the main slot | +7.0 node 'What is the sum of (the difference betw | -3.4 function 10 | -4.7 entry 2.0 'the main birth of Goror is 3 0 (sa | -6.6 entry 6.0 'the main birth of Tordun is 1 5 (s | -7.3 function 4 (calculator mul) | -7.4 function 0 (calculator add) | -7.5 function 11 | -7.5 function 12 | -7.5 entry 12.0 'the main birth of Gorba is 2 3 (s
+  fire 37: signal +1.00, acts: function 7 (gates function 7 1.17, function 8 1.05, function 6 0.87) | about: 'What is the sum of (the difference between the main slot of ' + 'the main slot of Bane and the main slot of Nezek) and (the m' | takes in 16/25: node 'What is the sum of (the difference betw (1.00); node 'the main slot of Bane and the main slot (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.01); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); entry 9.0 'the old slot of Thatha is 2 4 (sam (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.03); function 11 (0.00); function 12 (0.00); function 13 (0.00) | many 1, where 0, own error 1.19 (usual 0.93) | says: 'the main slot of Bane and the main slot of Nezek) and (the l' | pieces [('span', 9, 37), ('span', 9, 37), ('span', 33, 37)]
+    walk by label: 5 d 1.05 'the cycle of Gorzek is 1 0 (same as'; 2 d 1.09 'the main birth of Goror is 3 0 (sam'; 9 d 1.15 'the old slot of Thatha is 2 4 (same'; 1 d 1.19 'the main birth of Merba is 3 0 (sam'; 0 d 1.22 'the color of Dunmu is 2 9 (same as '; 12 d 1.24 'the main birth of Gorba is 2 3 (sam'
+    candidates (salience logit): +7.3 node 'the main slot of Bane and the main slot | +1.4 function 10 | -5.0 function 4 (calculator mul) | -5.2 function 0 (calculator add) | -5.3 function 11 | -5.3 function 12 | -5.7 function 9 | -5.8 function 8 | -5.8 function 5 | -5.8 function 13
+  fire 38: signal +1.00, acts: function 7 (gates function 7 1.12, function 15 0.76, function 13 0.74) | about: 'the main slot of Bane and the main slot of Nezek) and (the l' | takes in 16/24: node 'the main slot of Bane and the main slot (1.00); entry 5.0 'the cycle of Gorzek is 1 0 (same a (0.00); function 0 (calculator add) (0.01); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.01); function 5 (0.00); function 7 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.80); function 11 (0.00); function 12 (0.00); function 13 (0.00); function 14 (0.00); function 15 (0.00); function 16 (0.00) | many 1, where 2, own error 1.23 (usual 0.93) | says: 'the main slot of Bane' | pieces [('span', 0, 57), ('span', 61, 62), ('span', 12, 12)]
+    walk by label: 2 d 0.81 'the main birth of Goror is 3 0 (sam'; 6 d 0.91 'the main birth of Tordun is 1 5 (sa'; 12 d 0.99 'the main birth of Gorba is 2 3 (sam'; 9 d 1.02 'the old slot of Thatha is 2 4 (same'; 0 d 1.11 'the color of Dunmu is 2 9 (same as '; 1 d 1.11 'the main birth of Merba is 3 0 (sam'
+    candidates (salience logit): +7.0 node 'What is the sum of (the difference betw | +6.2 node 'the main slot of Bane' | -3.1 function 10 | -4.4 entry 2.0 'the main birth of Goror is 3 0 (sa | -6.5 entry 6.0 'the main birth of Tordun is 1 5 (s | -7.2 function 4 (calculator mul) | -7.3 function 0 (calculator add) | -7.4 function 11 | -7.4 function 12 | -7.5 entry 12.0 'the main birth of Gorba is 2 3 (s
+  fire 39: signal +1.00, acts: function 7 (gates function 7 1.15, function 8 0.98, function 15 0.80) | about: 'What is the sum of (the difference between the main slot of ' + 'the main slot of Bane' | takes in 16/25: node 'What is the sum of (the difference betw (1.00); node 'the main slot of Bane' (1.00); entry 2.0 'the main birth of Goror is 3 0 (sa (0.01); entry 6.0 'the main birth of Tordun is 1 5 (s (0.00); entry 12.0 'the main birth of Gorba is 2 3 (s (0.00); entry 9.0 'the old slot of Thatha is 2 4 (sam (0.00); function 0 (calculator add) (0.00); function 2 (calculator max) (0.00); function 4 (calculator mul) (0.00); function 5 (0.00); function 8 (0.00); function 9 (0.00); function 10 (0.04); function 11 (0.00); function 12 (0.00); function 13 (0.00) | many 1, where 3, own error 1.09 (usual 0.93) | says: 'the main slot of Bane and the main slot of Nezek) and (the m' | pieces [('span', 9, 37), ('span', 5, 37), ('span', 5, 37)]
+  -> 'What is the sum of (the difference between the main slot of Bane and the main slot of Nezek) and (the larger of the trade of Samu and the amount of Orsa)?' after 12 firings
