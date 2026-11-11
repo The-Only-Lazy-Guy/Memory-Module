@@ -3117,6 +3117,12 @@ def run_fm(A):
                 print(f"step {st['step']}: loss not finite in {sorted(set(bad))}", flush=True)
             return
         loss.backward()
+        if A.local and st["step"] > A.demo:            # living: only the nodes' own weights learn (program, action
+            mine = {id(x) for f in fm.bank.fns for x in (f.code, f.au, f.av, f.key)}   # correction, label); the shared
+            for x in params():                         # body stays as the demos left it (11-12, fm43: living's own
+                if id(x) not in mine:                  # lessons were ~0, yet check fails 0 -> 244 and every question
+                    x.grad = None                      # 0/24 by @100: the translator kept training and every node's
+        #                                                meaning drifted under the interpreter)
         if fm.made:                                    # a node made in this chunk joins before the step: its first
             remake()                                   # try trains it too (fm15 to step ~50: its own gradients were
             fm.made = False                            # dropped, the optimizer took it in only after)
@@ -3328,6 +3334,7 @@ if __name__ == "__main__":
     P.add_argument("--warm_q", type=int, default=16, help="lookups in each warm-start update")
     P.add_argument("--replay", type=int, default=20, help="routing replays after each demo step (want reader + labels)")
     P.add_argument("--show_live", type=int, default=0, help="living steps said in full (every firing, every verdict)")
+    P.add_argument("--local", type=int, default=1, help="living: only the nodes' own weights learn (shared body fixed)")
     P.add_argument("--replay_live", type=int, default=5, help="routing replays of the demos after each living step")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
