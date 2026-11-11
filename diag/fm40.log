@@ -1,0 +1,12 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2414.88it/s]
+/marimo/frozen/fm40/gnm.py:2327: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f} | "
+codec 100: label cos 0.278 relation err 0.0009 | heads: same fact 0.10 (max 0.24), other fact 0.39 (nearest 0.20); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 200: label cos 0.609 relation err 0.0008 | heads: same fact 0.21 (max 0.68), other fact 1.29 (nearest 0.80); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 300: label cos 0.661 relation err 0.0001 | heads: same fact 0.20 (max 0.67), other fact 1.32 (nearest 0.83); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 400: label cos 0.770 relation err 0.0003 | heads: same fact 0.20 (max 0.65), other fact 1.31 (nearest 0.84); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 500: label cos 0.743 relation err 0.0004 | heads: same fact 0.19 (max 0.65), other fact 1.33 (nearest 0.90); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 600: label cos 0.772 relation err 0.0006 | heads: same fact 0.19 (max 0.67), other fact 1.33 (nearest 0.92); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
+codec 700: label cos 0.785 relation err 0.0012 | heads: same fact 0.19 (max 0.65), other fact 1.33 (nearest 0.92); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89)
