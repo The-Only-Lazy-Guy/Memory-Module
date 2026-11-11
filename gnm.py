@@ -1302,6 +1302,7 @@ class FM:
         self.made, self.frozen, self.tune = False, False, .1
         self.routes = []                               # the demos' routing examples (signal's nodes, sign, purpose)
         self.shown = {}                                # purpose -> the demos' steps as runs (skill_replay)
+        self.rates = {}                                # episode kind -> how often its own run is right (surprise)
         self.stage, self.assign = "free", {}           # the training stage; purpose -> the node that learned it          # a node that acts was made (the optimizer takes it in); frozen:
         #                                                no new one (checks)
 
@@ -2580,6 +2581,16 @@ def gone(fm, r):
     return any(x.kind == "fn" and x.fn >= len(fm.bank.fns) for x in [r["actor"]] + list(r["ins"]))
 
 
+def surprise(fm, kind, ok):
+    """how much a right run of this kind teaches: 1 - how often its own run is right (a baseline, as RL's advantage).
+    11-12, fm41: living imitated every statement it already kept (462/481 in 50 steps) -- no news, and the shared
+    interpreter drifted to filing (@50 lookup 5, before 4, ops 11 firings; @100 every question 0 in ~2 firings).
+    Updated after it is read: the run's own outcome joins the rate"""
+    r = fm.rates.get(kind, .5)
+    fm.rates[kind] = .95 * r + .05 * float(ok)
+    return 1. - r
+
+
 def live_tick(fm, A, w, rng, upd, tally):
     """one tick of living: nothing scripted, no demo. What arrives is stored by the module itself; a statement that
     nothing kept (or whose kept value the check fails) is wrong: a few sampled tries from where it was, and the cheapest
@@ -2604,6 +2615,7 @@ def live_tick(fm, A, w, rng, upd, tally):
             recs = list(fm.firings)
             tally["statements"] += 1
             ok_ = held(fm, recs, want)
+            gain = surprise(fm, "statement", ok_)
             if ok_:
                 tally["kept"] += 1
                 best = recs
@@ -2620,10 +2632,11 @@ def live_tick(fm, A, w, rng, upd, tally):
                 mod.train()
             Ls = Lesson()                              # (no gradient through the frozen check while it lives: functions
             if best:                                   # learned to pass it -- dl37, fm36 'kept' 474/489, memory 0/151)
-                Ls.add("kept", imitate(fm, best) + relive(fm, best))
+                Ls.add("kept", gain * (imitate(fm, best) + relive(fm, best)))
             upd(Ls)
     for _ in range(A.lq):
-        E = q_expr(rng.choice(["lookup", "before", "coexist", "chain", "ops"]), w, rng)
+        kind = rng.choice(["lookup", "before", "coexist", "chain", "ops"])
+        E = q_expr(kind, w, rng)
         if E is None or not fm.g.n:
             continue
         for mod in mods:
@@ -2636,6 +2649,7 @@ def live_tick(fm, A, w, rng, upd, tally):
         recs = list(fm.firings)
         fm.g = g0                                      # asking leaves the memory as it was (its access keys learn)
         tally["asked"] += 1
+        gain = surprise(fm, kind, got == truth)
         if fm.show:
             print(f"  -> {got!r} ({'right' if got == truth else 'wrong'}, {len(recs)} firings)", flush=True)
         if got == truth:                               # what it made or edited on the way stays: accumulated
@@ -2659,7 +2673,7 @@ def live_tick(fm, A, w, rng, upd, tally):
             mod.train()
         if best:
             Ls = Lesson()
-            Ls.add("right", imitate(fm, best) + relive(fm, best))
+            Ls.add("right", gain * (imitate(fm, best) + relive(fm, best)))
             upd(Ls)
     return seen
 
@@ -3214,7 +3228,7 @@ def run_fm(A):
             #                                                  signal was its statements (questions 0/199), and @100 every
             #                                                  question rested again -- the demos anchor what living lacks)
         if step % 50 == 0 and step > A.demo:
-            print(f"step {step} living: {living_line(tally)} [" + ", ".join(f"{k} {v:.2f}" for k, v in acc.items()) +
+            print(f"step {step} living: {living_line(tally)} | own right rate " + ", ".join(f"{k} {v:.2f}" for k, v in sorted(fm.rates.items())) + " [" + ", ".join(f"{k} {v:.2f}" for k, v in acc.items()) +
                   f"] made nodes that act {len(fm.bank.fns)} | " + ", ".join(
                       f"{k} {v}" for k, v in sorted(fm.stats.items()) if k in ("fires", "rest", "no change", "budget out", "check fails",
                                                                          "new functions", "edits", "updates", "roundtrip"))
