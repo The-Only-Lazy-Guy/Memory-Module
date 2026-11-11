@@ -978,9 +978,18 @@ def commit_all(fm):
         commit(f)
 
 
-def assemble(net, o, j, plan=None):
+def choice(lg, temp=0.):
+    """a choice from logits: the likeliest, or (a try, temp > 0) one sampled as likely as the node itself finds it"""
+    if not temp:
+        return int(lg.argmax())
+    return int(torch.multinomial(F.softmax(lg.float() / temp, -1), 1))
+
+
+def assemble(net, o, j, plan=None, temp=0.):
     """output j as a node: its pieces put together (its own choices, or in demos the pieces the target is made of:
-    ("span", first token, last token) / ("made", how many latents)); returns the node's value and its pieces"""
+    ("span", first token, last token) / ("made", how many latents)); returns the node's value and its pieces. temp > 0:
+    a try -- each choice sampled from the node's own odds (11-11: tries changed only who fires and what it takes in;
+    what it makes and where it goes stayed its argmax, so a wrong slot or a wrong span was never tried otherwise)"""
     rows, pieces = [], []
     for s_ in range(net.S):
         if plan is not None:
@@ -991,14 +1000,15 @@ def assemble(net, o, j, plan=None):
             kd = o["kind"][j, s_].clone()
             if not len(o["raw"]):
                 kd[1] = -1e9                           # no inputs: nothing to take a span from
-            k = int(kd.argmax())
+            k = choice(kd, temp)
             if k == 0:
                 break
             if k == 1:
-                st_ = int(o["start"][j, s_].argmax())
-                pc = ("span", st_, int(net.end_logits(o, j, s_, st_).argmax()))
+                st_ = choice(o["start"][j, s_], temp)
+                pc = ("span", st_, choice(net.end_logits(o, j, s_, st_), temp))
             else:
-                pc = ("made", max(1, int((o["gkeep"][j, s_] > 0).sum())))
+                keep = torch.sigmoid(o["gkeep"][j, s_] / temp) if temp else None
+                pc = ("made", max(1, int((torch.bernoulli(keep) > 0).sum() if temp else (o["gkeep"][j, s_] > 0).sum())))
         rows.append(o["raw"][pc[1]:pc[2] + 1] if pc[0] == "span" else o["gen"][j, s_, :pc[1]])
         pieces.append(pc)
     return (torch.cat(rows) if rows else o["gen"][j, 0, :1]), pieces
@@ -1290,6 +1300,7 @@ class FM:
         self.calc_on, self.news = True, []             # the calculator's own body answers (False: removed, its mimic does)
         self.made, self.frozen, self.tune = False, False, .1
         self.routes = []                               # the demos' routing examples (signal's nodes, sign, purpose)
+        self.shown = {}                                # purpose -> the demos' steps as runs (skill_replay)
         self.stage, self.assign = "free", {}           # the training stage; purpose -> the node that learned it          # a node that acts was made (the optimizer takes it in); frozen:
         #                                                no new one (checks)
 
@@ -1439,9 +1450,14 @@ class FM:
         net = self.bank.interp
         o = self.bank.run(actor, ins, q, v=sg.sign, hops=hops, sal=sal)
         many, err, where, isfn = o["many"], o["err"], o["where"], o["isfn"]
-        made = [o["code"][j] if float(isfn[j]) > 0 else self.heads.reread(assemble(net, o, j)[0]) for j in range(int(many.argmax()) + 1)]
+        T = self.explore                               # a try: its whole action sampled from its own odds -- how many,
+        nm = choice(many, T) + 1                       # words or a program, which pieces, where each goes (a right try
+        fn_ = [bool(torch.bernoulli(torch.sigmoid(isfn[j] / T))) if T else float(isfn[j]) > 0 for j in range(nm)]   # is
+        asm = [None if fn_[j] else assemble(net, o, j, temp=T) for j in range(nm)]   # relived: what it sampled is
+        made = [o["code"][j] if fn_[j] else self.heads.reread(asm[j][0]) for j in range(nm)]   # what it learns to do)
         fslot = torch.tensor([False, False] + [n.kind == "fn" for n in ins[:net.R]], device=q.device)[:where.shape[-1]]
-        where = torch.stack([where[j] if float(isfn[j]) > 0 else where[j].masked_fill(fslot, -1e9) for j in range(len(where))])
+        where = torch.stack([where[j] if fn_[j] else where[j].masked_fill(fslot, -1e9) for j in range(nm)])
+        wsel = [choice(where[j], T) for j in range(nm)]
         #                                                words land in memory or the workspace, a program in a function
         #                                                (fm18c trace: 289 of 297 statements went into a function: memory 0)
         take = [i in pick for i in range(len(C))]
@@ -1477,19 +1493,19 @@ class FM:
                   f"{self.name(C[i][0])[:30]} {float(g[i]):.2f}" for i in top) +
                   ") | about: " + " + ".join(repr(self.say(n)[:60]) for n in sg.about) +
                   f" | takes in {len(ins)}/{len(C)}: " + "; ".join(f"{self.name(n)[:45]} ({float(sv):.2f})" for n, sv in zip(ins, sal)) +
-                  f" | many {int(many.argmax()) + 1}, where " + ", ".join(str(int(where[j].argmax())) for j in range(int(many.argmax()) + 1)) +
-                  ", function? " + ", ".join(f"{float(torch.sigmoid(isfn[j])):.2f}" for j in range(int(many.argmax()) + 1)) +
+                  f" | many {nm}{' (sampled)' if T else ''}, where " + ", ".join(str(w_) for w_ in wsel) +
+                  ", function? " + ", ".join(f"{float(torch.sigmoid(isfn[j])):.2f}" for j in range(nm)) +
                   f", own error {float(err):.2f} (usual {float(st_.mu):.2f}) | says: " +
                   "; ".join(repr(self.say(Node(z, None, None))[:60]) for z in made) +
-                  " | pieces " + "; ".join(str(assemble(net, o, j)[1]) for j in range(len(made))), flush=True)
+                  " | pieces " + "; ".join(str(asm[j][1] if asm[j] else "program") for j in range(nm)), flush=True)
         self.firings.append(rec)
         self.count("fires")
         drift = float(err) > float(st_.mu + self.kappa * st_.sd)
         self.news = []
         flat = [t for n in ins[:net.R] for t in (list(n.toks[:net.L]) if n.toks is not None else [None] * len(n.B[:net.L]))]
         for j, z in enumerate(made):
-            wj, fj = int(where[j].argmax()), float(isfn[j]) > 0
-            pcs = [] if fj else assemble(net, o, j)[1]
+            wj, fj = wsel[j], fn_[j]
+            pcs = [] if fj else asm[j][1]
             rec["outs"].append((pcs, wj, fj))          # (what it made: its pieces, where it went, words or a function)
             x = ins[wj - 2] if 2 <= wj < 2 + len(ins) else None
             if not fj and x is not None and x.kind != "fn" and x.toks is not None and pcs and all(pc[0] == "span" for pc in pcs):
@@ -1918,6 +1934,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
     dev = o["many"].device
     L = F.cross_entropy(o["many"][None], torch.tensor([len(outs) - 1], device=dev))
     res, keys, info, exact = [], [key(n) for n in order], [], True
+    shown = []                                         # this step as a run to relive later (skill_replay)
     for j, (target, dest) in enumerate(outs):
         w = dest if isinstance(dest, int) else 2 + keys.index(key(dest))
         if isinstance(target, str):
@@ -1925,10 +1942,12 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             got = say_loss(fm, A, net, o, j, target, order, prefer=[r for r, n in enumerate(order[:net.R]) if key(n) in want_in])
             if got is None:
                 res.append(None)
-                exact = False
+                exact, shown = False, None
                 continue
             Lj, ok, z, plan, tid, spelled = got
             L, exact, dl = L + Lj, exact and ok, float(Lj)
+            if shown is not None:
+                shown.append(([(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan], w, False))
             fm.count(f"{purpose} exact", int(ok)), fm.count(f"{purpose} said", 1)
             if calc is not None and fm.calc_on:        # the calculator's own body: what goes on is its result when it
                 with torch.no_grad():                  # is the right one; its mimic (this output) learns from it
@@ -1952,6 +1971,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                     info.append((j, target, w, dl, told_, plan, pcs, tid))
             res.append((z, tid, ok, spelled))
         else:                                          # a function given back: judged by what it then does
+            shown = None                               # (not relived: a program is not pieces)
             f, rins, rq, rtarget = target
             got = say_loss(fm, A, net, bank.run(fm.fnode(f), rins, rq, program=o["code"][j]), 0, rtarget, rins)
             if got is not None:
@@ -2001,6 +2021,10 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                 break
     if fm.trace:
         trace_step(fm, purpose, v, about, actor, how, C, s_all, lg, y, order, o, info, outs, net, float(S), push, exact, float(L), rl)
+    if shown and actor.kind == "fn" and calc is None:  # the demonstration kept as a run (its inputs as they were)
+        fm.shown.setdefault(purpose, []).append({"actor": actor.fn, "ins": [still(n) for n in order], "q": q.detach(), "sign": v,
+                                                 "hops": list(hops), "sal": [float(x) for x in sal], "outs": shown})
+        del fm.shown[purpose][:-200]
     if actor.kind == "fn" and order:                   # what the update writer reads with this function's gradient
         bank.fns[actor.fn].last_ctx = (q.detach(), torch.stack([n.B.mean(0).detach() for n in order[:8]]),
                                        float(torch.log1p(L.detach())), float(exact))
@@ -2215,6 +2239,31 @@ def apart(q, kinds, tau=.1, aq=None, akinds=()):
     lp = (q @ allq.T / tau).masked_fill(eye, -1e9).log_softmax(1)
     has = pos.any(1)
     return -((lp * pos).sum(1)[has] / pos.sum(1)[has]).mean() if has.any() else q.sum() * 0
+
+
+def still(n):
+    """a node as it was (its rows cut from any graph: a run kept to relive later)"""
+    m = Node(n.B.detach(), n.L.detach() if n.L is not None else None, n.R.detach() if n.R is not None else None,
+             n.kind, n.place, n.idx, fn=n.fn)
+    m.toks, m.text = n.toks, n.text
+    return m
+
+
+def skill_replay(fm, rng, n=8):
+    """the demos' steps relived while it lives, as many of each purpose (11-11, fm38: living relived only statement
+    runs -- questions never came out right -- and the interpreter, shared by every node, learned to file everything:
+    'found its place' 401 for 290 statements by step 100, every question answered in 1 firing, lookup 7/24 -> 0/24).
+    Nothing new is shown: the same 50 demo steps, again"""
+    ps = [k for k, v in fm.shown.items() if v and fm.assign.get(k, -1) < len(fm.bank.fns)]
+    if not ps:
+        return 0
+    recs = []
+    for _ in range(n):
+        r = rng.choice(fm.shown[rng.choice(ps)])
+        if r["actor"] >= len(fm.bank.fns) or any(x.kind == "fn" and x.fn >= len(fm.bank.fns) for x in r["ins"]):
+            continue
+        recs.append(dict(r, actor=fm.fnode(r["actor"]), ins=[fm.fnode(x.fn) if x.kind == "fn" else x for x in r["ins"]]))
+    return relive(fm, recs)
 
 
 def route_replay(fm, rng, n=64):
@@ -2583,6 +2632,11 @@ def live_tick(fm, A, w, rng, upd, tally):
             tally["right"] += 1
             tuned(g0, recs, A.tune)
             best = recs
+            b = tries(fm, A, g0, snapshot(fm.bank), lambda: fm.ask(ask_text(E))[0], lambda got_: got_ == truth)
+            fm.g = g0                                  # practice even when right (11-11, user: self-improving episodes
+            if b and len(b[0]) < len(recs):            # always): a shorter right way is what it imitates
+                best = b[0]
+                tally["shorter by a try"] += 1
         else:
             restore(fm.bank, snap)
             tuned(g0, recs, -A.tune / 2)
@@ -2602,10 +2656,10 @@ def live_tick(fm, A, w, rng, upd, tally):
 
 def living_line(tally):
     return (f"statements kept {tally['kept']}/{tally['statements']} (+{tally['kept by a try']} by a try) | questions right "
-            f"{tally['right']}/{tally['asked']} (+{tally['right by a try']} by a try)")
+            f"{tally['right']}/{tally['asked']} (+{tally['right by a try']} by a try, {tally['shorter by a try']} shorter by a try)")
 
 
-TALLY = lambda: {"statements": 0, "kept": 0, "kept by a try": 0, "asked": 0, "right": 0, "right by a try": 0}
+TALLY = lambda: {"statements": 0, "kept": 0, "kept by a try": 0, "asked": 0, "right": 0, "right by a try": 0, "shorter by a try": 0}
 
 
 @torch.no_grad()
@@ -3144,6 +3198,8 @@ def run_fm(A):
         for _ in range(A.replay if step <= A.demo else A.replay_live):   # the demos' routing, again (one small update
             Lr = Lesson()                                    # each; after the step's last update: fm33 replayed while the
             Lr.add("route replay", route_replay(fm, rng))    # functions' lesson still waited for its backward). Living too
+            if step > A.demo:                                # (and what the demos' steps made, relived: skill_replay)
+                Lr.add("skill replay", skill_replay(fm, rng))
             update(Lr, acc)                                  # (fm34: @50 statements stored, questions fired; living's only
             #                                                  signal was its statements (questions 0/199), and @100 every
             #                                                  question rested again -- the demos anchor what living lacks)
@@ -3266,7 +3322,7 @@ if __name__ == "__main__":
     P.add_argument("--tool_good", type=float, default=.3)
     P.add_argument("--live", type=int, default=100, help="ticks it then lives in a fresh world (signals only)")
     P.add_argument("--lq", type=int, default=4, help="questions per living tick")
-    P.add_argument("--tries", type=int, default=4, help="sampled tries for a wrong answer")
+    P.add_argument("--tries", type=int, default=6, help="sampled tries (whole actions sampled): every question, a wrong statement")
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
