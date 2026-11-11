@@ -576,6 +576,7 @@ class Graph:
 PULL = 1.5                      # a label is pulled until the want meets it this far above 1 (relevant): room for wants it
 #                                 has not met (fm31 @50, dm29: pulled to 1.1, in a fresh world every statement rested --
 #                                 new names put the gates just under 1); pushes stay at .9
+ROUTE_T = .2                    # a try's routing: every node, by its gate at this temperature (x --explore)
 REACH = .75                     # a place's reach: the same fact with another value lies within .61 of it, the nearest other
                                 # fact at .91 (fm28 codec 1200, gated label head; 11-11)
 
@@ -1426,9 +1427,11 @@ class FM:
             s = torch.nan_to_num(s, nan=-1e9, posinf=-1e9, neginf=-1e9)
         if float(s.max()) <= 1 and not self.explore:
             return -1
-        if self.explore:                               # a try: what meets the want, or when nothing does, any node by how
-            s_ = s.masked_fill(s <= 1, -1e9) if float(s.max()) > 1 else s   # near it is (tr29: 284 of 297 statements in
-            return int(torch.multinomial(F.softmax(s_ / self.explore, -1), 1))   # a fresh world rested, and so did every try)
+        if self.explore:                               # a try: any node, as likely as its label meets the want (tr29: 284
+            return int(torch.multinomial(F.softmax(s / (ROUTE_T * self.explore), -1), 1))   # of 297 statements in a fresh
+        #                                                world rested, and so did every try; fm39 @100: tries kept only the
+        #                                                nodes over 1 -- function 6 at 1.51 alone, so every try of every
+        #                                                question fired it again, filed the question, 1 firing, 0/24)
         return int(s.argmax())
 
     # --- one firing
@@ -2483,6 +2486,10 @@ def imitate(fm, recs):
         loss = loss + F.relu(PULL - fm.bank.gate(q[None], [a])[0, 0])   # (tr30: imitating ~500 statement runs pulled every
         #                                                    want toward the store's label; questions then rested or were
         #                                                    stored as facts -- as signalled(), fm17c)
+        if a.kind == "fn":                             # and among every node that acts, its label is the one this want
+            g = fm.bank.gate(q[None], [fm.fnode(t) for t in range(len(fm.bank.fns))])[0]   # meets (the demos' rule, run_step;
+            loss = loss + F.cross_entropy((g / .1)[None], torch.tensor([a.fn], device=g.device))   # fm39: pull alone left
+            #                                                    function 6 at 1.51 for statements AND questions)
         lg = fm.filt(fm.bank.key(a).detach(), fm.bank.program(a).detach(), q.detach(), r["sign"], 0., r["C"],
                      about=r.get("aboutL"))   # (codes change in place as it lives)
         loss = loss + F.binary_cross_entropy_with_logits(lg, torch.tensor(r["take"], dtype=torch.float, device=lg.device))
