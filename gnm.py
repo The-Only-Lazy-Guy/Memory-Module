@@ -1466,7 +1466,9 @@ class FM:
         #                                                (fm18c trace: 289 of 297 statements went into a function: memory 0)
         take = [i in pick for i in range(len(C))]
         rec = {"actor": actor, "about": [n.B for n in sg.about], "q": q, "C": [(n.B, n.L, k, a_, n.near) for n, k, a_ in C], "take": take,
-               "ins": ins, "hops": hops, "sign": sg.sign,
+               "ins": [still(n) for n in ins], "hops": hops, "sign": sg.sign,   # (its inputs as they were: fill changes the
+               #                                                question node in place -- relived later, its spans pointed into
+               #                                                the new value; fm42 'right' loss 7e8)
                "walkq": sg.about[0].L.detach().float().cpu().numpy() if sg.about[0].L is not None else None,
                "sal": [float(x) for x in sal], "outs": [],
                "aboutL": sg.about[0].L.detach() if sg.about[0].L is not None else None}
