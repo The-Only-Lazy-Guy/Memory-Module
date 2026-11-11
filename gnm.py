@@ -857,7 +857,10 @@ class Interpreter(nn.Module):
             if copy is not None:                       # a function's program is not words to copy
                 cm = torch.tensor(list(copy)[:len(toks)], dtype=torch.bool, device=dev)
                 o["start"] = o["start"].masked_fill(~cm[o["owner"]], -1e9)
-            o["where"] = torch.cat([self.where(g), self.wp(g) @ each.T], -1)
+            tk = self.wp(g) @ o["keys"].T              # where: in place of input r by its tokens, not their average
+            wr = torch.stack([tk[:, o["owner"] == r].logsumexp(-1) - math.log(int((o["owner"] == r).sum()))
+                              for r in range(len(toks))], -1)   # (11-12, ws44: 'the page of Torka' / '... Orka' as means
+            o["where"] = torch.cat([self.where(g), wr], -1)     # are one fact; 443 facts in 126 places, held 13%)
         else:
             o["where"] = self.where(g)
         o["isfn"] = self.isfn(g).squeeze(-1)
@@ -1571,6 +1574,7 @@ class FM:
                 n = self.node(z, toks=toks, parent=sg.about[0])
                 self.news.append(n)
             elif x.kind == "entry":                    # A to be B: the place's chain takes the new value, A stays
+                self.count("joined its place")
                 self.memorize(x.place, z, ins, rec, j, toks)
             else:                                      # a workspace node's value changed: the node that asked for it hears
                 n = self.node(z, toks=toks)
@@ -1587,13 +1591,9 @@ class FM:
             self.count("new functions")
             return
         n = self.node(z, toks=toks, parent=sg.about[0])
-        if w == NEW_PLACE:                             # a place is what it is about: one already there within its reach
-            p = self.find_place(n.L, reach=True)       # takes it (A to be B: its chain grows; tr24/ck27: 1.00 entry
-            if p < 0:                                  # per place, the history never formed, 'before' impossible)
-                p = self.g.add_place(n.L.detach().float().cpu().numpy())
-            else:
-                self.count("found its place")
-            self.memorize(p, z, ins, rec, j, toks)
+        if w == NEW_PLACE:                             # a new place is new: joining a fact's place is the store's own
+            p = self.g.add_place(n.L.detach().float().cpu().numpy())   # choice (where = that place's entry), read token by
+            self.memorize(p, z, ins, rec, j, toks)     # token (11-12: the reach threshold merged near names -- ws44)
         else:
             self.news.append(n)
 
