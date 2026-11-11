@@ -1511,22 +1511,25 @@ class FM:
             pcs = [] if fj else asm[j][1]
             rec["outs"].append((pcs, wj, fj))          # (what it made: its pieces, where it went, words or a function)
             x = ins[wj - 2] if 2 <= wj < 2 + len(ins) else None
-            if not fj and x is not None and x.kind != "fn" and x.toks is not None and pcs and all(pc[0] == "span" for pc in pcs):
-                said_t = [t for pc in pcs for t in flat[pc[1]:pc[2] + 1]]
-                if None not in said_t and said_t == list(x.toks[:net.L]):   # it says exactly what it replaces: no change,
+            said_t = None                              # a copy's words are known: the tokens it took (11-12, in40: a
+            if not fj and pcs and all(pc[0] == "span" for pc in pcs):   # lookup copied one token and the decoder said it
+                said_t = [t for pc in pcs for t in flat[pc[1]:pc[2] + 1]]   # as '7 7 7'; what a copy says is what it took)
+                said_t = None if None in said_t or len(said_t) != len(z) else said_t
+            if said_t is not None and x is not None and x.kind != "fn" and x.toks is not None:
+                if said_t == list(x.toks[:net.L]):                          # it says exactly what it replaces: no change,
                     self.count("no change")                                 # no signal (tr24: the store wrote the statement
                     if x.kind == "entry":                                   # onto itself, the re-read moved its label, and
                         rec["same"] = True                                  # it fired 6-9 times; 1315 firings for 297)
                         rec.setdefault("at", []).append(x.place)
                     continue
-            if drift and not fj:                       # its own guess: unusually wrong -> said and read again (words
+            if drift and not fj and said_t is None:    # its own guess: unusually wrong -> said and read again (words
             #                                            only: a program read back as text gave make() 46 rows for 16,
             #                                            fm35 living crash)
                 said_ = self.say(Node(z, None, None))
                 if said_.strip():                      # (said as nothing, it stays as it was: read again, nothing is
                     z = self.nodes([said_])[0].B       # a node of no rows, its mean not a number -- fm21's gates)
                     self.count("roundtrip")
-            self.write(z, wj, ins, sg, fj, rec, j)
+            self.write(z, wj, ins, sg, fj, rec, j, toks=said_t)
         if len(self.news) == 1:                        # a new node is heard by itself; several made at once are heard
             self.signals.append(Signal(self.news, 1., self.t))   # together, with what they came from
         elif self.news:
@@ -1550,7 +1553,7 @@ class FM:
         d, p = self.g.search(L.detach().float().cpu().numpy())[0]
         return p if d < (float(self.g.S[p]) if reach else .1) else -1
 
-    def write(self, z, w, ins, sg, isfn, rec, j):
+    def write(self, z, w, ins, sg, isfn, rec, j, toks=None):
         """where an output lands, and what that change signals"""
         self.t += 1
         if w >= 2 and w - 2 < len(ins):
@@ -1562,16 +1565,16 @@ class FM:
                 self.count("edits")
             elif x.kind == "fn":                       # words aimed at a function: a program is not words (fm18c: 270 of
                 self.count("words aimed at a function")   # 346 statements overwrote a function) -> a new node
-                n = self.node(z, parent=sg.about[0])
+                n = self.node(z, toks=toks, parent=sg.about[0])
                 self.news.append(n)
             elif x.kind == "entry":                    # A to be B: the place's chain takes the new value, A stays
-                self.memorize(x.place, z, ins, rec, j)
+                self.memorize(x.place, z, ins, rec, j, toks)
             else:                                      # a workspace node's value changed: the node that asked for it hears
-                n = self.node(z)
-                if self.say(n) == self.text_of(x):     # no change, no signal: it says what it said (11-11: by what it
+                n = self.node(z, toks=toks)
+                if self.text_of(n) == self.text_of(x):   # no change, no signal: it says what it said (11-11: by what it
                     self.count("no change")            # says, not by its label -- a fact's label is value-free now,
                     return                             # so a filled-in value barely moves it)
-                x.B, x.L, x.R = n.B, n.L, n.R
+                x.B, x.L, x.R, x.toks, x.text = n.B, n.L, n.R, n.toks, None
                 self.signals.append(Signal([x.parent, x] if x.parent is not None else [x], 1., self.t))
             return
         if isfn and not self.frozen:                   # a new node that acts (a function), made like an input function
@@ -1580,25 +1583,25 @@ class FM:
             self.made = True
             self.count("new functions")
             return
-        n = self.node(z, parent=sg.about[0])
+        n = self.node(z, toks=toks, parent=sg.about[0])
         if w == NEW_PLACE:                             # a place is what it is about: one already there within its reach
             p = self.find_place(n.L, reach=True)       # takes it (A to be B: its chain grows; tr24/ck27: 1.00 entry
             if p < 0:                                  # per place, the history never formed, 'before' impossible)
                 p = self.g.add_place(n.L.detach().float().cpu().numpy())
             else:
                 self.count("found its place")
-            self.memorize(p, z, ins, rec, j)
+            self.memorize(p, z, ins, rec, j, toks)
         else:
             self.news.append(n)
 
-    def memorize(self, p, z, ins, rec, j):
-        n = self.node(z)
-        if self.g.chain[p] and self.say(Node(z, None, None)) == self.text_of(self.entry(p)):
+    def memorize(self, p, z, ins, rec, j, toks=None):
+        n = self.node(z, toks=toks)
+        if self.g.chain[p] and self.text_of(n) == self.text_of(self.entry(p)):
             self.count("no change")                    # it says what the place says now: nothing new, nothing to hear
             rec["same"] = True                         # (the memory holds it already)
             rec.setdefault("at", []).append(p)
             return                                     # (a fact's label does not move with its value: said, compared)
-        self.g.chain[p].append((z.detach(), self.t, None))
+        self.g.chain[p].append((z.detach(), self.t, toks))
         self.g.R[p] = n.R.detach().float().cpu().numpy()
         ok = float(torch.sigmoid(self.critic([x.B for x in ins], z)))     # the check: does what was kept pass?
         rec.setdefault("kept", []).append((j, ok))
@@ -1636,7 +1639,7 @@ class FM:
         q = self.nodes([text])[0]
         self.signals.append(Signal([q], 1., self.t))
         n = self.run()
-        return self.say(q), n
+        return self.text_of(q), n
 
 
 # ---------------------------------------------------------------------- the teacher: demos only (it never runs a step)
