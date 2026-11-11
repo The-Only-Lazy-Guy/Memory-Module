@@ -1478,6 +1478,7 @@ class FM:
                   ") | about: " + " + ".join(repr(self.say(n)[:60]) for n in sg.about) +
                   f" | takes in {len(ins)}/{len(C)}: " + "; ".join(f"{self.name(n)[:45]} ({float(sv):.2f})" for n, sv in zip(ins, sal)) +
                   f" | many {int(many.argmax()) + 1}, where " + ", ".join(str(int(where[j].argmax())) for j in range(int(many.argmax()) + 1)) +
+                  ", function? " + ", ".join(f"{float(torch.sigmoid(isfn[j])):.2f}" for j in range(int(many.argmax()) + 1)) +
                   f", own error {float(err):.2f} (usual {float(st_.mu):.2f}) | says: " +
                   "; ".join(repr(self.say(Node(z, None, None))[:60]) for z in made) +
                   " | pieces " + "; ".join(str(assemble(net, o, j)[1]) for j in range(len(made))), flush=True)
@@ -2462,8 +2463,8 @@ def relive(fm, recs):
     net, loss, n = fm.bank.interp, 0, 0
     for r in recs:
         a, outs = r["actor"], r.get("outs")
-        if not outs or (a.kind == "fn" and a.fn >= len(fm.bank.fns)):   # (a calculator's own body; a node gone)
-            continue
+        if not outs or gone(fm, r):                    # (a calculator's own body; a node gone -- fm36 crashed on an
+            continue                                   # input a rolled-back try had made)
         o = fm.bank.run(a, r["ins"], r["q"], v=r["sign"], hops=r["hops"], sal=r["sal"])
         dev = o["many"].device
         L = F.cross_entropy(o["many"][None], torch.tensor([min(len(outs), net.M) - 1], device=dev))
@@ -2509,6 +2510,11 @@ def tuned(g, recs, eta):
                 g.tune(x.place, r["walkq"], eta)
 
 
+def gone(fm, r):
+    """a record that names a node no longer there (a try made it, the try was rolled back)"""
+    return any(x.kind == "fn" and x.fn >= len(fm.bank.fns) for x in [r["actor"]] + list(r["ins"]))
+
+
 def checked(fm, recs):
     """the check's score on what was kept is a signal: its gradient reaches the function that kept it (the check
     itself does not move here)"""
@@ -2516,7 +2522,7 @@ def checked(fm, recs):
     loss, n = 0, 0
     for r in recs:
         a = r["actor"]
-        if a.kind == "fn" and a.fn >= len(fm.bank.fns):
+        if gone(fm, r):
             continue
         for j, _ in r.get("kept", []):
             r_ = fm.bank.run(a, r["ins"], r["q"], v=r["sign"], hops=r.get("hops"))
@@ -2541,6 +2547,8 @@ def live_tick(fm, A, w, rng, upd, tally):
                 mod.eval()
             g0, snap = clone_graph(fm.g), snapshot(fm.bank)
             fm.firings = []
+            if fm.show:
+                print(f"\nLIVE statement {text!r}", flush=True)
             fm.arrive(text)
             recs = list(fm.firings)
             tally["statements"] += 1
@@ -2552,6 +2560,10 @@ def live_tick(fm, A, w, rng, upd, tally):
                 b = tries(fm, A, g0, snap, lambda: fm.arrive(text), lambda _: kept_well(fm.firings))
                 fm.g, best = (b[1], b[0]) if b else (g_own, None)
                 tally["kept by a try"] += int(b is not None)
+            if fm.show:
+                print(f"  -> kept {kept_well(recs)} (" + "; ".join(f"{fm.name(r['actor'])[:22]}: kept {[(j, round(ok, 2)) for j, ok in r.get('kept', [])]}"
+                      f"{' same' if r.get('same') else ''}" for r in recs) + f") | by a try: {bool(b) if not kept_well(recs) else '-'}"
+                      f" | memory {fm.g.n} places, functions {len(fm.bank.fns)}", flush=True)
             for mod in mods:
                 mod.train()
             Ls = Lesson()
@@ -2569,10 +2581,14 @@ def live_tick(fm, A, w, rng, upd, tally):
             mod.eval()
         truth, g0, snap = D(VAL(truth_of(E, w))), fm.g, snapshot(fm.bank)
         fm.g, fm.firings = clone_graph(g0), []
+        if fm.show:
+            print(f"\nLIVE question {ask_text(E)!r} truth {truth!r}", flush=True)
         got, _ = fm.ask(ask_text(E))
         recs = list(fm.firings)
         fm.g = g0                                      # asking leaves the memory as it was (its access keys learn)
         tally["asked"] += 1
+        if fm.show:
+            print(f"  -> {got!r} ({'right' if got == truth else 'wrong'}, {len(recs)} firings)", flush=True)
         if got == truth:                               # what it made or edited on the way stays: accumulated
             tally["right"] += 1
             tuned(g0, recs, A.tune)
@@ -3085,7 +3101,9 @@ def run_fm(A):
             if step == A.demo + 1:                     # demos; then it lives: the outcome is the only teacher
                 print(f"step {step}: the demos end; it lives by itself (signals only)", flush=True)
                 fm.look = 6
+            fm.show = step - A.demo <= A.show_live     # (--show_live: the first living steps, every firing said)
             seen += live_tick(fm, A, w, rng, lambda Ls_: update(Ls_, acc), tally)
+            fm.show = False
             Ls = Lesson()                              # (the translator still reads back what it read)
         else:
             Ls = Lesson()                              # the statements: one update
@@ -3237,6 +3255,7 @@ if __name__ == "__main__":
     P.add_argument("--warm", type=int, default=50, help="steps of the warm start: a batch of lookups an update")
     P.add_argument("--warm_q", type=int, default=16, help="lookups in each warm-start update")
     P.add_argument("--replay", type=int, default=20, help="routing replays after each demo step (want reader + labels)")
+    P.add_argument("--show_live", type=int, default=0, help="living steps said in full (every firing, every verdict)")
     P.add_argument("--replay_live", type=int, default=5, help="routing replays of the demos after each living step")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
     P.add_argument("--ticks", type=int, default=30, help="world ticks the module lives through before eval questions")
