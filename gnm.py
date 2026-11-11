@@ -1498,6 +1498,7 @@ class FM:
                     self.count("no change")                                 # no signal (tr24: the store wrote the statement
                     if x.kind == "entry":                                   # onto itself, the re-read moved its label, and
                         rec["same"] = True                                  # it fired 6-9 times; 1315 firings for 297)
+                        rec.setdefault("at", []).append(x.place)
                     continue
             if drift and not fj:                       # its own guess: unusually wrong -> said and read again (words
             #                                            only: a program read back as text gave make() 46 rows for 16,
@@ -1576,11 +1577,13 @@ class FM:
         if self.g.chain[p] and self.say(Node(z, None, None)) == self.text_of(self.entry(p)):
             self.count("no change")                    # it says what the place says now: nothing new, nothing to hear
             rec["same"] = True                         # (the memory holds it already)
+            rec.setdefault("at", []).append(p)
             return                                     # (a fact's label does not move with its value: said, compared)
         self.g.chain[p].append((z.detach(), self.t, None))
         self.g.R[p] = n.R.detach().float().cpu().numpy()
         ok = float(torch.sigmoid(self.critic([x.B for x in ins], z)))     # the check: does what was kept pass?
         rec.setdefault("kept", []).append((j, ok))
+        rec.setdefault("at", []).append(p)
         if rec.get("walkq") is not None:               # the check's signal lands at once: the places it read from get
             for x in ins:                              # easier (pass) or harder (fail) to reach by the walk that found them
                 if x.kind == "entry" and x.place < self.g.n:
@@ -2451,9 +2454,12 @@ def tries(fm, A, g0, snap, act, good):
     return best
 
 
-def kept_well(recs):
-    """a statement was kept: a firing kept it and the check passes what was kept, or the memory says it already"""
-    return any(r.get("same") for r in recs) or any(r.get("kept") and all(ok >= .5 for _, ok in r["kept"]) for r in recs)
+def held(fm, recs, want):
+    """a statement was kept: a place this arrival wrote (or found saying it already) now says what the world says the
+    memory should hold (the truth arriving, as a question's does). dl37: 'kept' by the check's score was hollow -- the
+    calculator filed '2 7' for a '(same as ...)' statement, the check passed it .69, and that run was imitated"""
+    at = {p for r in recs for p in r.get("at", []) if p < fm.g.n and fm.g.chain[p]}
+    return any(D(fm.text_of(fm.entry(p))) == want for p in at)
 
 
 def relive(fm, recs):
@@ -2515,22 +2521,6 @@ def gone(fm, r):
     return any(x.kind == "fn" and x.fn >= len(fm.bank.fns) for x in [r["actor"]] + list(r["ins"]))
 
 
-def checked(fm, recs):
-    """the check's score on what was kept is a signal: its gradient reaches the function that kept it (the check
-    itself does not move here)"""
-    fm.critic.requires_grad_(False)
-    loss, n = 0, 0
-    for r in recs:
-        a = r["actor"]
-        if gone(fm, r):
-            continue
-        for j, _ in r.get("kept", []):
-            r_ = fm.bank.run(a, r["ins"], r["q"], v=r["sign"], hops=r.get("hops"))
-            loss, n = loss - F.logsigmoid(fm.critic([x.B for x in r["ins"]], assemble(fm.bank.interp, r_, j)[0])), n + 1
-    fm.critic.requires_grad_(True)
-    return loss / max(1, n)
-
-
 def live_tick(fm, A, w, rng, upd, tally):
     """one tick of living: nothing scripted, no demo. What arrives is stored by the module itself; a statement that
     nothing kept (or whose kept value the check fails) is wrong: a few sampled tries from where it was, and the cheapest
@@ -2538,11 +2528,13 @@ def live_tick(fm, A, w, rng, upd, tally):
     edited on the way stays (accumulated) and the run is imitated; wrong -> rolled back, the cheapest right try imitated.
     No push on a wrong one's labels (fm17c: that silenced the module in 3 ticks). Returns the texts it read"""
     mods = (fm.bank, fm.heads, fm.filt, fm.critic)
-    seen = []
+    seen, T = [], Teacher(w)
     for d in world_step(w, rng):
         o = d()
-        for text, _ in said(o, w) if o else []:
+        side = w.side.get(id(o), {}) if o else {}
+        for text, meta in said(o, w) if o else []:
             seen.append(text)
+            want = D(T.kept(text, meta, side))        # what the memory should hold now (the world's truth)
             for mod in mods:
                 mod.eval()
             g0, snap = clone_graph(fm.g), snapshot(fm.bank)
@@ -2552,25 +2544,23 @@ def live_tick(fm, A, w, rng, upd, tally):
             fm.arrive(text)
             recs = list(fm.firings)
             tally["statements"] += 1
-            if kept_well(recs):
+            ok_ = held(fm, recs, want)
+            if ok_:
                 tally["kept"] += 1
                 best = recs
             else:
                 g_own = fm.g
-                b = tries(fm, A, g0, snap, lambda: fm.arrive(text), lambda _: kept_well(fm.firings))
+                b = tries(fm, A, g0, snap, lambda: fm.arrive(text), lambda _: held(fm, fm.firings, want))
                 fm.g, best = (b[1], b[0]) if b else (g_own, None)
                 tally["kept by a try"] += int(b is not None)
             if fm.show:
-                print(f"  -> kept {kept_well(recs)} (" + "; ".join(f"{fm.name(r['actor'])[:22]}: kept {[(j, round(ok, 2)) for j, ok in r.get('kept', [])]}"
-                      f"{' same' if r.get('same') else ''}" for r in recs) + f") | by a try: {bool(b) if not kept_well(recs) else '-'}"
+                print(f"  -> held {ok_} (" + "; ".join(f"{fm.name(r['actor'])[:22]}: kept {[(j, round(ok, 2)) for j, ok in r.get('kept', [])]}"
+                      f"{' same' if r.get('same') else ''}" for r in recs) + f") | by a try: {bool(b) if not ok_ else '-'}"
                       f" | memory {fm.g.n} places, functions {len(fm.bank.fns)}", flush=True)
             for mod in mods:
                 mod.train()
-            Ls = Lesson()
-            stored = [r for r in recs if r.get("kept")]
-            if stored:                                 # the check's score reaches the function that kept it
-                Ls.add("check", checked(fm, stored[-16:]))
-            if best:
+            Ls = Lesson()                              # (no gradient through the frozen check while it lives: functions
+            if best:                                   # learned to pass it -- dl37, fm36 'kept' 474/489, memory 0/151)
                 Ls.add("kept", imitate(fm, best) + relive(fm, best))
             upd(Ls)
     for _ in range(A.lq):
