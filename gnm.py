@@ -1154,7 +1154,7 @@ def make_out(fm, net, o, j, ins, w, temp=0., pieces=None, part=None):
     None; its tokens, None when not all are known; whether the part was its own pointing)"""
     _, pcs = assemble(net, o, j, pieces, temp)
     flat = toks_of(net, ins)
-    segs = []
+    segs, read = [], []
     for s_, pc in enumerate(pcs):
         if pc[0] != "span":
             segs.append((o["gen"][j, s_, :pc[1]], None))
@@ -1163,8 +1163,14 @@ def make_out(fm, net, o, j, ins, w, temp=0., pieces=None, part=None):
         val = None
         if ins[r_].kind == "entry" and ins[r_].ents:
             at = pc[1] - int((o["owner"] < r_).sum())
-            val = next((v for a_, b_, v in ins[r_].ents if a_ <= at <= b_), None)
-        segs.append(fm.value_node(val) if val is not None else (o["raw"][pc[1]:pc[2] + 1], flat[pc[1]:pc[2] + 1]))
+            val = next(((r_, a_, v) for a_, b_, v in ins[r_].ents if a_ <= at <= b_ and v is not None), None)
+        if val is not None and val not in read:
+            read.append(val)
+        segs.append((o["raw"][pc[1]:pc[2] + 1], flat[pc[1]:pc[2] + 1]))
+    if read:                                           # a READ is the value fields of the entries it points at and
+        segs = []                                      # nothing else: one value, or two as 'a and b' (in59: one stray
+        for i, (_, _, v) in enumerate(read):           # made piece left a rewritten question without its words, and
+            segs += ([fm.value_node("and")] if i else []) + [fm.value_node(v)]   # the calculator after it could not read)
     rows = torch.cat([x_ for x_, _ in segs]) if segs else o["gen"][j, 0, :1]
     toks = [t for _, ts in segs for t in ts] if segs and all(ts is not None for _, ts in segs) else None
     r, own = w - 2, False
