@@ -535,12 +535,26 @@ class Graph:
         s[np.arange(RM)[None] >= self.Mn[:self.n, None]] = 1.
         return s.min(-1)
 
+    def found_at(self, Q):
+        """every place's label laid along what a node says (Q: its rows), row on row, in order: how well its worst
+        row is met where it lies best, and where that is (the first row). A name is found where it stands, as it
+        stands -- its words scattered over the node are not it. -> (how well, first row), per place"""
+        n, m = self.n, len(Q)
+        S = self.M[:n] @ Q.T
+        acc = np.ones((n, m), dtype=np.float32)
+        for i in range(RM):
+            sh = np.full((n, m), -1., dtype=np.float32)
+            if i < m:
+                sh[:, :m - i] = S[:, i, i:]
+            acc = np.minimum(acc, np.where((i < self.Mn[:n])[:, None], sh, 1.))
+        return acc.max(1), acc.argmax(1)
+
     def near(self, Q, k):
-        """the places whose labels are found in what a node says, best first, as (1 - how well, place)"""
+        """the places named in what a node says, best first: (1 - how well, place, first row, last row of the name)"""
         if self.n == 0:
             return []
-        s = self.found_in(Q)
-        return [(float(1 - s[i]), int(i)) for i in np.argsort(-s)[:k]]
+        s, a = self.found_at(Q)
+        return [(float(1 - s[i]), int(i), int(a[i]), int(a[i] + self.Mn[i] - 1)) for i in np.argsort(-s)[:k]]
 
     def same(self, Q, key):
         """the place that is what a node names (Q: all its rows, key: those that name its thing): the place's label
@@ -806,7 +820,7 @@ class Interpreter(nn.Module):
     pieces, each a span taken as it is from one of the inputs or up to G latents it makes; a function given back is K
     latents. Also: how many outputs, where each goes, whether one is a function, its own guess of how wrong it is"""
 
-    def __init__(self, d=128, c=256, K=16, M=2, S=4, G=8, R=16, L=96, r=8, layers=5, lm=768):
+    def __init__(self, d=128, c=256, K=16, M=2, S=6, G=8, R=16, L=96, r=8, layers=5, lm=768):
         super().__init__()
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.hop = nn.Parameter(torch.randn(4, c) * .02)       # how far the traversal went to reach an input
@@ -1125,19 +1139,25 @@ def toks_of(net, ins):
 
 def make_out(fm, net, o, j, ins, w, temp=0., pieces=None, part=None):
     """output j as the node it becomes. Its pieces put together (its own choices -- sampled when temp > 0 -- or the
-    given ones); when it goes in place of a workspace node (w), they take the place of the PART of that node the
-    output points at (first, last token, counted over all the inputs' tokens: its own choice, or the given one) and the
-    rest of the node stays as it is: A to be B, where A is a part of what is there. -> (the node's rows, read again;
-    its pieces; the part or None; its tokens, None when not all are known)"""
+    given ones); when it goes in place of a workspace node (w), they take the place of a PART of that node and the
+    rest stays as it is: A to be B, where A is a part of what is there. Which part: what it took from a log goes
+    where that log's place is named in the node (the label match that found the place says where: a read, 11-12);
+    anything else, where the output itself points (first, last token). `part`: the given one, counted over all the
+    inputs' tokens. -> (the node's rows, read again; its pieces; the part or None; its tokens, None when not all are
+    known; whether the part was its own pointing)"""
     rows, pcs = assemble(net, o, j, pieces, temp)
     flat = toks_of(net, ins)
     toks = [t for pc in pcs for t in flat[pc[1]:pc[2] + 1]] if pcs and all(pc[0] == "span" for pc in pcs) else None
-    r = w - 2
+    r, own = w - 2, False
     if 0 <= r < min(len(ins), net.R) and ins[r].kind == "work" and len(o["raw"]):
-        if part is None:
-            st = choice(net.part_start(o, j, r), temp)
-            part = (st, choice(net.part_end(o, j, st), temp))
         x, off = ins[r], int((o["owner"] < r).sum())
+        if part is None:
+            src = next((ins[int(o["owner"][pc[1]])] for pc in pcs if pc[0] == "span" and ins[int(o["owner"][pc[1]])].kind == "entry"), None)
+            if src is not None and src.at is not None and src.at[0] is x and src.at[2] < len(x.B[:net.L]):
+                part = (off + src.at[1], off + src.at[2])
+            else:
+                st = choice(net.part_start(o, j, r), temp)
+                part, own = (st, choice(net.part_end(o, j, st), temp)), True
         a, b = part[0] - off, part[1] - off
         rows = torch.cat([x.B[:a], rows, x.B[b + 1:]])
         toks = list(x.toks[:a]) + toks + list(x.toks[b + 1:]) if toks is not None and x.toks is not None else None
@@ -1145,7 +1165,7 @@ def make_out(fm, net, o, j, ins, w, temp=0., pieces=None, part=None):
         part = None
     if toks is not None and (None in toks or len(toks) != len(rows)):
         toks = None
-    return fm.heads.reread(rows), pcs, part, toks
+    return fm.heads.reread(rows), pcs, part, toks, own
 
 
 def part_changed(tx, tt, others):
@@ -1173,18 +1193,30 @@ def say_loss(fm, A, net, o, j, target, order, prefer=None, dest=None):
     """how wrong output j is as the text it should say: which pieces it is made of (kind, where each span starts and
     ends, how many latents a made piece keeps and how close they are to what the encoder makes of those words), and
     what the assembled node says. dest: the input it goes in place of; when that is a workspace node the target is made
-    by changing a PART of it (part_changed): the pieces are what takes the part's place, and the output learns which
-    part. Returns (loss, exact, the node, the pieces, the target's tokens, the target as spelled, the rest) or None
-    when the target cannot be made of the pieces an output has"""
+    by changing a PART of it and the pieces are what takes the part's place. A read: the part is where the log it
+    reads from is named (found by the label match; nothing to learn); else the part is as little as differs
+    (part_changed) and the output learns to point at it. Returns (loss, exact, the node, the pieces, the target's
+    tokens, the target as spelled, the rest) or None when the target cannot be made of the pieces an output has"""
     ins_t = [(len(n.B[:net.L]), n.toks[:net.L] if n.toks is not None else None) for n in order[:net.R]]
     offs = np.cumsum([0] + [n for n, _ in ins_t])
     x = order[dest] if dest is not None and dest < len(ins_t) and order[dest].kind == "work" and order[dest].toks is not None \
         and len(order[dest].toks) <= net.L else None
     others = [t for r, (_, t) in enumerate(ins_t) if r != dest and (prefer is None or r in set(prefer))]
+    log = next((order[r] for r in (prefer or []) if r < len(ins_t) and order[r].kind == "entry" and order[r].at is not None
+                and order[r].at[0] is x), None) if x is not None else None   # the log this step reads (the teacher's first)
     best = None
     for spelled in dict.fromkeys([D(target), " " + D(target).lstrip()]):   # as written, or as it reads inside a
         full = fm.tr.tok(spelled)["input_ids"]                             # sentence: the one more of it is copied in
-        a, b, tid_ = part_changed(list(x.toks), full, others) if x is not None else (0, 0, full)
+        a, b, tid_, found = 0, 0, full, False
+        if x is not None:
+            tx = list(x.toks)
+            if log is not None:                        # where the log's place is named: is the target the node with
+                a, b = log.at[1], log.at[2]            # that part changed?
+                e_ = len(tx) - 1 - b
+                found = 0 <= a <= b < len(tx) and len(full) - e_ > a and tx[:a] == full[:a] and tx[b + 1:] == full[len(full) - e_:]
+                tid_ = full[a:len(full) - e_]
+            if not found:
+                a, b, tid_ = part_changed(tx, full, others)
         plan_ = plan_pieces(tid_, ins_t, net.S, net.G, prefer)
         if plan_ is not None:                                              # (more copied FROM THE INPUTS IT SHOULD
             own_in = lambda a_: prefer is None or int(np.searchsorted(offs, a_, side="right") - 1) in set(prefer)  # READ
@@ -1192,11 +1224,17 @@ def say_loss(fm, A, net, o, j, target, order, prefer=None, dest=None):
                       sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span"), -len(plan_))   # copied, fewer pieces
             copied = ((-len(tid_),) if x is not None else ()) + copied   # (a part: the smallest change first -- ' What
             if best is None or copied > best[0]:                           # is ...' for 'What is ...' changes it all)
-                best = (copied, spelled, full, plan_, (a, b), tid_)
+                best = (copied, spelled, full, plan_, (a, b), tid_, found)
     if best is None:
         fm.count("cannot be made of pieces")
         return None
-    _, target, tid, plan, part, inner = best
+    _, target, tid, plan, part, inner, found = best
+    if log is not None:
+        fm.count("read: place found where it is named", int(found)), fm.count("read: asked")
+    if found:                                          # what is read from a log is taken from a log (a value that also
+        owner = lambda a_: order[int(np.searchsorted(offs, a_, side="right") - 1)].kind   # stands in the question is
+        plan = [pc if pc[0] != "span" else (lambda al: ("span", al[0][0], al[0][1], al))(    # not the one to copy: the
+            [ab for ab in pc[3] if owner(ab[0]) == "entry"] or pc[3]) for pc in plan]        # larger of 19 and 4 = 19)
     dev = o["kind"].device
     with torch.no_grad():
         zt, mt = fm.tr.content([target])
@@ -1215,7 +1253,7 @@ def say_loss(fm, A, net, o, j, target, order, prefer=None, dest=None):
             if len(zt) == len(tid):                    # what the encoder makes of those words, there
                 L = L + F.mse_loss(o["gen"][j, s_, :i1 - i0], zt[at + i0:at + i1]) * A.mse
     ed = (int(offs[dest]) + part[0], int(offs[dest]) + part[1]) if x is not None else None
-    if ed is not None:                                 # which part of the node it changes
+    if ed is not None and not found:                   # which part of the node it changes: its own pointing
         L = L + F.cross_entropy(net.part_start(o, j, dest)[None], torch.tensor([ed[0]], device=dev)) + \
             F.cross_entropy(net.part_end(o, j, ed[0])[None], torch.tensor([ed[1]], device=dev))
     want_pcs = [(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan]
@@ -1230,7 +1268,7 @@ def say_loss(fm, A, net, o, j, target, order, prefer=None, dest=None):
         mine = make_out(fm, net, o, j, order, w)       # those tokens sit), on the same part, and what it makes says it
         same = says(mine) and None not in [x_ for p_ in said_as(mine[1], flat) if p_ and p_[0] != "made" for x_ in p_]
         exact = same and float(dl) < A.exact
-    return L + dl, exact, z, plan, tid, target, (mine, same, says, part if x is not None else None, ed, inner)
+    return L + dl, exact, z, plan, tid, target, (mine, same, says, part if x is not None else None, ed if not found else None, inner)
 
 
 class Acting(nn.Module):
@@ -1421,6 +1459,7 @@ class Node:
         self.text = None                               # the text it was read from (traces only)
         self.toks = None                               # the token each row of B is (known when read from text, or in demos)
         self.near = None                               # how far the walk that brought it was (its label, from the signal's)
+        self.at = None                                 # a log: (the node, first row, last row) where its place is named
 
 
 class Signal:
@@ -1497,7 +1536,8 @@ class FM:
         """a node's label rows as the graph keeps them: all of them, and those that name its thing (at least one)"""
         r, g, _ = self.heads.rows([z])
         r, g = r[0].float(), g[0]
-        key = r[g > .5] if bool((g > .5).any()) else r[g.argmax()][None]
+        i = (g > .5).nonzero().flatten()               # (one run of rows, first to last: a name is found where it stands)
+        key = r[int(i[0]):int(i[-1]) + 1] if len(i) else r[g.argmax()][None]
         return r.cpu().numpy(), key.cpu().numpy()
 
     def fnode(self, t):
@@ -1528,17 +1568,22 @@ class FM:
         x = sg.about[0]
         self.walks = []
 
-        def bring(p, kind, d_=None):
+        def bring(p, kind, d_=None, at=None):
             if p not in seen:
                 seen.add(p)
                 e_ = self.log(p)
-                e_.near = d_                           # (the label walk: how well its label is found in the signal's node)
-                out.append((e_, kind, 0))
+                e_.near, e_.at = d_, at                # (the label walk: how well its place is named in the signal's
+                out.append((e_, kind, 0))              # node, and where)
         if self.g.n:
-            found = self.g.near(self.label_rows(x.B)[0], self.look)
-            self.walks.append((1, found))
-            for d_, p in found:
-                bring(p, 1, d_)
+            Q = self.label_rows(x.B)[0]
+            sc, a0 = self.g.found_at(Q)
+            for n in sg.about[1:]:                     # a log the signal brings itself (a fact just stated): where it
+                if n.kind == "entry" and n.place < self.g.n:   # is named in the signal's node
+                    n.near, n.at = float(1 - sc[n.place]), (x, int(a0[n.place]), int(a0[n.place] + self.g.Mn[n.place] - 1))
+            found = self.g.near(Q, self.look)
+            self.walks.append((1, [(d_, p) for d_, p, _, _ in found]))
+            for d_, p, a_, b_ in found:
+                bring(p, 1, d_, (x, a_, b_))
             if x.R is not None and float(x.R.norm()) >= .3:   # (tr1: a direction from a near-zero R walked to the same
                 found = self.g.search(F.normalize(x.R, dim=0).detach().float().cpu().numpy())[:self.look]   # few places)
                 self.walks.append((3, found))
@@ -1642,18 +1687,14 @@ class FM:
                "aboutL": sg.about[0].L.detach() if sg.about[0].L is not None else None}
         self.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
         calc = self.bank.calc_of(actor)
-        if calc is not None and self.calc_on:          # the calculator: its own body answers; its mimic is checked
-            got = calculate(self, calc, ins, sal)
-            mimic = self.say(Node(made[0], None, None)) if made else ""
-            if got is not None:                        # its result where the operation stood: the part of the signal's
-                r = ins.index(sg.about[0])             # node its mimic points at; the rest of that node stays
-                pt = make_out(self, net, o, 0, ins, 2 + r, T)[2]
-                off = int((o["owner"] < r).sum()) if len(o["raw"]) else 0
-                r_ = result_in_place(self, sg.about[0], (pt[0] - off, pt[1] - off) if pt else None, got)
-                self.count("calculator"), self.count("mimic agrees", int(mimic == self.text_of(r_)))
-                #                                     (what it found is not kept as memory: nothing worked out is
-                #                                     stored -- a stored result goes stale when its sources change)
-                rec["did"] = int(self.write(r_.B, 2 + ins.index(sg.about[0]), ins, sg, False, rec, 0, toks=r_.toks))
+        if calc is not None and self.calc_on:          # a calculator: its own body states a fact from the phrase its
+            pc = asm[0][1][0] if asm and asm[0] and asm[0][1] else None   # node copied (the first piece), into the memory
+            r_ = stated(self, calc, toks_of(net, ins)[pc[1]:pc[2] + 1] if pc and pc[0] == "span" else None)
+            if r_ is not None:                         # (a fact about numbers alone: never stale. The question that
+                self.count("calculator")               # asked hears it, write())
+                if self.show:
+                    print(f"  fire {len(self.firings)}: {self.name(actor)} states {self.text_of(r_)!r}", flush=True)
+                rec["did"] = int(self.write(r_.B, NEW_PLACE, ins, sg, False, rec, 0, toks=r_.toks))
                 self.firings.append(rec)
                 self.count("fires")
                 return rec
@@ -1675,17 +1716,18 @@ class FM:
                   ", function? " + ", ".join(f"{float(torch.sigmoid(isfn[j])):.2f}" for j in range(nm)) +
                   f", own error {float(err):.2f} (usual {float(st_.mu):.2f}) | says: " +
                   "; ".join(repr(self.say(Node(z, None, None))[:60]) for z in made) +
-                  " | pieces " + "; ".join(str(asm[j][1]) + (f" in place of part {asm[j][2]}" if asm[j][2] else "") if asm[j] else "program"
-                                           for j in range(nm)), flush=True)
+                  " | pieces " + "; ".join(str(asm[j][1]) + (f" in place of part {asm[j][2]} ({'its own pointing' if asm[j][4] else 'where the log is named'})"
+                                                              if asm[j][2] else "") if asm[j] else "program" for j in range(nm)), flush=True)
         self.firings.append(rec)
         self.count("fires")
         drift = float(err) > float(st_.mu + self.kappa * st_.sd)
         self.news = []
         for j, z in enumerate(made):
             wj, fj = wsel[j], fn_[j]
-            pcs, pt, said_t = ([], None, None) if fj else asm[j][1:]   # (a copy's words are known: the tokens it took --
-            #                                            in40: a lookup copied one token and the decoder said '7 7 7')
-            rec["outs"].append((pcs, wj, fj, pt))      # (what it made: its pieces, where it went, words or a function,
+            pcs, pt, said_t, own = ([], None, None, False) if fj else asm[j][1:]   # (a copy's words are known: the
+            #                                            tokens it took -- in40: a lookup copied one token and the decoder
+            #                                            said '7 7 7')
+            rec["outs"].append((pcs, wj, fj, pt if own else None))   # (what it made: its pieces, where it went, words or a function,
             x = ins[wj - 2] if 2 <= wj < 2 + len(ins) else None   # the part of the node it went in place of)
             if said_t is not None and x is not None and x.kind != "fn" and x.toks is not None:
                 if said_t == list(x.toks[:net.L]):                          # it says exactly what it replaces: no change,
@@ -1746,6 +1788,9 @@ class FM:
             else:
                 self.count("found its place")
             self.memorize(p, z, rec, toks)
+            a = sg.about[0]                            # a fact stated for a node that names that thing without being it
+            if a.kind == "work" and self.g.same(*self.label_rows(a.B)) != p:   # (a question; a statement being stored
+                self.signals.append(Signal([a, self.log(p)], 1., self.t))      # IS its place): the node hears the fact
         else:
             self.news.append(n)
         return True
@@ -1838,7 +1883,9 @@ def unresolved(E):
     if E[0] == "of":                                   # the k of (something still to find)
         return unresolved(E[2]) or E
     if E[0] == "sumboth":
-        return unresolved(E[1])
+        return unresolved(E[1]) or E
+    if E[0] == "pair":
+        return None
     return next((x for x in (unresolved(c) for c in E[2]) if x), None) or E
 
 
@@ -1851,6 +1898,8 @@ def show(E, top=True):
         return leaf(E[1], E[2]) + " before"
     if E[0] == "both":
         return "both values of " + leaf(E[1], E[2])
+    if E[0] == "pair":
+        return f"both values of {E[1]} and {E[2]}"
     if E[0] == "of":
         return f"the {words(E[1])} of " + show(E[2], False)
     if E[0] == "sumboth":
@@ -1876,26 +1925,32 @@ def ask_text(E):
 
 
 def plan(T, E):
-    """the demo steps for a question: (purpose, about, inputs, outputs). Each step rewrites the question where it
-    stands (v3, 11-12; fm46: split 77% / lookup 48% / fill 47% exact, three firings per fact): a fact named in it is
-    read from its log and its name becomes what the log says (innermost, leftmost first); an operation on two numbers
-    is done -- its operands read out, then the result takes the operation's place; until the question is a value.
-    About / inputs name workspace nodes ("q", "a", "b") or a place's log ("e", place); outputs = (text it should
-    say, where, node)"""
-    steps, w = [], T.w
-    tell = lambda E2: VAL(E2[1]) if E2[0] == "val" else ask_text(E2)
+    """the demo steps for a question: (purpose, about, inputs, outputs). Two kinds of step, the same at every depth
+    (11-12, user: self node creation; in53: asked to rewrite the question itself, the lookup node replaced all of it
+    by one value):
+    - read: a phrase of the question that names a known place becomes what that place's log says (lookup / before /
+      both: the question + the log + the rule's log; where the phrase is, the label match that found the place says);
+    - state: an operation on two numbers is not done in the question -- the calculator SAYS a fact, '<the operation
+      as it stands> is <result>.', which goes to the memory like any statement; the question hears it and reads it.
+    Last, the question that is only a value is answered. About / inputs name workspace nodes ("q") or a place's
+    log ("e", place or the key of a fact stated on the way); outputs = (text, where, node or the stated fact's key)"""
+    steps, w, was = [], T.w, E[0] == "before"
+    tell = lambda E2: f"What was {show(E2)} before?" if was else ask_text(E2)
     while True:
         x = unresolved(E)
         if x is None:
-            return steps, E
+            return steps + [("answer", ["q"], ["q"], [(VAL(E[1]), 2, "q")])], E
         if x[0] == "of" and x[2][0] == "val":          # its inner part is answered: now a plain fact
             E = swap(E, x, ("leaf", x[2][1], x[1]))
             continue
-        if x[0] == "op":
-            y = ("val", next(f for f in TOOLS if f[0] == x[1])[1](*[c[1] for c in x[2]]))
-            E = swap(E, x, y)
-            steps.append(("operands", ["q"], ["q"], [(f" {x[2][0][1]}", NEW_WORK, "a"), (f" {x[2][1][1]}", NEW_WORK, "b")]))
-            steps.append((x[1], ["q", "a", "b"], ["q", "a", "b"], [(tell(E), 2, "q")]))
+        if x[0] in ("op", "sumboth"):                  # stated, then read: the same read as any fact's
+            a, b = (x[1][1], x[1][2]) if x[0] == "sumboth" else (x[2][0][1], x[2][1][1])
+            y = ("val", next(f for f in TOOLS if f[0] == ("add" if x[0] == "sumboth" else x[1]))[1](a, b))
+            said_ = show(x) if x is E else f"({show(x)})"   # (as it stands in the question)
+            key = ("said", said_)
+            steps.append(("add" if x[0] == "sumboth" else x[1], ["q"], ["q"], [(f"{said_} is {y[1]}.", NEW_PLACE, key)]))
+            E = y if x is E else swap(E, x, y)
+            steps.append(("lookup", ["q", ("e", key)], ["q", ("e", key)], [(tell(E), 2, "q")]))
             continue
         p = T.place.get(("fact", x[1], x[2]))
         if p is None:
@@ -1915,9 +1970,9 @@ def plan(T, E):
             vs = w.multi.get((x[1], x[2]), [])
             if len(vs) != 2 or {value_in(t) for t in texts} != set(vs):
                 return None, None
-            y = ("op", "add", [("val", vs[0]), ("val", vs[1])])
+            y = ("pair", vs[0], vs[1])
         r = T.place.get(("rule", x[2]))                # the place's log, and the log of the rule over its key
-        E = swap(E, x, y)
+        E = y if x is E else swap(E, x, y)
         steps.append(({"leaf": "lookup"}.get(x[0], x[0]), ["q"], ["q", ("e", p)] + ([("e", r)] if r is not None else []),
                       [(tell(E), 2, "q")]))
 
@@ -1985,39 +2040,22 @@ class Lesson:
         return sum(x for _, x in self.parts)
 
 
-def number_of(fm, n):
-    """the number a node says (decoded once, then kept on the node), or None"""
-    if not hasattr(n, "_num"):
-        n._num = num(n.text) if n.text is not None else None if n.kind == "fn" else num(fm.text_of(n))
-    return n._num
-
-
-def calculate(fm, op, ins, sal):
-    """the calculator's own body: the first two numbers among what it took in (as much as it attends to them),
-    decoded; computed; None when it read no two numbers"""
-    nums = []
-    for n, sv in zip(ins, sal):
-        x = number_of(fm, n)
-        if x is not None and float(sv) > .5:
-            nums.append(x)
-    if len(nums) < 2:
-        nums = [x for x in (number_of(fm, n) for n in ins) if x is not None]
-    if len(nums) < 2:
+def stated(fm, op, toks):
+    """a calculator's own body (11-12): the phrase its node copied names an operation on two numbers -> the fact it
+    states, '<the phrase as it stands> is <result>.', as a node read from those words. It says a fact; it does not
+    touch what it read. None when the phrase does not hold exactly two numbers (an operation with a part still to
+    read is not one it can do)"""
+    if not toks or None in toks:
+        return None
+    text = fm.tr.tok.decode(list(toks))
+    nums = re.findall(r"-?\d(?: \d)*", text)
+    if len(nums) != 2:
         return None
     try:
-        return CALC[op](nums[0], nums[1])
+        got = CALC[op](*[int(x.replace(" ", "")) for x in nums])
     except Exception:
         return None
-
-
-def result_in_place(fm, x, part, got):
-    """a calculator's result where the operation stood: the part (first, last token) of the node it rewrites becomes
-    the result, the rest of the node stays (read again from those words). No part, or the node's words not known: the
-    result alone"""
-    if part is None or x is None or x.toks is None:
-        return fm.nodes([str(got)])[0]
-    ids = list(x.toks[:part[0]]) + fm.tr.tok((" " if part[0] else "") + D(str(got)))["input_ids"] + list(x.toks[part[1] + 1:])
-    return fm.nodes([fm.tr.tok.decode(ids)])[0]
+    return fm.nodes([f"{text} is {got}."])[0]
 
 
 def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
@@ -2128,10 +2166,9 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             if shown is not None:
                 shown.append(([(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan], w, False, ed))
             fm.count(f"{purpose} exact", int(ok)), fm.count(f"{purpose} said", 1)
-            if calc is not None and fm.calc_on:        # the calculator's own body: what goes on is its result when it
-                with torch.no_grad():                  # is the right one; its mimic (this output) learns from it
-                    got_c = calculate(fm, calc, order, sal)
-                cz = result_in_place(fm, order[w - 2] if w >= 2 else None, part, got_c) if got_c is not None else None
+            if calc is not None and fm.calc_on:        # the calculator's own body: what goes on is the fact it states
+                flat_ = toks_of(net, order)            # from the phrase its node should copy; its mimic learns from it
+                cz = stated(fm, calc, flat_[plan[0][1]:plan[0][2] + 1] if plan and plan[0][0] == "span" else None)
                 right = cz is not None and cz.toks is not None and fm.tr.tok.decode(cz.toks).strip() == fm.tr.tok.decode(tid).strip()
                 fm.count("calculator right", int(right)), fm.count("calculator", 1)
                 if right:
@@ -2177,16 +2214,6 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         g_all = bank.gate(q[None], [n for n, _, _ in C])[0]    # one the want meets (all the others' move too)
         at = next(i for i, (n, _, _) in enumerate(C) if n is actor)
         Ls.add("labels", F.cross_entropy((g_all / .1)[None], torch.tensor([at], device=dev)))
-    if not exact and fm.calc_on and outs and isinstance(outs[0][0], str) and num(D(outs[0][0])) is not None:
-        for c_i, c_net in enumerate(bank.fns):         # trying the tools it has: a calculator that gets this right
-            if c_net.calc is None or (actor.kind == "fn" and c_i == actor.fn):   # is where this want's label should lead
-                continue
-            with torch.no_grad():
-                got_c = calculate(fm, c_net.calc, order, sal)
-            if got_c is not None and D(str(got_c)) == D(outs[0][0]):
-                Ls.add("labels", F.relu(PULL - bank.gate(q[None], [fm.fnode(c_i)])[0, 0]) + F.relu(S - (1 - m)))   # its label here,
-                fm.count("calculator found by trying")                                             # the one that missed off
-                break
     if fm.trace:
         trace_step(fm, purpose, v, about, actor, how, C, s_all, lg, y, order, o, info, outs, net, float(S), push, exact, float(L), rl)
     if shown and actor.kind == "fn" and calc is None:  # the demonstration kept as a run (its inputs as they were)
@@ -2273,28 +2300,40 @@ def trace_step(fm, purpose, v, about, actor, how, C, gates, lg, y, order, o, inf
 
 
 def demo_question(fm, T, Ls, A, st, E):
-    """a question done step by step by the model (each step reads the previous steps' outputs as they are)"""
+    """a question done step by step by the model (each step reads the previous steps' outputs as they are). A fact
+    stated on the way goes to the memory as write() files it, for this question only (as when it lives)"""
     steps, last = plan(T, E)
     if not steps:
         return False
-    ws = {"q": fm.nodes([ask_text(E)])[0]}
-    for purpose, about, ins, outs in steps:
-        pick = lambda r: fm.log(r[1]) if isinstance(r, tuple) else ws[r]
-        res, _ = run_step(fm, Ls, A, st, purpose, [pick(r) for r in about], [pick(r) for r in ins],
-                          [(text, w if w == NEW_WORK else ws[name]) for text, w, name in outs])
-        if res is None:
-            return False
-        if any(x is None for x in res):
-            return False
-        for (text, w, name), (z, tid, ok, spelled) in zip(outs, res):
-            parent = ws["q"] if w == NEW_WORK else ws[name].parent
-            if ok:                                     # exact: its own node goes on, as it is
-                ws[name] = fm.node(z, tid, parent=parent)
-            else:                                      # not yet: what it should have said goes on (its tokens are then true)
-                ws[name] = fm.nodes([spelled])[0]
-                ws[name].parent = parent
-    Ls.none.append([ws["q"].B])                       # answered: its value asks for nothing more
-    return True
+    ws, keep, stated_ = {"q": fm.nodes([ask_text(E)])[0]}, fm.g, []
+    fm.g = clone_graph(fm.g)
+    try:
+        for purpose, about, ins, outs in steps:
+            pick = lambda r: fm.log(r[1] if isinstance(r[1], int) else T.place[r[1]]) if isinstance(r, tuple) else ws[r]
+            res, _ = run_step(fm, Ls, A, st, purpose, [pick(r) for r in about], [pick(r) for r in ins],
+                              [(text, w if w in (NEW_WORK, NEW_PLACE) else ws[name]) for text, w, name in outs])
+            if res is None or any(x is None for x in res):
+                return False
+            for (text, w, name), (z, tid, ok, spelled) in zip(outs, res):
+                n = fm.node(z, tid) if ok else fm.nodes([spelled])[0]   # exact: its own node goes on, as it is; not
+                #                                        yet: what it should have said (its tokens are then true)
+                if w == NEW_PLACE:
+                    with torch.no_grad():
+                        p = fm.g.add_place(n.L.detach().float().cpu().numpy(), fm.label_rows(n.B)[1])
+                        fm.g.R[p] = n.R.detach().float().cpu().numpy()
+                    fm.t += 1
+                    fm.g.chain[p].append((n.B.detach(), fm.t, n.toks))
+                    T.place[name], T.texts[p] = p, [text]
+                    stated_.append((name, p))
+                else:
+                    n.parent = ws["q"] if w == NEW_WORK else ws[name].parent
+                    ws[name] = n
+        Ls.none.append([ws["q"].B])                   # answered: its value asks for nothing more
+        return True
+    finally:
+        fm.g = keep
+        for name, p in stated_:
+            T.place.pop(name, None), T.texts.pop(p, None)
 
 
 def same_place(fm, s, p):
@@ -2303,7 +2342,7 @@ def same_place(fm, s, p):
     if not fm.g.n:
         return 0
     r, g, m = fm.heads.rows([s.B])
-    ps = [q for _, q in fm.g.near(r[0].detach().float().cpu().numpy(), 8) if q != p] + ([p] if p is not None else [])
+    ps = [t[1] for t in fm.g.near(r[0].detach().float().cpu().numpy(), 8) if t[1] != p] + ([p] if p is not None else [])
     P = torch.from_numpy(fm.g.M[ps]).to(r.device)
     pm = (torch.arange(RM, device=r.device)[None] < torch.from_numpy(fm.g.Mn[ps]).to(r.device)[:, None]).float()
     both = torch.minimum(align(P, pm, r, m.float())[:, 0], align(r, g, P, pm)[0])
@@ -2448,44 +2487,71 @@ def finish(fm, Ls, rng, recent=None):
 
 def same_batch(w, rng, n=10):
     """texts for the label rows' lesson, from a world: things said two ways (another value, a correction, a copy, the
-    thing's name alone; a rule in other words) with what each is about, and questions with the facts they name"""
+    thing's name alone; a rule in other words; a fact a calculator states) with what each is about and the words that
+    name it, and questions with the things they name. -> statements (text, thing, name), questions (text, things)"""
     facts = [(nm, k, v) for nm, e in sorted(w.ents.items()) for k, v in sorted(e.items())]
     facts = rng.sample(facts, min(n, len(facts)))
     names, st = sorted(w.ents), []
     for nm, k, v in facts:
         other = lambda: rng.randint(1, 60) if isinstance(v, int) else rng.choice(names)
-        f2 = rng.choice(facts)
-        st.append((f"{leaf(nm, k)} is {v}.", ("fact", nm, k)))
-        st.append((rng.choice([f"{leaf(nm, k)} is {other()}.", f"Correction: {leaf(nm, k)} is now {other()}.",
-                               f"{leaf(nm, k)} is {other()} (same as {leaf(f2[0], f2[1])}).", leaf(nm, k)]), ("fact", nm, k)))
+        f2, nme = rng.choice(facts), leaf(nm, k)
+        st.append((f"{nme} is {v}.", ("fact", nm, k), nme))
+        st.append((rng.choice([f"{nme} is {other()}.", f"Correction: {nme} is now {other()}.",
+                               f"{nme} is {other()} (same as {leaf(f2[0], f2[1])}).", nme]), ("fact", nm, k), nme))
     for k in rng.sample(w.num_keys, 3):
-        st += [(rule_text(rng, kind, k), ("rule", k)) for kind in rng.sample(["add", "set", "keep"], 2)]
-    st += [(t, None) for t in rng.sample(CHAT, 2)]
+        st += [(rule_text(rng, kind, k), ("rule", k), None) for kind in rng.sample(["add", "set", "keep"], 2)]
+    st += [(t, None, None) for t in rng.sample(CHAT, 2)]
     qs = [(ask_text(E), named(E)) for E in (q_expr(kd, w, rng) for kd in ("lookup", "before", "chain", "ops", "ops")) if E]
+    for _ in range(3):                                 # a fact stated on the way, and the question it was stated for
+        op, fn_, tpl = rng.choice(TOOLS)
+        a, b, c = amount(rng), amount(rng), amount(rng)
+        if rng.random() < .5:                          # (inside another operation: in brackets, as it stands there)
+            nme = f"({tpl.format(a, b)})"
+            qs.append((f"What is {rng.choice(TOOLS)[2].format(*rng.sample([nme, str(c)], 2))}?", {("said", nme)}))
+        else:
+            nme = tpl.format(a, b)
+            qs.append((f"What is {nme}?", {("said", nme)}))
+        st.append((f"{nme} is {fn_(a, b)}.", ("said", nme), nme))
     return st, qs
 
 
 def same_loss(fm, st, qs):
     """the label rows' lesson: two statements about one thing are the same place (the one's naming rows found in the
-    other's words, and the other's naming rows among them: both ways), statements about two things are not; a fact a
-    question names is found in it, another fact is not. Returns the loss and how often each comes out right"""
-    z, m = fm.tr.content([D(t) for t, _ in st] + [D(t) for t, _ in qs])
+    other's words, and the other's naming rows among them: both ways), statements about two things are not; a thing a
+    question names is found in it, another is not; and the rows that name a thing are the words of its name (a name is
+    found where it stands). Returns the loss and how often each comes out right"""
+    texts = [D(t) for t, _, _ in st] + [D(t) for t, _ in qs]
+    z, m = fm.tr.content(texts)
     R, G, M = fm.heads.rows([z[i][m[i]] for i in range(len(z))])
     n = len(st)
     into = align(R[:n], G[:n], R, M.float())           # [i, j]: thing i's naming rows found in what j says
     both = torch.minimum(into[:, :n], align(R[:n], G[:n], R[:n], G[:n]).T)   # ... and j's among i's: the same thing
     dev = R.device
-    one = torch.tensor([[a is not None and a == b for _, b in st] for _, a in st], device=dev)
+    one = torch.tensor([[a is not None and a == b for _, b, _ in st] for _, a, _ in st], device=dev)
     off = ~torch.eye(n, dtype=torch.bool, device=dev)
     loss = apart_at(both[off], one[off])
-    fact = torch.tensor([a is not None and a[0] == "fact" for _, a in st], device=dev)
     rate = lambda x: float((x > JOIN).float().mean()) if x.numel() else 0.
     said = {"same": rate(both[off & one]), "other": rate(both[off & ~one]),
             "same low": float(both[off & one].min()) if bool((off & one).any()) else 1., "other high": float(both[off & ~one].max())}
-    if qs and bool(fact.any()):
-        has = torch.tensor([[a in inq for _, inq in qs] for _, a in st], device=dev)[fact]
-        loss = loss + apart_at(into[:, n:][fact], has)
-        said["named"], said["not named"] = rate(into[:, n:][fact][has]), rate(into[:, n:][fact][~has])
+    thing = torch.tensor([a is not None and a[0] != "rule" for _, a, _ in st], device=dev)
+    if qs and bool(thing.any()):
+        has = torch.tensor([[a in inq for _, inq in qs] for _, a, _ in st], device=dev)[thing]
+        loss = loss + apart_at(into[:, n:][thing], has)
+        said["named"], said["not named"] = rate(into[:, n:][thing][has]), rate(into[:, n:][thing][~has])
+    nl, hit, k = 0, 0, 0
+    for i, (_, _, nme) in enumerate(st):               # the rows that name it: the words of its name
+        if nme is None:
+            continue
+        at = texts[i].find(D(nme))
+        offs_ = fm.tr.tok(texts[i], return_offsets_mapping=True)["offset_mapping"]
+        if at < 0 or len(offs_) != int(M[i].sum()):
+            continue
+        y = torch.tensor([float(a_ < at + len(D(nme)) and b_ > at) for a_, b_ in offs_], device=dev)
+        g = G[i, :len(offs_)]
+        nl, k = nl + F.binary_cross_entropy(g.clamp(1e-4, 1 - 1e-4), y), k + 1
+        hit += int(bool(((g > .5).float() == y).all()))
+    if k:
+        loss, said["name rows"] = loss + nl / k, hit / k
     return loss, said
 
 
@@ -2623,7 +2689,10 @@ def evaluate(fm, A, seed):
             if E is None:
                 continue
             n += 1
+            keep_ = fm.g                               # (what a question's run states stays its own: no truth comes
+            fm.g = clone_graph(keep_)                  # here to say it was right)
             got, k = fm.ask(ask_text(E))
+            fm.g = keep_
             steps += k
             hit += got == D(VAL(truth_of(E, w)))
             held_ += fm.text_of(fm.asked) == D(VAL(truth_of(E, w)))
