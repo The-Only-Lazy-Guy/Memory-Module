@@ -3220,6 +3220,71 @@ def lm_probe(A):
 
 
 @torch.no_grad()
+def lm_probe2(A):
+    """--lm_probe2: two more things asked of the frozen LM by 3-4 examples of the form, no training. (1) a statement's
+    fields with a name-valued example among the shots; (2) the next operation of a question whose facts are all
+    read: the first operation on two plain numbers, as it stands (in its brackets when it has them)"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    tok, lm, nl = tr.tok, tr.lm, chr(10)
+
+    def line(prompt, n=30):
+        ids = tok(tok.eos_token + prompt, return_tensors="pt")["input_ids"][:, -1000:].to(dev)
+        out = []
+        for _ in range(n):
+            nxt = int((lm(input_ids=ids).last_hidden_state[0, -1] @ lm.wte.weight.T).argmax())
+            if nl in tok.decode([nxt]):
+                break
+            out.append(nxt)
+            ids = torch.cat([ids, torch.tensor([[nxt]], device=dev)], 1)
+        return tok.decode(out).strip()
+    shots = ("the gate of Morva is 4. the gate of Morva = 4" + nl + "Correction: the fee of Seldo is now 12. the fee of Seldo = 12" + nl +
+             "the host of Tarn is Velo. the host of Tarn = Velo" + nl + "the tax of Runa is 9 (same as the toll of Bex). the tax of Runa = 9" + nl)
+    tot, odd = {}, []
+    for seed in range(4):
+        rng = random.Random(A.seed + 130 + seed)
+        w, sts = new_world(rng), []
+        for _ in range(A.ticks):
+            for d in world_step(w, rng):
+                o = d()
+                sts += [x for x in (said(o, w) if o else []) if x[1][0] == "fact"]
+        for text, meta in rng.sample(sts, min(80, len(sts))):
+            kind = ("correction" if text.startswith("Correction") else "copy" if "(same as" in text else
+                    "name value" if meta[2] in w.ent_keys else "plain")
+            got = line(shots + text)
+            nm_, _, v_ = got.partition(" = ")
+            c = tot.setdefault(kind, [0, 0, 0])
+            c[0], c[1], c[2] = c[0] + (nm_.strip() == leaf(meta[1], meta[2])), c[1] + (v_.strip() == str(value_in(text))), c[2] + 1
+            if (nm_.strip() != leaf(meta[1], meta[2]) or v_.strip() != str(value_in(text))) and len(odd) < 6:
+                odd.append(f"{text!r} -> {got!r}")
+    for k, (a, b, n_) in sorted(tot.items()):
+        print(f"LM says a statement's fields (4 shots), {k}: name {a}/{n_}, value {b}/{n_}", flush=True)
+    for x in odd:
+        print("   " + x, flush=True)
+    ops = ("What is the sum of 4 and (the larger of 7 and 2)? first: (the larger of 7 and 2)" + nl +
+           "What is the difference between (the smaller of 12 and 5) and 3? first: (the smaller of 12 and 5)" + nl +
+           "What is the larger of 8 and 15? first: the larger of 8 and 15" + nl +
+           "What is the smaller of (the sum of 6 and (the difference between 9 and 1)) and 20? first: (the difference between 9 and 1)" + nl)
+    tot, odd = {}, []
+    rng = random.Random(A.seed + 170)
+    for n_ops in (1, 2, 3, 4, 5, 6):
+        for _ in range(40):
+            conv = lambda x: ("val", amount(rng)) if x[0] == "leaf" else ("op", x[1], [conv(c) for c in x[2]])
+            E = conv(rand_tree(rng, [("x", "y")] * 8, n_ops, "any"))
+            x = unresolved(E)
+            want = show(x) if x is E else f"({show(x)})"
+            got = line(ops + ask_text(E) + " first:")
+            c = tot.setdefault(n_ops, [0, 0])
+            c[0], c[1] = c[0] + (got == want), c[1] + 1
+            if got != want and len(odd) < 8:
+                odd.append(f"{ask_text(E)!r} -> {got!r} (the first is {want!r})")
+    for k, (a, b) in sorted(tot.items()):
+        print(f"LM says the next operation, {k} operations in the question: {a}/{b}", flush=True)
+    for x in odd:
+        print("   " + x, flush=True)
+
+
+@torch.no_grad()
 def eval_only(A):
     """--eval --load X: the saved module in a fresh world (the code as it is now)"""
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -3727,6 +3792,7 @@ def world_step(world, rng):
 if __name__ == "__main__":
     P = argparse.ArgumentParser()
     P.add_argument("--fm", action="store_true", help="the function machine: codec stage 2, demos, then a world by itself")
+    P.add_argument("--lm_probe2", action="store_true", help="the frozen LM: a statement's fields, a question's next operation")
     P.add_argument("--lm_probe", action="store_true", help="can the frozen LM read a log by itself (no module, no training)")
     P.add_argument("--inspect", action="store_true", help="with --load: every firing of a few questions, said")
     P.add_argument("--eval", action="store_true", help="with --load: the saved module in a fresh world")
@@ -3776,4 +3842,4 @@ if __name__ == "__main__":
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
-    (lm_probe if A.lm_probe else overfit if A.overfit else deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
+    (lm_probe2 if A.lm_probe2 else lm_probe if A.lm_probe else overfit if A.overfit else deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
