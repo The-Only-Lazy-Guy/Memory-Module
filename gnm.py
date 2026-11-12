@@ -805,7 +805,7 @@ class Interpreter(nn.Module):
     pieces, each a span taken as it is from one of the inputs or up to G latents it makes; a function given back is K
     latents. Also: how many outputs, where each goes, whether one is a function, its own guess of how wrong it is"""
 
-    def __init__(self, d=128, c=256, K=16, M=2, S=6, G=8, R=16, L=96, r=8, layers=3):
+    def __init__(self, d=128, c=256, K=16, M=2, S=4, G=8, R=16, L=96, r=8, layers=3):
         super().__init__()
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.hop = nn.Parameter(torch.randn(4, c) * .02)       # how far the traversal went to reach an input
@@ -828,6 +828,8 @@ class Interpreter(nn.Module):
         self.sp = nn.Parameter(torch.tensor(1.))               # ... as much as it is salient (tr24: the right fact at
         #                                                        input 1 every lookup, the number copied from input 2/7/8)
         self.gkeep = nn.Linear(c, 1)                           # how many latents a made piece keeps
+        self.es, self.ee, self.ex = nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c)   # in place of an input: which part
+        #                                                        of it (first, last token) the output takes the place of
         self.K, self.M, self.S, self.G, self.R, self.L, self.r = K, M, S, G, R, L, r
 
     def action_of(self, z):
@@ -886,8 +888,19 @@ class Interpreter(nn.Module):
             o["where"] = torch.cat([self.where(g), wr], -1)     # are one fact; 443 facts in 126 places, held 13%)
         else:
             o["where"] = self.where(g)
-        o["isfn"] = self.isfn(g).squeeze(-1)
+        o["isfn"], o["g"] = self.isfn(g).squeeze(-1), g
         return o
+
+    def part_start(self, o, j, r):
+        """the first token of the part of input r that output j takes the place of (11-12, fm47: a question rewritten
+        as three pieces -- before, the value, after -- stopped after the first; the node only says which part changes)"""
+        return (self.es(o["g"][j]) @ o["keys"].T).masked_fill(o["owner"] != r, -1e9)
+
+    def part_end(self, o, j, st):
+        """... and its last: at st or after, in the same input"""
+        lg = (self.ee(o["g"][j]) + self.ex(o["ctx"][st])) @ o["keys"].T
+        bad = (torch.arange(len(lg), device=lg.device) < st) | (o["owner"] != o["owner"][st])
+        return lg.masked_fill(bad, -1e9)
 
     def end_logits(self, o, j, s, st):
         """where a span that starts at token st ends: at st or after, in the same input"""
@@ -1098,33 +1111,90 @@ def said_as(pieces, flat):
     return [tuple(flat[pc[1]:pc[2] + 1]) if pc[0] == "span" else ("made", pc[1] if len(pc) == 2 else pc[2] - pc[1]) for pc in pieces]
 
 
-def say_loss(fm, A, net, o, j, target, order, prefer=None):
+def toks_of(net, ins):
+    """the tokens of everything a node takes in, in a row (None where an input's tokens are not known)"""
+    return [t for n in ins[:net.R] for t in (list(n.toks[:net.L]) if n.toks is not None else [None] * len(n.B[:net.L]))]
+
+
+def make_out(fm, net, o, j, ins, w, temp=0., pieces=None, part=None):
+    """output j as the node it becomes. Its pieces put together (its own choices -- sampled when temp > 0 -- or the
+    given ones); when it goes in place of a workspace node (w), they take the place of the PART of that node the
+    output points at (first, last token, counted over all the inputs' tokens: its own choice, or the given one) and the
+    rest of the node stays as it is: A to be B, where A is a part of what is there. -> (the node's rows, read again;
+    its pieces; the part or None; its tokens, None when not all are known)"""
+    rows, pcs = assemble(net, o, j, pieces, temp)
+    flat = toks_of(net, ins)
+    toks = [t for pc in pcs for t in flat[pc[1]:pc[2] + 1]] if pcs and all(pc[0] == "span" for pc in pcs) else None
+    r = w - 2
+    if 0 <= r < min(len(ins), net.R) and ins[r].kind == "work" and len(o["raw"]):
+        if part is None:
+            st = choice(net.part_start(o, j, r), temp)
+            part = (st, choice(net.part_end(o, j, st), temp))
+        x, off = ins[r], int((o["owner"] < r).sum())
+        a, b = part[0] - off, part[1] - off
+        rows = torch.cat([x.B[:a], rows, x.B[b + 1:]])
+        toks = list(x.toks[:a]) + toks + list(x.toks[b + 1:]) if toks is not None and x.toks is not None else None
+    else:
+        part = None
+    if toks is not None and (None in toks or len(toks) != len(rows)):
+        toks = None
+    return fm.heads.reread(rows), pcs, part, toks
+
+
+def part_changed(tx, tt, others):
+    """what of a node changes when it is to say tt instead of tx (tokens): (first, last) token of the part replaced,
+    and the tokens that take its place. As little as differs; grown while what takes its place is still found whole in
+    another input (a name comes with its 'the'); never nothing replaced, never by nothing"""
+    p = s_ = 0
+    while p < min(len(tx), len(tt)) and tx[p] == tt[p]:
+        p += 1
+    while s_ < min(len(tx), len(tt)) - p and tx[-1 - s_] == tt[-1 - s_]:
+        s_ += 1
+    found = lambda seq: any(t is not None and any(list(t[i:i + len(seq)]) == seq for i in range(len(t) - len(seq) + 1)) for t in others)
+    new = lambda: list(tt[p:len(tt) - s_])
+    if p + s_ < len(tt) and found(new()):
+        while p > 0 and found([tt[p - 1]] + new()):
+            p -= 1
+        while s_ > 0 and found(new() + [tt[len(tt) - s_]]):
+            s_ -= 1
+    while (p + s_ >= len(tt) or p + s_ >= len(tx)) and (p or s_):
+        p, s_ = (p - 1, s_) if p else (p, s_ - 1)
+    return p, len(tx) - s_ - 1, new()
+
+
+def say_loss(fm, A, net, o, j, target, order, prefer=None, dest=None):
     """how wrong output j is as the text it should say: which pieces it is made of (kind, where each span starts and
     ends, how many latents a made piece keeps and how close they are to what the encoder makes of those words), and
-    what the assembled node says. Returns (loss, decode loss, the node, the target's pieces, its tokens) or None when
-    the target cannot be made of the pieces an output has"""
+    what the assembled node says. dest: the input it goes in place of; when that is a workspace node the target is made
+    by changing a PART of it (part_changed): the pieces are what takes the part's place, and the output learns which
+    part. Returns (loss, exact, the node, the pieces, the target's tokens, the target as spelled, the rest) or None
+    when the target cannot be made of the pieces an output has"""
     ins_t = [(len(n.B[:net.L]), n.toks[:net.L] if n.toks is not None else None) for n in order[:net.R]]
+    offs = np.cumsum([0] + [n for n, _ in ins_t])
+    x = order[dest] if dest is not None and dest < len(ins_t) and order[dest].kind == "work" and order[dest].toks is not None \
+        and len(order[dest].toks) <= net.L else None
+    others = [t for r, (_, t) in enumerate(ins_t) if r != dest and (prefer is None or r in set(prefer))]
     best = None
     for spelled in dict.fromkeys([D(target), " " + D(target).lstrip()]):   # as written, or as it reads inside a
-        tid_ = fm.tr.tok(spelled)["input_ids"]                             # sentence: the one more of it is copied in
+        full = fm.tr.tok(spelled)["input_ids"]                             # sentence: the one more of it is copied in
+        a, b, tid_ = part_changed(list(x.toks), full, others) if x is not None else (0, 0, full)
         plan_ = plan_pieces(tid_, ins_t, net.S, net.G, prefer)
         if plan_ is not None:                                              # (more copied FROM THE INPUTS IT SHOULD
-            offs = np.cumsum([0] + [n for n, _ in ins_t])                  # READ (tr21: split's target came from a fact,
-            own_in = lambda a: prefer is None or int(np.searchsorted(offs, a, side="right") - 1) in set(prefer)  # the
-            copied = (sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span" and own_in(pc[1])),   # question's own
-                      sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span"), -len(plan_))   # ' the ...' was marked
-            #                                                                 wrong); then more copied, fewer pieces: 'the' from an
-            if best is None or copied > best[0]:                           # unrelated fact + ' offer of Thasa'
-                best = (copied, spelled, tid_, plan_)                      # tied ' the offer of Thasa', inspection)
+            own_in = lambda a_: prefer is None or int(np.searchsorted(offs, a_, side="right") - 1) in set(prefer)  # READ
+            copied = (sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span" and own_in(pc[1])),   # (tr21); then more
+                      sum(pc[2] - pc[1] + 1 for pc in plan_ if pc[0] == "span"), -len(plan_))   # copied, fewer pieces
+            copied = ((-len(tid_),) if x is not None else ()) + copied   # (a part: the smallest change first -- ' What
+            if best is None or copied > best[0]:                           # is ...' for 'What is ...' changes it all)
+                best = (copied, spelled, full, plan_, (a, b), tid_)
     if best is None:
         fm.count("cannot be made of pieces")
         return None
-    _, target, tid, plan = best
+    _, target, tid, plan, part, inner = best
     dev = o["kind"].device
     with torch.no_grad():
         zt, mt = fm.tr.content([target])
         zt = zt[0][mt[0]]
-    L = 0
+    L, at = 0, part[0] if x is not None else 0         # (at: where the pieces sit in the target)
     for s_ in range(min(len(plan) + 1, net.S)):
         k = 0 if s_ == len(plan) else 1 if plan[s_][0] == "span" else 2
         L = L + F.cross_entropy(o["kind"][j, s_][None], torch.tensor([k], device=dev))
@@ -1136,19 +1206,24 @@ def say_loss(fm, A, net, o, j, target, order, prefer=None):
             i0, i1 = plan[s_][1], plan[s_][2]
             L = L + F.binary_cross_entropy_with_logits(o["gkeep"][j, s_], (torch.arange(net.G, device=dev) < i1 - i0).float())
             if len(zt) == len(tid):                    # what the encoder makes of those words, there
-                L = L + F.mse_loss(o["gen"][j, s_, :i1 - i0], zt[i0:i1]) * A.mse
+                L = L + F.mse_loss(o["gen"][j, s_, :i1 - i0], zt[at + i0:at + i1]) * A.mse
+    ed = (int(offs[dest]) + part[0], int(offs[dest]) + part[1]) if x is not None else None
+    if ed is not None:                                 # which part of the node it changes
+        L = L + F.cross_entropy(net.part_start(o, j, dest)[None], torch.tensor([ed[0]], device=dev)) + \
+            F.cross_entropy(net.part_end(o, j, ed[0])[None], torch.tensor([ed[1]], device=dev))
     want_pcs = [(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan]
-    z, _ = assemble(net, o, j, want_pcs)
-    z = fm.heads.reread(z)                             # read again, as the encoder reads those words
+    w = 2 + dest if x is not None else -1
+    z = make_out(fm, net, o, j, order, w, pieces=want_pcs, part=ed)[0]   # (read again, as the encoder reads those words)
     if len(zt) == len(z):
         L = L + F.mse_loss(z, zt) * A.mse
     dl = fm.tr.decode_loss(z[None], torch.ones(1, len(z), dtype=torch.bool, device=dev), [target])
-    flat = [x for n_rows, t in ins_t for x in (list(t) if t is not None else [None] * n_rows)]
+    flat = toks_of(net, order)
+    says = lambda out: said_as(out[1], flat) == said_as(want_pcs, flat) and out[2] == ed   # (does an output say the target?)
     with torch.no_grad():                              # exact = its own pieces say what the target's say (from wherever
-        own = said_as(assemble(net, o, j)[1], flat)   # those tokens sit), and what it makes says it
-        exact = own == said_as(want_pcs, flat) and None not in [x for p_ in own if p_ and p_[0] != "made" for x in p_] \
-            and float(dl) < A.exact
-    return L + dl, exact, z, plan, tid, target
+        mine = make_out(fm, net, o, j, order, w)       # those tokens sit), on the same part, and what it makes says it
+        same = says(mine) and None not in [x_ for p_ in said_as(mine[1], flat) if p_ and p_[0] != "made" for x_ in p_]
+        exact = same and float(dl) < A.exact
+    return L + dl, exact, z, plan, tid, target, (mine, same, says, part if x is not None else None, ed, inner)
 
 
 class Acting(nn.Module):
@@ -1385,7 +1460,7 @@ class FM:
         if n.kind == "fn":
             c = self.bank.fns[n.fn].calc
             return f"function {n.fn}" + (f" (calculator {c})" if c else "")
-        return (f"entry {n.place}.{n.idx} " if n.kind == "entry" else "node ") + repr((n.text or self.say(n))[:40])
+        return (f"log {n.place} " if n.kind == "entry" else "node ") + repr(self.text_of(n)[-40:] if n.kind == "entry" else self.text_of(n)[:40])
 
     def text_of(self, n):
         """what a node says: the text it was read from, its tokens when they are known (no decoding), else decoded"""
@@ -1497,11 +1572,24 @@ class FM:
         T = self.explore                               # a try: its whole action sampled from its own odds -- how many,
         nm = choice(many, T) + 1                       # words or a program, which pieces, where each goes (a right try
         fn_ = [bool(torch.bernoulli(torch.sigmoid(isfn[j] / T))) if T else float(isfn[j]) > 0 for j in range(nm)]   # is
-        asm = [None if fn_[j] else assemble(net, o, j, temp=T) for j in range(nm)]   # relived: what it sampled is
-        made = [o["code"][j] if fn_[j] else self.heads.reread(asm[j][0]) for j in range(nm)]   # what it learns to do)
         fslot = torch.tensor([False, False] + [n.kind == "fn" for n in ins[:net.R]], device=q.device)[:where.shape[-1]]
         where = torch.stack([where[j] if fn_[j] else where[j].masked_fill(fslot, -1e9) for j in range(nm)])
         wsel = [choice(where[j], T) for j in range(nm)]
+        asm = [None if fn_[j] else make_out(self, net, o, j, ins, wsel[j], T) for j in range(nm)]   # relived: what it
+        #                                                sampled is what it learns to do). Each: (the node, its pieces,
+        #                                                the part of the node it goes in place of, its tokens)
+        if not T and self.bank.calc_of(actor) is None:   # the check on what it made (v3 point 5): failed -> second
+            cin = [n.B for n in ins]                    # thoughts, the node's own other ways; the check's best stays
+            for j in range(nm):
+                if not fn_[j]:
+                    sc = float(self.critic(cin, asm[j][0]))
+                    if sc < 0:
+                        self.count("check fails")
+                        b = second_thought(self, net, o, j, ins, wsel[j], cin, sc)
+                        if b is not None:
+                            asm[j] = b
+                            self.count("second thought taken")
+        made = [o["code"][j] if fn_[j] else asm[j][0] for j in range(nm)]
         #                                                words land in memory or the workspace, a program in a function
         #                                                (fm18c trace: 289 of 297 statements went into a function: memory 0)
         take = [i in pick for i in range(len(C))]
@@ -1517,9 +1605,12 @@ class FM:
         if calc is not None and self.calc_on:          # the calculator: its own body answers; its mimic is checked
             got = calculate(self, calc, ins, sal)
             mimic = self.say(Node(made[0], None, None)) if made else ""
-            if got is not None:                        # its result where its made piece is, the rest of what it
-                r_ = result_in_place(self, asm[0][1] if asm and asm[0] else [], ins, got) or self.nodes([str(got)])[0]   # rewrites
-                self.count("calculator"), self.count("mimic agrees", int(mimic == self.text_of(r_)))   # as it stands
+            if got is not None:                        # its result where the operation stood: the part of the signal's
+                r = ins.index(sg.about[0])             # node its mimic points at; the rest of that node stays
+                pt = make_out(self, net, o, 0, ins, 2 + r, T)[2]
+                off = int((o["owner"] < r).sum()) if len(o["raw"]) else 0
+                r_ = result_in_place(self, sg.about[0], (pt[0] - off, pt[1] - off) if pt else None, got)
+                self.count("calculator"), self.count("mimic agrees", int(mimic == self.text_of(r_)))
                 #                                     (what it found is not kept as memory: nothing worked out is
                 #                                     stored -- a stored result goes stale when its sources change)
                 self.write(r_.B, 2 + ins.index(sg.about[0]), ins, sg, False, rec, 0, toks=r_.toks)
@@ -1544,21 +1635,18 @@ class FM:
                   ", function? " + ", ".join(f"{float(torch.sigmoid(isfn[j])):.2f}" for j in range(nm)) +
                   f", own error {float(err):.2f} (usual {float(st_.mu):.2f}) | says: " +
                   "; ".join(repr(self.say(Node(z, None, None))[:60]) for z in made) +
-                  " | pieces " + "; ".join(str(asm[j][1] if asm[j] else "program") for j in range(nm)), flush=True)
+                  " | pieces " + "; ".join(str(asm[j][1]) + (f" in place of part {asm[j][2]}" if asm[j][2] else "") if asm[j] else "program"
+                                           for j in range(nm)), flush=True)
         self.firings.append(rec)
         self.count("fires")
         drift = float(err) > float(st_.mu + self.kappa * st_.sd)
         self.news = []
-        flat = [t for n in ins[:net.R] for t in (list(n.toks[:net.L]) if n.toks is not None else [None] * len(n.B[:net.L]))]
         for j, z in enumerate(made):
             wj, fj = wsel[j], fn_[j]
-            pcs = [] if fj else asm[j][1]
-            rec["outs"].append((pcs, wj, fj))          # (what it made: its pieces, where it went, words or a function)
-            x = ins[wj - 2] if 2 <= wj < 2 + len(ins) else None
-            said_t = None                              # a copy's words are known: the tokens it took (11-12, in40: a
-            if not fj and pcs and all(pc[0] == "span" for pc in pcs):   # lookup copied one token and the decoder said it
-                said_t = [t for pc in pcs for t in flat[pc[1]:pc[2] + 1]]   # as '7 7 7'; what a copy says is what it took)
-                said_t = None if None in said_t or len(said_t) != len(z) else said_t
+            pcs, pt, said_t = ([], None, None) if fj else asm[j][1:]   # (a copy's words are known: the tokens it took --
+            #                                            in40: a lookup copied one token and the decoder said '7 7 7')
+            rec["outs"].append((pcs, wj, fj, pt))      # (what it made: its pieces, where it went, words or a function,
+            x = ins[wj - 2] if 2 <= wj < 2 + len(ins) else None   # the part of the node it went in place of)
             if said_t is not None and x is not None and x.kind != "fn" and x.toks is not None:
                 if said_t == list(x.toks[:net.L]):                          # it says exactly what it replaces: no change,
                     self.count("no change")                                 # no signal (tr24: the store wrote the statement
@@ -1881,21 +1969,48 @@ def calculate(fm, op, ins, sal):
         return None
 
 
-def result_in_place(fm, pieces, order, got):
-    """a calculator's output: its result where the made piece is, the spans around it taken as they are (the rest of
-    the question stays: the operation is done in place). No span: the result alone. -> the node, read from those
-    words; None when a span's words are not known"""
-    net = fm.bank.interp
-    flat = [t for n in order[:net.R] for t in (list(n.toks[:net.L]) if n.toks is not None else [None] * len(n.B[:net.L]))]
-    ids, done = [], False
-    for pc in pieces:
-        if pc[0] == "span":
-            ids += flat[pc[1]:pc[2] + 1]
-        elif not done:
-            ids, done = ids + fm.tr.tok((" " if ids else "") + D(str(got)))["input_ids"], True
-    if not done:
-        ids = fm.tr.tok(D(str(got)))["input_ids"]
-    return None if None in ids else fm.nodes([fm.tr.tok.decode(ids)])[0]
+THOUGHTS = 4                    # second thoughts when the check fails what a node made: this many, from its own odds
+
+
+def second_thought(fm, net, o, j, ins, w, cin, first):
+    """the check failed what the node made: other ways to make it (its pieces, the part it changes), sampled from the
+    node's own odds; the one the check scores highest, when that is higher than the first (else None)"""
+    best, top = None, first
+    for _ in range(THOUGHTS):
+        out = make_out(fm, net, o, j, ins, w, temp=1.)
+        sc = float(fm.critic(cin, out[0]))
+        if sc > top:
+            best, top = out, sc
+    return best
+
+
+def check_lesson(fm, Ls, net, o, j, order, w, z, mine, same, says, purpose):
+    """the check node learns from the acting node's own work: what the step should have made passes; what the node
+    made itself, when it says something else, fails. Measured here too: how often the check is right, and how often
+    a second thought (the check's pick among the node's own other ways) says the target when the first did not"""
+    cin = [n.B.detach() for n in order]
+    dev = z.device
+    up = fm.critic(cin, z.detach())
+    Ls.add("check", F.binary_cross_entropy_with_logits(up, torch.ones((), device=dev)))
+    fm.count("check right", int(float(up) > 0)), fm.count("check asked")
+    if same:
+        return
+    down = fm.critic(cin, mine[0])
+    Ls.add("check", F.binary_cross_entropy_with_logits(down, torch.zeros((), device=dev)))
+    fm.count("check right", int(float(down) < 0)), fm.count("check asked")
+    with torch.no_grad():
+        b = second_thought(fm, net, o, j, order, w, cin, float(down))
+    fm.count(f"{purpose} second thought right", int(b is not None and says(b))), fm.count(f"{purpose} second thought")
+
+
+def result_in_place(fm, x, part, got):
+    """a calculator's result where the operation stood: the part (first, last token) of the node it rewrites becomes
+    the result, the rest of the node stays (read again from those words). No part, or the node's words not known: the
+    result alone"""
+    if part is None or x is None or x.toks is None:
+        return fm.nodes([str(got)])[0]
+    ids = list(x.toks[:part[0]]) + fm.tr.tok((" " if part[0] else "") + D(str(got)))["input_ids"] + list(x.toks[part[1] + 1:])
+    return fm.nodes([fm.tr.tok.decode(ids)])[0]
 
 
 def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
@@ -1995,21 +2110,25 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         w = dest if isinstance(dest, int) else 2 + keys.index(key(dest))
         if isinstance(target, str):
             fm.said.append(target)                     # what functions are asked to say: the round trip covers it too
-            got = say_loss(fm, A, net, o, j, target, order, prefer=[r for r, n in enumerate(order[:net.R]) if key(n) in want_in])
+            got = say_loss(fm, A, net, o, j, target, order, prefer=[r for r, n in enumerate(order[:net.R]) if key(n) in want_in],
+                           dest=w - 2 if w >= 2 else None)
             if got is None:
                 res.append(None)
                 exact, shown = False, None
                 continue
-            Lj, ok, z, plan, tid, spelled = got
+            Lj, ok, z, plan, tid, spelled, (mine, same_, says, part, ed, inner) = got
             L, exact, dl = L + Lj, exact and ok, float(Lj)
+            if calc is None:                           # the check (v3 point 5, at the read): what it should have made
+                check_lesson(fm, Ls, net, o, j, order, w if ed is not None else -1, z, mine, same_, says, purpose)   # passes,
+                #                                        its own miss does not
             if shown is not None:
-                shown.append(([(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan], w, False))
+                shown.append(([(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan], w, False, ed))
             fm.count(f"{purpose} exact", int(ok)), fm.count(f"{purpose} said", 1)
             if calc is not None and fm.calc_on:        # the calculator's own body: what goes on is its result when it
                 with torch.no_grad():                  # is the right one; its mimic (this output) learns from it
                     got_c = calculate(fm, calc, order, sal)
-                cz = result_in_place(fm, plan, order, got_c) if got_c is not None else None
-                right = cz is not None and cz.toks is not None and list(cz.toks) == list(tid)
+                cz = result_in_place(fm, order[w - 2] if w >= 2 else None, part, got_c) if got_c is not None else None
+                right = cz is not None and cz.toks is not None and fm.tr.tok.decode(cz.toks).strip() == fm.tr.tok.decode(tid).strip()
                 fm.count("calculator right", int(right)), fm.count("calculator", 1)
                 if right:
                     z, tid, ok = cz.B, cz.toks, True
@@ -2019,13 +2138,12 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             Ls.add("label of what it made", (1 - (L_[0] * lab).sum()) * .5 + F.mse_loss(R_[0], rel) * 5)
             if fm.capture is not None or fm.trace:
                 with torch.no_grad():
-                    own, pcs = assemble(net, o, j)
-                    told_ = (fm.say(Node(z, None, None)), fm.say(Node(fm.heads.reread(own), None, None)))   # (read again,
-                    #                                                      as when it lives)
+                    pcs = mine[1]
+                    told_ = (fm.say(Node(z, None, None)), fm.say(Node(mine[0], None, None)))
                 if fm.capture is not None:             # --codec_check: what it says, with the target's pieces and its own
                     fm.capture.append((purpose, D(target), told_[0], told_[1], dl, len(pcs), len(plan), fm.name(actor)[:30]))
                 if fm.trace:
-                    info.append((j, target, w, dl, told_, plan, pcs, tid))
+                    info.append((j, target, w, dl, told_, plan, pcs, inner))
             res.append((z, tid, ok, spelled))
         else:                                          # a function given back: judged by what it then does
             shown = None                               # (not relived: a program is not pieces)
@@ -2351,7 +2469,8 @@ def same_loss(fm, st, qs):
     loss = apart_at(both[off], one[off])
     fact = torch.tensor([a is not None and a[0] == "fact" for _, a in st], device=dev)
     rate = lambda x: float((x > JOIN).float().mean()) if x.numel() else 0.
-    said = {"same": rate(both[off & one]), "other": rate(both[off & ~one])}
+    said = {"same": rate(both[off & one]), "other": rate(both[off & ~one]),
+            "same low": float(both[off & one].min()) if bool((off & one).any()) else 1., "other high": float(both[off & ~one].max())}
     if qs and bool(fact.any()):
         has = torch.tensor([[a in inq for _, inq in qs] for _, a in st], device=dev)[fact]
         loss = loss + apart_at(into[:, n:][fact], has)
@@ -2612,7 +2731,10 @@ def relive(fm, recs):
         dev = o["many"].device
         L = F.cross_entropy(o["many"][None], torch.tensor([min(len(outs), net.M) - 1], device=dev))
         fslot = torch.tensor([False, False] + [x.kind == "fn" for x in r["ins"][:net.R]], device=dev)
-        for j, (pcs, w, isfn) in enumerate(outs[:net.M]):
+        for j, (pcs, w, isfn, pt) in enumerate(outs[:net.M]):
+            if pt is not None and not isfn:            # which part of the node it changed
+                L = L + F.cross_entropy(net.part_start(o, j, w - 2)[None], torch.tensor([pt[0]], device=dev)) + \
+                    F.cross_entropy(net.part_end(o, j, pt[0])[None], torch.tensor([pt[1]], device=dev))
             for s_ in range(min(len(pcs) + 1, net.S) if not isfn else 0):
                 k = 0 if s_ == len(pcs) else 1 if pcs[s_][0] == "span" else 2
                 L = L + F.cross_entropy(o["kind"][j, s_][None], torch.tensor([k], device=dev))
@@ -3301,7 +3423,7 @@ def run_fm(A):
                                                                          "new functions", "edits", "updates", "roundtrip"))
                   + f" | {time.time() - t0:.0f}s", flush=True)
             fm.stats, tally = {}, TALLY()
-        elif step % 50 == 0:
+        elif step % 25 == 0 and step <= A.demo:
             parts = acc
             loss = sum(acc.values())
             n_run = max(1, fm.stats.get("steps run", 0) - n0)
@@ -3312,6 +3434,8 @@ def run_fm(A):
                       f"{k[5:]} {v}" for k, v in sorted(fm.stats.items()) if k.startswith("acts")) + " | exact: " + ", ".join(
                       f"{k[:-5]} {fm.stats.get(k[:-5] + ' exact', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" said")) +
                   f" (lookup chance {100 * fm.stats.get('lookup chance', 0) / max(1, fm.stats.get('lookup said', 0)):.0f}%)" +
+                  " | check right " + f"{fm.stats.get('check right', 0)}/{fm.stats.get('check asked', 0)}, second thought right: " + ", ".join(
+                      f"{k[:-15]} {fm.stats.get(k + ' right', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" second thought")) +
                   " | where right: " + ", ".join(
                       f"{k[:-6]} {fm.stats.get(k + ' right', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" where")) +
                   " | inputs the walk brought: " + ", ".join(
