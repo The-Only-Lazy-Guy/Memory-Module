@@ -1,0 +1,17 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4145.04it/s]
+codec stage read from /marimo/ckpt/heads_v3.pt
+step 1: stage skills
+/marimo/frozen/fm57/gnm.py:2054: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  actor, how = C[a][0], "routed" if float(s_all[a]) > 1 else "nearest"
+step 1: the store skill gets its node -> function 5
+step 1: the lookup skill gets its node -> function 6
+step 1: the both skill gets its node -> function 7
+step 1: the operands skill gets its node -> function 8
+step 1: the inc skill gets its node -> function 9
+step 1: the fedit skill gets its node -> function 10
+step 1: the fnew skill gets its node -> function 11
+step 2: the before skill gets its node -> function 12
+step 25 loss 340.71 (functions per demo step 3.85, 856 updates, 3 targets not made of pieces) [route hint 0.59, salience hint 5.04, label of what it made 4.45, functions 192.55, labels 5.44, same thing 0.00, apart 35.84, asks nothing 0.00, relation 23.54, round trip 0.22, round trip (pieces) 0.95, re-read 1.65, route replay 47.87, skill replay 22.58] made nodes that act 13 | who acts: by assigned 1368,  function 1368 | exact: add 1/74, before 20/39, both 10/36, inc 0/25, lookup 217/565, max 4/53, min 8/50, operands 232/440, store 170/210, sub 0/43 (lookup chance 81%) | where right: add 71/74, before 39/39, both 35/36, fedit 13/25, fnew 7/25, inc 24/25, lookup 560/565, max 48/53, min 50/50, operands 421/440, store 197/210, sub 40/43 | inputs the walk brought: add 222/222, before 78/78, both 72/72, fedit 50/50, fnew 50/50, inc 50/50, lookup 1138/1148, max 159/159, min 150/150, operands 220/220, store 210/210, sub 129/129 | functions written 10919 (writer step [0.000214, 0.000223, 0.000223, 0.000203], gain [0.00103, 0.00107, 0.00106, 0.00101]) | stage skills, routing reaches the skill's node 1217/1368 | 362s
+step 36: stage route
