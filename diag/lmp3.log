@@ -1,0 +1,67 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4184.44it/s]
+LM reads, as said, 6 logs, 1 statement: 80/101
+LM reads, as said, 6 logs, 2+ statements: 28/59
+LM reads, as said, asked, 1 statement: 71/101
+LM reads, as said, asked, 2+ statements: 25/59
+LM reads, as said, own log, 1 statement: 98/101
+LM reads, as said, own log, 2+ statements: 16/59
+LM reads, digit by digit, 6 logs, 1 statement: 54/101
+LM reads, digit by digit, 6 logs, 2+ statements: 18/59
+LM reads, digit by digit, asked, 1 statement: 62/101
+LM reads, digit by digit, asked, 2+ statements: 19/59
+LM reads, digit by digit, own log, 1 statement: 99/101
+LM reads, digit by digit, own log, 2+ statements: 14/59
+LM reads one statement, as said, after 3 others, asked '3 shots', copy: 31/31
+LM reads one statement, as said, after 3 others, asked '3 shots', correction: 24/24
+LM reads one statement, as said, after 3 others, asked '3 shots', plain: 184/185
+LM reads one statement, as said, after 3 others, asked 'is', copy: 24/31
+LM reads one statement, as said, after 3 others, asked 'is', correction: 20/24
+LM reads one statement, as said, after 3 others, asked 'is', plain: 125/185
+LM reads one statement, as said, after 3 others, asked 'is now', copy: 19/31
+LM reads one statement, as said, after 3 others, asked 'is now', correction: 20/24
+LM reads one statement, as said, after 3 others, asked 'is now', plain: 80/185
+LM reads one statement, as said, alone, asked '3 shots', copy: 31/31
+LM reads one statement, as said, alone, asked '3 shots', correction: 24/24
+LM reads one statement, as said, alone, asked '3 shots', plain: 185/185
+LM reads one statement, as said, alone, asked 'is', copy: 30/31
+LM reads one statement, as said, alone, asked 'is', correction: 24/24
+LM reads one statement, as said, alone, asked 'is', plain: 185/185
+LM reads one statement, as said, alone, asked 'is now', copy: 31/31
+LM reads one statement, as said, alone, asked 'is now', correction: 24/24
+LM reads one statement, as said, alone, asked 'is now', plain: 145/185
+LM reads one statement, digit by digit, after 3 others, asked '3 shots', copy: 17/31
+LM reads one statement, digit by digit, after 3 others, asked '3 shots', correction: 13/24
+LM reads one statement, digit by digit, after 3 others, asked '3 shots', plain: 67/185
+LM reads one statement, digit by digit, after 3 others, asked 'is', copy: 23/31
+LM reads one statement, digit by digit, after 3 others, asked 'is', correction: 16/24
+LM reads one statement, digit by digit, after 3 others, asked 'is', plain: 88/185
+LM reads one statement, digit by digit, after 3 others, asked 'is now', copy: 16/31
+LM reads one statement, digit by digit, after 3 others, asked 'is now', correction: 16/24
+LM reads one statement, digit by digit, after 3 others, asked 'is now', plain: 72/185
+LM reads one statement, digit by digit, alone, asked '3 shots', copy: 15/31
+LM reads one statement, digit by digit, alone, asked '3 shots', correction: 13/24
+LM reads one statement, digit by digit, alone, asked '3 shots', plain: 64/185
+LM reads one statement, digit by digit, alone, asked 'is', copy: 29/31
+LM reads one statement, digit by digit, alone, asked 'is', correction: 24/24
+LM reads one statement, digit by digit, alone, asked 'is', plain: 181/185
+LM reads one statement, digit by digit, alone, asked 'is now', copy: 31/31
+LM reads one statement, digit by digit, alone, asked 'is now', correction: 24/24
+LM reads one statement, digit by digit, alone, asked 'is now', plain: 152/185
+LM says a statement's fields, copy: name 17/18, value 17/18
+LM says a statement's fields, correction: name 28/28, value 28/28
+LM says a statement's fields, name value: name 72/75, value 62/75
+LM says a statement's fields, plain: name 178/178, value 178/178
+LM says a statement's fields, rule: name 0/21, value 0/21
+   'rule: any further font become the current font' -> '.'
+   'please remember: each new primary pilot are the new primary pilot; discard the old one' -> '.'
+   'rule: primary pilot figures that arrive later replace the old primary pilot' -> 'figures.'
+   'please remember: primary pilot figures that arrive later replace the old primary pilot' -> 'figures.'
+   'the last door of Dungor is Pelor.' -> 'the last door of Dungor = 9'
+   'the first device of Dungor is Balo.' -> 'the first device of Dungor = 9'
+   'each new primary pilot overwrite the previous primary pilot' -> ''
+   'the last door of Lolo is Pelor.' -> 'the last door of Lolo = 9'
+   'please remember: each new job count as increments to the job' -> 'count.'
+   'incoming daily grade numbers increase the daily grade by that much' -> '.'
+   'note: any further first seat should be added to the existing first seat' -> '.'
+   'rule: every reported capacity should be added to the existing capacity' -> '.'
