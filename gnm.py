@@ -805,7 +805,7 @@ class Interpreter(nn.Module):
     pieces, each a span taken as it is from one of the inputs or up to G latents it makes; a function given back is K
     latents. Also: how many outputs, where each goes, whether one is a function, its own guess of how wrong it is"""
 
-    def __init__(self, d=128, c=256, K=16, M=2, S=4, G=8, R=16, L=96, r=8, layers=3):
+    def __init__(self, d=128, c=256, K=16, M=2, S=6, G=8, R=16, L=96, r=8, layers=3):
         super().__init__()
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.hop = nn.Parameter(torch.randn(4, c) * .02)       # how far the traversal went to reach an input
@@ -1517,11 +1517,12 @@ class FM:
         if calc is not None and self.calc_on:          # the calculator: its own body answers; its mimic is checked
             got = calculate(self, calc, ins, sal)
             mimic = self.say(Node(made[0], None, None)) if made else ""
-            if got is not None:
-                self.count("calculator"), self.count("mimic agrees", int(num(mimic) == got))
-                z = self.nodes([str(got)])[0].B     # (what it found is not kept as memory: nothing worked out is
+            if got is not None:                        # its result where its made piece is, the rest of what it
+                r_ = result_in_place(self, asm[0][1] if asm and asm[0] else [], ins, got) or self.nodes([str(got)])[0]   # rewrites
+                self.count("calculator"), self.count("mimic agrees", int(mimic == self.text_of(r_)))   # as it stands
+                #                                     (what it found is not kept as memory: nothing worked out is
                 #                                     stored -- a stored result goes stale when its sources change)
-                self.write(z, 2 + ins.index(sg.about[0]), ins, sg, False, rec, 0)
+                self.write(r_.B, 2 + ins.index(sg.about[0]), ins, sg, False, rec, 0, toks=r_.toks)
                 self.firings.append(rec)
                 self.count("fires")
                 return rec
@@ -1746,61 +1747,50 @@ def ask_text(E):
 
 
 def plan(T, E):
-    """the demo steps for a question (innermost part first): (purpose, about, inputs, outputs). About / inputs name
-    workspace nodes ("q", "p") or memory entries ("e", place, index); outputs = (text it should say, where, node)"""
+    """the demo steps for a question: (purpose, about, inputs, outputs). Each step rewrites the question where it
+    stands (v3, 11-12; fm46: split 77% / lookup 48% / fill 47% exact, three firings per fact): a fact named in it is
+    read from its log and its name becomes what the log says (innermost, leftmost first); an operation on two numbers
+    is done -- its operands read out, then the result takes the operation's place; until the question is a value.
+    About / inputs name workspace nodes ("q", "a", "b") or a place's log ("e", place); outputs = (text it should
+    say, where, node)"""
     steps, w = [], T.w
+    tell = lambda E2: VAL(E2[1]) if E2[0] == "val" else ask_text(E2)
     while True:
         x = unresolved(E)
         if x is None:
             return steps, E
-        if x[0] == "of" and x[2][0] == "val":          # its inner part is answered: now a plain lookup
-            y = ("leaf", x[2][1], x[1])
-            E = swap(E, x, y)
+        if x[0] == "of" and x[2][0] == "val":          # its inner part is answered: now a plain fact
+            E = swap(E, x, ("leaf", x[2][1], x[1]))
             continue
-        if x[0] == "op" and x is E:                    # the whole question is arithmetic on values: its operands are
-            v = next(f for f in TOOLS if f[0] == x[1])[1](*[c[1] for c in x[2]])   # read out, then the operation
-            steps.append(("operands", ["q"], ["q"], [(f" {x[2][0][1]}", NEW_WORK, "a"), (f" {x[2][1][1]}", NEW_WORK, "b")]))
-            steps.append((x[1], ["q", "a", "b"], ["q", "a", "b"], [(VAL(v), 2, "q")]))
-            return steps, ("val", v)
-        part = show(x)
-        steps.append(("split", ["q"], ["q"], [(part, NEW_WORK, "p")]))
         if x[0] == "op":
-            v = next(f for f in TOOLS if f[0] == x[1])[1](*[c[1] for c in x[2]])
-            steps.append(("operands", ["p"], ["p"], [(f" {x[2][0][1]}", NEW_WORK, "a"), (f" {x[2][1][1]}", NEW_WORK, "b")]))
-            steps.append((x[1], ["p", "a", "b"], ["p", "a", "b"], [(VAL(v), 2, "p")]))
+            y = ("val", next(f for f in TOOLS if f[0] == x[1])[1](*[c[1] for c in x[2]]))
+            E = swap(E, x, y)
+            steps.append(("operands", ["q"], ["q"], [(f" {x[2][0][1]}", NEW_WORK, "a"), (f" {x[2][1][1]}", NEW_WORK, "b")]))
+            steps.append((x[1], ["q", "a", "b"], ["q", "a", "b"], [(tell(E), 2, "q")]))
+            continue
+        p = T.place.get(("fact", x[1], x[2]))
+        if p is None:
+            return None, None
+        texts = T.texts[p][-4:]                        # (what a log shows at once)
+        if x[0] == "leaf":                             # the log read: its value, the sum it comes to, or the fact it
+            y, n_in = T.fold(p)                        # is the same as (the name is then that: read again)
+            if y is None or n_in > 4 or (y[0] == "op" and named(y)) or truth_of(y, w) != w.ents[x[1]][x[2]]:
+                return None, None                      # (more than the log shows at once; an amount added to a copy)
+        elif x[0] == "before":
+            h = w.hist[(x[1], x[2])]
+            v = next((u for u in reversed(h) if u != h[-1]), None)
+            if v is None or not any(value_in(t) == v for t in texts):
+                return None, None
             y = ("val", v)
         else:
-            p = T.place.get(("fact", x[1], x[2]))
-            if p is None:
+            vs = w.multi.get((x[1], x[2]), [])
+            if len(vs) != 2 or {value_in(t) for t in texts} != set(vs):
                 return None, None
-            texts = T.texts[p]
-            if x[0] == "leaf":                         # the log read: its value, the sum it comes to, or the fact it
-                y, n_in = T.fold(p)                    # is the same as (the part is then that: looked up again)
-                if y is None or n_in > 4 or (y[0] == "op" and named(y)) or truth_of(y, w) != w.ents[x[1]][x[2]]:
-                    return None, None                  # (more than the log shows at once; an amount added to a copy)
-                v = VAL(y[1]) if y[0] == "val" else show(y, False)
-            elif x[0] == "before":
-                h = w.hist[(x[1], x[2])]
-                v = next((u for u in reversed(h) if u != h[-1]), None)
-                n_in = min(4, len(texts))
-                if v is None or not any(value_in(t) == v for t in texts[-n_in:]):
-                    return None, None
-            else:
-                vs = w.multi.get((x[1], x[2]), [])
-                n_in = min(4, len(texts))
-                if len(vs) != 2 or {value_in(t) for t in texts[-n_in:]} != set(vs):
-                    return None, None
-                v = f"{vs[0]} and {vs[1]}"
-            r = T.place.get(("rule", x[2]))            # the place's log, and the log of the rule over its key
-            ins = ["p", ("e", p)] + ([("e", r)] if r is not None else [])
-            steps.append(({"leaf": "lookup"}.get(x[0], x[0]), ["p"], ins, [(VAL(v) if x[0] == "before" else v, 2, "p")]))
-            y = ("op", "add", [("val", vs[0]), ("val", vs[1])]) if x[0] == "both" else ("val", v) if x[0] == "before" else y
-        E2 = swap(E, x, y)
-        if E2[0] == "val":
-            steps.append(("fill", ["q", "p"], ["q", "p"], [(VAL(E2[1]), 2, "q")]))
-            return steps, E2
-        steps.append(("fill", ["q", "p"], ["q", "p"], [(ask_text(E2), 2, "q")]))
-        E = E2
+            y = ("op", "add", [("val", vs[0]), ("val", vs[1])])
+        r = T.place.get(("rule", x[2]))                # the place's log, and the log of the rule over its key
+        E = swap(E, x, y)
+        steps.append(({"leaf": "lookup"}.get(x[0], x[0]), ["q"], ["q", ("e", p)] + ([("e", r)] if r is not None else []),
+                      [(tell(E), 2, "q")]))
 
 
 def q_expr(kind, w, rng, ops=(1, 3)):
@@ -1889,6 +1879,23 @@ def calculate(fm, op, ins, sal):
         return CALC[op](nums[0], nums[1])
     except Exception:
         return None
+
+
+def result_in_place(fm, pieces, order, got):
+    """a calculator's output: its result where the made piece is, the spans around it taken as they are (the rest of
+    the question stays: the operation is done in place). No span: the result alone. -> the node, read from those
+    words; None when a span's words are not known"""
+    net = fm.bank.interp
+    flat = [t for n in order[:net.R] for t in (list(n.toks[:net.L]) if n.toks is not None else [None] * len(n.B[:net.L]))]
+    ids, done = [], False
+    for pc in pieces:
+        if pc[0] == "span":
+            ids += flat[pc[1]:pc[2] + 1]
+        elif not done:
+            ids, done = ids + fm.tr.tok((" " if ids else "") + D(str(got)))["input_ids"], True
+    if not done:
+        ids = fm.tr.tok(D(str(got)))["input_ids"]
+    return None if None in ids else fm.nodes([fm.tr.tok.decode(ids)])[0]
 
 
 def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
@@ -2001,9 +2008,10 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             if calc is not None and fm.calc_on:        # the calculator's own body: what goes on is its result when it
                 with torch.no_grad():                  # is the right one; its mimic (this output) learns from it
                     got_c = calculate(fm, calc, order, sal)
-                fm.count("calculator right", int(got_c is not None and D(str(got_c)) == D(target))), fm.count("calculator", 1)
-                if got_c is not None and D(str(got_c)) == D(target):
-                    cz = fm.nodes([spelled])[0]
+                cz = result_in_place(fm, plan, order, got_c) if got_c is not None else None
+                right = cz is not None and cz.toks is not None and list(cz.toks) == list(tid)
+                fm.count("calculator right", int(right)), fm.count("calculator", 1)
+                if right:
                     z, tid, ok = cz.B, cz.toks, True
             with torch.no_grad():
                 lab, rel = fm.tr.encode([target])[0], fm.tr.relation([target])[0]
