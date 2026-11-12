@@ -7,6 +7,7 @@ recipient; text becomes a node once, when it arrives.
 import argparse
 import copy
 import math
+import os
 import random
 import re
 import time
@@ -3301,8 +3302,15 @@ def run_fm(A):
     rng = random.Random(A.seed)
     if A.load:
         load_fm(fm, A.load)
+    elif A.heads and os.path.exists(A.heads):          # the codec stage as an earlier run left it (12 of a run's 45 min)
+        fm.heads.load_state_dict(torch.load(A.heads, map_location=dev))
+        print(f"codec stage read from {A.heads}", flush=True)
     else:
         train_codec(fm, A, rng, torch.optim.AdamW(fm.heads.parameters(), lr=A.lr))
+        if A.heads:
+            torch.save(fm.heads.state_dict(), A.heads)
+    rng = random.Random(A.seed + 1)                    # (the same demo worlds whether the codec stage ran or was read)
+    torch.manual_seed(A.seed + 1)
     fnp = lambda: {id(p) for f in fm.bank.fns for p in (f.code, f.au, f.av)}   # (the keys stay on Adam: fm22, the
     #                                                writer's keys never cleared the gate living -- 268/268 statements rested)
     own = lambda: [p for mod in (fm.bank, fm.heads, fm.filt, fm.critic) for p in mod.parameters()
@@ -3450,8 +3458,11 @@ def run_fm(A):
         for _ in range(A.replay if step <= A.demo else A.replay_live):   # the demos' routing, again (one small update
             Lr = Lesson()                                    # each; after the step's last update: fm33 replayed while the
             Lr.add("route replay", route_replay(fm, rng))    # functions' lesson still waited for its backward). Living too
-            if step > A.demo:                                # (and what the demos' steps made, relived: skill_replay)
-                Lr.add("skill replay", skill_replay(fm, rng))
+            Lr.add("skill replay", skill_replay(fm, rng))    # ... and what the demos' steps made, relived. In the demos
+            #                                                  too (11-12, fm49 / fm51 / fm52: 3 or 5 layers, with or
+            #                                                  without the LM's reading, lookup exact in the late demos
+            #                                                  stayed 35-39% -- the reader learned from each demo step
+            #                                                  once, the routing 20 times). Nothing new is shown
             update(Lr, acc)                                  # (fm34: @50 statements stored, questions fired; living's only
             #                                                  signal was its statements (questions 0/199), and @100 every
             #                                                  question rested again -- the demos anchor what living lacks)
@@ -3542,6 +3553,7 @@ if __name__ == "__main__":
     P.add_argument("--same", type=float, default=.1, help="a node whose label moved less than this did not change: no signal")
     P.add_argument("--init", default="", help="translator weights (text -> B, B -> text)")
     P.add_argument("--load", default="", help="a saved module (skips the codec stage)")
+    P.add_argument("--heads", default="", help="the codec stage's result: read from this file when it is there, else written to it")
     P.add_argument("--save", default="")
     P.add_argument("--log", default="")
     P.add_argument("--seed", type=int, default=0)
