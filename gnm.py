@@ -1182,7 +1182,7 @@ def make_out(fm, net, o, j, ins, w, temp=0., pieces=None, part=None):
         toks = list(x.toks[:a]) + toks + list(x.toks[b + 1:]) if toks is not None and x.toks is not None else None
     else:
         part = None
-    if toks is not None and None not in toks:          # its words are all known: the node is those words, read (no
+    if toks is not None and None not in toks and len(toks) <= 2 * net.L:   # its words are all known: the node is those words, read (no
         n = fm.nodes([fm.tr.tok.decode(toks)])[0]      # latent pieced together from several sentences to drift)
         if n.toks is not None and list(n.toks) == list(toks):
             return n.B, pcs, part, toks, own
@@ -1640,7 +1640,8 @@ class FM:
         return self.say(n)
 
     def say(self, n):
-        return self.tr.decode(n.B[None], torch.ones(1, len(n.B), dtype=torch.bool, device=self.dev))[0].strip()
+        z = n.B[:600]
+        return self.tr.decode(z[None], torch.ones(1, len(z), dtype=torch.bool, device=self.dev))[0].strip()
 
     # --- what is near a signal (everything is visible; two walks order the memory: by label -- the places whose
     #     label rows are all found in what the signal's node says -- and by its relation, what it relates to: the rule
@@ -1803,7 +1804,10 @@ class FM:
                 self.firings.append(rec)
                 self.count("fires")
                 return rec
-            self.count("calculator read no numbers")
+            self.count("calculator read no numbers")   # (it does nothing then: fm58, its mimic's words went on instead,
+            self.firings.append(rec)                   # were filed, the question heard them and fired it again -- 2263
+            self.count("fires")                        # such firings in one eval, 39 questions out of budget)
+            return rec
         st_ = self.bank.stats_of(actor)
         if self.show:                                  # --inspect: every firing, said
             for kind, found in self.walks:
@@ -1870,6 +1874,9 @@ class FM:
                 n = self.node(z, toks=toks, parent=sg.about[0])
                 self.news.append(n)
             else:                                      # a workspace node's value changed: the node that asked for it hears
+                if len(z) > 2 * self.bank.interp.L:    # (fm58: a question rewritten in a loop grew past what the LM
+                    self.count("grown too long")       # reads, 1024 tokens, and the run died in an eval)
+                    return False
                 n = self.node(z, toks=toks)
                 if self.text_of(n) == self.text_of(x):   # no change, no signal: it says what it said (11-11: by what it
                     self.count("no change")            # says, not by its label -- a fact's label is value-free now,
@@ -1917,7 +1924,8 @@ class FM:
         self.signals.append(Signal([q], 1., self.t))
         n = self.run()
         self.asked = q                                 # (the node itself: evaluate also reads what it holds as copied)
-        return self.say(q), n                          # the answer is said by the LM, from the node (user 11-12: all that
+        return (self.text_of(q) if q.toks is not None else self.say(q)), n   # (11-13: an answer is the LM's own line, the
+        #                                                answer's body; said again from latents only when its words are not known)                          # the answer is said by the LM, from the node (user 11-12: all that
         #                                                comes out comes out of the LM; 11-12 to fm50 a copy's tokens were
         #                                                given back as they were, past the LM)
 
@@ -3787,10 +3795,8 @@ def run_fm(A):
                 mod.eval()
             keep, snap = (fm.g, fm.stats), snapshot(fm.bank)
             print(f"EVAL step {step}: {evaluate(fm, A, A.seed + 1000 + step)} | {fn_probe(fm, random.Random(step))}", flush=True)
-            restore(fm.bank, snap)                     # (the probe edits functions: the next eval starts as this one did)
-            fm.calc_on = False
-            print(f"EVAL step {step}, calculator removed (its mimic answers): {evaluate(fm, A, A.seed + 1000 + step)}", flush=True)
-            fm.calc_on = True
+            #                                            (11-13: the eval with the bodies removed is gone -- the store's
+            #                                            and the answer's are the LM now, nothing stands in for them)
             restore(fm.bank, snap)
             fm.g, fm.stats = keep
             for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
