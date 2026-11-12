@@ -1338,7 +1338,7 @@ class Acting(nn.Module):
         R = self.interp.R
         return self.interp([n.B for n in ins], q, self.program(actor) if program is None else program,
                            self.action(actor, program), v, hops, sal, acts=[self.action(n) for n in ins[:R]],
-                           copy=[n.kind != "fn" for n in ins[:R]], lm=self.lm_read(ins[:R]))
+                           copy=[n.kind != "fn" for n in ins[:R]], lm=self.lm_read(ins[:R]) if self.see_lm else None)
 
     def make(self, key, like=None, code=None, scope=.9):
         """a new node that acts (a function): made like another acting node (its program and its own action; a read
@@ -1438,6 +1438,7 @@ class FM:
     def __init__(self, tr, bank, heads, filt, critic, budget=60, look=6, newest=4, kappa=2., same=.1):
         self.tr, self.bank, self.heads, self.filt, self.critic = tr, bank, heads, filt, critic
         object.__setattr__(bank, "tr", tr)             # (the acting side reads through the LM; not one of its own parts)
+        bank.see_lm = True                             # (--lm_read 0: without what the LM made of the inputs, to tell its share)
         self.dev = next(heads.parameters()).device
         self.g, self.signals, self.t, self.explore = Graph(bank.d), [], 0, 0.
         self.budget, self.look, self.newest, self.kappa, self.same = budget, look, newest, kappa, same
@@ -2906,6 +2907,7 @@ def inspect(A):
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm.bank.see_lm = bool(A.lm_read)
     load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
@@ -2945,6 +2947,7 @@ def deep_trace(A):
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm.bank.see_lm = bool(A.lm_read)
     load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
@@ -3043,6 +3046,7 @@ def eval_only(A):
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm.bank.see_lm = bool(A.lm_read)
     load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
@@ -3060,6 +3064,7 @@ def codec_check(A):
     if A.init:
         tr.load_state_dict(torch.load(A.init, map_location=dev), strict=False)
     fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm.bank.see_lm = bool(A.lm_read)
     if A.load:
         load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
@@ -3160,6 +3165,7 @@ def overfit(A):
     for p_ in tr_params(tr):
         p_.requires_grad_(True)
     fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm.bank.see_lm = bool(A.lm_read)
     rng, t0 = random.Random(A.seed), time.time()
     train_codec(fm, A, rng, torch.optim.AdamW(fm.heads.parameters(), lr=A.lr))
     print(f"codec done {time.time() - t0:.0f}s", flush=True)
@@ -3286,6 +3292,7 @@ def run_fm(A):
     for p_ in tr_params(tr):                           # the encoder and the decoder learn from every signal too
         p_.requires_grad_(True)
     fm = FM(tr, Acting().to(dev), Heads().to(dev), Filter().to(dev), Critic().to(dev), same=A.same)
+    fm.bank.see_lm = bool(A.lm_read)
     rng = random.Random(A.seed)
     if A.load:
         load_fm(fm, A.load)
@@ -3542,6 +3549,7 @@ if __name__ == "__main__":
     P.add_argument("--warm_q", type=int, default=16, help="lookups in each warm-start update")
     P.add_argument("--replay", type=int, default=20, help="routing replays after each demo step (want reader + labels)")
     P.add_argument("--show_live", type=int, default=0, help="living steps said in full (every firing, every verdict)")
+    P.add_argument("--lm_read", type=int, default=1, help="0: the interpreter does not see what the LM made of its inputs (a split run)")
     P.add_argument("--local", type=int, default=1, help="living: only the nodes' own weights learn (shared body fixed)")
     P.add_argument("--replay_live", type=int, default=5, help="routing replays of the demos after each living step")
     P.add_argument("--q", type=int, default=24, help="questions per kind at eval")
