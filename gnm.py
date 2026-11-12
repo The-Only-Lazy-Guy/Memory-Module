@@ -3182,6 +3182,41 @@ def lm_probe(A):
                         c[1] += 1
     for k, (a, b) in sorted(tot.items()):
         print(f"LM reads one statement, {k[0]}, {k[1]}, asked '{k[2]}', {k[3]}: {a}/{b}", flush=True)
+    # a statement as an object: does the LM itself say its two fields, '<name> = <value>', given the statement only?
+    tot, odd = {}, []
+    for seed in range(4):
+        rng = random.Random(A.seed + 130 + seed)
+        w, sts = new_world(rng), []
+        for _ in range(A.ticks):
+            for d in world_step(w, rng):
+                o = d()
+                sts += list(said(o, w)) if o else []
+        for text, meta in rng.sample(sts, min(80, len(sts))):
+            kind = "rule" if meta[0] == "rule" else "correction" if text.startswith("Correction") else "copy" if "(same as" in text else \
+                "name value" if meta[2] in w.ent_keys else "plain"
+            ids = tok(tok.eos_token + shots + text, return_tensors="pt")["input_ids"].to(dev)
+            out = []
+            for _ in range(24):
+                nxt = int((lm(input_ids=ids).last_hidden_state[0, -1] @ lm.wte.weight.T).argmax())
+                if chr(10) in tok.decode([nxt]):
+                    break
+                out.append(nxt)
+                ids = torch.cat([ids, torch.tensor([[nxt]], device=dev)], 1)
+            got = tok.decode(out).strip()
+            c = tot.setdefault(kind, [0, 0, 0])
+            c[2] += 1
+            if meta[0] == "fact":
+                nm_, _, v_ = got.partition(" = ")
+                c[0] += nm_.strip() == leaf(meta[1], meta[2])
+                c[1] += v_.strip() == str(value_in(text))
+                if (nm_.strip() != leaf(meta[1], meta[2]) or v_.strip() != str(value_in(text))) and len(odd) < 8:
+                    odd.append(f"{text!r} -> {got!r}")
+            elif len(odd) < 12:
+                odd.append(f"{text!r} -> {got!r}")
+    for k, (a, b, n_) in sorted(tot.items()):
+        print(f"LM says a statement's fields, {k}: name {a}/{n_}, value {b}/{n_}", flush=True)
+    for x in odd:
+        print("   " + x, flush=True)
 
 
 @torch.no_grad()
