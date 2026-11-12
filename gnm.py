@@ -711,7 +711,14 @@ class Translator(nn.Module):
 CHAT = ["Thanks for the update!", "Morning everyone.", "Let me know if anything else changes.", "OK, noted.",
         "Have a good weekend.", "Sorry for the delay.", "See the notes below.", "That is all for today.", "Hope you are well.",
         "Quick update:", "Cheers, talk soon.", "Nothing new on my side."]
-VAL = lambda v: str(v) if isinstance(v, int) else f"string {v}"      # what a value node says: typed ("1", "string hello")
+VAL = lambda v: str(v)                               # what a value node says (11-13: plain -- the LM says the answer)
+ND = lambda t: re.sub(r"(?<=\d) (?=\d)", "", t)      # numbers as they are said (what the LM reads best: lm_probe)
+SHOTS = ("the gate of Morva is 4. the gate of Morva = 4\nCorrection: the fee of Seldo is now 12. the fee of Seldo = 12\n"
+         "the host of Tarn is Velo. the host of Tarn = Velo\nthe tax of Runa is 9 (same as the toll of Bex). the tax of Runa = 9\n")
+ANSWERS = "What is 46? = 46\nWhat was 7 before? = 7\nWhat is Velo? = Velo\nWhat is -12? = -12\n"
+#                                                the form shown to the frozen LM, nothing more (11-13, lm_probe2: a
+#                                                statement's two fields right 317-319 of 320; a chosen statement's
+#                                                value 240/240) -- what the small reader was being trained to do
 D = lambda t: re.sub(r"(?<=\d)(?=\d)", " ", t)       # numbers as the module reads and says them: digit by digit
 #                                                (one row per digit: a function can work along them)
 
@@ -1139,15 +1146,27 @@ def toks_of(net, ins):
 
 def make_out(fm, net, o, j, ins, w, temp=0., pieces=None, part=None):
     """output j as the node it becomes. Its pieces put together (its own choices -- sampled when temp > 0 -- or the
-    given ones); when it goes in place of a workspace node (w), they take the place of a PART of that node and the
-    rest stays as it is: A to be B, where A is a part of what is there. Which part: what it took from a log goes
-    where that log's place is named in the node (the label match that found the place says where: a read, 11-12);
-    anything else, where the output itself points (first, last token). `part`: the given one, counted over all the
-    inputs' tokens. -> (the node's rows, read again; its pieces; the part or None; its tokens, None when not all are
-    known; whether the part was its own pointing)"""
-    rows, pcs = assemble(net, o, j, pieces, temp)
+    given ones). A piece that points into a log is a READ of an object: it takes the VALUE FIELD of the entry it
+    points at, whole, whatever tokens it pointed at there (11-13). When the output goes in place of a workspace
+    node (w), the pieces take the place of a PART of that node and the rest stays: what was read from a log goes
+    where that log's place is named in the node (the label match says where); anything else, where the output itself
+    points. `part`: the given one, counted over all the inputs' tokens. -> (the node's rows; its pieces; the part or
+    None; its tokens, None when not all are known; whether the part was its own pointing)"""
+    _, pcs = assemble(net, o, j, pieces, temp)
     flat = toks_of(net, ins)
-    toks = [t for pc in pcs for t in flat[pc[1]:pc[2] + 1]] if pcs and all(pc[0] == "span" for pc in pcs) else None
+    segs = []
+    for s_, pc in enumerate(pcs):
+        if pc[0] != "span":
+            segs.append((o["gen"][j, s_, :pc[1]], None))
+            continue
+        r_ = int(o["owner"][pc[1]])
+        val = None
+        if ins[r_].kind == "entry" and ins[r_].ents:
+            at = pc[1] - int((o["owner"] < r_).sum())
+            val = next((v for a_, b_, v in ins[r_].ents if a_ <= at <= b_), None)
+        segs.append(fm.value_node(val) if val is not None else (o["raw"][pc[1]:pc[2] + 1], flat[pc[1]:pc[2] + 1]))
+    rows = torch.cat([x_ for x_, _ in segs]) if segs else o["gen"][j, 0, :1]
+    toks = [t for _, ts in segs for t in ts] if segs and all(ts is not None for _, ts in segs) else None
     r, own = w - 2, False
     if 0 <= r < min(len(ins), net.R) and ins[r].kind == "work" and len(o["raw"]):
         x, off = ins[r], int((o["owner"] < r).sum())
@@ -1163,6 +1182,10 @@ def make_out(fm, net, o, j, ins, w, temp=0., pieces=None, part=None):
         toks = list(x.toks[:a]) + toks + list(x.toks[b + 1:]) if toks is not None and x.toks is not None else None
     else:
         part = None
+    if toks is not None and None not in toks:          # its words are all known: the node is those words, read (no
+        n = fm.nodes([fm.tr.tok.decode(toks)])[0]      # latent pieced together from several sentences to drift)
+        if n.toks is not None and list(n.toks) == list(toks):
+            return n.B, pcs, part, toks, own
     if toks is not None and (None in toks or len(toks) != len(rows)):
         toks = None
     return fm.heads.reread(rows), pcs, part, toks, own
@@ -1264,9 +1287,12 @@ def say_loss(fm, A, net, o, j, target, order, prefer=None, dest=None):
     dl = fm.tr.decode_loss(z[None], torch.ones(1, len(z), dtype=torch.bool, device=dev), [target])
     flat = toks_of(net, order)
     says = lambda out: said_as(out[1], flat) == said_as(want_pcs, flat) and out[2] == ed   # (does an output say the target?)
-    with torch.no_grad():                              # exact = its own pieces say what the target's say (from wherever
-        mine = make_out(fm, net, o, j, order, w)       # those tokens sit), on the same part, and what it makes says it
-        same = says(mine) and None not in [x_ for p_ in said_as(mine[1], flat) if p_ and p_[0] != "made" for x_ in p_]
+    with torch.no_grad():                              # exact = what it makes by itself says the target: the same words
+        mine = make_out(fm, net, o, j, order, w)       # when they are all known (a value read from the right entry is
+        if mine[3] is not None:                        # right wherever in that entry it pointed), else the same pieces
+            same = list(mine[3]) == list(tid)          # on the same part
+        else:
+            same = says(mine) and None not in [x_ for p_ in said_as(mine[1], flat) if p_ and p_[0] != "made" for x_ in p_]
         exact = same and float(dl) < A.exact
     return L + dl, exact, z, plan, tid, target, (mine, same, says, part if x is not None else None, ed if not found else None, inner)
 
@@ -1279,7 +1305,7 @@ class Acting(nn.Module):
     model made to act (functions are nodes: made by writing one, seen and chosen like any other; the calculator's
     nodes are there from the start)"""
 
-    def __init__(self, d=128, c=256, calculators=tuple(CALC)):
+    def __init__(self, d=128, c=256, calculators=tuple(CALC) + ("store", "answer")):
         super().__init__()
         self.d, self.c = d, c
         self.interp = Interpreter(d, c)
@@ -1460,6 +1486,7 @@ class Node:
         self.toks = None                               # the token each row of B is (known when read from text, or in demos)
         self.near = None                               # how far the walk that brought it was (its label, from the signal's)
         self.at = None                                 # a log: (the node, first row, last row) where its place is named
+        self.ents = None                               # a log: its entries, each (first row, last row, its value field)
 
 
 class Signal:
@@ -1488,6 +1515,7 @@ class FM:
         self.made, self.frozen = False, False
         self.routes = []                               # the demos' routing examples (signal's nodes, sign, purpose)
         self.nones, self.rests = [], []                # ... and what asked nothing there; what this run rested on
+        self.lines, self.values = {}, {}               # what the LM said for a prompt; a value field as rows (kept)
         self.shown = {}                                # purpose -> the demos' steps as runs (skill_replay)
         self.rates = {}                                # episode kind -> how often its own run is right (surprise)
         self.stage, self.assign = "free", {}           # the training stage; purpose -> the node that learned it          # a node that acts was made (the optimizer takes it in); frozen:
@@ -1524,21 +1552,75 @@ class FM:
 
     def log(self, p):
         """a place as it is read: its log, the newest entries in the order they were said, as one node (the order is
-        the rows' own: what was said last is read last)"""
+        the rows' own: what was said last is read last). Each entry is an object: its rows, and the value it says"""
         es = self.g.chain[p][-self.newest:]
         n = Node(torch.cat([e[0] for e in es]), torch.from_numpy(self.g.L[p]).to(self.dev), torch.from_numpy(self.g.R[p]).to(self.dev),
                  "entry", p, -1)
         n.toks = [t for e in es for t in e[2]] if all(len(e) > 2 and e[2] is not None for e in es) else None
+        at, n.ents = 0, []
+        for e in es:                                   # (first row, last row, its value field)
+            n.ents.append((at, at + len(e[0]) - 1, e[3] if len(e) > 3 else None))
+            at += len(e[0])
         return n
+
+    @torch.no_grad()
+    def lm_line(self, prompt, n=30):
+        """the frozen LM goes on from a prompt, to the end of the line"""
+        tok, lm = self.tr.tok, self.tr.lm
+        if prompt in self.lines:
+            return self.lines[prompt]
+        ids = tok(tok.eos_token + prompt, return_tensors="pt")["input_ids"][:, -1000:].to(self.dev)
+        out = []
+        for _ in range(n):
+            nxt = int((lm(input_ids=ids).last_hidden_state[0, -1] @ lm.wte.weight.T).argmax())
+            if chr(10) in tok.decode([nxt]):
+                break
+            out.append(nxt)
+            ids = torch.cat([ids, torch.tensor([[nxt]], device=self.dev)], 1)
+        if len(self.lines) > 20000:
+            self.lines.clear()
+        self.lines[prompt] = tok.decode(out).strip()
+        return self.lines[prompt]
+
+    def fields(self, text):
+        """a statement as an object: the LM itself says its two fields, the thing's name and the value said of it
+        (its words, numbers as said); None when it says no such thing (a rule, talk)"""
+        nm, sep, v = self.lm_line(SHOTS + ND(text)).partition(" = ")
+        nm, v = nm.strip(), v.strip()
+        return (nm, v) if sep and nm and v and nm in ND(text) else None
+
+    def value_node(self, v):
+        """a value field as rows to put into a node, and its tokens as they stand inside a sentence"""
+        if v not in self.values:
+            n = self.nodes([str(v)])[0]
+            t = self.tr.tok(" " + D(str(v)))["input_ids"]
+            self.values[v] = (n.B.detach(), t if len(t) == len(n.B) else None)
+        return self.values[v]
+
+    def file(self, n, name, value):
+        """a node into the memory: the place that is the thing it names -- the label rows of the NAME alone (11-13: the
+        same name gives the same rows; a place no longer depends on what a function made of the statement), or of the
+        whole node when it names nothing -- else a new place; its log one entry longer, the entry with its value"""
+        with torch.no_grad():
+            lab = self.nodes([name])[0] if name else n
+            rows = self.label_rows(lab.B)[0]
+            p = self.g.same(rows, rows)
+            if p < 0:
+                p = self.g.add_place(lab.L.detach().float().cpu().numpy(), rows)
+                self.count("new place")
+            else:
+                self.count("found its place")
+            self.t += 1
+            self.g.chain[p].append((n.B.detach(), self.t, n.toks, value))
+            self.g.R[p] = n.R.detach().float().cpu().numpy() if n.R is not None else self.g.R[p]
+        return p
 
     @torch.no_grad()
     def label_rows(self, z):
         """a node's label rows as the graph keeps them: all of them, and those that name its thing (at least one)"""
         r, g, _ = self.heads.rows([z])
         r, g = r[0].float(), g[0]
-        i = (g > .5).nonzero().flatten()               # (one run of rows, first to last: a name is found where it stands)
-        key = r[int(i[0]):int(i[-1]) + 1] if len(i) else r[g.argmax()][None]
-        return r.cpu().numpy(), key.cpu().numpy()
+        return r.cpu().numpy(), r.cpu().numpy()        # (11-13: a place's label = the rows of its NAME, all of them)
 
     def fnode(self, t):
         return Node(self.bank.as_node(t), self.bank.fns[t].w("key").detach(), torch.zeros(self.bank.d, device=self.dev), "fn", fn=t)
@@ -1687,14 +1769,37 @@ class FM:
                "aboutL": sg.about[0].L.detach() if sg.about[0].L is not None else None}
         self.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
         calc = self.bank.calc_of(actor)
-        if calc is not None and self.calc_on:          # a calculator: its own body states a fact from the phrase its
+        if calc == "store" and self.calc_on and sg.about[0].kind == "work":   # the store's own body (11-13): the LM says
+            x = sg.about[0]                            # the statement's two fields; the statement goes to the place its
+            f_ = self.fields(self.text_of(x))          # NAME is, as it was said, with its value. Nothing is copied by a
+            p = self.file(x, f_[0] if f_ else None, f_[1] if f_ else None)   # reader, nothing of it can drift
+            rec.setdefault("at", []).append(p)
+            rec["did"] = 1
+            self.count("filed with its fields" if f_ else "filed whole")
+            if self.show:
+                print(f"  fire {len(self.firings)}: {self.name(actor)} files {self.text_of(x)[:60]!r} as {f_}", flush=True)
+            self.firings.append(rec)
+            self.count("fires")
+            return rec
+        if calc == "answer" and self.calc_on and sg.about[0].kind == "work":   # the answer's own body: the LM says it
+            x = sg.about[0]
+            got = self.lm_line(ANSWERS + ND(self.text_of(x)) + " =")
+            if self.show:
+                print(f"  fire {len(self.firings)}: {self.name(actor)} answers {self.text_of(x)[:60]!r} with {got!r}", flush=True)
+            if got:
+                n_ = self.nodes([got])[0]
+                rec["did"] = int(self.write(n_.B, 2 + ins.index(x), ins, sg, False, rec, 0, toks=n_.toks))
+                self.firings.append(rec)
+                self.count("fires")
+                return rec
+        if calc in CALC and self.calc_on:              # a calculator: its own body states a fact from the phrase its
             pc = asm[0][1][0] if asm and asm[0] and asm[0][1] else None   # node copied (the first piece), into the memory
             r_ = stated(self, calc, toks_of(net, ins)[pc[1]:pc[2] + 1] if pc and pc[0] == "span" else None)
             if r_ is not None:                         # (a fact about numbers alone: never stale. The question that
                 self.count("calculator")               # asked hears it, write())
                 if self.show:
-                    print(f"  fire {len(self.firings)}: {self.name(actor)} states {self.text_of(r_)!r}", flush=True)
-                rec["did"] = int(self.write(r_.B, NEW_PLACE, ins, sg, False, rec, 0, toks=r_.toks))
+                    print(f"  fire {len(self.firings)}: {self.name(actor)} states {self.text_of(r_[0])!r}", flush=True)
+                rec["did"] = int(self.write(r_[0].B, NEW_PLACE, ins, sg, False, rec, 0, toks=r_[0].toks, name=r_[1], value=r_[2]))
                 self.firings.append(rec)
                 self.count("fires")
                 return rec
@@ -1750,7 +1855,7 @@ class FM:
             self.signals.append(Signal([sg.about[0]] + self.news, 1., self.t))
         return rec
 
-    def write(self, z, w, ins, sg, isfn, rec, j, toks=None):
+    def write(self, z, w, ins, sg, isfn, rec, j, toks=None, name=None, value=None):
         """where an output lands, and what that change signals; -> whether anything changed"""
         self.t += 1
         if w >= 2 and w - 2 < len(ins) and ins[w - 2].kind != "entry":   # (a log is not rewritten: what is said of a
@@ -1779,28 +1884,15 @@ class FM:
             self.count("new functions")
             return True
         n = self.node(z, toks=toks, parent=sg.about[0])
-        if w == NEW_PLACE:                             # into the memory: the place that is the thing it names (its label
-            rows, key = self.label_rows(z)             # rows and that place's found in each other), else a new place
-            p = self.g.same(rows, key)
-            if p < 0:
-                p = self.g.add_place(n.L.detach().float().cpu().numpy(), key)
-                self.count("new place")
-            else:
-                self.count("found its place")
-            self.memorize(p, z, rec, toks)
+        if w == NEW_PLACE:                             # into the memory (file): the place its name is, else a new one
+            p = self.file(n, name, value)
+            rec.setdefault("at", []).append(p)
             a = sg.about[0]                            # a fact stated for a node that names that thing without being it
             if a.kind == "work" and self.g.same(*self.label_rows(a.B)) != p:   # (a question; a statement being stored
                 self.signals.append(Signal([a, self.log(p)], 1., self.t))      # IS its place): the node hears the fact
         else:
             self.news.append(n)
         return True
-
-    def memorize(self, p, z, rec, toks=None):
-        """a place's log takes what was said of it, as it was said (v3: nothing is worked out when it is stored and no
-        other place is rewritten -- what a thing is worth now, and what follows it, is read from the logs)"""
-        self.g.chain[p].append((z.detach(), self.t, toks))
-        self.g.R[p] = self.heads([z])[1][0].detach().float().cpu().numpy()
-        rec.setdefault("at", []).append(p)
 
     def run(self):
         n = 0
@@ -1956,10 +2048,10 @@ def plan(T, E):
         if p is None:
             return None, None
         texts = T.texts[p][-4:]                        # (what a log shows at once)
-        if x[0] == "leaf":                             # the log read: its value, the sum it comes to, or the fact it
-            y, n_in = T.fold(p)                        # is the same as (the name is then that: read again)
-            if y is None or n_in > 4 or (y[0] == "op" and named(y)) or truth_of(y, w) != w.ents[x[1]][x[2]]:
-                return None, None                      # (more than the log shows at once; an amount added to a copy)
+        if x[0] == "leaf":                             # the log read: the value its newest entry says (11-13: a sum
+            y = ("val", value_in(texts[-1]))           # under an adding rule and a copy whose source moved are not
+            if y[1] != w.ents[x[1]][x[2]]:             # read this way yet: no demo, a known limit)
+                return None, None
         elif x[0] == "before":
             h = w.hist[(x[1], x[2])]
             v = next((u for u in reversed(h) if u != h[-1]), None)
@@ -1971,10 +2063,8 @@ def plan(T, E):
             if len(vs) != 2 or {value_in(t) for t in texts} != set(vs):
                 return None, None
             y = ("pair", vs[0], vs[1])
-        r = T.place.get(("rule", x[2]))                # the place's log, and the log of the rule over its key
         E = y if x is E else swap(E, x, y)
-        steps.append(({"leaf": "lookup"}.get(x[0], x[0]), ["q"], ["q", ("e", p)] + ([("e", r)] if r is not None else []),
-                      [(tell(E), 2, "q")]))
+        steps.append(({"leaf": "lookup"}.get(x[0], x[0]), ["q"], ["q", ("e", p)], [(tell(E), 2, "q")]))
 
 
 def q_expr(kind, w, rng, ops=(1, 3)):
@@ -2042,10 +2132,10 @@ class Lesson:
 
 def stated(fm, op, toks):
     """a calculator's own body (11-12): the phrase its node copied names an operation on two numbers -> the fact it
-    states, '<the phrase as it stands> is <result>.', as a node read from those words. It says a fact; it does not
-    touch what it read. None when the phrase does not hold exactly two numbers (an operation with a part still to
-    read is not one it can do)"""
-    if not toks or None in toks:
+    states, '<the phrase as it stands> is <result>.', as a node read from those words, with its two fields. It says a
+    fact; it does not touch what it read. None when the phrase does not hold exactly two numbers (an operation with a
+    part still to read is not one it can do)"""
+    if op not in CALC or not toks or None in toks:
         return None
     text = fm.tr.tok.decode(list(toks))
     nums = re.findall(r"-?\d(?: \d)*", text)
@@ -2055,7 +2145,7 @@ def stated(fm, op, toks):
         got = CALC[op](*[int(x.replace(" ", "")) for x in nums])
     except Exception:
         return None
-    return fm.nodes([f"{text} is {got}."])[0]
+    return fm.nodes([f"{text} is {got}."])[0], text.strip(), str(got)
 
 
 def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
@@ -2166,9 +2256,10 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             if shown is not None:
                 shown.append(([(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan], w, False, ed))
             fm.count(f"{purpose} exact", int(ok)), fm.count(f"{purpose} said", 1)
-            if calc is not None and fm.calc_on:        # the calculator's own body: what goes on is the fact it states
+            if calc in CALC and fm.calc_on:            # the calculator's own body: what goes on is the fact it states
                 flat_ = toks_of(net, order)            # from the phrase its node should copy; its mimic learns from it
                 cz = stated(fm, calc, flat_[plan[0][1]:plan[0][2] + 1] if plan and plan[0][0] == "span" else None)
+                cz = cz[0] if cz else None
                 right = cz is not None and cz.toks is not None and fm.tr.tok.decode(cz.toks).strip() == fm.tr.tok.decode(tid).strip()
                 fm.count("calculator right", int(right)), fm.count("calculator", 1)
                 if right:
@@ -2317,12 +2408,8 @@ def demo_question(fm, T, Ls, A, st, E):
             for (text, w, name), (z, tid, ok, spelled) in zip(outs, res):
                 n = fm.node(z, tid) if ok else fm.nodes([spelled])[0]   # exact: its own node goes on, as it is; not
                 #                                        yet: what it should have said (its tokens are then true)
-                if w == NEW_PLACE:
-                    with torch.no_grad():
-                        p = fm.g.add_place(n.L.detach().float().cpu().numpy(), fm.label_rows(n.B)[1])
-                        fm.g.R[p] = n.R.detach().float().cpu().numpy()
-                    fm.t += 1
-                    fm.g.chain[p].append((n.B.detach(), fm.t, n.toks))
+                if w == NEW_PLACE:                     # (the fact a calculator stated: its name the phrase, its value)
+                    p = fm.file(n, name[1], text[len(name[1]) + 4:-1])
                     T.place[name], T.texts[p] = p, [text]
                     stated_.append((name, p))
                 else:
@@ -2336,43 +2423,23 @@ def demo_question(fm, T, Ls, A, st, E):
             T.place.pop(name, None), T.texts.pop(p, None)
 
 
-def same_place(fm, s, p):
-    """the label rows' lesson on a statement: the place that is its thing (p, when there is one) and the statement are
-    found in each other; the other places near it are not that thing"""
-    if not fm.g.n:
-        return 0
-    r, g, m = fm.heads.rows([s.B])
-    ps = [t[1] for t in fm.g.near(r[0].detach().float().cpu().numpy(), 8) if t[1] != p] + ([p] if p is not None else [])
-    P = torch.from_numpy(fm.g.M[ps]).to(r.device)
-    pm = (torch.arange(RM, device=r.device)[None] < torch.from_numpy(fm.g.Mn[ps]).to(r.device)[:, None]).float()
-    both = torch.minimum(align(P, pm, r, m.float())[:, 0], align(r, g, P, pm)[0])
-    is_p = torch.tensor([q == p for q in ps], device=r.device)
-    fm.count("same thing: right", int(p is not None and float(both[-1]) > JOIN and int(both.argmax()) == len(ps) - 1 or
-                                      p is None and float(both.max()) <= JOIN)), fm.count("same thing: asked")
-    return apart_at(both, is_p)
-
-
 def demo_statement(fm, T, Ls, A, st, text, meta, side):
-    """a statement: the model keeps it as it was said (v3, 11-12: nothing is worked out when it is stored, no other
-    place is rewritten); the teacher writes the memory -- the thing's own place, its log one entry longer -- and the
-    label rows learn which place is the same thing"""
+    """a statement: routed to the store (its mimic still learns to keep it as said; living, its body files it); the
+    memory is filed as when it lives -- the LM says the statement's fields, the place is its name's (11-13)"""
     s = fm.nodes([text])[0]
     k = ("rule", meta[1]) if meta[0] == "rule" else ("fact", meta[1], meta[2])
-    p = T.place.get(k)
     src = T.w.deps.get((meta[1], meta[2])) if meta[0] == "fact" and "(same as" in text else None
     also = [T.place[("fact",) + src]] if src and ("fact",) + src in T.place else []
-    res, _ = run_step(fm, Ls, A, st, "store", [s], [s], [(text, NEW_PLACE)], also)
-    Ls.add("same thing", same_place(fm, s, p))
-    own, own_t = (res[0][0].detach(), res[0][1]) if res is not None and res[0] is not None and res[0][2] and st["step"] > A.own \
-        else (s.B.detach(), s.toks)                    # the teacher's memory: as the store itself writes it, once it can
-    if p is None:
-        with torch.no_grad():
-            p = fm.g.add_place(fm.heads([own])[0][0].float().cpu().numpy(), fm.label_rows(own)[1])
-        T.place[k], T.texts[p] = p, []
-    fm.t += 1
-    fm.g.chain[p].append((own, fm.t, own_t))
-    with torch.no_grad():
-        fm.g.R[p] = fm.heads([own])[1][0].float().cpu().numpy()
+    run_step(fm, Ls, A, st, "store", [s], [s], [(text, NEW_PLACE)], also)
+    f_ = fm.fields(s.text)
+    if meta[0] == "fact":                              # (measured: does the LM say the fields the world means)
+        fm.count("fields right", int(f_ is not None and f_[0] == leaf(meta[1], meta[2]) and f_[1] == str(value_in(text))))
+        fm.count("fields asked")
+    p = fm.file(s, f_[0] if f_ else None, f_[1] if f_ else None)
+    if T.place.get(k, p) != p:
+        fm.count("a thing in two places")
+    T.place[k] = p
+    T.texts.setdefault(p, [])
     T.heard(p, text, meta, side)
 
 
@@ -2485,22 +2552,13 @@ def finish(fm, Ls, rng, recent=None):
     Ls.add("asks nothing", asks / max(1, len(rows)))
 
 
-def same_batch(w, rng, n=10):
-    """texts for the label rows' lesson, from a world: things said two ways (another value, a correction, a copy, the
-    thing's name alone; a rule in other words; a fact a calculator states) with what each is about and the words that
-    name it, and questions with the things they name. -> statements (text, thing, name), questions (text, things)"""
-    facts = [(nm, k, v) for nm, e in sorted(w.ents.items()) for k, v in sorted(e.items())]
-    facts = rng.sample(facts, min(n, len(facts)))
-    names, st = sorted(w.ents), []
-    for nm, k, v in facts:
-        other = lambda: rng.randint(1, 60) if isinstance(v, int) else rng.choice(names)
-        f2, nme = rng.choice(facts), leaf(nm, k)
-        st.append((f"{nme} is {v}.", ("fact", nm, k), nme))
-        st.append((rng.choice([f"{nme} is {other()}.", f"Correction: {nme} is now {other()}.",
-                               f"{nme} is {other()} (same as {leaf(f2[0], f2[1])}).", nme]), ("fact", nm, k), nme))
-    for k in rng.sample(w.num_keys, 3):
-        st += [(rule_text(rng, kind, k), ("rule", k), None) for kind in rng.sample(["add", "set", "keep"], 2)]
-    st += [(t, None, None) for t in rng.sample(CHAT, 2)]
+def same_batch(w, rng, n=12):
+    """texts for the label rows' lesson, from a world: the NAMES of things (a fact's, a fact a calculator states; a
+    rule or talk is its own name) with what each is, and questions with the things they name"""
+    facts = [(nm, k) for nm, e in sorted(w.ents.items()) for k in sorted(e)]
+    st = [(leaf(nm, k), ("fact", nm, k)) for nm, k in rng.sample(facts, min(n, len(facts)))]
+    st += [(rule_text(rng, rng.choice(["add", "set", "keep"]), k), ("rule", k)) for k in rng.sample(w.num_keys, 2)]
+    st += [(t, ("talk", t)) for t in rng.sample(CHAT, 2)]
     qs = [(ask_text(E), named(E)) for E in (q_expr(kd, w, rng) for kd in ("lookup", "before", "chain", "ops", "ops")) if E]
     for _ in range(3):                                 # a fact stated on the way, and the question it was stated for
         op, fn_, tpl = rng.choice(TOOLS)
@@ -2511,47 +2569,29 @@ def same_batch(w, rng, n=10):
         else:
             nme = tpl.format(a, b)
             qs.append((f"What is {nme}?", {("said", nme)}))
-        st.append((f"{nme} is {fn_(a, b)}.", ("said", nme), nme))
+        st.append((nme, ("said", nme)))
     return st, qs
 
 
 def same_loss(fm, st, qs):
-    """the label rows' lesson: two statements about one thing are the same place (the one's naming rows found in the
-    other's words, and the other's naming rows among them: both ways), statements about two things are not; a thing a
-    question names is found in it, another is not; and the rows that name a thing are the words of its name (a name is
-    found where it stands). Returns the loss and how often each comes out right"""
-    texts = [D(t) for t, _, _ in st] + [D(t) for t, _ in qs]
+    """the label rows' lesson (11-13: a place's label is the rows of its name, all of them): two names are one place
+    only when each one's rows are all found in the other's; a thing a question names is found in it, another is not.
+    Returns the loss and how often each comes out right"""
+    texts = [D(t) for t, _ in st] + [D(t) for t, _ in qs]
     z, m = fm.tr.content(texts)
-    R, G, M = fm.heads.rows([z[i][m[i]] for i in range(len(z))])
-    n = len(st)
-    into = align(R[:n], G[:n], R, M.float())           # [i, j]: thing i's naming rows found in what j says
-    both = torch.minimum(into[:, :n], align(R[:n], G[:n], R[:n], G[:n]).T)   # ... and j's among i's: the same thing
-    dev = R.device
-    one = torch.tensor([[a is not None and a == b for _, b, _ in st] for _, a, _ in st], device=dev)
+    R, _, M = fm.heads.rows([z[i][m[i]] for i in range(len(z))])
+    G, n, dev = M.float(), len(st), R.device
+    into = align(R[:n], G[:n], R, G)                   # [i, j]: name i's rows found in what j says
+    both = torch.minimum(into[:, :n], into[:, :n].T)   # ... and j's in i's: the same thing
     off = ~torch.eye(n, dtype=torch.bool, device=dev)
-    loss = apart_at(both[off], one[off])
+    loss = F.relu(both[off] - .5).sum() / max(1, int((both[off] > .5).sum()))
     rate = lambda x: float((x > JOIN).float().mean()) if x.numel() else 0.
-    said = {"same": rate(both[off & one]), "other": rate(both[off & ~one]),
-            "same low": float(both[off & one].min()) if bool((off & one).any()) else 1., "other high": float(both[off & ~one].max())}
-    thing = torch.tensor([a is not None and a[0] != "rule" for _, a, _ in st], device=dev)
+    said = {"other": rate(both[off]), "other high": float(both[off].max())}
+    thing = torch.tensor([a[0] in ("fact", "said") for _, a in st], device=dev)
     if qs and bool(thing.any()):
-        has = torch.tensor([[a in inq for _, inq in qs] for _, a, _ in st], device=dev)[thing]
+        has = torch.tensor([[a in inq for _, inq in qs] for _, a in st], device=dev)[thing]
         loss = loss + apart_at(into[:, n:][thing], has)
         said["named"], said["not named"] = rate(into[:, n:][thing][has]), rate(into[:, n:][thing][~has])
-    nl, hit, k = 0, 0, 0
-    for i, (_, _, nme) in enumerate(st):               # the rows that name it: the words of its name
-        if nme is None:
-            continue
-        at = texts[i].find(D(nme))
-        offs_ = fm.tr.tok(texts[i], return_offsets_mapping=True)["offset_mapping"]
-        if at < 0 or len(offs_) != int(M[i].sum()):
-            continue
-        y = torch.tensor([float(a_ < at + len(D(nme)) and b_ > at) for a_, b_ in offs_], device=dev)
-        g = G[i, :len(offs_)]
-        nl, k = nl + F.binary_cross_entropy(g.clamp(1e-4, 1 - 1e-4), y), k + 1
-        hit += int(bool(((g > .5).float() == y).all()))
-    if k:
-        loss, said["name rows"] = loss + nl / k, hit / k
     return loss, said
 
 
