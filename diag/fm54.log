@@ -1,0 +1,15 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2609.03it/s]
+codec stage read from /marimo/ckpt/heads_v3.pt
+step 1: stage skills
+/marimo/frozen/fm54/gnm.py:2054: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  actor, how = C[a][0], "routed" if float(s_all[a]) > 1 else "nearest"
+step 1: the store skill gets its node -> function 5
+step 1: the lookup skill gets its node -> function 6
+step 1: the both skill gets its node -> function 7
+step 1: the operands skill gets its node -> function 8
+step 1: the inc skill gets its node -> function 9
+step 1: the fedit skill gets its node -> function 10
+step 1: the fnew skill gets its node -> function 11
+step 2: the before skill gets its node -> function 12
