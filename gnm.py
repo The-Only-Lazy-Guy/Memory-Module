@@ -1402,6 +1402,7 @@ class FM:
         self.calc_on, self.news = True, []             # the calculator's own body answers (False: removed, its mimic does)
         self.made, self.frozen = False, False
         self.routes = []                               # the demos' routing examples (signal's nodes, sign, purpose)
+        self.nones, self.rests = [], []                # ... and what asked nothing there; what this run rested on
         self.shown = {}                                # purpose -> the demos' steps as runs (skill_replay)
         self.rates = {}                                # episode kind -> how often its own run is right (surprise)
         self.stage, self.assign = "free", {}           # the training stage; purpose -> the node that learned it          # a node that acts was made (the optimizer takes it in); frozen:
@@ -1541,14 +1542,15 @@ class FM:
                     f"{C[i][0].kind}{C[i][0].fn if C[i][0].kind == 'fn' else ''} (value finite {bool(torch.isfinite(C[i][0].B).all())}, "
                     f"label finite {C[i][0].L is not None and bool(torch.isfinite(C[i][0].L).all())})" for i in bad[:6]), flush=True)
             s = torch.nan_to_num(s, nan=-1e9, posinf=-1e9, neginf=-1e9)
-        if float(s.max()) <= 1 and not self.explore:
-            return -1
         if self.explore:                               # a try: any node, as likely as its label meets the want (tr29: 284
-            return int(torch.multinomial(F.softmax(s / (ROUTE_T * self.explore), -1), 1))   # of 297 statements in a fresh
-        #                                                world rested, and so did every try; fm39 @100: tries kept only the
-        #                                                nodes over 1 -- function 6 at 1.51 alone, so every try of every
-        #                                                question fired it again, filed the question, 1 firing, 0/24)
-        return int(s.argmax())
+            s1 = torch.cat([s, s.new_ones(1)])         # of 297 statements in a fresh world rested, and so did every try;
+            a = int(torch.multinomial(F.softmax(s1 / (ROUTE_T * self.explore), -1), 1))   # fm39 @100: tries kept only the
+            return -1 if a == len(s) else a            # nodes over 1 -- function 6 at 1.51 alone fired on everything) --
+        #                                                or rest, as likely as a label that meets the want exactly (in48:
+        #                                                a try could not rest; every right try ended on firings that
+        #                                                changed nothing, those were imitated, and an answered value kept
+        #                                                firing: '1 9' right after one firing, then '3 3', '3')
+        return int(s.argmax()) if float(s.max()) > 1 else -1
 
     # --- one firing
     def fire(self, sg):
@@ -1557,6 +1559,7 @@ class FM:
         a = self.choose(q, C)
         if a < 0:
             self.count("rest")
+            self.rests.append(([n.B for n in sg.about], sg.sign))
             if self.show:                              # --inspect / --trace: why it rested (fm32 @50: 280 of 286
                 g = self.bank.gate(q[None], [n for n, _, _ in C])[0]   # statements in a fresh world rested)
                 top = sorted(range(len(g)), key=lambda i: -float(g[i]))[:4]
@@ -1572,23 +1575,14 @@ class FM:
         T = self.explore                               # a try: its whole action sampled from its own odds -- how many,
         nm = choice(many, T) + 1                       # words or a program, which pieces, where each goes (a right try
         fn_ = [bool(torch.bernoulli(torch.sigmoid(isfn[j] / T))) if T else float(isfn[j]) > 0 for j in range(nm)]   # is
-        fslot = torch.tensor([False, False] + [n.kind == "fn" for n in ins[:net.R]], device=q.device)[:where.shape[-1]]
-        where = torch.stack([where[j] if fn_[j] else where[j].masked_fill(fslot, -1e9) for j in range(nm)])
+        fslot = torch.tensor([False, False] + [n.kind != "work" for n in ins[:net.R]], device=q.device)[:where.shape[-1]]
+        where = torch.stack([where[j] if fn_[j] else where[j].masked_fill(fslot, -1e9) for j in range(nm)])   # (words: a
+        #                                                new node, the memory, or in place of a workspace node -- never a
+        #                                                function, never a log: fm48 EVAL, 53 outputs said into a log)
         wsel = [choice(where[j], T) for j in range(nm)]
         asm = [None if fn_[j] else make_out(self, net, o, j, ins, wsel[j], T) for j in range(nm)]   # relived: what it
         #                                                sampled is what it learns to do). Each: (the node, its pieces,
         #                                                the part of the node it goes in place of, its tokens)
-        if not T and self.bank.calc_of(actor) is None:   # the check on what it made (v3 point 5): failed -> second
-            cin = [n.B for n in ins]                    # thoughts, the node's own other ways; the check's best stays
-            for j in range(nm):
-                if not fn_[j]:
-                    sc = float(self.critic(cin, asm[j][0]))
-                    if sc < 0:
-                        self.count("check fails")
-                        b = second_thought(self, net, o, j, ins, wsel[j], cin, sc)
-                        if b is not None:
-                            asm[j] = b
-                            self.count("second thought taken")
         made = [o["code"][j] if fn_[j] else asm[j][0] for j in range(nm)]
         #                                                words land in memory or the workspace, a program in a function
         #                                                (fm18c trace: 289 of 297 statements went into a function: memory 0)
@@ -1598,7 +1592,7 @@ class FM:
                #                                                question node in place -- relived later, its spans pointed into
                #                                                the new value; fm42 'right' loss 7e8)
                "walkq": sg.about[0].L.detach().float().cpu().numpy() if sg.about[0].L is not None else None,
-               "sal": [float(x) for x in sal], "outs": [],
+               "sal": [float(x) for x in sal], "outs": [], "did": 0,
                "aboutL": sg.about[0].L.detach() if sg.about[0].L is not None else None}
         self.count("acts: " + ("function" if actor.kind == "fn" else "read node"))
         calc = self.bank.calc_of(actor)
@@ -1613,7 +1607,7 @@ class FM:
                 self.count("calculator"), self.count("mimic agrees", int(mimic == self.text_of(r_)))
                 #                                     (what it found is not kept as memory: nothing worked out is
                 #                                     stored -- a stored result goes stale when its sources change)
-                self.write(r_.B, 2 + ins.index(sg.about[0]), ins, sg, False, rec, 0, toks=r_.toks)
+                rec["did"] = int(self.write(r_.B, 2 + ins.index(sg.about[0]), ins, sg, False, rec, 0, toks=r_.toks))
                 self.firings.append(rec)
                 self.count("fires")
                 return rec
@@ -1661,7 +1655,7 @@ class FM:
                 if said_.strip():                      # (said as nothing, it stays as it was: read again, nothing is
                     z = self.nodes([said_])[0].B       # a node of no rows, its mean not a number -- fm21's gates)
                     self.count("roundtrip")
-            self.write(z, wj, ins, sg, fj, rec, j, toks=said_t)
+            rec["did"] += int(self.write(z, wj, ins, sg, fj, rec, j, toks=said_t))
         if len(self.news) == 1:                        # a new node is heard by itself; several made at once are heard
             self.signals.append(Signal(self.news, 1., self.t))   # together, with what they came from
         elif self.news:
@@ -1669,10 +1663,10 @@ class FM:
         return rec
 
     def write(self, z, w, ins, sg, isfn, rec, j, toks=None):
-        """where an output lands, and what that change signals"""
+        """where an output lands, and what that change signals; -> whether anything changed"""
         self.t += 1
-        if w >= 2 and w - 2 < len(ins):
-            x = ins[w - 2]
+        if w >= 2 and w - 2 < len(ins) and ins[w - 2].kind != "entry":   # (a log is not rewritten: what is said of a
+            x = ins[w - 2]                             # thing goes to the memory and finds its place by its label)
             if x.kind == "fn" and isfn:                # an edited function: its code is now this
                 with torch.no_grad():
                     f_ = self.bank.fns[x.fn]                # (as it is now = z: the pending part stays)
@@ -1682,23 +1676,20 @@ class FM:
                 self.count("words aimed at a function")   # 346 statements overwrote a function) -> a new node
                 n = self.node(z, toks=toks, parent=sg.about[0])
                 self.news.append(n)
-            elif x.kind == "entry":                    # said of a place it read: that place's log takes it
-                self.count("said into a place it read")
-                self.memorize(x.place, z, rec, toks)
             else:                                      # a workspace node's value changed: the node that asked for it hears
                 n = self.node(z, toks=toks)
                 if self.text_of(n) == self.text_of(x):   # no change, no signal: it says what it said (11-11: by what it
                     self.count("no change")            # says, not by its label -- a fact's label is value-free now,
-                    return                             # so a filled-in value barely moves it)
+                    return False                       # so a filled-in value barely moves it)
                 x.B, x.L, x.R, x.toks, x.text = n.B, n.L, n.R, n.toks, None
                 self.signals.append(Signal([x.parent, x] if x.parent is not None else [x], 1., self.t))
-            return
+            return True
         if isfn and not self.frozen:                   # a new node that acts (a function), made like an input function
             like = next((n for n in ins if n.kind == "fn"), None)
             self.bank.make(self.bank.want([[z]])[0].detach(), like, code=z.detach())
             self.made = True
             self.count("new functions")
-            return
+            return True
         n = self.node(z, toks=toks, parent=sg.about[0])
         if w == NEW_PLACE:                             # into the memory: the place that is the thing it names (its label
             rows, key = self.label_rows(z)             # rows and that place's found in each other), else a new place
@@ -1711,6 +1702,7 @@ class FM:
             self.memorize(p, z, rec, toks)
         else:
             self.news.append(n)
+        return True
 
     def memorize(self, p, z, rec, toks=None):
         """a place's log takes what was said of it, as it was said (v3: nothing is worked out when it is stored and no
@@ -1969,40 +1961,6 @@ def calculate(fm, op, ins, sal):
         return None
 
 
-THOUGHTS = 4                    # second thoughts when the check fails what a node made: this many, from its own odds
-
-
-def second_thought(fm, net, o, j, ins, w, cin, first):
-    """the check failed what the node made: other ways to make it (its pieces, the part it changes), sampled from the
-    node's own odds; the one the check scores highest, when that is higher than the first (else None)"""
-    best, top = None, first
-    for _ in range(THOUGHTS):
-        out = make_out(fm, net, o, j, ins, w, temp=1.)
-        sc = float(fm.critic(cin, out[0]))
-        if sc > top:
-            best, top = out, sc
-    return best
-
-
-def check_lesson(fm, Ls, net, o, j, order, w, z, mine, same, says, purpose):
-    """the check node learns from the acting node's own work: what the step should have made passes; what the node
-    made itself, when it says something else, fails. Measured here too: how often the check is right, and how often
-    a second thought (the check's pick among the node's own other ways) says the target when the first did not"""
-    cin = [n.B.detach() for n in order]
-    dev = z.device
-    up = fm.critic(cin, z.detach())
-    Ls.add("check", F.binary_cross_entropy_with_logits(up, torch.ones((), device=dev)))
-    fm.count("check right", int(float(up) > 0)), fm.count("check asked")
-    if same:
-        return
-    down = fm.critic(cin, mine[0])
-    Ls.add("check", F.binary_cross_entropy_with_logits(down, torch.zeros((), device=dev)))
-    fm.count("check right", int(float(down) < 0)), fm.count("check asked")
-    with torch.no_grad():
-        b = second_thought(fm, net, o, j, order, w, cin, float(down))
-    fm.count(f"{purpose} second thought right", int(b is not None and says(b))), fm.count(f"{purpose} second thought")
-
-
 def result_in_place(fm, x, part, got):
     """a calculator's result where the operation stood: the part (first, last token) of the node it rewrites becomes
     the result, the rest of the node stays (read again from those words). No part, or the node's words not known: the
@@ -2118,9 +2076,6 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
                 continue
             Lj, ok, z, plan, tid, spelled, (mine, same_, says, part, ed, inner) = got
             L, exact, dl = L + Lj, exact and ok, float(Lj)
-            if calc is None:                           # the check (v3 point 5, at the read): what it should have made
-                check_lesson(fm, Ls, net, o, j, order, w if ed is not None else -1, z, mine, same_, says, purpose)   # passes,
-                #                                        its own miss does not
             if shown is not None:
                 shown.append(([(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan], w, False, ed))
             fm.count(f"{purpose} exact", int(ok)), fm.count(f"{purpose} said", 1)
@@ -2154,7 +2109,7 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             res.append((o["code"][j], None, True, None))
         wl = o["where"][j]
         if isinstance(target, str):                    # words: never into a function's place (as when it lives)
-            wl = wl.masked_fill(torch.tensor([False, False] + [n.kind == "fn" for n in order[:net.R]], device=dev)[:len(wl)], -1e9)
+            wl = wl.masked_fill(torch.tensor([False, False] + [n.kind != "work" for n in order[:net.R]], device=dev)[:len(wl)], -1e9)
         L = L + F.cross_entropy(wl[None], torch.tensor([w], device=dev))
         w_ok = int(wl.argmax()) == w                   # where it lands is part of exact (tr24: store said right 95%,
         exact = exact and w_ok                         # living it wrote every statement onto itself)
@@ -2257,7 +2212,7 @@ def trace_step(fm, purpose, v, about, actor, how, C, gates, lg, y, order, o, inf
     for j, target, w, dl, told_, plan, pcs, tid in info:
         wp = o["where"][j]
         if isinstance(target, str):                    # (as it is used: words never into a function's place)
-            wp = wp.masked_fill(torch.tensor([False, False] + [n.kind == "fn" for n in order[:net.R]], device=wp.device)[:len(wp)], -1e9)
+            wp = wp.masked_fill(torch.tensor([False, False] + [n.kind != "work" for n in order[:net.R]], device=wp.device)[:len(wp)], -1e9)
         wp = wp.softmax(-1)
         print(f"   out {j}: target {target!r}\n      target's pieces: {pieces_said(fm, order, net, o, j, plan, tid)}\n"
               f"      its own pieces:  {pieces_said(fm, order, net, o, j, pcs)}\n"
@@ -2414,7 +2369,12 @@ def route_replay(fm, rng, n=64):
     g = fm.bank.gate(q, fns)
     tgt = torch.tensor([fm.assign[k] for _, _, k in xs], device=q.device)
     own = g.gather(1, tgt[:, None]).squeeze(1)
-    return apart(q, [k for _, _, k in xs]) + F.cross_entropy(g / .1, tgt) + F.relu(PULL - own).mean()
+    kinds, none = [k for _, _, k in xs], 0
+    if fm.nones:                                       # ... and what asked nothing (answered values, talk) stays under
+        qn = fm.bank.want(rng.sample(fm.nones, min(n // 4, len(fm.nones))))   # every label (in48 / fm48: the pulls were
+        none = F.relu(fm.bank.gate(qn, fns) - .9).sum() / len(qn)   # rehearsed 20x a step, this once: 144 eval questions
+        q, kinds = torch.cat([q, qn]), kinds + ["none"] * len(qn)   # rested 20 times, an answer was fired on again)
+    return apart(q, kinds) + F.cross_entropy(g / .1, tgt) + F.relu(PULL - own).mean() + none
 
 
 def finish(fm, Ls, rng, recent=None):
@@ -2422,6 +2382,8 @@ def finish(fm, Ls, rng, recent=None):
     every label. recent: [(want detached, purpose)] of the last updates, compared against (and extended)"""
     talk = fm.nodes(rng.sample(CHAT, 3) + [VAL(amount(rng)), VAL(_name(rng, 2))])
     rows = Ls.none + [[n.B] for n in talk]
+    fm.nones += [[b.detach() for b in r] for r in rows]   # (rehearsed: route_replay)
+    del fm.nones[:-500]
     qn = fm.bank.want(rows)
     q = torch.stack(Ls.wants) if Ls.wants else qn[:0]
     kinds = Ls.kinds + ["none"] * len(qn)
@@ -2581,7 +2543,7 @@ def evaluate(fm, A, seed):
     teacher only measures"""
     rng = random.Random(seed)
     w = new_world(rng)
-    fm.g, fm.stats, fm.firings = Graph(fm.bank.d), {}, []
+    fm.g, fm.stats, fm.firings, fm.rests = Graph(fm.bank.d), {}, [], []
     nstat, things, inside = 0, {}, {}
     for _ in range(A.ticks):
         for d in world_step(w, rng):
@@ -2696,15 +2658,32 @@ def imitate(fm, recs):
     return loss / max(1, len(recs))
 
 
+def unasked(fm, recs, rests):
+    """what asked nothing in a run that turned out right: a firing that changed nothing (its label moves off that
+    want), and what the run rested on (every made node's label stays under that want). Labels only: the shared want
+    reader does not move (fm17c)"""
+    loss = signalled(fm, [r for r in recs if not r.get("did", 1)], -1)
+    if rests and len(fm.bank.fns):
+        q = fm.bank.want([r for r, _ in rests], [v for _, v in rests]).detach()
+        loss = loss + F.relu(fm.bank.gate(q, [fm.fnode(t) for t in range(len(fm.bank.fns))]) - .9).sum() / len(rests)
+    return loss
+
+
+def lesson_of(fm, recs, rests):
+    """a right run as its own lesson: the firings that changed something imitated and relived, the rest unasked"""
+    acted = [r for r in recs if r.get("did", 1)]
+    return imitate(fm, acted) + relive(fm, acted) + unasked(fm, recs, rests)
+
+
 def tries(fm, A, g0, snap, act, good):
     """sampled tries from the same start (memory g0, functions as in snap): the cheapest one that turns out right ->
-    (its firings, its memory), else None. Nothing a try makes stays in the functions"""
+    (its firings, its memory, what it rested on), else None. Nothing a try makes stays in the functions"""
     best, fm.explore = None, A.explore
     for _ in range(A.tries):
-        fm.g, fm.firings = clone_graph(g0), []
+        fm.g, fm.firings, fm.rests = clone_graph(g0), [], []
         ok = good(act())
         if ok and (best is None or len(fm.firings) < len(best[0])):
-            best = (list(fm.firings), fm.g)
+            best = (list(fm.firings), fm.g, list(fm.rests))
         restore(fm.bank, snap)
     fm.explore = 0.
     return best
@@ -2730,7 +2709,7 @@ def relive(fm, recs):
         o = fm.bank.run(a, r["ins"], r["q"], v=r["sign"], hops=r["hops"], sal=r["sal"])
         dev = o["many"].device
         L = F.cross_entropy(o["many"][None], torch.tensor([min(len(outs), net.M) - 1], device=dev))
-        fslot = torch.tensor([False, False] + [x.kind == "fn" for x in r["ins"][:net.R]], device=dev)
+        fslot = torch.tensor([False, False] + [x.kind != "work" for x in r["ins"][:net.R]], device=dev)
         for j, (pcs, w, isfn, pt) in enumerate(outs[:net.M]):
             if pt is not None and not isfn:            # which part of the node it changed
                 L = L + F.cross_entropy(net.part_start(o, j, w - 2)[None], torch.tensor([pt[0]], device=dev)) + \
@@ -2796,11 +2775,11 @@ def live_tick(fm, A, w, rng, upd, tally):
             for mod in mods:
                 mod.eval()
             g0, snap = clone_graph(fm.g), snapshot(fm.bank)
-            fm.firings = []
+            fm.firings, fm.rests = [], []
             if fm.show:
                 print(f"\nLIVE statement {text!r}", flush=True)
             fm.arrive(text)
-            recs = list(fm.firings)
+            recs, rests = list(fm.firings), list(fm.rests)
             tally["statements"] += 1
             ok_ = held(fm, recs, want)
             gain = surprise(fm, "statement", ok_)
@@ -2810,7 +2789,7 @@ def live_tick(fm, A, w, rng, upd, tally):
             else:
                 g_own = fm.g
                 b = tries(fm, A, g0, snap, lambda: fm.arrive(text), lambda _: held(fm, fm.firings, want))
-                fm.g, best = (b[1], b[0]) if b else (g_own, None)
+                fm.g, best, rests = (b[1], b[0], b[2]) if b else (g_own, None, [])
                 tally["kept by a try"] += int(b is not None)
             if fm.show:
                 print(f"  -> held {ok_} (" + "; ".join(f"{fm.name(r['actor'])[:22]}: kept {[(j, round(ok, 2)) for j, ok in r.get('kept', [])]}"
@@ -2820,7 +2799,7 @@ def live_tick(fm, A, w, rng, upd, tally):
                 mod.train()
             Ls = Lesson()                              # (no gradient through the frozen check while it lives: functions
             if best:                                   # learned to pass it -- dl37, fm36 'kept' 474/489, memory 0/151)
-                Ls.add("kept", gain * (imitate(fm, best) + relive(fm, best)))
+                Ls.add("kept", gain * lesson_of(fm, best, rests))
             upd(Ls)
     for _ in range(A.lq):
         kind = rng.choice(["lookup", "before", "coexist", "chain", "ops"])
@@ -2830,11 +2809,11 @@ def live_tick(fm, A, w, rng, upd, tally):
         for mod in mods:
             mod.eval()
         truth, g0, snap = D(VAL(truth_of(E, w))), fm.g, snapshot(fm.bank)
-        fm.g, fm.firings = clone_graph(g0), []
+        fm.g, fm.firings, fm.rests = clone_graph(g0), [], []
         if fm.show:
             print(f"\nLIVE question {ask_text(E)!r} truth {truth!r}", flush=True)
         got, _ = fm.ask(ask_text(E))
-        recs = list(fm.firings)
+        recs, rests = list(fm.firings), list(fm.rests)
         fm.g = g0                                      # asking leaves the memory as it was (its access keys learn)
         tally["asked"] += 1
         gain = surprise(fm, kind, got == truth)
@@ -2846,19 +2825,19 @@ def live_tick(fm, A, w, rng, upd, tally):
             b = tries(fm, A, g0, snapshot(fm.bank), lambda: fm.ask(ask_text(E))[0], lambda got_: got_ == truth)
             fm.g = g0                                  # practice even when right (11-11, user: self-improving episodes
             if b and len(b[0]) < len(recs):            # always): a shorter right way is what it imitates
-                best = b[0]
+                best, rests = b[0], b[2]
                 tally["shorter by a try"] += 1
         else:
             restore(fm.bank, snap)
             b = tries(fm, A, g0, snap, lambda: fm.ask(ask_text(E))[0], lambda got_: got_ == truth)
-            fm.g, best = g0, (b[0] if b else None)
+            fm.g, best, rests = g0, (b[0] if b else None), (b[2] if b else [])
             if best:
                 tally["right by a try"] += 1
         for mod in mods:
             mod.train()
         if best:
             Ls = Lesson()
-            Ls.add("right", gain * (imitate(fm, best) + relive(fm, best)))
+            Ls.add("right", gain * lesson_of(fm, best, rests))
             upd(Ls)
     return seen
 
@@ -3434,8 +3413,6 @@ def run_fm(A):
                       f"{k[5:]} {v}" for k, v in sorted(fm.stats.items()) if k.startswith("acts")) + " | exact: " + ", ".join(
                       f"{k[:-5]} {fm.stats.get(k[:-5] + ' exact', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" said")) +
                   f" (lookup chance {100 * fm.stats.get('lookup chance', 0) / max(1, fm.stats.get('lookup said', 0)):.0f}%)" +
-                  " | check right " + f"{fm.stats.get('check right', 0)}/{fm.stats.get('check asked', 0)}, second thought right: " + ", ".join(
-                      f"{k[:-15]} {fm.stats.get(k + ' right', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" second thought")) +
                   " | where right: " + ", ".join(
                       f"{k[:-6]} {fm.stats.get(k + ' right', 0)}/{v}" for k, v in sorted(fm.stats.items()) if k.endswith(" where")) +
                   " | inputs the walk brought: " + ", ".join(
