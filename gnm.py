@@ -3129,8 +3129,7 @@ def lm_probe(A):
             nxt = int((lm(input_ids=ids).last_hidden_state[0, -1] @ lm.wte.weight.T).argmax())
             out.append(nxt)
             ids = torch.cat([ids, torch.tensor([[nxt]], device=dev)], 1)
-        return re.split(r"[.?
-(]", tok.decode(out))[0].strip()
+        return re.split("[.?(" + chr(10) + "]", tok.decode(out))[0].strip()
     tot = {}
     for seed in range(4):
         rng = random.Random(A.seed + 50 + seed)
