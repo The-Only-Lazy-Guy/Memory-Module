@@ -3389,6 +3389,12 @@ def run_fm(A):
     w = T = None
     for step in range(1, A.steps + 1):
         st["step"] = step
+        pos = (step - 1) % A.again + 1 if A.again and step <= A.demo else step   # (where in the demos this step is)
+        if A.again and step <= A.demo and pos == 1:    # the same demo steps again (11-12: shown the same 16 items 40
+            rng, w = random.Random(A.seed + 1), None   # times the reader goes lookup 0 -> 16/23 and is still learning;
+            random.seed(A.seed + 1), torch.manual_seed(A.seed + 1)   # in a run it met each demo step about once).
+            if step > 1:                               # Nothing new is shown: the same worlds, statements, questions
+                print(f"step {step}: the same {A.again} demo steps again", flush=True)
         if w is None or (step <= A.demo and (step - 1) % A.world == 0) or (step > A.demo and (step - A.demo - 1) % 150 == 0):
             #                                            a new world now and then: names, keys, numbers all new (demos:
             #                                            every --world steps -- dm29: one world in 50 demo steps, and a
@@ -3419,8 +3425,8 @@ def run_fm(A):
                     seen.append(text)
             finish(fm, Ls, rng, recent)
             update(Ls, acc)
-            if step <= A.warm:                         # warm start (REALM's retriever warm start; induction-head
-                fm.look = min(6, 2 + 4 * step // max(1, A.warm))   # plateaus need many examples): lookups in a batch,
+            if pos <= A.warm:                          # warm start (REALM's retriever warm start; induction-head
+                fm.look = min(6, 2 + 4 * pos // max(1, A.warm))    # plateaus need many examples): lookups in a batch,
                 Ls = Lesson()                                      # one update; the walk brings 2 places at first, 6 at
                 for _ in range(A.warm_q):                          # the end (fewer look-alikes first). fm24: ~6 lookups
                     E = q_expr("lookup", w, rng)                   # an update, stuck at 16-21% = chance
@@ -3581,6 +3587,7 @@ if __name__ == "__main__":
     P.add_argument("--route", type=int, default=15, help="steps of stage 2: routing chooses, a light hint toward that node")
     P.add_argument("--world", type=int, default=5, help="demo steps per world (a new world: names, keys, numbers)")
     P.add_argument("--demo", type=int, default=50, help="steps with demos (user 11-10: ~50); after them it lives, signals only")
+    P.add_argument("--again", type=int, default=0, help="the demo steps repeat every this many steps (the same ones, shown again)")
     P.add_argument("--writer", type=int, default=1, help="1: the functions' own weights are written by the update writer")
     P.add_argument("--try_read", type=float, default=.1, help="share of demo steps where the read node nearest the want acts instead")
     P.add_argument("--kappa", type=float, default=2.)
