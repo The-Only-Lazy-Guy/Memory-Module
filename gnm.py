@@ -2612,7 +2612,9 @@ def evaluate(fm, A, seed):
             D(fm.text_of(fm.entry(min(ps)))) == xs[-1][1]
     held = (f"memory: things kept whole {whole}/{len(things)}, places {fm.g.n}, entries per place "
             f"{sum(len(c) for c in fm.g.chain) / max(1, fm.g.n):.2f}")
-    line = []
+    line, snap = [], snapshot(fm.bank)                 # (each question from the same functions: what one question's run
+    #                                                    made or edited is not what the next is judged on -- fm49 @150: 30
+    #                                                    new functions by the end of one eval)
     for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6))):
         hit = held_ = n = steps = 0
         for _ in range(A.q):
@@ -2624,6 +2626,7 @@ def evaluate(fm, A, seed):
             steps += k
             hit += got == D(VAL(truth_of(E, w)))
             held_ += fm.text_of(fm.asked) == D(VAL(truth_of(E, w)))
+            restore(fm.bank, snap)
         line.append(f"{kind} {hit}/{n} (the node holds it {held_}/{n}; {steps / max(1, n):.1f} firings)")
     stats = ", ".join(f"{k} {v}" for k, v in sorted(mem.items()))
     return f"statements {nstat} [{stats}] | {held} | answers: " + " | ".join(line) + f" | made nodes that act {len(fm.bank.fns)}"
@@ -3050,7 +3053,9 @@ def eval_only(A):
     load_fm(fm, A.load)
     for mod in (fm.bank, fm.heads, fm.filt, fm.critic):
         mod.eval()
+    snap = snapshot(fm.bank)
     print(f"EVAL {A.load}: {evaluate(fm, A, A.seed + 1000)} | {fn_probe(fm, random.Random(1))}", flush=True)
+    restore(fm.bank, snap)                             # (ev51: the probe's edits left every answer of the next eval 0/96)
     fm.calc_on = False
     print(f"EVAL {A.load}, calculator removed (its mimic answers): {evaluate(fm, A, A.seed + 1000)}", flush=True)
 
@@ -3483,6 +3488,7 @@ def run_fm(A):
                 mod.eval()
             keep, snap = (fm.g, fm.stats), snapshot(fm.bank)
             print(f"EVAL step {step}: {evaluate(fm, A, A.seed + 1000 + step)} | {fn_probe(fm, random.Random(step))}", flush=True)
+            restore(fm.bank, snap)                     # (the probe edits functions: the next eval starts as this one did)
             fm.calc_on = False
             print(f"EVAL step {step}, calculator removed (its mimic answers): {evaluate(fm, A, A.seed + 1000 + step)}", flush=True)
             fm.calc_on = True
