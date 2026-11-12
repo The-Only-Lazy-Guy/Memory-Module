@@ -3112,6 +3112,54 @@ def deep_trace(A):
 
 
 @torch.no_grad()
+def lm_probe(A):
+    """--lm_probe: can the frozen LM itself read a log? No module, no training: statements as they were said, then the
+    thing's name and ' is' -- does the LM go on with the value (greedy)? own log: only that place's log (its newest 4);
+    6 logs: with the logs of 5 other places before it (what a walk brings); asked: the 6 logs, then the question as it
+    is asked. Numbers as the world says them and digit by digit (as the module reads them). Facts whose newest
+    statement says their value, by how many statements the log has"""
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    tr = Translator().to(dev).eval()
+    tok, lm = tr.tok, tr.lm
+
+    def goes_on(prompt, n=6):
+        ids = tok(tok.eos_token + prompt, return_tensors="pt")["input_ids"][:, -1000:].to(dev)
+        out = []
+        for _ in range(n):
+            nxt = int((lm(input_ids=ids).last_hidden_state[0, -1] @ lm.wte.weight.T).argmax())
+            out.append(nxt)
+            ids = torch.cat([ids, torch.tensor([[nxt]], device=dev)], 1)
+        return re.split(r"[.?
+(]", tok.decode(out))[0].strip()
+    tot = {}
+    for seed in range(4):
+        rng = random.Random(A.seed + 50 + seed)
+        w, logs = new_world(rng), {}
+        for _ in range(A.ticks):
+            for d in world_step(w, rng):
+                o = d()
+                for text, meta in said(o, w) if o else []:
+                    if meta[0] == "fact":
+                        logs.setdefault(meta[1:3], []).append(text)
+        facts = [f for f in sorted(logs) if f[1] in w.num_keys and value_in(logs[f][-1]) == w.ents[f[0]].get(f[1])]
+        for f in rng.sample(facts, min(40, len(facts))):
+            others = rng.sample([g for g in sorted(logs) if g != f], 5)
+            for form, fmt in (("as said", lambda t: t), ("digit by digit", D)):
+                own = " ".join(fmt(t) for t in logs[f][-4:])
+                six = " ".join(fmt(t) for g in others for t in logs[g][-4:]) + " " + own
+                want = fmt(str(w.ents[f[0]][f[1]]))
+                n_ = "1 statement" if len(logs[f]) == 1 else "2+ statements"
+                for case, prompt in (("own log", f"{own} {leaf(*f)} is"), ("6 logs", f"{six} {leaf(*f)} is"),
+                                     ("asked", f"{six} What is {leaf(*f)}? {leaf(*f)} is")):
+                    k = (form, case, n_)
+                    c = tot.setdefault(k, [0, 0])
+                    c[0] += goes_on(prompt) == want
+                    c[1] += 1
+    for k, (a, b) in sorted(tot.items()):
+        print(f"LM reads, {k[0]}, {k[1]}, {k[2]}: {a}/{b}", flush=True)
+
+
+@torch.no_grad()
 def eval_only(A):
     """--eval --load X: the saved module in a fresh world (the code as it is now)"""
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -3613,6 +3661,7 @@ def world_step(world, rng):
 if __name__ == "__main__":
     P = argparse.ArgumentParser()
     P.add_argument("--fm", action="store_true", help="the function machine: codec stage 2, demos, then a world by itself")
+    P.add_argument("--lm_probe", action="store_true", help="can the frozen LM read a log by itself (no module, no training)")
     P.add_argument("--inspect", action="store_true", help="with --load: every firing of a few questions, said")
     P.add_argument("--eval", action="store_true", help="with --load: the saved module in a fresh world")
     P.add_argument("--trace_n", type=int, default=25, help="demo ticks the trace's routing table runs")
@@ -3660,4 +3709,4 @@ if __name__ == "__main__":
     P.add_argument("--explore", type=float, default=1., help="sampling temperature of a try")
     A = P.parse_args()
     random.seed(A.seed), np.random.seed(A.seed), torch.manual_seed(A.seed)
-    (overfit if A.overfit else deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
+    (lm_probe if A.lm_probe else overfit if A.overfit else deep_trace if A.trace else inspect if A.inspect else eval_only if A.eval else codec_check if A.codec_check else run_fm)(A)
