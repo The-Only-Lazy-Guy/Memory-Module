@@ -1,0 +1,263 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3175.05it/s]
+/marimo/frozen/probe/gnm.py:2535: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  "same low": float(both[off & one].min()) if bool((off & one).any()) else 1., "other high": float(both[off & ~one].max())}
+codec 100: label cos 0.318 relation err 0.0011 | heads: same fact 0.10 (max 0.36), other fact 0.56 (nearest 0.25); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.31, other 0.00, same low 0.27, other high 0.61, named 0.88, not named 0.02, name rows 0.51
+codec 200: label cos 0.633 relation err 0.0021 | heads: same fact 0.19 (max 0.62), other fact 1.23 (nearest 0.71); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.53, other 0.00, same low 0.32, other high 0.50, named 0.85, not named 0.01, name rows 0.52
+codec 300: label cos 0.713 relation err 0.0009 | heads: same fact 0.19 (max 0.59), other fact 1.32 (nearest 0.83); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.58, other 0.00, same low 0.35, other high 0.47, named 0.87, not named 0.00, name rows 0.51
+codec done 102s
+step 1: the store skill gets its node -> function 5
+memory 50 places; batch: 8 statements, 8 questions
+  Q: What is the vendor of Mutor? | truth 9 | plan: ['lookup', 'answer']
+  Q: What is the base account of Kaba? | truth 15 | plan: []
+  Q: What is the base account of Kaba? | truth 15 | plan: []
+  Q: What is the camera of the country of Kagor? | truth 17 | plan: ['lookup', 'lookup', 'answer']
+  Q: What is the daily author of the old entry of Bavin? | truth 21 | plan: ['lookup', 'lookup', 'answer']
+  Q: What is the sum of (the larger of the profile of Bavin and the last ship of Netor) and (the sum of the page of Sapel and the doctor of Batha)? | truth 62 | plan: ['lookup', 'lookup', 'lookup', 'lookup', 'max', 'lookup', 'lookup', 'lookup', 'add', 'lookup', 'add', 'lookup', 'answer']
+  Q: What is the smaller of (the larger of the signal of Tormu and (the sum of the vessel of Tormu and the doctor of Batha)) and the capacity of Gormer? | truth 27 | plan: []
+  Q: What was the tax of Oror before? | truth 8 | plan: ['before', 'answer']
+
+######## TRACE question 'What is the vendor of Mutor?' truth 9
+step 1: the lookup skill gets its node -> function 6
+
+== lookup (signal +1.0) | about: 'What is the vendor of Mutor?'
+   acts: function 6 (assigned); gates function 5 0.86, function 3 (calculator min) 0.09, function 4 (calculator mul) 0.02, log 39 'the next locale of Mup 0.02, log 27 'Torne is 6.the daily p 0.01
+   walk by label: place 31 d 0.08 'the vendor of Mutor is 9.'; place 37 d 0.81 'the seller of Oror is 8.'; place 23 d 0.87 'the daily author of Sapel is 2 1.'; place 39 d 0.89 'the next locale of Mupel is 2 9.'; place 45 d 0.91 'the page of Sapel is 2 7.'; place 27 d 0.91 'the daily post of Torne is 9.'
+   candidates 14 (filter logit, wanted): +2.2* label walk 'the vendor of Mutor is 9.' @31.-1 | +0.3 function fn 2 | +0.2 label walk 'the seller of Oror is 3.' @37.-1 | +0.2 function fn 1 | +0.2 label walk 'the page of Sapel is 2 7.' @45.-1 | +0.2 label walk 'the daily post of Torne is 6.' @27.-1 | +0.1 label walk 'the daily author of Sapel is 2 1.' @23.-1 | +0.1* signal's 'What is the vendor of Mutor?' | +0.1 function fn 6 | +0.1 function fn 3 | -0.0 label walk 'the next locale of Mupel is 2 9.' @39.-1 | -0.0 function fn 5 | -0.0 function fn 0 | -0.2 function fn 4
+   inputs in order: 0: 'What is the vendor of Mutor?' | 1: 'the vendor of Mutor is 9.' | 2: 'the seller of Oror is 3.' | 3: 'the daily author of Sapel is 2 1.' | 4: 'the next locale of Mupel is 2 9.' | 5: 'the page of Sapel is 2 7.' | 6: 'the daily post of Torne is 6.' | 7: '' | 8: '' | 9: 'IdIdIdIdIdNotIdNotIdNotIdNotIdNotIdNotIdNotIdNotId' | 10: '' | 11: '' | 12: '=false' | 13: 'tototototototototototototototototototototototototo'
+   many 1 (target 1), own error -0.42 (usual 2.00)
+   out 0: target 'What is 9?'
+      target's pieces: span 1:6-6 ' 9'
+      its own pieces:  made 6 + made 7 + made 6 + made 6 + made 6 + span 2:9-9 ' seller'
+      said with the target's pieces 'What is 9?' | with its own 'What isIsIsIsIsIs'
+      where 2 (1.00) target 2 | function? 0.62 | loss of this output 13.98
+   label gate 1.11, step loss 15.13, exact False -> pull | relation loss 2.30
+step 1: the answer skill gets its node -> function 7
+
+== answer (signal +1.0) | about: 'What is 9?'
+   acts: function 7 (assigned); gates function 6 0.95, function 5 0.76, function 4 (calculator mul) 0.01, log 2 'f Zekpel is 8.the host  0.01, log 5 'kpel is 1 0.the camera  -0.00
+   walk by label: place 0 d 2.00 'later page values are amounts to add to '; place 1 d 2.00 'the bonus of Zekpel is 2 3.'; place 2 d 2.00 'the host of Zekpel is 2 8.'; place 3 d 2.00 'the list of Zekpel is 1 8.'; place 4 d 2.00 'the base ship of Zekpel is 1.'; place 5 d 2.00 'the camera of Zekpel is 1 7.'
+   candidates 15 (filter logit, wanted): +0.2 function fn 6 | +0.2 function fn 1 | +0.1 function fn 3 | +0.1 function fn 7 | +0.0 function fn 0 | -0.0* signal's 'What is 9?' | -0.1 function fn 4 | -0.1 function fn 2 | -0.2 function fn 5 | -2.8 label walk 'the host of Zekpel is 2.' @2.-1 | -2.8 label walk 'later page values are amounts to add to the c' @0.-1 | -2.8 label walk 'the camera of Zekpel is 1 2.' @5.-1 | -3.0 label walk 'the bonus of Zekpel is 3 0.' @1.-1 | -3.0 label walk 'the base ship of Zekpel is 1.' @4.-1
+   inputs in order: 0: 'What is 9?' | 1: 'later page values are amounts to add to the curren' | 2: 'the bonus of Zekpel is 3 0.' | 3: 'the host of Zekpel is 2.' | 4: 'the list of Zekpel is 8.' | 5: 'the base ship of Zekpel is 1.' | 6: 'the camera of Zekpel is 1 2.' | 7: '' | 8: '' | 9: 'IdIdIdIdIdNotIdNotIdNotIdNotIdNotIdNotIdNotIdNotId' | 10: '' | 11: '' | 12: '=false' | 13: 'tototototototototototototototototototototototototo' | 14: 'abier'
+   many 1 (target 1), own error -0.06 (usual 2.00)
+   out 0: target '9'
+      target's pieces: span 0:2-2 ' 9'
+      its own pieces:  made 3 + made 4 + made 6 + made 2 + made 3 + made 1
+      said with the target's pieces '.\n\nTheory.com\nTheory.com\nTheory.com\nTheory.com\nTheory.com\n\nTheory.com\n\nTheory.com\n\nTheory.com\n\nThe' | with its own ''
+      where 2 (0.86) target 2 | function? 0.55 | loss of this output 31.93
+   label gate 1.11, step loss 33.11, exact False -> pull
+step 1: the before skill gets its node -> function 8
+
+=== iter 0 (16s) loss 2391.91 grad-norm 32477.5 | route hint 44.28, salience hint 63.05, label of what it made 18.80, functions 2148.53, labels 29.99, same thing 0.00, relation 83.98, round trip 0.12, re-read 3.16
+   exact (own pieces): add 0/3, answer 0/8, before 0/1, lookup 0/23, max 0/2, min 0/1, store 0/8
+   said (outputs: with its own pieces / with the target's pieces, mean output loss): add 3: own 0 tgt 0 loss 60.76 | answer 8: own 0 tgt 0 loss 34.48 | before 1: own 0 tgt 1 loss 27.80 | lookup 23: own 0 tgt 10 loss 18.36 | max 2: own 0 tgt 0 loss 69.98 | min 1: own 0 tgt 0 loss 40.08 | store 8: own 0 tgt 7 loss 23.49
+   e.g.: store: want 'note: incoming base ship numbers become the current base ship' tgt-pieces 'note: incoming base ship numbers become the current base ship' own 'The following is a list of the most common and common errors in the Java programming language.\n\nThe following is a list of the most common and common errors in the Java programming language.\n\nThe following is a list of' || store: want 'the base account of Kaba is 1 5.' tgt-pieces 'the base account of Kaba is 1 5.' own '3' || store: want 'the net charge of Kaba is Zekpel.' tgt-pieces 'the net charge of Kaba is Zpel.' own 'The most important thing to remember is that the game is not a game. It is a game.\n\nThe game is a game.\n\nThe game is a game.\n\nThe game is a game.' || store: want 'the last band of Kaba is Netor.' tgt-pieces 'the last band of Kaba is Netor.' own '[ 1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0' || store: want 'the seller of Oror is 8.' tgt-pieces 'the seller of Oror is 8.' own '[B]\n\n[C]\n\n[D]\n\n[E]\n\n[F]\n\n[G]\n\n[H]\n\n[I]\n\n[J]\n\n[' || store: want 'the vessel of Tormu is 2 0.' tgt-pieces 'the vessel of Tormu is 2 0.' own '[1.0.0.0] (...)\n\n[1.0.0.0] (...)\n\n[1.0.0.0] (...)\n\n[1.0.0' || store: want 'the signal of Tormu is 1.' tgt-pieces 'the signal of Tormu is 1.' own '1' || store: want 'the capacity of Gormer is 2 7.' tgt-pieces 'the capacity of Gormer is 2 7.' own '.\n\nThe first is the one that is the most important. The second is the one that is the most important. The third is the one that is the most important. The fourth is the one that is the most important. The' || lookup: want 'What is 9?' tgt-pieces 'What is 9?' own 'What isIsIsIsIsIs' || answer: want '9' tgt-pieces '.\n\nTheory.com\nTheory.com\nTheory.com\nTheory.com\nTheory.com\n\nTheory.com\n\nTheory.com\n\nTheory.com\n\nThe' own '' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own 'The following is the list of the most important things to know about the Russian Federation.\n1. The Russian Federation is a nation of people.\n2. The Russian Federation is a nation of people.\n\n3. The' || answer: want '1 5' tgt-pieces '5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5' own '' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own '' || answer: want '1 5' tgt-pieces '5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5' own ':\n\n1 5-6\n\n2 5-6\n\n3 5-6\n\n4 5-6\n\n5 5-6\n\n6 5-6\n\n7 5-6\n\n8 5-'
+   grad norm per module: interp 1.59e+04, want 233, readkey 0.0589, fns 2.09e+03, heads 207, filter 281, critic 0, translator 2.83e+04
+   weight change: interp 0.483, want 0.209, readkey 0.0125, fns 0.0409, heads 0.3, filter 0.217, critic 0
+   function nodes (t, calc, grad key/code/au/av): 0 add 17/4e+02/10/8.3; 1 sub 0.0064/0.016/3.4/2.6; 2 max 12/2.4e+02/14/10; 3 min 6/1.9e+02/4.5/5.8; 4 mul 0.0074/0.014/2.3/2.4; 5 - 40/1e+03/24/17; 6 - 61/1.2e+03/25/32; 7 - 16/1.3e+03/30/24; 8 - 1.7/1.3e+02/3.7/2.6
+
+=== iter 1 (7s) loss 1161.71 grad-norm 22415.7 | route hint 54.88, salience hint 59.96, label of what it made 16.80, functions 922.45, labels 31.28, same thing 0.00, relation 74.46, round trip 0.12, re-read 1.77
+   exact (own pieces): add 0/3, answer 0/8, before 0/1, lookup 3/23, max 0/2, min 0/1, store 0/8
+   grad norm per module: interp 1.09e+04, want 203, readkey 0.0405, fns 1.37e+03, heads 314, filter 233, critic 0, translator 1.95e+04
+
+=== iter 2 (6s) loss 898.95 grad-norm 11589.9 | route hint 45.95, salience hint 54.45, label of what it made 14.99, functions 680.29, labels 32.63, same thing 0.00, relation 67.77, round trip 0.12, re-read 2.76
+   exact (own pieces): add 0/3, answer 0/8, before 0/1, lookup 0/23, max 0/2, min 0/1, store 3/8
+   grad norm per module: interp 7.02e+03, want 179, readkey 0.0762, fns 789, heads 155, filter 270, critic 0, translator 9.18e+03
+
+=== iter 3 (7s) loss 786.23 grad-norm 8328.2 | route hint 37.31, salience hint 59.57, label of what it made 13.46, functions 568.43, labels 41.61, same thing 0.00, relation 63.00, round trip 0.12, re-read 2.73
+   exact (own pieces): add 0/3, answer 0/8, before 1/1, lookup 0/23, max 0/2, min 0/1, store 3/8
+   grad norm per module: interp 4.43e+03, want 185, readkey 0.181, fns 515, heads 147, filter 402, critic 0, translator 7.02e+03
+
+=== iter 4 (6s) loss 643.33 grad-norm 5641.8 | route hint 32.36, salience hint 49.04, label of what it made 12.03, functions 447.45, labels 42.15, same thing 0.00, relation 57.91, round trip 0.12, re-read 2.27
+   exact (own pieces): add 0/3, answer 0/8, before 0/1, lookup 3/23, max 0/2, min 0/1, store 5/8
+   grad norm per module: interp 3.21e+03, want 167, readkey 0.406, fns 395, heads 191, filter 248, critic 0, translator 4.61e+03
+
+=== iter 5 (7s) loss 549.52 grad-norm 6626.7 | route hint 28.81, salience hint 41.72, label of what it made 11.00, functions 370.58, labels 43.12, same thing 0.00, relation 52.43, round trip 0.11, re-read 1.75
+   exact (own pieces): add 0/3, answer 0/8, before 0/1, lookup 1/23, max 0/2, min 0/1, store 7/8
+   grad norm per module: interp 3.6e+03, want 104, readkey 0.561, fns 414, heads 123, filter 248, critic 0, translator 5.54e+03
+
+=== iter 6 (6s) loss 550.98 grad-norm 3824.9 | route hint 24.56, salience hint 41.46, label of what it made 9.89, functions 375.51, labels 44.11, same thing 0.00, relation 52.79, round trip 0.11, re-read 2.55
+   exact (own pieces): add 0/3, answer 0/8, before 0/1, lookup 2/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 2.27e+03, want 115, readkey 0.776, fns 217, heads 138, filter 302, critic 0, translator 3.05e+03
+
+=== iter 7 (6s) loss 489.18 grad-norm 4617.1 | route hint 22.41, salience hint 36.31, label of what it made 9.02, functions 322.66, labels 46.73, same thing 0.00, relation 48.98, round trip 0.11, re-read 2.97
+   exact (own pieces): add 0/3, answer 0/8, before 1/1, lookup 3/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 2.4e+03, want 122, readkey 0.66, fns 237, heads 156, filter 172, critic 0, translator 3.93e+03
+
+=== iter 8 (6s) loss 440.02 grad-norm 2795.2 | route hint 20.25, salience hint 34.34, label of what it made 8.30, functions 285.64, labels 41.51, same thing 0.00, relation 47.13, round trip 0.11, re-read 2.73
+   exact (own pieces): add 0/3, answer 0/8, before 0/1, lookup 2/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.61e+03, want 91.6, readkey 0.57, fns 178, heads 108, filter 137, critic 0, translator 2.27e+03
+
+=== iter 9 (6s) loss 387.61 grad-norm 5109.6 | route hint 19.88, salience hint 32.14, label of what it made 7.53, functions 238.99, labels 41.01, same thing 0.00, relation 45.58, round trip 0.11, re-read 2.37
+   exact (own pieces): add 0/3, answer 0/8, before 0/1, lookup 5/23, max 0/2, min 0/1, store 7/8
+   grad norm per module: interp 2.54e+03, want 97.1, readkey 0.485, fns 277, heads 156, filter 170, critic 0, translator 4.42e+03
+
+=== iter 10 (13s) loss 378.60 grad-norm 3000.7 | route hint 19.23, salience hint 28.74, label of what it made 6.83, functions 237.37, labels 38.63, same thing 0.00, relation 44.95, round trip 0.11, re-read 2.74
+   exact (own pieces): add 0/3, answer 0/8, before 0/1, lookup 3/23, max 0/2, min 0/1, store 7/8
+   said (outputs: with its own pieces / with the target's pieces, mean output loss): add 3: own 0 tgt 1 loss 20.09 | answer 8: own 3 tgt 4 loss 1.67 | before 1: own 0 tgt 1 loss 1.94 | lookup 23: own 3 tgt 22 loss 4.17 | max 2: own 0 tgt 0 loss 9.46 | min 1: own 0 tgt 0 loss 7.77 | store 8: own 7 tgt 8 loss 0.77
+   e.g.: store: want 'note: incoming base ship numbers become the current base ship' tgt-pieces 'note: incoming base ship numbers become the current base ship' own 'note: incoming base ship numbers become the current base ship' || store: want 'the base account of Kaba is 1 5.' tgt-pieces 'the base account of Kaba is 1 5.' own 'the base account of Kaba is 1 6.' || store: want 'the net charge of Kaba is Zekpel.' tgt-pieces 'the net charge of Kaba is Zekpel.' own 'the net charge of Kaba is Zekpel.' || store: want 'the last band of Kaba is Netor.' tgt-pieces 'the last band of Kaba is Netor.' own 'the last band of Kaba is Netor.' || store: want 'the seller of Oror is 8.' tgt-pieces 'the seller of Oror is 8.' own 'the seller of Oror is 8.' || store: want 'the vessel of Tormu is 2 0.' tgt-pieces 'the vessel of Tormu is 2 0.' own 'the vessel of Tormu is 2 0.' || store: want 'the signal of Tormu is 1.' tgt-pieces 'the signal of Tormu is 1.' own 'the signal of Tormu is 1.' || store: want 'the capacity of Gormer is 2 7.' tgt-pieces 'the capacity of Gormer is 2 7.' own 'the capacity of Gormer is 2 7.' || lookup: want 'What is 9?' tgt-pieces 'What is 9?' own 'What is 9?' || answer: want '9' tgt-pieces '9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9' own '9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own 'What is 1 6.the base account of Kaba is 1 5?' || answer: want '1 5' tgt-pieces '1 5' own '1 5' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own 'What is 1 5?' || answer: want '1 5' tgt-pieces '1 5' own '1 5'
+   grad norm per module: interp 1.79e+03, want 89.3, readkey 0.453, fns 193, heads 104, filter 162, critic 0, translator 2.39e+03
+   weight change: interp 0.156, want 0.123, readkey 0.0476, fns 0.0227, heads 0.175, filter 0.122, critic 0
+   function nodes (t, calc, grad key/code/au/av): 0 add 14/77/1.9/1.7; 1 sub 0.032/0.0021/0.12/0.13; 2 max 9.3/44/1.4/1.3; 3 min 4.9/52/0.92/1.1; 4 mul 0.14/0.0011/0.11/0.097; 5 - 16/48/0.83/0.62; 6 - 33/1.4e+02/3.4/4; 7 - 10/43/0.62/0.53; 8 - 8.9/33/0.66/0.75
+
+=== iter 11 (7s) loss 359.68 grad-norm 2386.6 | route hint 17.08, salience hint 27.37, label of what it made 6.35, functions 225.75, labels 39.98, same thing 0.00, relation 41.13, round trip 0.11, re-read 1.89
+   exact (own pieces): add 0/3, answer 3/8, before 0/1, lookup 8/23, max 0/2, min 0/1, store 7/8
+   grad norm per module: interp 1.48e+03, want 78.7, readkey 0.494, fns 173, heads 303, filter 74.6, critic 0, translator 1.84e+03
+
+=== iter 12 (7s) loss 330.23 grad-norm 1943.5 | route hint 15.83, salience hint 25.22, label of what it made 5.92, functions 202.21, labels 43.48, same thing 0.00, relation 34.92, round trip 0.11, re-read 2.55
+   exact (own pieces): add 0/3, answer 3/8, before 1/1, lookup 10/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.01e+03, want 98.8, readkey 0.633, fns 128, heads 208, filter 221, critic 0, translator 1.63e+03
+
+=== iter 13 (6s) loss 329.31 grad-norm 2850.3 | route hint 14.42, salience hint 18.96, label of what it made 5.52, functions 212.53, labels 41.81, same thing 0.00, relation 33.82, round trip 0.11, re-read 2.14
+   exact (own pieces): add 0/3, answer 4/8, before 1/1, lookup 8/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.65e+03, want 99.3, readkey 0.391, fns 163, heads 110, filter 117, critic 0, translator 2.31e+03
+
+=== iter 14 (7s) loss 298.19 grad-norm 2359.5 | route hint 14.90, salience hint 14.88, label of what it made 5.27, functions 188.45, labels 39.93, same thing 0.00, relation 32.33, round trip 0.11, re-read 2.33
+   exact (own pieces): add 0/3, answer 5/8, before 1/1, lookup 8/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.43e+03, want 64, readkey 0.291, fns 165, heads 139, filter 54.1, critic 0, translator 1.86e+03
+
+=== iter 15 (7s) loss 289.09 grad-norm 2882.4 | route hint 13.61, salience hint 16.96, label of what it made 5.05, functions 178.79, labels 39.56, same thing 0.00, relation 32.12, round trip 0.11, re-read 2.89
+   exact (own pieces): add 0/3, answer 5/8, before 1/1, lookup 9/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.32e+03, want 100, readkey 0.233, fns 138, heads 456, filter 123, critic 0, translator 2.51e+03
+
+=== iter 16 (6s) loss 263.09 grad-norm 1611.4 | route hint 13.74, salience hint 15.53, label of what it made 4.76, functions 155.85, labels 39.22, same thing 0.00, relation 31.77, round trip 0.11, re-read 2.11
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 10/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.01e+03, want 101, readkey 0.191, fns 133, heads 185, filter 238, critic 0, translator 1.21e+03
+
+=== iter 17 (6s) loss 250.68 grad-norm 2795.2 | route hint 11.39, salience hint 15.85, label of what it made 4.37, functions 147.34, labels 38.63, same thing 0.00, relation 30.66, round trip 0.11, re-read 2.34
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 9/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.57e+03, want 98.6, readkey 0.351, fns 153, heads 139, filter 191, critic 0, translator 2.29e+03
+
+=== iter 18 (6s) loss 248.82 grad-norm 2731.9 | route hint 11.29, salience hint 12.90, label of what it made 4.04, functions 147.04, labels 38.69, same thing 0.00, relation 32.00, round trip 0.11, re-read 2.75
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 10/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.67e+03, want 101, readkey 0.216, fns 184, heads 250, filter 52.4, critic 0, translator 2.14e+03
+
+=== iter 19 (7s) loss 236.29 grad-norm 4607.9 | route hint 10.44, salience hint 11.96, label of what it made 3.85, functions 139.06, labels 37.29, same thing 0.00, relation 30.95, round trip 0.11, re-read 2.63
+   exact (own pieces): add 0/3, answer 5/8, before 1/1, lookup 9/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.96e+03, want 82.1, readkey 0.129, fns 197, heads 166, filter 81.4, critic 0, translator 4.16e+03
+
+=== iter 20 (12s) loss 221.72 grad-norm 3552.7 | route hint 11.90, salience hint 16.99, label of what it made 3.76, functions 119.77, labels 36.85, same thing 0.00, relation 29.62, round trip 0.11, re-read 2.71
+   exact (own pieces): add 0/3, answer 5/8, before 1/1, lookup 12/23, max 0/2, min 0/1, store 8/8
+   said (outputs: with its own pieces / with the target's pieces, mean output loss): add 3: own 0 tgt 1 loss 12.73 | answer 8: own 8 tgt 8 loss 0.65 | before 1: own 1 tgt 1 loss 0.24 | lookup 23: own 13 tgt 22 loss 1.70 | max 2: own 0 tgt 0 loss 6.39 | min 1: own 0 tgt 0 loss 8.73 | store 8: own 8 tgt 8 loss 0.15
+   e.g.: store: want 'note: incoming base ship numbers become the current base ship' tgt-pieces 'note: incoming base ship numbers become the current base ship' own 'note: incoming base ship numbers become the current base ship' || store: want 'the base account of Kaba is 1 5.' tgt-pieces 'the base account of Kaba is 1 5.' own 'the base account of Kaba is 1 5.' || store: want 'the net charge of Kaba is Zekpel.' tgt-pieces 'the net charge of Kaba is Zekpel.' own 'the net charge of Kaba is Zekpel.' || store: want 'the last band of Kaba is Netor.' tgt-pieces 'the last band of Kaba is Netor.' own 'the last band of Kaba is Netor.' || store: want 'the seller of Oror is 8.' tgt-pieces 'the seller of Oror is 8.' own 'the seller of Oror is 8.' || store: want 'the vessel of Tormu is 2 0.' tgt-pieces 'the vessel of Tormu is 2 0.' own 'the vessel of Tormu is 2 0.' || store: want 'the signal of Tormu is 1.' tgt-pieces 'the signal of Tormu is 1.' own 'the signal of Tormu is 1.' || store: want 'the capacity of Gormer is 2 7.' tgt-pieces 'the capacity of Gormer is 2 7.' own 'the capacity of Gormer is 2 7.' || lookup: want 'What is 9?' tgt-pieces 'What is 9?' own 'What is 9?' || answer: want '9' tgt-pieces '9' own '9' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own 'What is 1 6.the base account of Kaba is 1 5?' || answer: want '1 5' tgt-pieces '1 5' own '1 5' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own 'What is 1 5?' || answer: want '1 5' tgt-pieces '1 5' own '1 5'
+   grad norm per module: interp 1.72e+03, want 68.5, readkey 0.101, fns 166, heads 297, filter 174, critic 0, translator 3.08e+03
+   weight change: interp 0.129, want 0.0921, readkey 0.0423, fns 0.0177, heads 0.133, filter 0.0967, critic 0
+   function nodes (t, calc, grad key/code/au/av): 0 add 13/72/1.3/2.2; 1 sub 0.031/6.2e-05/0.0052/0.0077; 2 max 8.2/77/1.4/2.8; 3 min 3.1/84/1.6/1.6; 4 mul 0.16/2.5e-05/0.0026/0.0034; 5 - 13/20/0.22/0.17; 6 - 30/85/1.5/2.6; 7 - 16/6.5/0.06/0.049; 8 - 8.4/5.4/0.1/0.14
+
+=== iter 21 (6s) loss 241.68 grad-norm 2654.4 | route hint 12.15, salience hint 20.37, label of what it made 3.62, functions 137.60, labels 35.23, same thing 0.00, relation 30.31, round trip 0.11, re-read 2.29
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 9/23, max 0/2, min 0/1, store 7/8
+   grad norm per module: interp 1.26e+03, want 93.8, readkey 0.0601, fns 163, heads 139, filter 538, critic 0, translator 2.26e+03
+
+=== iter 22 (6s) loss 212.98 grad-norm 2656.6 | route hint 9.76, salience hint 13.74, label of what it made 3.54, functions 116.02, labels 36.65, same thing 0.00, relation 30.56, round trip 0.11, re-read 2.60
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 13/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.25e+03, want 95.6, readkey 0.0798, fns 143, heads 355, filter 244, critic 0, translator 2.3e+03
+
+=== iter 23 (6s) loss 204.67 grad-norm 2678.9 | route hint 8.71, salience hint 10.78, label of what it made 3.48, functions 111.87, labels 37.12, same thing 0.00, relation 30.58, round trip 0.11, re-read 2.01
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 15/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.36e+03, want 200, readkey 0.103, fns 163, heads 437, filter 126, critic 0, translator 2.25e+03
+
+=== iter 24 (6s) loss 196.15 grad-norm 3053.2 | route hint 10.12, salience hint 10.63, label of what it made 3.43, functions 105.93, labels 33.65, same thing 0.00, relation 29.38, round trip 0.11, re-read 2.91
+   exact (own pieces): add 0/3, answer 5/8, before 1/1, lookup 11/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.82e+03, want 124, readkey 0.0304, fns 243, heads 162, filter 330, critic 0, translator 2.41e+03
+
+=== iter 25 (6s) loss 185.98 grad-norm 2771.7 | route hint 11.54, salience hint 9.24, label of what it made 3.45, functions 98.93, labels 32.76, same thing 0.00, relation 27.33, round trip 0.11, re-read 2.62
+   exact (own pieces): add 0/3, answer 4/8, before 1/1, lookup 12/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.47e+03, want 158, readkey 0.0177, fns 155, heads 146, filter 58.8, critic 0, translator 2.33e+03
+
+=== iter 26 (6s) loss 188.86 grad-norm 3307.4 | route hint 8.85, salience hint 7.59, label of what it made 3.47, functions 107.53, labels 33.84, same thing 0.00, relation 25.02, round trip 0.11, re-read 2.45
+   exact (own pieces): add 0/3, answer 5/8, before 1/1, lookup 12/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.53e+03, want 83.3, readkey 0.0286, fns 173, heads 740, filter 55.1, critic 0, translator 2.83e+03
+
+=== iter 27 (6s) loss 179.44 grad-norm 3188.5 | route hint 7.89, salience hint 7.39, label of what it made 3.29, functions 101.62, labels 34.11, same thing 0.00, relation 21.96, round trip 0.11, re-read 3.07
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 12/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.53e+03, want 101, readkey 0.0261, fns 235, heads 247, filter 24.1, critic 0, translator 2.78e+03
+
+=== iter 28 (6s) loss 160.58 grad-norm 3005.5 | route hint 7.65, salience hint 7.60, label of what it made 3.21, functions 83.99, labels 34.10, same thing 0.00, relation 21.99, round trip 0.11, re-read 1.95
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 14/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.4e+03, want 106, readkey 0.0283, fns 175, heads 360, filter 54.8, critic 0, translator 2.63e+03
+
+=== iter 29 (6s) loss 158.78 grad-norm 2385.4 | route hint 8.40, salience hint 7.38, label of what it made 3.08, functions 86.62, labels 32.71, same thing 0.00, relation 18.21, round trip 0.11, re-read 2.28
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 16/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.1e+03, want 126, readkey 0.0212, fns 188, heads 253, filter 54.9, critic 0, translator 2.09e+03
+
+=== iter 30 (11s) loss 151.94 grad-norm 2728.2 | route hint 8.39, salience hint 7.23, label of what it made 2.89, functions 75.87, labels 37.63, same thing 0.00, relation 17.87, round trip 0.11, re-read 1.96
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 15/23, max 2/2, min 0/1, store 8/8
+   said (outputs: with its own pieces / with the target's pieces, mean output loss): add 3: own 0 tgt 2 loss 8.63 | answer 8: own 8 tgt 8 loss 0.45 | before 1: own 1 tgt 1 loss 0.10 | lookup 23: own 16 tgt 23 loss 1.34 | max 2: own 2 tgt 0 loss 1.66 | min 1: own 0 tgt 1 loss 2.24 | store 8: own 8 tgt 8 loss 0.13
+   e.g.: store: want 'note: incoming base ship numbers become the current base ship' tgt-pieces 'note: incoming base ship numbers become the current base ship' own 'note: incoming base ship numbers become the current base ship' || store: want 'the base account of Kaba is 1 5.' tgt-pieces 'the base account of Kaba is 1 5.' own 'the base account of Kaba is 1 5.' || store: want 'the net charge of Kaba is Zekpel.' tgt-pieces 'the net charge of Kaba is Zekpel.' own 'the net charge of Kaba is Zekpel.' || store: want 'the last band of Kaba is Netor.' tgt-pieces 'the last band of Kaba is Netor.' own 'the last band of Kaba is Netor.' || store: want 'the seller of Oror is 8.' tgt-pieces 'the seller of Oror is 8.' own 'the seller of Oror is 8.' || store: want 'the vessel of Tormu is 2 0.' tgt-pieces 'the vessel of Tormu is 2 0.' own 'the vessel of Tormu is 2 0.' || store: want 'the signal of Tormu is 1.' tgt-pieces 'the signal of Tormu is 1.' own 'the signal of Tormu is 1.' || store: want 'the capacity of Gormer is 2 7.' tgt-pieces 'the capacity of Gormer is 2 7.' own 'the capacity of Gormer is 2 7.' || lookup: want 'What is 9?' tgt-pieces 'What is 9?' own 'What is 9?' || answer: want '9' tgt-pieces '9' own '9' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own 'What is 1 5?' || answer: want '1 5' tgt-pieces '1 5' own '1 5' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own 'What is 1 5?' || answer: want '1 5' tgt-pieces '1 5' own '1 5'
+   grad norm per module: interp 1.17e+03, want 221, readkey 0.0232, fns 170, heads 215, filter 117, critic 0, translator 2.44e+03
+   weight change: interp 0.0985, want 0.0808, readkey 0.0198, fns 0.0122, heads 0.119, filter 0.0577, critic 0
+   function nodes (t, calc, grad key/code/au/av): 0 add 6.5/97/1.5/3; 1 sub 0.019/7.6e-05/0.0021/0.0019; 2 max 26/14/0.46/0.5; 3 min 1.9/13/0.17/0.25; 4 mul 0.12/1.7e-05/0.0012/0.0012; 5 - 15/24/0.29/0.26; 6 - 26/1.3e+02/2.7/3.3; 7 - 14/9.3/0.076/0.094; 8 - 9.5/1.7/0.021/0.028
+
+=== iter 31 (6s) loss 143.43 grad-norm 2909.2 | route hint 5.87, salience hint 6.86, label of what it made 2.74, functions 73.10, labels 35.27, same thing 0.00, relation 17.12, round trip 0.11, re-read 2.36
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 14/23, max 0/2, min 0/1, store 8/8
+   grad norm per module: interp 1.24e+03, want 375, readkey 0.032, fns 172, heads 501, filter 83.3, critic 0, translator 2.55e+03
+
+=== iter 32 (6s) loss 149.59 grad-norm 2008.1 | route hint 5.65, salience hint 7.63, label of what it made 2.66, functions 72.82, labels 35.51, same thing 0.00, relation 23.00, round trip 0.11, re-read 2.20
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 16/23, max 2/2, min 0/1, store 8/8
+   grad norm per module: interp 923, want 79.1, readkey 0.0225, fns 128, heads 138, filter 45.4, critic 0, translator 1.77e+03
+
+=== iter 33 (6s) loss 141.74 grad-norm 2801.6 | route hint 9.06, salience hint 7.41, label of what it made 2.67, functions 69.41, labels 35.85, same thing 0.00, relation 15.08, round trip 0.11, re-read 2.17
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 15/23, max 2/2, min 0/1, store 8/8
+   grad norm per module: interp 926, want 291, readkey 0.0149, fns 119, heads 455, filter 55.4, critic 0, translator 2.58e+03
+
+=== iter 34 (6s) loss 150.63 grad-norm 2634.2 | route hint 6.19, salience hint 9.42, label of what it made 2.49, functions 73.92, labels 34.59, same thing 0.00, relation 21.27, round trip 0.11, re-read 2.64
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 14/23, max 1/2, min 0/1, store 8/8
+   grad norm per module: interp 1.02e+03, want 273, readkey 0.0234, fns 166, heads 289, filter 134, critic 0, translator 2.39e+03
+
+=== iter 35 (6s) loss 133.62 grad-norm 3059.8 | route hint 4.78, salience hint 7.12, label of what it made 2.42, functions 67.99, labels 32.89, same thing 0.00, relation 15.80, round trip 0.10, re-read 2.52
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 14/23, max 1/2, min 0/1, store 8/8
+   grad norm per module: interp 1.49e+03, want 194, readkey 0.0159, fns 193, heads 457, filter 95.7, critic 0, translator 2.61e+03
+
+=== iter 36 (6s) loss 126.77 grad-norm 1802.0 | route hint 6.10, salience hint 7.62, label of what it made 2.43, functions 55.80, labels 33.99, same thing 0.00, relation 17.55, round trip 0.10, re-read 3.18
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 16/23, max 2/2, min 0/1, store 8/8
+   grad norm per module: interp 531, want 221, readkey 0.0105, fns 78.1, heads 153, filter 55.6, critic 0, translator 1.7e+03
+
+=== iter 37 (6s) loss 129.36 grad-norm 2297.6 | route hint 5.75, salience hint 6.88, label of what it made 2.30, functions 61.03, labels 34.19, same thing 0.00, relation 16.01, round trip 0.10, re-read 3.09
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 15/23, max 2/2, min 1/1, store 8/8
+   grad norm per module: interp 713, want 286, readkey 0.01, fns 96.2, heads 131, filter 90.9, critic 0, translator 2.16e+03
+
+=== iter 38 (6s) loss 133.48 grad-norm 2943.7 | route hint 5.13, salience hint 6.57, label of what it made 2.28, functions 62.24, labels 36.14, same thing 0.00, relation 18.79, round trip 0.10, re-read 2.23
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 16/23, max 2/2, min 1/1, store 8/8
+   grad norm per module: interp 809, want 469, readkey 0.0326, fns 113, heads 519, filter 103, critic 0, translator 2.74e+03
+
+=== iter 39 (6s) loss 124.66 grad-norm 2588.9 | route hint 3.94, salience hint 6.10, label of what it made 2.20, functions 61.83, labels 34.52, same thing 0.00, relation 13.69, round trip 0.10, re-read 2.29
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 16/23, max 2/2, min 1/1, store 8/8
+   grad norm per module: interp 1.02e+03, want 392, readkey 0.0175, fns 131, heads 602, filter 39, critic 0, translator 2.26e+03
+
+######## TRACE question 'What is the vendor of Mutor?' truth 9
+
+== lookup (signal +1.0) | about: 'What is the vendor of Mutor?'
+   acts: function 6 (assigned); gates function 6 1.08, function 8 0.82, function 7 0.75, function 5 0.67, function 3 (calculator min) 0.11
+   walk by label: place 31 d 0.08 'the vendor of Mutor is 9.'; place 37 d 0.81 'the seller of Oror is 8.'; place 39 d 0.89 'the next locale of Mupel is 2 9.'; place 23 d 0.89 'the daily author of Sapel is 2 1.'; place 45 d 0.91 'the page of Sapel is 2 7.'; place 27 d 0.92 'the daily post of Torne is 9.'
+   candidates 16 (filter logit, wanted): +6.3* signal's 'What is the vendor of Mutor?' | +1.7* label walk 'the vendor of Mutor is 9.' @31.-1 | -5.4 label walk 'the seller of Oror is 3.' @37.-1 | -6.4 label walk 'the next locale of Mupel is 2 9.' @39.-1 | -6.5 label walk 'the daily author of Sapel is 2 1.' @23.-1 | -6.6 label walk 'the daily post of Torne is 6.' @27.-1 | -6.7 label walk 'the page of Sapel is 2 7.' @45.-1 | -6.7 function fn 7 | -7.1 function fn 1 | -7.1 function fn 3 | -7.3 function fn 0 | -7.4 function fn 4 | -7.4 function fn 5 | -7.4 function fn 2
+   inputs in order: 0: 'What is the vendor of Mutor?' | 1: 'the vendor of Mutor is 9.' | 2: 'the seller of Oror is 3.' | 3: 'the next locale of Mupel is 2 9.' | 4: 'the daily author of Sapel is 2 1.' | 5: 'the page of Sapel is 2 7.' | 6: 'the daily post of Torne is 6.' | 7: '6 months ago' | 8: '' | 9: 'IdStatusMessageAlternate PrivacyPopup' | 10: '' | 11: '' | 12: 'About' | 13: '�' | 14: 'ark' | 15: '////////////////////////////'
+   many 1 (target 1), own error 0.28 (usual 0.59)
+   out 0: target 'What is 9?'
+      target's pieces: span 1:6-6 ' 9'
+      its own pieces:  span 1:6-6 ' 9'
+      said with the target's pieces 'What is 9?' | with its own 'What is 9?'
+      where 2 (1.00) target 2 | function? 0.03 | loss of this output 0.12
+   label gate 1.08, step loss 0.17, exact True -> pull | relation loss 0.42
+
+== answer (signal +1.0) | about: 'What is 9?'
+   acts: function 7 (assigned); gates function 7 1.04, function 6 0.73, function 8 0.68, function 5 0.44, function 1 (calculator sub) 0.04
+   walk by label: place 0 d 2.00 'later page values are amounts to add to '; place 1 d 2.00 'the bonus of Zekpel is 2 3.'; place 2 d 2.00 'the host of Zekpel is 2 8.'; place 3 d 2.00 'the list of Zekpel is 1 8.'; place 4 d 2.00 'the base ship of Zekpel is 1.'; place 5 d 2.00 'the camera of Zekpel is 1 7.'
+   candidates 16 (filter logit, wanted): +6.9* signal's 'What is 9?' | -5.4 function fn 7 | -5.8 function fn 2 | -5.9 function fn 0 | -6.0 function fn 1 | -6.2 function fn 6 | -6.2 function fn 3 | -6.3 function fn 5 | -6.3 function fn 8 | -6.6 function fn 4 | -8.7 label walk 'later page values are amounts to add to the c' @0.-1 | -8.9 label walk 'the camera of Zekpel is 1 2.' @5.-1 | -8.9 label walk 'the base ship of Zekpel is 1.' @4.-1 | -9.0 label walk 'the list of Zekpel is 8.' @3.-1
+   inputs in order: 0: 'What is 9?' | 1: 'later page values are amounts to add to the curren' | 2: 'the bonus of Zekpel is 3 0.' | 3: 'the host of Zekpel is 2.' | 4: 'the list of Zekpel is 8.' | 5: 'the base ship of Zekpel is 1.' | 6: 'the camera of Zekpel is 1 2.' | 7: '6 months ago' | 8: '' | 9: 'IdStatusMessageAlternate PrivacyPopup' | 10: '' | 11: '' | 12: 'About' | 13: '�' | 14: 'ark' | 15: '////////////////////////////'
+   many 1 (target 1), own error 0.52 (usual 0.37)
+   out 0: target '9'
+      target's pieces: span 0:2-2 ' 9'
+      its own pieces:  span 0:2-2 ' 9'
+      said with the target's pieces '9' | with its own '9'
+      where 2 (1.00) target 2 | function? 0.02 | loss of this output 0.65
+   label gate 1.04, step loss 0.67, exact False -> pull
+
+=== iter 40 (12s) loss 117.21 grad-norm 3982.3 | route hint 10.00, salience hint 7.72, label of what it made 2.24, functions 45.24, labels 34.91, same thing 0.00, relation 14.31, round trip 0.10, re-read 2.69
+   exact (own pieces): add 0/3, answer 6/8, before 1/1, lookup 18/23, max 2/2, min 1/1, store 8/8
+   said (outputs: with its own pieces / with the target's pieces, mean output loss): add 3: own 0 tgt 3 loss 5.91 | answer 8: own 8 tgt 8 loss 0.34 | before 1: own 1 tgt 1 loss 0.06 | lookup 23: own 19 tgt 23 loss 0.72 | max 2: own 2 tgt 0 loss 0.76 | min 1: own 0 tgt 1 loss 1.04 | store 8: own 8 tgt 8 loss 0.07
+   e.g.: store: want 'note: incoming base ship numbers become the current base ship' tgt-pieces 'note: incoming base ship numbers become the current base ship' own 'note: incoming base ship numbers become the current base ship' || store: want 'the base account of Kaba is 1 5.' tgt-pieces 'the base account of Kaba is 1 5.' own 'the base account of Kaba is 1 5.' || store: want 'the net charge of Kaba is Zekpel.' tgt-pieces 'the net charge of Kaba is Zekpel.' own 'the net charge of Kaba is Zekpel.' || store: want 'the last band of Kaba is Netor.' tgt-pieces 'the last band of Kaba is Netor.' own 'the last band of Kaba is Netor.' || store: want 'the seller of Oror is 8.' tgt-pieces 'the seller of Oror is 8.' own 'the seller of Oror is 8.' || store: want 'the vessel of Tormu is 2 0.' tgt-pieces 'the vessel of Tormu is 2 0.' own 'the vessel of Tormu is 2 0.' || store: want 'the signal of Tormu is 1.' tgt-pieces 'the signal of Tormu is 1.' own 'the signal of Tormu is 1.' || store: want 'the capacity of Gormer is 2 7.' tgt-pieces 'the capacity of Gormer is 2 7.' own 'the capacity of Gormer is 2 7.' || lookup: want 'What is 9?' tgt-pieces 'What is 9?' own 'What is 9?' || answer: want '9' tgt-pieces '9' own '9' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own 'What is 1 5?' || answer: want '1 5' tgt-pieces '1 5' own '1 5' || lookup: want 'What is 1 5?' tgt-pieces 'What is 1 5?' own 'What is 1 5?' || answer: want '1 5' tgt-pieces '1 5' own '1 5'
+   grad norm per module: interp 564, want 569, readkey 0.00616, fns 76.1, heads 762, filter 69.7, critic 0, translator 3.82e+03
+   weight change: interp 0.0826, want 0.0703, readkey 0.00959, fns 0.00981, heads 0.116, filter 0.0592, critic 0
+   function nodes (t, calc, grad key/code/au/av): 0 add 12/39/0.72/0.95; 1 sub 0.018/4.8e-06/0.00035/0.0003; 2 max 21/10/0.18/0.28; 3 min 10/3.5/0.073/0.067; 4 mul 0.069/5.8e-06/0.00032/0.00028; 5 - 13/17/0.26/0.26; 6 - 23/46/1.3/1.3; 7 - 12/9.3/0.16/0.24; 8 - 9.9/0.77/0.0086/0.011
+done 399s
