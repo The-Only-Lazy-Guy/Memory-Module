@@ -1,0 +1,31 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3131.94it/s]
+/marimo/frozen/fm46/gnm.py:2377: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"codec {step}: label cos {float((L * lab).sum(-1).mean()):.3f} relation err {float(F.mse_loss(R, rel)):.4f} | "
+codec 100: label cos 0.301 relation err 0.0013 | heads: same fact 0.09 (max 0.22), other fact 0.33 (nearest 0.20); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.64, other 0.00, named 0.79, not named 0.01
+codec 200: label cos 0.577 relation err 0.0005 | heads: same fact 0.20 (max 0.63), other fact 1.21 (nearest 0.73); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.64, other 0.00, named 0.73, not named 0.01
+codec 300: label cos 0.672 relation err 0.0002 | heads: same fact 0.20 (max 0.63), other fact 1.31 (nearest 0.87); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.71, other 0.00, named 0.81, not named 0.01
+codec 400: label cos 0.750 relation err 0.0006 | heads: same fact 0.16 (max 0.56), other fact 1.32 (nearest 0.88); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.66, other 0.00, named 0.70, not named 0.01
+codec 500: label cos 0.758 relation err 0.0012 | heads: same fact 0.17 (max 0.57), other fact 1.34 (nearest 0.95); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.87, other 0.00, named 0.86, not named 0.01
+codec 600: label cos 0.808 relation err 0.0008 | heads: same fact 0.17 (max 0.57), other fact 1.34 (nearest 0.91); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.75, other 0.00, named 0.88, not named 0.01
+codec 700: label cos 0.790 relation err 0.0007 | heads: same fact 0.17 (max 0.58), other fact 1.33 (nearest 0.92); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.71, other 0.00, named 0.79, not named 0.01
+codec 800: label cos 0.831 relation err 0.0009 | heads: same fact 0.18 (max 0.60), other fact 1.34 (nearest 0.90); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.81, other 0.00, named 0.86, not named 0.01
+codec 900: label cos 0.821 relation err 0.0009 | heads: same fact 0.18 (max 0.61), other fact 1.34 (nearest 0.93); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.85, other 0.00, named 0.92, not named 0.01
+codec 1000: label cos 0.807 relation err 0.0006 | heads: same fact 0.17 (max 0.59), other fact 1.34 (nearest 0.92); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.76, other 0.00, named 0.79, not named 0.01
+codec 1100: label cos 0.842 relation err 0.0009 | heads: same fact 0.16 (max 0.55), other fact 1.34 (nearest 0.90); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.85, other 0.00, named 0.88, not named 0.01
+codec 1200: label cos 0.842 relation err 0.0011 | heads: same fact 0.17 (max 0.57), other fact 1.35 (nearest 0.90); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.95, other 0.00, named 0.94, not named 0.01
+codec 1300: label cos 0.843 relation err 0.0003 | heads: same fact 0.16 (max 0.51), other fact 1.34 (nearest 0.88); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.89, other 0.00, named 0.84, not named 0.01
+codec 1400: label cos 0.852 relation err 0.0010 | heads: same fact 0.16 (max 0.50), other fact 1.35 (nearest 0.88); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.88, other 0.00, named 0.90, not named 0.01
+codec 1500: label cos 0.855 relation err 0.0004 | heads: same fact 0.16 (max 0.54), other fact 1.35 (nearest 0.94); encoder: same fact 0.04 (max 0.15), other fact 1.35 (nearest 0.89) | label rows: same 0.95, other 0.00, named 0.94, not named 0.01
+step 1: stage skills
+step 1: the store skill gets its node -> function 5
+step 1: the split skill gets its node -> function 6
+step 1: the lookup skill gets its node -> function 7
+step 1: the fill skill gets its node -> function 8
+step 1: the operands skill gets its node -> function 9
+step 1: the inc skill gets its node -> function 10
+step 1: the fedit skill gets its node -> function 11
+step 1: the fnew skill gets its node -> function 12
+step 4: the both skill gets its node -> function 13
+step 4: the before skill gets its node -> function 14
