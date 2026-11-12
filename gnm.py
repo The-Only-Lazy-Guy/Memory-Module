@@ -805,7 +805,7 @@ class Interpreter(nn.Module):
     pieces, each a span taken as it is from one of the inputs or up to G latents it makes; a function given back is K
     latents. Also: how many outputs, where each goes, whether one is a function, its own guess of how wrong it is"""
 
-    def __init__(self, d=128, c=256, K=16, M=2, S=4, G=8, R=16, L=96, r=8, layers=3):
+    def __init__(self, d=128, c=256, K=16, M=2, S=4, G=8, R=16, L=96, r=8, layers=5, lm=768):
         super().__init__()
         self.pos = nn.Parameter(torch.randn(L, c) * .02)
         self.hop = nn.Parameter(torch.randn(4, c) * .02)       # how far the traversal went to reach an input
@@ -830,6 +830,10 @@ class Interpreter(nn.Module):
         self.gkeep = nn.Linear(c, 1)                           # how many latents a made piece keeps
         self.es, self.ee, self.ex = nn.Linear(c, c), nn.Linear(c, c), nn.Linear(c, c)   # in place of an input: which part
         #                                                        of it (first, last token) the output takes the place of
+        self.lmh, self.lms = nn.Linear(lm, c), nn.Linear(3, c)   # what the LM made of the inputs read as one text (user
+        for m_ in (self.lmh, self.lms):                          # 11-12): its state at each token, and its logits -- how
+            nn.init.zeros_(m_.weight), nn.init.zeros_(m_.bias)   # expected the token was, how much it would say it next
+        #                                                        (zero at first: it starts as it was without them)
         self.K, self.M, self.S, self.G, self.R, self.L, self.r = K, M, S, G, R, L, r
 
     def action_of(self, z):
@@ -837,7 +841,7 @@ class Interpreter(nn.Module):
         a = self.act(z.mean(0)).view(2, -1, self.r)
         return a[0], a[1]
 
-    def forward(self, ins, q, program, action, v=1., hops=None, sal=None, acts=None, copy=None):
+    def forward(self, ins, q, program, action, v=1., hops=None, sal=None, acts=None, copy=None, lm=None):
         c, dev = self.pos.shape[-1], q.device
         toks = [z[:self.L] for z in ins[:self.R]]
         hops = (list(hops) if hops is not None else [0] * len(toks))[:len(toks)]
@@ -845,7 +849,9 @@ class Interpreter(nn.Module):
         head = [self.codeq, self.segq, self.genq, F.layer_norm(program, (c,)) + self.me, self.wq(q)[None],
                 self.wv(torch.tensor([float(v)], device=dev))[None]]
         nh = sum(len(x) for x in head)
-        parts = head + [z + self.pos[:len(z)] + self.hop[min(hp, 3)] + sv * self.salv for z, hp, sv in zip(toks, hops, sal)]
+        lm = (list(lm) if lm is not None else [])[:len(toks)] + [None] * len(toks)
+        parts = head + [z + self.pos[:len(z)] + self.hop[min(hp, 3)] + sv * self.salv +
+                        (self.lmh(f[:, :-3]) + self.lms(f[:, -3:]) if f is not None else 0) for z, hp, sv, f in zip(toks, hops, sal, lm)]
         reach = torch.tensor([-1] * nh + [hp for z, hp in zip(toks, hops) for _ in range(len(z))], device=dev)
         acts = list(acts)[:len(toks)] if acts is not None else [self.action_of(z) for z in toks]
         h = torch.cat(parts)
@@ -1291,11 +1297,48 @@ class Acting(nn.Module):
     def calc_of(self, n):
         return self.fns[n.fn].calc if n.kind == "fn" else None
 
+    @torch.no_grad()
+    def lm_read(self, nodes):
+        """the LM itself reads what the acting node takes in, as one text: the memory's logs first, the workspace nodes
+        (the question) last, so its states there have read the logs (user 11-12: the LM processes it too, and the
+        interpreter sees the LM's logits). -> for each input, a row per token: the LM's state there, how expected the
+        token was (log p, from the logits before it), how much the LM would say it next (the logits after the last
+        token), and whether its token is known. A node whose words are not known is read through the decoder's way
+        in (up); a function is not text: None"""
+        tr, L = self.tr, self.interp.L
+        dev = self.interp.pos.device
+        seq = [i for i, n in enumerate(nodes) if n.kind == "entry"] + [i for i, n in enumerate(nodes) if n.kind == "work"]
+        embs, ids, own = [tr.lm.wte(torch.tensor([tr.tok.eos_token_id], device=dev))], [-1], [(-1, 0)]
+        for i in seq:
+            n = nodes[i]
+            z = n.B[:L]
+            known = n.toks is not None and len(n.toks) == len(n.B)
+            t = list(n.toks[:len(z)]) if known else [-1] * len(z)
+            embs.append(tr.lm.wte(torch.tensor(t, device=dev)) if known else tr.up(z))
+            ids += t
+            own += [(i, k) for k in range(len(z))]
+        x, ids, own = torch.cat(embs)[-1000:], ids[-1000:], own[-1000:]
+        h = tr.lm(inputs_embeds=x[None]).last_hidden_state[0]
+        lp = (h @ tr.lm.wte.weight.T).log_softmax(-1)
+        idt = torch.tensor([max(t, 0) for t in ids], device=dev)
+        has = torch.tensor([float(t >= 0) for t in ids], device=dev)
+        was = torch.cat([lp.new_zeros(1), lp[:-1].gather(1, idt[1:, None]).squeeze(1)]) * has
+        f = torch.cat([tr.norm(h), torch.stack([was / 10, lp[-1][idt] * has / 10, has], -1)], -1)
+        out = [None] * len(nodes)
+        for i in seq:
+            rows = [r for r, (i_, _) in enumerate(own) if i_ == i]
+            g = f.new_zeros(len(nodes[i].B[:L]), f.shape[-1])
+            g[[own[r][1] for r in rows]] = f[rows]
+            out[i] = g
+        return out
+
     def run(self, actor, ins, q, v=1., hops=None, sal=None, program=None):
-        """the actor acts: the interpreter reads its program and applies its action, and every input's own action"""
+        """the actor acts: the interpreter reads its program and applies its action, and every input's own action;
+        it sees what the LM made of those inputs"""
+        R = self.interp.R
         return self.interp([n.B for n in ins], q, self.program(actor) if program is None else program,
-                           self.action(actor, program), v, hops, sal, acts=[self.action(n) for n in ins[:self.interp.R]],
-                           copy=[n.kind != "fn" for n in ins[:self.interp.R]])
+                           self.action(actor, program), v, hops, sal, acts=[self.action(n) for n in ins[:R]],
+                           copy=[n.kind != "fn" for n in ins[:R]], lm=self.lm_read(ins[:R]))
 
     def make(self, key, like=None, code=None, scope=.9):
         """a new node that acts (a function): made like another acting node (its program and its own action; a read
@@ -1394,6 +1437,7 @@ class FM:
 
     def __init__(self, tr, bank, heads, filt, critic, budget=60, look=6, newest=4, kappa=2., same=.1):
         self.tr, self.bank, self.heads, self.filt, self.critic = tr, bank, heads, filt, critic
+        object.__setattr__(bank, "tr", tr)             # (the acting side reads through the LM; not one of its own parts)
         self.dev = next(heads.parameters()).device
         self.g, self.signals, self.t, self.explore = Graph(bank.d), [], 0, 0.
         self.budget, self.look, self.newest, self.kappa, self.same = budget, look, newest, kappa, same
@@ -1733,7 +1777,10 @@ class FM:
         q = self.nodes([text])[0]
         self.signals.append(Signal([q], 1., self.t))
         n = self.run()
-        return self.text_of(q), n
+        self.asked = q                                 # (the node itself: evaluate also reads what it holds as copied)
+        return self.say(q), n                          # the answer is said by the LM, from the node (user 11-12: all that
+        #                                                comes out comes out of the LM; 11-12 to fm50 a copy's tokens were
+        #                                                given back as they were, past the LM)
 
 
 # ---------------------------------------------------------------------- the teacher: demos only (it never runs a step)
@@ -2566,7 +2613,7 @@ def evaluate(fm, A, seed):
             f"{sum(len(c) for c in fm.g.chain) / max(1, fm.g.n):.2f}")
     line = []
     for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6))):
-        hit = n = steps = 0
+        hit = held_ = n = steps = 0
         for _ in range(A.q):
             E = q_expr("ops" if kind == "long" else kind, w, rng, ops or (1, 3))
             if E is None:
@@ -2575,7 +2622,8 @@ def evaluate(fm, A, seed):
             got, k = fm.ask(ask_text(E))
             steps += k
             hit += got == D(VAL(truth_of(E, w)))
-        line.append(f"{kind} {hit}/{n} ({steps / max(1, n):.1f} firings)")
+            held_ += fm.text_of(fm.asked) == D(VAL(truth_of(E, w)))
+        line.append(f"{kind} {hit}/{n} (the node holds it {held_}/{n}; {steps / max(1, n):.1f} firings)")
     stats = ", ".join(f"{k} {v}" for k, v in sorted(mem.items()))
     return f"statements {nstat} [{stats}] | {held} | answers: " + " | ".join(line) + f" | made nodes that act {len(fm.bank.fns)}"
 
