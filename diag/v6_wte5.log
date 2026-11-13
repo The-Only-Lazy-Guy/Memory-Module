@@ -3,3 +3,7 @@ Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF
 demos: 5 worlds, 2744 firings; nodes made by the model: 9 (n0=read, n1=scan, n2=cmp, n3=add, n4=addd, n5=max, n6=min, n7=sub, n8=subd)
 epoch 10: loss 2.31
 epoch 20: loss 1.27
+epoch 30: loss 1.05
+demos done 102s
+BEFORE living, fresh world 7: facts held 126/153 | lookup 39/48, before 30/48, coexist 4/48, chain 32/48, ops 19/48, long 7/48, long12 6/48
+BEFORE living, fresh world 8: facts held 145/155 | lookup 46/48, before 44/48, coexist 16/48, chain 42/48, ops 28/48, long 13/48, long12 5/48
