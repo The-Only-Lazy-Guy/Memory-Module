@@ -29,3 +29,17 @@ epoch 24: loss 0.94
 epoch 25: loss 0.94
 epoch 26: loss 0.94
 epoch 27: loss 0.94
+epoch 28: loss 0.94
+epoch 29: loss 0.94
+epoch 30: loss 0.94
+trained 665s
+  [before] What was the disk of Gorba before? truth 29 got None
+      What was the disk of Gorba before ? | before | the disk of Gorba
+  [before] What was the device of Thasa before? truth 8 got None
+      What was the device of Thasa before ? | before | the device of Thasa
+  [before] What was the base motor of Tortor before? truth 27 got None
+      What was the base motor of Tortor before ? | before | the base motor of Tortor
+  [before] What was the base motor of Tortor before? truth 27 got None
+      What was the base motor of Tortor before ? | before | the base motor of Tortor
+fresh world 7: facts held 152/153 | lookup 48/48, before 44/48, coexist 48/48, chain 45/48, ops 47/48, long 45/48, long12 27/48
+fresh world 8: facts held 154/155 | lookup 48/48, before 46/48, coexist 48/48, chain 43/48, ops 48/48, long 46/48, long12 37/48
