@@ -11,6 +11,9 @@ USE = {"scan": ("tags", "want"), "read": ("want",), "add": ("state", "choice", "
        "max": ("state", "choice", "want"), "min": ("state", "choice", "want"), "cmp": ("state",), "addd": ("digit", "state"),
        "subd": ("digit", "state")}
 KEYS = list(V.PURPOSE)
+import os
+NAMER = os.environ.get("NAMER", "1") == "1"            # the namer lives too (learns from the names it hears)
+EXPLORE = os.environ.get("EXPLORE", "unsure")          # unsure: deviate where the node doubts; random: ~15% of firings
 
 
 class Memory(V.Memory):
@@ -18,7 +21,7 @@ class Memory(V.Memory):
 
     def __init__(self, M, T=0.):
         super().__init__(M)
-        self.T, self.rec, self.p = T, None, .15          # p: how many of a try's firings choose differently (11-14:
+        self.T, self.rec, self.p, self.U = T, None, .15, 2.          # p: how many of a try's firings choose differently (11-14:
         #                                                  sampling every choice of a 20-firing run broke what was right;
         #                                                  tries found a better run 0-3 times in 20)
 
@@ -38,7 +41,19 @@ class Memory(V.Memory):
             return nm, None                            # (a want that meets a node with nothing for it to read: no run)
         chosen = {}
         here = self.T and random.random() < self.p       # this firing tries something else (all its choices)
-        smp = lambda lg: int(torch.multinomial(F.softmax(lg / self.T, -1), 1)) if here else int(lg.argmax())
+
+        def smp(lg):
+            if EXPLORE == "unsure":                      # 11-14: a try deviates where the node itself doubts: chance
+                if not self.T:                           # ~ its doubt (1 - top probability); then its next choice
+                    return int(lg.argmax())
+                p = F.softmax(lg, -1)
+                top = int(p.argmax())
+                if random.random() < min(1., self.U * (1 - float(p[top]))):
+                    q = p.clone()
+                    q[top] = 0
+                    return int(torch.multinomial(q / q.sum(), 1)) if float(q.sum()) > 0 else top
+                return top
+            return int(torch.multinomial(F.softmax(lg / self.T, -1), 1)) if here else int(lg.argmax())
         for h in USE.get(key, ()):
             if h == "tags":
                 t = [smp(r) for r in o["tags"]]
@@ -86,19 +101,49 @@ def imitate(M, recs, demo_fs, opt, n_demo=400):
     return float(L.detach())
 
 
+def heard_groups(M, texts):
+    """the names the module itself read in what it heard (its reader's own tags): the namer's lesson needs no teacher
+    -- a name said again goes together, different names apart (11-14: every wrong fact of the 5-demo model was two
+    names merged in one place, e.g. 'the shelf of Orzek' into 'the part of Orzek'; living never touched the namer)"""
+    groups = []
+    with torch.no_grad():
+        for text in texts:
+            ts = B.tok(text)
+            lg, _ = M.reader(ts)
+            tags = [B.RTAGS[i] for i in lg.argmax(-1).tolist()]
+            for fl in (("NAME", "NATTR"), ("NATTR",), ("SRC",), ("RATTR",)):
+                g = tuple(t for t, x in zip(ts, tags) if x in fl)
+                if g:
+                    groups.append(g)
+    return groups
+
+
 def live(M, demo_fs, worlds, tries=12, T=1., nq=24, seed0=70000):
-    opt = torch.optim.AdamW([p for n in M.nodes for p in n.parameters()], lr=1e-3)   # (the translator stays as the
-    tally = {}                                                                         # demos left it)
+    opt = torch.optim.AdamW([p for n in M.nodes for p in n.parameters()] + list(M.namer.parameters()), lr=1e-3)
+    tally = {}                                         # (the reader's tags stay as the demos left them)
     for wi in range(worlds):
         rng = random.Random(seed0 + wi)
         w = B.new_world(rng)
         mem = Memory(M)
+        heard = []
         with torch.no_grad():
             for _ in range(30):
                 for dd in B.world_step(w, rng):
                     o = dd()
                     for text, meta in B.said(o, w) if o else []:
                         mem.hear(text)
+                        heard.append(text)
+        if NAMER:
+            groups = heard_groups(M, heard)
+            for _ in range(20):                         # the namer learns from this world's names before it is asked
+                L = B.name_lesson(M, random.sample(groups, min(400, len(groups))))
+                opt.zero_grad()
+                L.backward()
+                opt.step()
+            mem = Memory(M)                             # and hears the world again with what it learned
+            with torch.no_grad():
+                for text in heard:
+                    mem.hear(text)
         recs = []
         for kind, ops in (("lookup", 0), ("before", 0), ("coexist", 0), ("chain", 0), ("ops", (1, 3)), ("long", (4, 6))) * (nq // 6):
             E = B.q_expr("ops" if kind == "long" else kind, w, rng, ops or (1, 3))
