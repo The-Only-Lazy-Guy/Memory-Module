@@ -30,3 +30,20 @@ epoch 23: loss 0.95
 epoch 24: loss 0.94
 epoch 25: loss 0.94
 epoch 26: loss 0.94
+epoch 27: loss 0.94
+epoch 28: loss 0.94
+epoch 29: loss 0.94
+epoch 30: loss 0.94
+trained 341s
+  [lookup] What is the base currency of Bapel? truth 13 got None
+      What is the base currency of Bapel ? | lookup | the base currency of Bapel
+      What is Gordun ? | lookup | Gordun
+  [before] What was the shelf of Gorzek before? truth 22 got 1
+      What was the shelf of Gorzek before ? | before | the shelf of Gorzek
+      What was 1 before ? | answer | 1
+  [before] What was the disk of Gorba before? truth 29 got None
+      What was the disk of Gorba before ? | before | the disk of Gorba
+  [before] What was the device of Thasa before? truth 8 got None
+      What was the device of Thasa before ? | before | the device of Thasa
+fresh world 7: facts held 147/153 | lookup 47/48, before 43/48, coexist 48/48, chain 44/48, ops 40/48, long 34/48, long12 27/48
+fresh world 8: facts held 155/155 | lookup 48/48, before 46/48, coexist 47/48, chain 48/48, ops 47/48, long 45/48, long12 37/48
