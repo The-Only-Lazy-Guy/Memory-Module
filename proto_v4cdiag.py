@@ -2,7 +2,7 @@
 import random, torch, sys
 import proto_v4c as V
 M = V.Module().to(V.dev)
-M.load_state_dict(torch.load("v4c_M.pt"))
+M.load_state_dict(torch.load(f"v4c_{V.VECS}_M.pt"))
 M.eval()
 rng = random.Random(50007)
 w = V.new_world(rng)

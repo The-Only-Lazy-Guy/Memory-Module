@@ -40,8 +40,20 @@ value_in = G["value_in"]
 OPF = {n: f for n, f, _ in TOOLS}
 
 dev = "cuda" if torch.cuda.is_available() else "cpu"
-d, c = 64, 32
+import os
+VECS = os.environ.get("VECS", "stand")         # stand: fixed per-token vectors; wte: GPT-2's token embeddings (no
+#                                                context); ctx: GPT-2's last-layer states over the sequence being read
+d, c = (64 if VECS == "stand" else 768), 32
 tok = lambda s: re.findall(r"[A-Za-z]+|\d|[^\sA-Za-z\d]", s)
+_LM = {}
+
+
+def lm():
+    if not _LM:
+        from transformers import AutoModel, AutoTokenizer
+        _LM["tok"] = AutoTokenizer.from_pretrained("gpt2")
+        _LM["m"] = AutoModel.from_pretrained("gpt2").to(dev).eval()
+    return _LM["tok"], _LM["m"]
 
 
 def tvec(t):                                     # a token's fixed vector (the LM's embedding stands here)
@@ -50,14 +62,35 @@ def tvec(t):                                     # a token's fixed vector (the L
     return torch.randn(d, generator=g)
 
 
-VEC = {}
+VEC, SEQ = {}, {}
 
 
+@torch.no_grad()
 def vecs(ts):
-    for t in ts:
-        if t not in VEC:
-            VEC[t] = tvec(t)
-    return torch.stack([VEC[t] for t in ts]).to(dev)
+    """the vectors of a token sequence: one per word token (a word's GPT-2 pieces averaged)"""
+    if VECS == "stand":
+        for t in ts:
+            if t not in VEC:
+                VEC[t] = tvec(t)
+        return torch.stack([VEC[t] for t in ts]).to(dev)
+    k = tuple(ts)
+    if k in SEQ:
+        return SEQ[k]
+    tk, m = lm()
+    ids, own = [], []
+    for i, t in enumerate(ts):
+        p = tk(("" if i == 0 else " ") + t)["input_ids"]
+        ids += p
+        own += [i] * len(p)
+    x = torch.tensor([ids], device=dev)
+    h = m.wte(x)[0] if VECS == "wte" else m(input_ids=x).last_hidden_state[0]
+    own = torch.tensor(own, device=dev)
+    out = torch.stack([h[own == i].mean(0) for i in range(len(ts))])
+    out = F.layer_norm(out, (d,))
+    if len(SEQ) > 200000:
+        SEQ.clear()
+    SEQ[k] = out
+    return out
 
 
 def find(seq, sub, start=0):
@@ -616,7 +649,7 @@ if __name__ == "__main__":
     t0 = time.time()
     train(M, worlds, epochs)
     print(f"trained {time.time() - t0:.0f}s", flush=True)
-    torch.save(M.state_dict(), "v4c_M.pt")
+    torch.save(M.state_dict(), f"v4c_{VECS}_M.pt")
     for s in (7, 8):
         held, nf, res = evaluate(M, 50000 + s, show_fail=4 if s == 7 else 0)
         print(f"fresh world {s}: facts held {held}/{nf} | " + ", ".join(f"{k} {a}/{b}" for k, (a, b) in res.items()), flush=True)
