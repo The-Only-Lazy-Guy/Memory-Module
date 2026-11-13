@@ -191,7 +191,7 @@ def name_lesson(M, groups):
 
 
 def as_num(ts):
-    if not ts or any(t != "-" and not t.isdigit() for t in ts):
+    if not ts or any(t != "-" and not t.isdigit() for t in ts) or "-" in ts[1:]:
         return None
     neg = ts[0] == "-"
     ds = [int(t) for t in ts[1:] if t.isdigit()] if neg else [int(t) for t in ts]
