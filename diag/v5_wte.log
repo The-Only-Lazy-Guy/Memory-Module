@@ -11,3 +11,5 @@ trained 1188s
       What was the device of Thasa before ? | before | the device of Thasa
   [before] What was the base motor of Tortor before? truth 27 got None
       What was the base motor of Tortor before ? | before | the base motor of Tortor
+fresh world 7: facts held 151/153 | lookup 48/48, before 44/48, coexist 48/48, chain 44/48, ops 30/48, long 17/48, long12 6/48
+fresh world 8: facts held 155/155 | lookup 48/48, before 46/48, coexist 48/48, chain 48/48, ops 26/48, long 14/48, long12 1/48
