@@ -1,0 +1,10 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1717.01it/s]
+demos: 5 worlds, 5211 firings; nodes made by the model: 9 (n0=read, n1=scan, n2=back, n3=cmp, n4=add, n5=next, n6=max, n7=min, n8=sub)
+epoch 10: loss 1.47
+epoch 20: loss 1.07
+epoch 30: loss 0.99
+demos done 139s
+BEFORE living, fresh world 7: facts held 126/153 | lookup 39/48, before 32/48, coexist 36/48, chain 32/48, ops 28/48, long 14/48, long12 13/48
+BEFORE living, fresh world 8: facts held 144/155 | lookup 46/48, before 44/48, coexist 42/48, chain 40/48, ops 39/48, long 33/48, long12 22/48
+255s
