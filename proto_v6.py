@@ -32,6 +32,8 @@ class Memory(V.Memory):
         o = node([list(seq)], [list(s1)], [list(s2)], [st])
         o = {k: (v[0] if isinstance(v, list) else v[0] if v is not None else v) for k, v in o.items()}
         key = self.M.purpose_of[nm]
+        if "tags" in USE.get(key, ()) and o["tags"] is None:
+            return nm, None                            # (a want that meets a node with nothing for it to read: no run)
         chosen = {}
         smp = lambda lg: int(torch.multinomial(F.softmax(lg / self.T, -1), 1)) if self.T else int(lg.argmax())
         for h in USE.get(key, ()):
