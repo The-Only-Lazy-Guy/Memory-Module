@@ -7,3 +7,5 @@ epoch 30: loss 0.98
 demos done 199s
 BEFORE living, fresh world 7: facts held 138/153 | lookup 42/48, before 35/48, coexist 33/48, chain 35/48, ops 27/48, long 13/48, long12 11/48
 BEFORE living, fresh world 8: facts held 149/155 | lookup 47/48, before 45/48, coexist 29/48, chain 44/48, ops 32/48, long 23/48, long12 17/48
+lived 5 worlds: own run right / some run right: lookup 20/20 (20), before 17/20 (17), coexist 12/20 (13), chain 18/20 (20), ops 13/20 (13), long 5/20 (5)
+lived 10 worlds: own run right / some run right: lookup 19/20 (19), before 18/20 (18), coexist 13/20 (13), chain 16/20 (16), ops 9/20 (10), long 13/20 (13)
