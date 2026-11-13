@@ -1,0 +1,5 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2852.53it/s]
+demos: 5 worlds, 2744 firings; nodes made by the model: 9 (n0=read, n1=scan, n2=cmp, n3=add, n4=addd, n5=max, n6=min, n7=sub, n8=subd)
+epoch 10: loss 2.31
+epoch 20: loss 1.27
