@@ -1914,12 +1914,22 @@ class FM:
         return True
 
     def run(self):
-        n = 0
+        n = idle = 0
         while self.signals and n < self.budget:
             sg = max(self.signals, key=lambda s: s.strength)              # the newest first: inner parts before outer
             self.signals.remove(sg)
-            self.fire(sg)
+            keep = self.explore
+            if idle:                                   # a second go at a signal: as a try explores
+                self.explore = max(keep, 1.)
+            rec = self.fire(sg)
+            self.explore = keep
             n += 1
+            if rec is not None and not rec.get("did", 1) and idle < 3:   # it fired and changed nothing: that is not the
+                idle += 1                              # end -- the signal is still there (11-13, in62: two long questions
+                self.signals.append(sg)                # stopped after 3 and 5 firings on one firing that did nothing, a
+                self.count("did nothing, tried again")   # fact still unread and an operation ready)
+            elif rec is not None and rec.get("did", 1):
+                idle = 0
         if self.signals:
             self.count("budget out")
         self.signals.clear()
@@ -2161,7 +2171,7 @@ def stated(fm, op, toks):
         return None
     text = fm.tr.tok.decode(list(toks))
     nums = re.findall(r"-?\d(?: \d)*", text)
-    if len(nums) != 2:
+    if len(nums) != 2 or text.count("(") != text.count(")"):   # (whole: two numbers, and every bracket it opens closed)
         return None
     try:
         got = CALC[op](*[int(x.replace(" ", "")) for x in nums])
