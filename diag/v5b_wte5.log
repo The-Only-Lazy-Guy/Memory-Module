@@ -1,0 +1,18 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2319.47it/s]
+demos: 5 worlds, 2744 firings; nodes made by the model: 9 (n0=read, n1=scan, n2=cmp, n3=add, n4=addd, n5=max, n6=min, n7=sub, n8=subd)
+epoch 10: loss 2.31
+epoch 20: loss 1.27
+epoch 30: loss 1.05
+trained 132s
+  [lookup] What is the base company of Netor? truth 18 got 1
+      What is the base company of Netor ? | look | the base company of Netor
+      What is 1 ? | answer | 1
+  [lookup] What is the birth of Gorzek? truth 4 got 6
+      What is the birth of Gorzek ? | look | the birth of Gorzek
+      What is 6 ? | answer | 6
+  [lookup] What is the worker of Vinka? truth 18 got 27
+      What is the worker of Vinka ? | look | the worker of Vinka
+      What is 2 7 ? | answer | 2 7
+fresh world 7: facts held 126/153 | lookup 39/48, before 30/48, coexist 4/48, chain 32/48, ops 19/48, long 7/48, long12 6/48
+fresh world 8: facts held 145/155 | lookup 46/48, before 44/48, coexist 16/48, chain 42/48, ops 28/48, long 13/48, long12 5/48
