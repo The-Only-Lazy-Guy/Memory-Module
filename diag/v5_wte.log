@@ -3,3 +3,11 @@ Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF
 demos: 100 worlds, 54107 firings; nodes made by the model: 8 (n0=read, n1=scan, n2=cmp, n3=add, n4=addd, n5=max, n5=min, n6=sub, n7=subd)
 epoch 10: loss 2.13
 epoch 20: loss 1.69
+epoch 30: loss 1.67
+trained 1188s
+  [before] What was the disk of Gorba before? truth 29 got None
+      What was the disk of Gorba before ? | before | the disk of Gorba
+  [before] What was the device of Thasa before? truth 8 got None
+      What was the device of Thasa before ? | before | the device of Thasa
+  [before] What was the base motor of Tortor before? truth 27 got None
+      What was the base motor of Tortor before ? | before | the base motor of Tortor
