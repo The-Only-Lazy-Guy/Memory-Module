@@ -1,0 +1,16 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2338.69it/s]
+demos: 10 worlds, 5585 firings; nodes made by the model: 9 (n0=read, n1=scan, n2=cmp, n3=add, n4=addd, n5=max, n6=min, n7=sub, n8=subd)
+epoch 10: loss 1.64
+epoch 20: loss 1.13
+epoch 30: loss 0.98
+trained 263s
+  [lookup] What is the base company of Netor? truth 18 got 1
+      What is the base company of Netor ? | look | the base company of Netor
+      What is 1 ? | answer | 1
+  [lookup] What is the worker of Dunzek? truth 18 got 1
+      What is the worker of Dunzek ? | look | the worker of Dunzek
+      What is 1 ? | answer | 1
+  [lookup] What is the doctor of Rilba? truth 23 got 13
+      What is the doctor of Rilba ? | look | the doctor of Rilba
+      What is 1 3 ? | answer | 1 3
