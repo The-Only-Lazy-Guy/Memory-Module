@@ -14,3 +14,5 @@ trained 263s
   [lookup] What is the doctor of Rilba? truth 23 got 13
       What is the doctor of Rilba ? | look | the doctor of Rilba
       What is 1 3 ? | answer | 1 3
+fresh world 7: facts held 138/153 | lookup 42/48, before 35/48, coexist 33/48, chain 35/48, ops 27/48, long 13/48, long12 11/48
+fresh world 8: facts held 149/155 | lookup 47/48, before 45/48, coexist 29/48, chain 44/48, ops 32/48, long 23/48, long12 17/48
