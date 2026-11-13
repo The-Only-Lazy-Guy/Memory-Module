@@ -3053,12 +3053,12 @@ def inspect(A):
                 n += 1
     print(f"memory: {fm.g.n} places from {n} statements | {fm.stats}", flush=True)
     fm.show = True
-    for kind in ("lookup", "before", "coexist", "chain", "ops"):
-        E = q_expr(kind, w, rng)
+    for kind in ("lookup", "before", "coexist", "chain", "ops", "long", "long"):
+        E = q_expr("ops" if kind == "long" else kind, w, rng, (4, 6) if kind == "long" else (1, 3))
         if E is None:
             continue
         print(f"\n{kind}: {ask_text(E)!r} truth {VAL(truth_of(E, w))!r}", flush=True)
-        fm.budget = 12
+        fm.budget = 40
         got, k = fm.ask(ask_text(E))
         print(f"  -> {got!r} after {k} firings", flush=True)
 
