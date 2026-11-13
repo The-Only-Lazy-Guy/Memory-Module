@@ -14,3 +14,7 @@ lived 20 worlds: own run right / some run right: lookup 18/20 (18), before 17/20
 lived 25 worlds: own run right / some run right: lookup 20/20 (20), before 18/20 (18), coexist 14/20 (14), chain 15/20 (15), ops 9/20 (11), long 7/20 (7)
 lived 30 worlds: own run right / some run right: lookup 20/20 (20), before 13/20 (13), coexist 17/20 (17), chain 16/20 (16), ops 12/20 (12), long 5/20 (5)
 lived 35 worlds: own run right / some run right: lookup 19/20 (19), before 16/20 (16), coexist 15/20 (15), chain 18/20 (18), ops 11/20 (11), long 11/20 (11)
+lived 40 worlds: own run right / some run right: lookup 18/20 (18), before 15/20 (15), coexist 15/20 (15), chain 17/20 (17), ops 13/20 (13), long 9/20 (9)
+AFTER living, fresh world 7: facts held 139/153 | lookup 42/48, before 36/48, coexist 24/48, chain 35/48, ops 25/48, long 13/48, long12 12/48
+AFTER living, fresh world 8: facts held 149/155 | lookup 47/48, before 46/48, coexist 24/48, chain 44/48, ops 33/48, long 20/48, long12 16/48
+3250s
