@@ -1,0 +1,26 @@
+demos: 100 worlds, 29326 statements, 2400 questions (8768 question steps)
+/home/marimo/pv/proto_v4b.py:537: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  tot += float(L)
+epoch 1: loss 4.01
+epoch 2: loss 1.10
+epoch 3: loss 0.50
+epoch 4: loss 0.22
+epoch 5: loss 0.11
+epoch 6: loss 0.07
+epoch 7: loss 0.05
+epoch 8: loss 0.04
+epoch 9: loss 0.03
+epoch 10: loss 0.02
+epoch 11: loss 0.02
+epoch 12: loss 0.01
+epoch 13: loss 0.01
+epoch 14: loss 0.01
+epoch 15: loss 0.01
+epoch 16: loss 0.01
+epoch 17: loss 0.01
+epoch 18: loss 0.00
+epoch 19: loss 0.00
+epoch 20: loss 0.00
+epoch 21: loss 0.00
+epoch 22: loss 0.00
