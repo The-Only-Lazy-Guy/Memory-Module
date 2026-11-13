@@ -1,0 +1,32 @@
+demos: 50 worlds, 14644 statements, 1200 questions (4362 question steps)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3954.90it/s]
+/home/marimo/pv/w50/proto_v4c.py:609: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  tot += float(L)
+epoch 1: loss 6.32
+epoch 2: loss 2.81
+epoch 3: loss 2.09
+epoch 4: loss 1.69
+epoch 5: loss 1.42
+epoch 6: loss 1.25
+epoch 7: loss 1.14
+epoch 8: loss 1.07
+epoch 9: loss 1.03
+epoch 10: loss 1.00
+epoch 11: loss 0.98
+epoch 12: loss 0.97
+epoch 13: loss 0.97
+epoch 14: loss 0.96
+epoch 15: loss 0.96
+epoch 16: loss 0.96
+epoch 17: loss 0.96
+epoch 18: loss 0.95
+epoch 19: loss 0.95
+epoch 20: loss 0.95
+epoch 21: loss 0.95
+epoch 22: loss 0.95
+epoch 23: loss 0.95
+epoch 24: loss 0.94
+epoch 25: loss 0.94
+epoch 26: loss 0.94
