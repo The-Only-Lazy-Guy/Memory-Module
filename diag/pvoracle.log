@@ -1,0 +1,4 @@
+world 7, relations learned: facts held 27/153 | lookup 5/48, before 2/48, coexist 12/48, chain 3/48, ops 1/48, long 0/48, long12 1/48
+world 7, relations PERFECT (given): facts held 153/153 | lookup 48/48, before 44/48, coexist 48/48, chain 48/48, ops 47/48, long 45/48, long12 27/48
+world 8, relations learned: facts held 31/155 | lookup 10/48, before 4/48, coexist 5/48, chain 5/48, ops 2/48, long 0/48, long12 0/48
+world 8, relations PERFECT (given): facts held 155/155 | lookup 48/48, before 46/48, coexist 48/48, chain 48/48, ops 48/48, long 46/48, long12 37/48
