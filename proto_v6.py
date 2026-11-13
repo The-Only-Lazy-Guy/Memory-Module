@@ -14,6 +14,7 @@ KEYS = list(V.PURPOSE)
 import os
 NAMER = os.environ.get("NAMER", "1") == "1"            # the namer lives too (learns from the names it hears)
 EXPLORE = os.environ.get("EXPLORE", "unsure")          # unsure: deviate where the node doubts; random: ~15% of firings
+PICK = os.environ.get("PICK", "uniform")               # where it deviates: uniform over the other choices, or "odds"
 
 
 class Memory(V.Memory):
@@ -49,6 +50,9 @@ class Memory(V.Memory):
                 p = F.softmax(lg, -1)
                 top = int(p.argmax())
                 if random.random() < min(1., self.U * (1 - float(p[top]))):
+                    if PICK == "uniform":                # 11-14: a wrong column is sure of itself (.84) and gives the
+                        o_ = [i for i in range(len(p)) if i != top]   # right digit ~0 -- sampling its own odds never
+                        return random.choice(o_) if o_ else top       # finds it; any other choice, evenly
                     q = p.clone()
                     q[top] = 0
                     return int(torch.multinomial(q / q.sum(), 1)) if float(q.sum()) > 0 else top
