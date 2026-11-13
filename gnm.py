@@ -712,14 +712,19 @@ CHAT = ["Thanks for the update!", "Morning everyone.", "Let me know if anything 
         "Have a good weekend.", "Sorry for the delay.", "See the notes below.", "That is all for today.", "Hope you are well.",
         "Quick update:", "Cheers, talk soon.", "Nothing new on my side."]
 VAL = lambda v: str(v)                               # what a value node says (11-13: plain -- the LM says the answer)
-ND = lambda t: re.sub(r"(?<=\d) (?=\d)", "", t)      # numbers as they are said (what the LM reads best: lm_probe)
+ND = lambda t: re.sub(r"\( ", "(", re.sub(r" \)", ")", re.sub(r"(?<=\d) (?=\d)", "", t)))   # as it is said
+#                                                (numbers and brackets back together: what the LM reads best, lm_probe)
 SHOTS = ("the gate of Morva is 4. the gate of Morva = 4\nCorrection: the fee of Seldo is now 12. the fee of Seldo = 12\n"
          "the host of Tarn is Velo. the host of Tarn = Velo\nthe tax of Runa is 9 (same as the toll of Bex). the tax of Runa = 9\n")
 ANSWERS = "What is 46? = 46\nWhat was 7 before? = 7\nWhat is Velo? = Velo\nWhat is -12? = -12\n"
 #                                                the form shown to the frozen LM, nothing more (11-13, lm_probe2: a
 #                                                statement's two fields right 317-319 of 320; a chosen statement's
 #                                                value 240/240) -- what the small reader was being trained to do
-D = lambda t: re.sub(r"(?<=\d)(?=\d)", " ", t)       # numbers as the module reads and says them: digit by digit
+D = lambda t: re.sub(r"(?<! )\)", " )", re.sub(r"\((?! )", "( ", re.sub(r"(?<=\d)(?=\d)", " ", t)))
+#                                                as the module reads and says it: a number digit by digit, and each
+#                                                bracket a token of its own (11-13, in61: the tokenizer glues '))',
+#                                                so '(the smaller of 23 and 10)' at the end of another bracket could
+#                                                not be copied whole -- stated without its ')', read back, '))' left)
 #                                                (one row per digit: a function can work along them)
 
 
