@@ -20,7 +20,7 @@ PURPOSE = {"scan": "find the next part of the question", "read": "read the next 
 MEMORY = ("take", "look", "before", "both", "answer")          # memory actions (reads), fixed labels
 KIND2P = {"lookup": "look", "before": "before", "both": "both", "add": "add", "sub": "sub", "max": "max", "min": "min",
           "answer": "answer"}
-THR = .9
+THR = .99                                       # a want meets a label: only when it is that want (11-14: at .9 GPT-2 put "the larger of" and "the smaller of" in one node)
 
 
 @torch.no_grad()
@@ -39,15 +39,17 @@ class GNode(nn.Module):
         self.g = nn.GRU(96, 96, batch_first=True, bidirectional=True)
         self.slot = nn.Linear(d, 96)
         self.st = nn.Embedding(8, 32)
-        self.mix = nn.Sequential(nn.Linear(192 * 2 + 96 * 2 + 32, 256), nn.GELU(), nn.Linear(256, 256), nn.GELU())
-        self.tag = nn.Linear(192 + 256, len(B.QTAGS))
+        self.mix = nn.Sequential(nn.Linear(192 * 3 + 96 * 2 + 32, 256), nn.GELU(), nn.Linear(256, 256), nn.GELU())
+        self.tag = nn.Linear(192 * 3, len(B.QTAGS))     # (11-14, v5 trace: what it decides it decides from the part
+        #                                                 it marks -- from the whole question's ends, a long question's
+        #                                                 operation was routed to a lookup)
         self.digit, self.state, self.choice, self.want = nn.Linear(256, 10), nn.Linear(256, 8), nn.Linear(256, 4), nn.Linear(256, d)
 
     def forward(self, seqs, s1, s2, st):
         """a batch of firings: seqs (token lists or []), s1 / s2 (token lists or []), st (ints)"""
         n = len(st)
         Z = torch.zeros(96, device=dev)
-        H, summ = [None] * n, []
+        H = [None] * n
         idx = [i for i in range(n) if seqs[i]]
         sm = {}
         if idx:
@@ -60,10 +62,14 @@ class GNode(nn.Module):
                 H[i] = h[k, :ln[k]]
                 sm[i] = torch.cat([H[i][0], H[i][-1]])
         pool = lambda s: F.gelu(self.slot(B.vecs(s))).mean(0) if s else Z
-        rows = [torch.cat([sm.get(i, torch.zeros(384, device=dev)), pool(s1[i]), pool(s2[i]),
-                           self.st(torch.tensor(st[i], device=dev))]) for i in range(n)]
+        tags, focus = [None] * n, {}
+        for i in idx:                                  # what it marks, then a pool over what it marks
+            tags[i] = self.tag(torch.cat([H[i], sm[i].expand(len(H[i]), -1)], -1))
+            wgt = 1 - tags[i].softmax(-1)[:, 0]
+            focus[i] = (wgt[:, None] * H[i]).sum(0) / wgt.sum().clamp_min(1e-4)
+        rows = [torch.cat([sm.get(i, torch.zeros(384, device=dev)), focus.get(i, torch.zeros(192, device=dev)), pool(s1[i]),
+                           pool(s2[i]), self.st(torch.tensor(st[i], device=dev))]) for i in range(n)]
         m = self.mix(torch.stack(rows))
-        tags = [self.tag(torch.cat([H[i], m[i].expand(len(H[i]), -1)], -1)) if H[i] is not None else None for i in range(n)]
         return dict(m=m, tags=tags, digit=self.digit(m), state=self.state(m), choice=self.choice(m),
                     want=F.normalize(self.want(m), dim=-1))
 
@@ -395,6 +401,7 @@ if __name__ == "__main__":
     t0 = time.time()
     train(M, worlds, epochs)
     print(f"trained {time.time() - t0:.0f}s", flush=True)
+    torch.save({"sd": M.state_dict(), "labels": M.labels, "n": len(M.nodes)}, f"v5_{B.VECS}_M.pt")
     for s in (7, 8):
         held, nf, res = evaluate(M, 50000 + s, show_fail=3 if s == 7 else 0)
         print(f"fresh world {s}: facts held {held}/{nf} | " + ", ".join(f"{k} {a}/{b}" for k, (a, b) in res.items()), flush=True)
