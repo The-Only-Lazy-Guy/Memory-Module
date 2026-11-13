@@ -84,6 +84,26 @@ def op_firings(a, b, op):
 
 V.op_firings = op_firings                       # (v5's firings() calls it for every operation a demo shows)
 
+import os
+SIGNDEMO = os.environ.get("SIGNDEMO", "1") == "1"
+# 11-14: the operation node's decision (which count, which order, the sign) is a table: op x sign x sign x compare =
+# 48 cases; world questions rarely have a negative operand (5 demo worlds: the sub node saw 2 / 12 cases, never a
+# negative; 50 worlds: 7 / 12) -> -9 - 5 said 4. The teacher's demos show each case once: 48 one-digit operations.
+SIGN_CASES = [(op, (sa, [0] * (B.P - 1) + [x]), (sb, [0] * (B.P - 1) + [y]), op)
+              for op in ("add", "sub", "max", "min") for sa in (0, 1) for sb in (0, 1) for x, y in ((3, 3), (7, 2), (2, 7))]
+_firings = V.firings
+
+
+def firings_with_signs(M, data):
+    out = _firings(M, data)
+    if SIGNDEMO:
+        for op, a, b, _ in SIGN_CASES:
+            out += op_firings(a, b, op)
+    return out
+
+
+V.firings = firings_with_signs
+
 
 # ====================================================================== the run: columns by counting
 class Counted:
