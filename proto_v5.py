@@ -258,7 +258,7 @@ class Memory(B.Memory):
 
     @torch.no_grad()
     def value(self, name, depth=0):
-        p = self.place_of(name)
+        p = self.place_of(name) if name else -1     # (nothing named: nothing found -- 11-14, a try's look on an entry with no source)
         if p < 0 or depth > 6:
             return None, None, []
         if p in self.memo:
