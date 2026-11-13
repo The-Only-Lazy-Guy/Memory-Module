@@ -1806,6 +1806,7 @@ class FM:
                 self.count("calculator")               # asked hears it, write())
                 if self.show:
                     print(f"  fire {len(self.firings)}: {self.name(actor)} states {self.text_of(r_[0])!r}", flush=True)
+                rec["outs"].append((asm[0][1][:1], NEW_WORK, False, None))   # (the phrase it copied: relived when the run was right)
                 rec["did"] = int(self.write(r_[0].B, NEW_PLACE, ins, sg, False, rec, 0, toks=r_[0].toks, name=r_[1], value=r_[2]))
                 self.firings.append(rec)
                 self.count("fires")
@@ -2053,8 +2054,10 @@ def plan(T, E):
             a, b = (x[1][1], x[1][2]) if x[0] == "sumboth" else (x[2][0][1], x[2][1][1])
             y = ("val", next(f for f in TOOLS if f[0] == ("add" if x[0] == "sumboth" else x[1]))[1](a, b))
             said_ = show(x) if x is E else f"({show(x)})"   # (as it stands in the question)
-            key = ("said", said_)
-            steps.append(("add" if x[0] == "sumboth" else x[1], ["q"], ["q"], [(f"{said_} is {y[1]}.", NEW_PLACE, key)]))
+            key = ("said", said_, y[1])                # (what its node makes is the phrase alone, a new node: in60, taught
+            steps.append(("add" if x[0] == "sumboth" else x[1], ["q"], ["q"], [(said_, NEW_WORK, key)]))   # the phrase
+            #                                            together with a result it cannot know, it copied the wrong phrase
+            #                                            43 times of 78; its body states '<phrase> is <result>.')
             E = y if x is E else swap(E, x, y)
             steps.append(("lookup", ["q", ("e", key)], ["q", ("e", key)], [(tell(E), 2, "q")]))
             continue
@@ -2270,14 +2273,10 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
             if shown is not None:
                 shown.append(([(pc[0], pc[1], pc[2]) if pc[0] == "span" else ("made", pc[2] - pc[1]) for pc in plan], w, False, ed))
             fm.count(f"{purpose} exact", int(ok)), fm.count(f"{purpose} said", 1)
-            if calc in CALC and fm.calc_on:            # the calculator's own body: what goes on is the fact it states
-                flat_ = toks_of(net, order)            # from the phrase its node should copy; its mimic learns from it
+            if calc in CALC and fm.calc_on:            # (measured: could its body state a fact from the phrase shown)
+                flat_ = toks_of(net, order)
                 cz = stated(fm, calc, flat_[plan[0][1]:plan[0][2] + 1] if plan and plan[0][0] == "span" else None)
-                cz = cz[0] if cz else None
-                right = cz is not None and cz.toks is not None and fm.tr.tok.decode(cz.toks).strip() == fm.tr.tok.decode(tid).strip()
-                fm.count("calculator right", int(right)), fm.count("calculator", 1)
-                if right:
-                    z, tid, ok = cz.B, cz.toks, True
+                fm.count("calculator right", int(cz is not None)), fm.count("calculator", 1)
             with torch.no_grad():
                 lab, rel = fm.tr.encode([target])[0], fm.tr.relation([target])[0]
             L_, R_ = fm.heads([z])
@@ -2321,7 +2320,8 @@ def run_step(fm, Ls, A, st, purpose, about, ins, outs, also=(), v=1.):
         Ls.add("labels", F.cross_entropy((g_all / .1)[None], torch.tensor([at], device=dev)))
     if fm.trace:
         trace_step(fm, purpose, v, about, actor, how, C, s_all, lg, y, order, o, info, outs, net, float(S), push, exact, float(L), rl)
-    if shown and actor.kind == "fn" and calc is None:  # the demonstration kept as a run (its inputs as they were)
+    if shown and actor.kind == "fn" and (calc is None or calc in CALC):   # the demonstration kept as a run (its inputs as
+        #                                                they were); a calculator's too: the phrase it copies is learned
         fm.shown.setdefault(purpose, []).append({"actor": actor.fn, "ins": [still(n) for n in order], "q": q.detach(), "sign": v,
                                                  "hops": list(hops), "sal": [float(x) for x in sal], "outs": shown})
         del fm.shown[purpose][:-200]
@@ -2422,9 +2422,10 @@ def demo_question(fm, T, Ls, A, st, E):
             for (text, w, name), (z, tid, ok, spelled) in zip(outs, res):
                 n = fm.node(z, tid) if ok else fm.nodes([spelled])[0]   # exact: its own node goes on, as it is; not
                 #                                        yet: what it should have said (its tokens are then true)
-                if w == NEW_PLACE:                     # (the fact a calculator stated: its name the phrase, its value)
-                    p = fm.file(n, name[1], text[len(name[1]) + 4:-1])
-                    T.place[name], T.texts[p] = p, [text]
+                if isinstance(name, tuple):            # (a calculator's step: the fact its body states from that phrase,
+                    said_ = f"{name[1]} is {name[2]}."     # its name the phrase, its value the result)
+                    p = fm.file(fm.nodes([said_])[0], name[1], str(name[2]))
+                    T.place[name], T.texts[p] = p, [said_]
                     stated_.append((name, p))
                 else:
                     n.parent = ws["q"] if w == NEW_WORK else ws[name].parent
