@@ -3,3 +3,14 @@ Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF
 demos: 50 worlds, 26868 firings; nodes made by the model: 9 (n0=read, n1=scan, n2=cmp, n3=add, n4=addd, n5=max, n6=min, n7=sub, n8=subd)
 epoch 10: loss 1.20
 epoch 20: loss 1.03
+epoch 30: loss 0.99
+trained 1009s
+  [lookup] What is the base currency of Bapel? truth 13 got None
+      What is the base currency of Bapel ? | look | the base currency of Bapel
+      What is Gordun ? | n7 | Gordun
+  [before] What was the disk of Gorba before? truth 29 got None
+      What was the disk of Gorba before ? | before | the disk of Gorba
+  [before] What was the device of Thasa before? truth 8 got None
+      What was the device of Thasa before ? | before | the device of Thasa
+fresh world 7: facts held 149/153 | lookup 47/48, before 44/48, coexist 48/48, chain 44/48, ops 39/48, long 38/48, long12 32/48
+fresh world 8: facts held 155/155 | lookup 48/48, before 46/48, coexist 47/48, chain 48/48, ops 47/48, long 43/48, long12 37/48
