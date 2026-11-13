@@ -2,3 +2,17 @@ Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF
 Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2374.94it/s]
 demos: 20 worlds, 10906 firings; nodes made by the model: 9 (n0=read, n1=scan, n2=cmp, n3=add, n4=addd, n5=max, n6=min, n7=sub, n8=subd)
 epoch 10: loss 1.44
+epoch 20: loss 1.05
+epoch 30: loss 1.22
+trained 426s
+  [lookup] What is the base company of Netor? truth 18 got 
+      What is the base company of Netor ? | look | the base company of Netor
+      What is Muba ? | answer | Muba
+  [lookup] What is the worker of Dunzek? truth 18 got 
+      What is the worker of Dunzek ? | look | the worker of Dunzek
+      What is Muba ? | answer | Muba
+  [lookup] What is the worker of Dunzek? truth 18 got 
+      What is the worker of Dunzek ? | look | the worker of Dunzek
+      What is Muba ? | answer | Muba
+fresh world 7: facts held 141/153 | lookup 42/48, before 35/48, coexist 33/48, chain 35/48, ops 29/48, long 25/48, long12 15/48
+fresh world 8: facts held 153/155 | lookup 48/48, before 46/48, coexist 42/48, chain 43/48, ops 41/48, long 26/48, long12 22/48
