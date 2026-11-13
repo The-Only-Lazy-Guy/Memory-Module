@@ -26,3 +26,41 @@ epoch 19: loss 0.94
 epoch 20: loss 0.94
 epoch 21: loss 0.94
 epoch 22: loss 0.94
+epoch 23: loss 0.94
+epoch 24: loss 0.94
+epoch 25: loss 0.94
+epoch 26: loss 0.94
+epoch 27: loss 0.94
+epoch 28: loss 0.94
+epoch 29: loss 0.94
+epoch 30: loss 0.94
+trained 1108s
+  [lookup] What is the base company of Netor? truth 18 got None
+      What is the base company of Netor ? | lookup | the base company of Netor
+      What is Muba ? | before | Muba
+  [lookup] What is the worker of Dunzek? truth 18 got None
+      What is the worker of Dunzek ? | lookup | the worker of Dunzek
+      What is Muba ? | before | Muba
+  [lookup] What is the doctor of Rilba? truth 23 got 13
+      What is the doctor of Rilba ? | lookup | the doctor of Rilba
+      What is 1 3 ? | answer | 1 3
+  [lookup] What is the doctor of Rilba? truth 23 got 13
+      What is the doctor of Rilba ? | lookup | the doctor of Rilba
+      What is 1 3 ? | answer | 1 3
+Traceback (most recent call last):
+  File "/home/marimo/pv/proto_v4c.py", line 654, in <module>
+    held, nf, res = evaluate(M, 50000 + s, show_fail=4 if s == 7 else 0)
+                    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/marimo/pv/proto_v4c.py", line 634, in evaluate
+    got = mem.ask(ask_text(E), tr)
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/marimo/pv/proto_v4c.py", line 477, in ask
+    na, nb = as_num(A_), as_num(B_)
+             ~~~~~~^^^^
+  File "/home/marimo/pv/proto_v4c.py", line 197, in as_num
+    ds = [int(t) for t in ts[1:] if t.isdigit()] if neg else [int(t) for t in ts]
+                                                              ~~~^^^
+ValueError: invalid literal for int() with base 10: '-'
