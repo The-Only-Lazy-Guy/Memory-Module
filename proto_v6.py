@@ -18,7 +18,9 @@ class Memory(V.Memory):
 
     def __init__(self, M, T=0.):
         super().__init__(M)
-        self.T, self.rec = T, None
+        self.T, self.rec, self.p = T, None, .15          # p: how many of a try's firings choose differently (11-14:
+        #                                                  sampling every choice of a 20-firing run broke what was right;
+        #                                                  tries found a better run 0-3 times in 20)
 
     def labels(self):
         names = list(self.M.mem) + [f"n{i}" for i in range(len(self.M.nodes))]
@@ -35,7 +37,8 @@ class Memory(V.Memory):
         if "tags" in USE.get(key, ()) and o["tags"] is None:
             return nm, None                            # (a want that meets a node with nothing for it to read: no run)
         chosen = {}
-        smp = lambda lg: int(torch.multinomial(F.softmax(lg / self.T, -1), 1)) if self.T else int(lg.argmax())
+        here = self.T and random.random() < self.p       # this firing tries something else (all its choices)
+        smp = lambda lg: int(torch.multinomial(F.softmax(lg / self.T, -1), 1)) if here else int(lg.argmax())
         for h in USE.get(key, ()):
             if h == "tags":
                 t = [smp(r) for r in o["tags"]]
@@ -83,8 +86,8 @@ def imitate(M, recs, demo_fs, opt, n_demo=400):
     return float(L.detach())
 
 
-def live(M, demo_fs, worlds, tries=4, T=.7, nq=24, seed0=70000):
-    opt = torch.optim.AdamW([p for n in M.nodes for p in n.parameters()], lr=5e-4)   # (the translator stays as the
+def live(M, demo_fs, worlds, tries=12, T=1., nq=24, seed0=70000):
+    opt = torch.optim.AdamW([p for n in M.nodes for p in n.parameters()], lr=1e-3)   # (the translator stays as the
     tally = {}                                                                         # demos left it)
     for wi in range(worlds):
         rng = random.Random(seed0 + wi)
@@ -117,7 +120,7 @@ def live(M, demo_fs, worlds, tries=4, T=.7, nq=24, seed0=70000):
             mem.T, mem.rec, mem.memo = 0., None, {}
             if best:
                 recs += best
-        if recs:
+        for _ in range(20 if recs else 0):          # (11-14: one step per world was 40 steps in all -- nothing moved)
             imitate(M, recs, demo_fs, opt)
         if (wi + 1) % 5 == 0:
             print(f"lived {wi + 1} worlds: own run right / some run right: " +
