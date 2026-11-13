@@ -1,0 +1,20 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 5049.80it/s]
+Traceback (most recent call last):
+  File "/home/marimo/pv/proto_v4coracle.py", line 93, in <module>
+    held, nf, res = score(50000 + s, oracle)
+                    ~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/marimo/pv/proto_v4coracle.py", line 85, in score
+    hit += mem.ask(V.ask_text(E)) == str(V.truth_of(E, w))
+           ~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/marimo/pv/proto_v4c.py", line 477, in ask
+    na, nb = as_num(A_), as_num(B_)
+             ~~~~~~^^^^
+  File "/home/marimo/pv/proto_v4c.py", line 197, in as_num
+    ds = [int(t) for t in ts[1:] if t.isdigit()] if neg else [int(t) for t in ts]
+                                                              ~~~^^^
+ValueError: invalid literal for int() with base 10: '-'
