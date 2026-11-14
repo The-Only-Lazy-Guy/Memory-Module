@@ -71,3 +71,11 @@ step 5600: blank nll 2.398, round trip 1.803, write cost 0.025, nodes / article 
 step 5800: blank nll 2.522, round trip 1.894, write cost 0.025, nodes / article 31.3, grad norm 113.34 (max 8548.7), row norm 1.64 (token vectors ~3.5), mark 0.98, 2280s
    largest grads (before clipping): mark 8.2e-01, qry.weight 3.9e-01, key.weight 3.7e-01, att.weight 1.2e-01
 step 6000: blank nll 2.601, round trip 1.841, write cost 0.026, nodes / article 31.5, grad norm 48.34 (max 673.6), row norm 1.67 (token vectors ~3.5), mark 1.00, 2356s
+   largest grads (before clipping): mark 8.7e-01, key.weight 3.3e-01, qry.weight 3.1e-01, spanq 1.5e-01
+step 6200: blank nll 2.424, round trip 1.901, write cost 0.026, nodes / article 31.4, grad norm 99.85 (max 9494.0), row norm 1.65 (token vectors ~3.5), mark 1.01, 2431s
+   largest grads (before clipping): mark 6.5e-01, qry.weight 5.1e-01, key.weight 5.0e-01, ptr.weight 1.6e-01
+step 6400: blank nll 2.282, round trip 1.916, write cost 0.026, nodes / article 31.7, grad norm 50.59 (max 2329.5), row norm 1.63 (token vectors ~3.5), mark 1.00, 2509s
+   largest grads (before clipping): mark 8.0e-01, key.weight 3.7e-01, ptr.weight 3.5e-01, qry.weight 2.3e-01
+step 6600: blank nll 2.178, round trip 1.917, write cost 0.025, nodes / article 31.6, grad norm 44.79 (max 963.1), row norm 1.59 (token vectors ~3.5), mark 1.03, 2585s
+   largest grads (before clipping): mark 7.9e-01, key.weight 4.9e-01, qry.weight 3.2e-01, att.weight 1.2e-01
+step 6800: blank nll 2.521, round trip 1.915, write cost 0.025, nodes / article 31.8, grad norm 69.21 (max 2851.1), row norm 1.57 (token vectors ~3.5), mark 1.06, 2663s
