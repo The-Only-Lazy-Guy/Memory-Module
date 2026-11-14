@@ -1,1 +1,124 @@
 annotations resolve: demo 135 firings, held-out 60 firings
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2785.09it/s]
+demos: 10 articles, 52 sentences, 83 facts, 135 firings; nodes made: 1; fields named: 30
+epoch 25: loss 9.20
+epoch 50: loss 7.78
+epoch 75: loss 6.93
+epoch 100: loss 6.74
+epoch 125: loss 5.43
+epoch 150: loss 5.44
+trained 35s
+lockstep: firings 60 | want right 52 (of 'nothing more' firings: 13/21; of 'keep' firings: 39/39) | subject choice 39/39 | THING recall 51/80 precision 51/61, ATTR recall 89/127 precision 89/128, VAL recall 89/128 precision 89/129
+
+demo articles (seen): gold facts 83 | value found 72 (exact 41) | field named right 59 | facts kept 76, of them a gold value 71
+
+  == Diamond stingray: sentences read one fact per firing
+    S0: The diamond stingray ( Dasyatis dipterura ) is a species of stingray in the family Dasyatidae .
+    S1: It is found in the coastal waters of the eastern Pacific Ocean from southern California to northern Chile , and around the Galápagos and Hawaiian Isla
+      [subject] is found in the -> coastal waters (new)
+      [subject] of the -> eastern Pacific (added)
+    S2: This bottom @-@ dweller generally inhabits sandy or muddy flats near rocky reefs and kelp forests , to a depth of 30 m ( 98 ft ) , though off Hawaii i
+      [subject] generally inhabits -> @ dweller sandy or muddy flats rocky (new)
+      [subject] depth of -> kelp 3 0 m (new)
+    S3: As its common name suggests , this species has an angular , diamond @-@ shaped pectoral fin disc that is plain brown or gray above , with rows of tube
+      [subject] has an -> angular , diamond @ - @ shaped pectoral (new)
+      [subject] is -> brown (new)
+    S4: The long , whip @-@ like tail has both dorsal and ventral fin folds , which distinguish this ray from the closely similar longtail stingray ( D. longa
+      [subject] has both -> dorsal and ventral fin (new)
+  -- its nodes:
+    NODE Diamond stingray
+                 range | said as: is found in the / of the | value(s): coastal waters ; eastern Pacific
+               habitat | said as: generally inhabits | value(s): @ dweller sandy or muddy flats rocky
+                  size | said as: depth of | value(s): kelp 3 0 m
+                  male | said as: has an | value(s): angular , diamond @ - @ shaped pectoral
+              known as | said as: is | value(s): brown
+             resembles | said as: has both | value(s): dorsal and ventral fin
+
+  == Verpa bohemica: sentences read one fact per firing
+    S0: Verpa bohemica is a species of fungus in the family Morchellaceae .
+      [subject] is a species of -> fungus (new)
+      [subject] in the family -> Morchellaceae (new)
+    S1: Commonly known as the early morel ( or early false morel ) or the wrinkled thimble @-@ cap , it is one of several species known informally as a " fals
+      [subject] known as the of several species known -> early morel (added)
+    S2: The mushroom has a pale yellow or brown thimble @-@ shaped cap — 2 to 4 cm ( 0 @.@ 8 to 1 @.@ 6 in ) in diameter by 2 to 5 cm ( 0 @.@ 8 to 2 @.@ 0 in 
+      [subject] has a -> pale yellow or brown thimble (new)
+    S3: The cap hangs from the top of a lighter @-@ colored , brittle stem that measures up to 12 cm ( 4 @.@ 7 in ) long by 1 to 2 @.@ 5 cm ( 0 @.@ 4 to 1 @.@
+      [subject] hangs from the top of a measures up to -> lighter @ 2 (new)
+      [subject] - -> @ colored brittle stem (new)
+    S4: Microscopically , the mushroom is distinguished by its large spores , typically 60 – 80 by 15 – 18 µm , and the presence of only two spores per ascus 
+  -- its nodes:
+    NODE Verpa bohemica
+                  kind | said as: is a species of / known as the of several species known | value(s): fungus ; early morel
+                family | said as: in the family | value(s): Morchellaceae
+                 stalk | said as: has a | value(s): pale yellow or brown thimble
+                  size | said as: hangs from the top of a measures up to | value(s): lighter @ 2
+       scientific name | said as: - | value(s): @ colored brittle stem
+
+  == Pluteus nevadensis: sentences read one fact per firing
+    S0: Pluteus nevadensis is a species of fungus in the agaric family Pluteaceae .
+      [subject] is a species of -> fungus (new)
+      [subject] in the -> agaric family Pluteaceae (new)
+    S1: Described as new to science in 2010 , the species is known only from subtropical and pine forests in Mexico , where it grows on rotting pine and oak w
+      [subject] Described as new is known only from -> subtropical and pine forests (new)
+      [subject] grows on -> rotting pine and oak (new)
+    S2: Fruit bodies ( mushrooms ) have red @-@ orange caps up to 3 @.@ 8 cm ( 1 @.@ 5 in ) in diameter with a shape ranging from conic , convex , or flattene
+      [subject] have -> red @ - @ orange caps (new)
+      [subject] up to -> 3 @ . @ 8 cm (new)
+      [subject] ranging -> conic (new)
+    S3: The silky yellow stems are up to 4 @.@ 5 cm ( 1 @.@ 8 in ) long .
+      [subject] stems are up to -> 4 @ . @ 5 (added)
+      [subject]  -> yellow cm (new)
+    S4: It is similar in appearance to Pluteus aurantiorugosus , with which it shares an <unk> or scarlet @-@ colored cap and a yellow stem .
+      [subject] is similar in appearance -> Pluteus aurantiorugosus (new)
+  -- its nodes:
+    NODE Pluteus nevadensis
+                  kind | said as: is a species of | value(s): fungus
+                family | said as: in the | value(s): agaric family Pluteaceae
+                 range | said as: Described as new is known only from | value(s): subtropical and pine forests
+               habitat | said as: grows on | value(s): rotting pine and oak
+                  tail | said as: have | value(s): red @ - @ orange caps
+                  size | said as: up to / stems are up to | value(s): 3 @ . @ 8 cm ; 4 @ . @ 5
+            related to | said as: ranging | value(s): conic
+       scientific name | said as:  | value(s): yellow cm
+                 genus | said as: is similar in appearance | value(s): Pluteus aurantiorugosus
+
+  == Banksia sphaerocarpa: sentences read one fact per firing
+    S0: Banksia sphaerocarpa , commonly known as the Fox Banksia or Round @-@ fruit Banksia , is a species of shrub or tree in the plant genus Banksia ( famil
+      [subject] commonly known as the or -> Fox Banksia Round @ - (new)
+      [subject] is a species of -> shrub or (new)
+      [subject] in the plant genus -> Banksia (new)
+    S1: It is generally encountered as a 1 – 2 m ( 3 @.@ 3 – 6 @.@ 6 ft ) high shrub , and is usually smaller in the north of its range .
+      [subject] is generally encountered as -> a 1 – 2 m (new)
+    S2: This species has narrow green leaves , and brownish , orange or yellow round flower spikes which may be seen from January to July .
+      [subject] has -> narrow green leaves , brownish orange (new)
+      [subject] seen -> yellow round (new)
+    S3: It is widely distributed across the southwest of Western Australia , growing exclusively in sandy soils .
+      [subject] is widely distributed across the of -> southwest Western Australia (new)
+      [subject] growing exclusively in -> sandy soils . (new)
+    S4: It is usually the dominant plant in scrubland or low woodland .
+      [subject] is usually the dominant plant in -> scrubland or low woodland (new)
+  -- its nodes:
+    NODE Banksia sphaerocarpa
+              known as | said as: commonly known as the or | value(s): Fox Banksia Round @ -
+                  kind | said as: is a species of | value(s): shrub or
+                 genus | said as: in the plant genus | value(s): Banksia
+       (new: is generally encountered as) | said as: is generally encountered as | value(s): a 1 – 2 m
+                  tail | said as: has | value(s): narrow green leaves , brownish orange
+           (new: seen) | said as: seen | value(s): yellow round
+                 range | said as: is widely distributed across the of | value(s): southwest Western Australia
+                  soil | said as: growing exclusively in | value(s): sandy soils .
+               habitat | said as: is usually the dominant plant in | value(s): scrubland or low woodland
+
+  == Bigeye thresher: sentences read one fact per firing
+    S0: The bigeye thresher ( Alopias superciliosus ) is a species of thresher shark , family Alopiidae , found in temperate and tropical oceans worldwide .
+      [subject]  -> Alopias superciliosus (new)
+      [subject] is a species of -> thresher shark (new)
+      [subject] family Alopiidae , found in -> temperate and tropical (new)
+  -- its nodes:
+    NODE Bigeye thresher
+       scientific name | said as:  | value(s): Alopias superciliosus
+                  kind | said as: is a species of | value(s): thresher shark
+                 range | said as: family Alopiidae , found in | value(s): temperate and tropical
+
+HELD-OUT articles: gold facts 39 | value found 27 (exact 10) | field named right 15 | facts kept 35, of them a gold value 27
