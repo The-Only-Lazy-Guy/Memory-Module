@@ -669,7 +669,7 @@ class GNM(nn.Module):
     """the trained parts around the frozen LM: retrieval query, write head (K slots of m rows), keys, gates, pointer
     (which fetched node a slot replaces), relations from the write's own attention"""
 
-    def __init__(self, K=4, m=2, dk=256, topk=8):
+    def __init__(self, K=4, m=8, dk=256, topk=8):
         super().__init__()
         tk, M = lm()
         d = M.config.n_embd
@@ -683,8 +683,10 @@ class GNM(nn.Module):
         self.ptr = nn.Linear(d, dk)
         self.new = nn.Parameter(torch.zeros(1))
         self.mark = nn.Parameter(torch.zeros(d))            # added to memory rows: "this is memory"
-        with torch.no_grad():
-            self.scale = nn.Parameter(M.transformer.wte.weight.norm(dim=-1).mean().reshape(1))
+        nn.init.zeros_(self.val.weight)                      # rows start as pure mixtures of the step's token vectors
+        nn.init.zeros_(self.val.bias)
+        self.register_buffer("hmu", torch.zeros(d))         # running mean of the LM's states (11-14 inspect: sentence
+        #                                                     means of GPT-2's last layer had cos .995 -- a constant)
         nn.init.constant_(self.gate.bias, 1.)                # start by writing; the cost teaches restraint
         self.cost = float(os.environ.get("WRITE_COST", ".001"))
 
@@ -697,10 +699,17 @@ class GNM(nn.Module):
             out = lm()[1](inputs_embeds=embs[None], output_hidden_states=True)
         return out.hidden_states[-1][0].float(), out.logits[0].float()
 
+    def center(self, H):
+        """the LM's states minus their running mean (what differs between inputs, not what all share)"""
+        if self.training:
+            with torch.no_grad():
+                self.hmu.mul_(.99).add_(.01 * H.mean(0))
+        return H - self.hmu
+
     # ---------------------------------------------------------------- retrieve
     def query(self, ids):
         h, _ = self.run(self.embed(ids))
-        return F.normalize(self.qry(h.mean(0)), dim=-1)
+        return F.normalize(self.qry(self.center(h).mean(0)), dim=-1)
 
     def retrieve(self, mem, q):
         """top-k nodes by key, plus their one-hop neighbours; rows carry the key score's gradient"""
@@ -722,18 +731,22 @@ class GNM(nn.Module):
         return sel, torch.cat(rows), owner
 
     # ---------------------------------------------------------------- write (the loop's output)
-    def write(self, mem, sel, owner, H, n_rows, train):
-        """K slots attend over the step's LM states -> rows, key, gate, pointer (replace a fetched node / new),
+    def write(self, mem, sel, owner, H, embs, n_rows, train):
+        """K slots of m rows; each row attends over the step (fetched memory rows + the change): WHAT it takes is chosen
+        from the LM's centred states, what it holds is the step's own token vectors (+ a learned context correction,
+        starting at zero) -- a node is a group of token vectors the LM reads natively (11-14 inspect: rows made from
+        the LM's last-layer states were one constant vector). Then key, gate, pointer (replace a fetched node / new),
         relations (attention mass on each fetched node).
         Train (soft, so both decisions learn from the loss -- 11-14 e1: a hard untrained pointer overwrote memory down to
         ~2 nodes an article and the gates gave up): a slot's rows are scaled by its gate; its edit is a blend -- each
         fetched node moves toward the slot by gate x pointer probability, the rest goes to a new node.
         Eval: open slots only (gate > .5); the pointer's best choice replaces that node, or 'new' adds one."""
         K, m, d = self.K, self.m, self.d
-        A = F.softmax(self.slotq @ self.att(H).T / d ** .5, -1)          # (K*m, T)
-        self._A, self._H = A.detach(), H.detach()                        # (inspection only)
-        X = A @ H
-        rows = (F.normalize(self.val(X), dim=-1) * self.scale).view(K, m, d)
+        Hc = self.center(H)
+        A = F.softmax(self.slotq @ self.att(Hc).T / d ** .5, -1)         # (K*m, T)
+        self._A, self._H = A.detach(), Hc.detach()                       # (inspection only)
+        X = A @ Hc
+        rows = (A @ embs + self.val(X)).view(K, m, d)
         pooled = X.view(K, m, d).mean(1)
         g = torch.sigmoid(self.gate(pooled)).squeeze(-1)
         k = F.normalize(self.key(pooled), dim=-1)
@@ -773,7 +786,7 @@ class GNM(nn.Module):
         sel, rows, owner = self.retrieve(mem, self.query(ids))
         embs = self.embed(ids) if rows is None else torch.cat([rows, self.embed(ids)])
         H, _ = self.run(embs)
-        written, cost = self.write(mem, sel, owner, H, 0 if rows is None else len(rows), train)
+        written, cost = self.write(mem, sel, owner, H, embs, 0 if rows is None else len(rows), train)
         woken = sorted({i for w in written for i, _ in mem.R[w]} - set(written))
         return written, woken, cost
 
@@ -869,6 +882,7 @@ def read(G, mem, art, train=False):
 
 def train_e1(G, arts, steps, lr=3e-4, nq=4, log=200):
     opt = torch.optim.AdamW([p for p in G.parameters() if p.requires_grad], lr=lr)
+    G.train()
     rng = random.Random(0)
     t0, acc = time.time(), []
     for st in range(steps):
@@ -893,6 +907,7 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
     """per quiz item, three readers of the same blank: the LM alone, the LM with the article(s) in context (when it
     fits), the LM with GNM's memory of the article(s). nll / token accuracy / exact span (greedy)"""
     tk = lm()[0]
+    G.eval()
     rng = random.Random(seed)
     res = {k: [0., 0., 0, 0] for k in ("LM alone", "LM + text in context", "LM + GNM memory", "LM + another's memory")}
     prev = None
@@ -936,6 +951,7 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
 def inspect(G, arts, tr_arts, n=20):
     """what the trained parts actually do: node collapse, write attention, retrieval vs a node's source, gradients"""
+    G.eval()
     rng = random.Random(3)
     per_art, att_ent, ret_hit, ret_n, hid = [], [], 0, 0, []
     with torch.no_grad():
