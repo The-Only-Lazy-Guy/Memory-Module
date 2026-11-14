@@ -1,1 +1,1 @@
-species_used.json / species_e1.json: species articles from WikiText-103 (Wikipedia, CC BY-SA 3.0). species_e1.json = all 529 'is a species/genus of' articles, first 3 paragraphs.
+species_e1.json: 529 WikiText-103 species articles (first 3 paragraphs). wiki_e1.json.gz: the other 28,845 WikiText-103 articles (first 3 paragraphs). Wikipedia text, CC BY-SA 3.0.

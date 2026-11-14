@@ -7,6 +7,7 @@ The world below is kept only as a source of checkable questions (later tests). O
   python gnm.py e1 --steps 3000 --save /marimo/ckpt/e1.pt     # reading: species articles in, blanked spans out
 """
 import argparse
+import gzip
 import json
 import os
 import random
@@ -828,7 +829,8 @@ def load_articles(path, n_sent=8):
     """species articles (WikiText-103): per article its first sentences, as the LM's token ids"""
     tk = lm()[0]
     arts = []
-    for b in json.load(open(path, encoding="utf-8")):
+    raw = gzip.open(path, "rt", encoding="utf-8") if path.endswith(".gz") else open(path, encoding="utf-8")
+    for b in json.load(raw):
         ss = []
         for para in b["text"]:
             ss += [clean(s) + "." for s in re.split(r" \. ", para) if len(s.split()) > 3]
@@ -933,6 +935,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("task", nargs="?", default="e1")
     ap.add_argument("--data", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio", "species_e1.json"))
+    ap.add_argument("--train-data", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio", "wiki_e1.json.gz"))  # any text (11-14: 469 articles were too few)
     ap.add_argument("--steps", type=int, default=3000)
     ap.add_argument("--heldout", type=int, default=60)
     ap.add_argument("--save", default="")
@@ -945,6 +948,8 @@ if __name__ == "__main__":
         arts = arts[:12]
         a.steps, a.heldout = 4, 4
     train, held = arts[:-a.heldout], arts[-a.heldout:]
+    if os.path.exists(a.train_data) and not a.smoke:
+        train = train + load_articles(a.train_data)
     print(f"E1: {len(arts)} articles ({len(train)} train, {len(held)} held out), LM {LM_NAME}, device {dev}", flush=True)
     G = GNM().to(dev)
     eval_e1(G, held[:10 if not a.smoke else 2], show=0)
