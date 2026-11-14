@@ -1,0 +1,242 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 5225.23it/s]
+E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
+/marimo/pv/insp/gnm.py:898: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3)))
+
+FIRE on sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   fetched: nothing (memory empty)
+   slot 0: takes 'Rh' 0.02, ' C' 0.02, 'ut' 0.02, 'r' 0.02, 'op' 0.02, 'ar' 0.02
+   slot 1: takes '.' 0.02, ' Indian' 0.02, ' an' 0.02, ' its' 0.02, ' common' 0.02, ' meat' 0.02
+   slot 2: takes '.' 0.02, ' promotes' 0.02, ' meat' 0.02, ' Indian' 0.02, ' that' 0.02, ' and' 0.02
+   slot 3: takes ' a' 0.02, ' Indian' 0.02, ' whose' 0.02, ' its' 0.02, '.' 0.02, 'r' 0.02
+   gates open: 0/4; woke []; memory now 0 nodes
+
+FIRE on sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   fetched: nothing (memory empty)
+   slot 0: takes '.' 0.02, ' (' 0.02, '-' 0.02, ' milk' 0.02, '.' 0.02, ' coastal' 0.02
+   slot 1: takes '.' 0.02, ' (' 0.02, ' measures' 0.02, ' be' 0.02, ' coastal' 0.02, ' the' 0.02
+   slot 2: takes '.' 0.02, ' (' 0.02, '.' 0.02, ' measures' 0.02, '.' 0.02, ' largest' 0.02
+   slot 3: takes ' measures' 0.02, ' coastal' 0.02, ' be' 0.02, ' typically' 0.02, ' the' 0.02, '.' 0.02
+   gates open: 0/4; woke []; memory now 0 nodes
+
+FIRE on sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   fetched: nothing (memory empty)
+   slot 0: takes 'u' 0.03, ' (' 0.03, ' est' 0.03, ' a' 0.03, ',' 0.03, ' been' 0.03
+   slot 1: takes ' been' 0.03, 'u' 0.03, ' of' 0.03, ' (' 0.03, ' swimming' 0.03, ',' 0.03
+   slot 2: takes ' has' 0.03, ' of' 0.03, ' and' 0.03, '.' 0.03, ' is' 0.03, ' (' 0.03
+   slot 3: takes 'u' 0.03, ' of' 0.03, ' been' 0.03, ',' 0.03, ' and' 0.03, ' is' 0.03
+   gates open: 0/4; woke []; memory now 0 nodes
+
+FIRE on sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   fetched: nothing (memory empty)
+   slot 0: takes ' se' 0.06, ' me' 0.06, 'ag' 0.06, ' tidal' 0.06, 'r' 0.06, '.' 0.06
+   slot 1: takes '.' 0.06, ' are' 0.06, ' tidal' 0.06, 'ass' 0.06, ' pools' 0.06, 'iles' 0.06
+   slot 2: takes '.' 0.06, ' are' 0.06, 'iles' 0.06, ' to' 0.06, ' inhabit' 0.06, ' and' 0.06
+   slot 3: takes ' are' 0.06, '.' 0.06, ' and' 0.06, ' to' 0.06, 'iles' 0.06, 'ass' 0.06
+   gates open: 0/4; woke []; memory now 0 nodes
+
+FIRE on sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   fetched: nothing (memory empty)
+   slot 0: takes ' sn' 0.03, 'esc' 0.03, ' a' 0.03, ' gray' 0.03, ' long' 0.03, ' a' 0.03
+   slot 1: takes ' is' 0.03, ' pointed' 0.03, ' slender' 0.03, ' a' 0.03, '.' 0.03, 'ript' 0.03
+   slot 2: takes ' has' 0.03, '.' 0.03, ' is' 0.03, ' and' 0.03, ' with' 0.03, ' large' 0.03
+   slot 3: takes ' a' 0.03, ' pointed' 0.03, ' a' 0.03, ' is' 0.03, ' a' 0.03, ' slender' 0.03
+   gates open: 0/4; woke []; memory now 0 nodes
+
+FIRE on sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   fetched: nothing (memory empty)
+   slot 0: takes ' seven' 0.03, ' fur' 0.03, ' ..' 0.03, ' to' 0.03, ' long' 0.03, ' 15' 0.03
+   slot 1: takes ' to' 0.03, ' just' 0.03, ' be' 0.03, 'rows' 0.03, ' ..' 0.03, ' its' 0.03
+   slot 2: takes ' be' 0.03, ' pores' 0.03, ' its' 0.03, ' just' 0.03, 'rows' 0.03, ' to' 0.03
+   slot 3: takes ' the' 0.03, ' its' 0.03, ' be' 0.03, ' can' 0.03, ' just' 0.03, ' enlarged' 0.03
+   gates open: 0/4; woke []; memory now 0 nodes
+
+FIRE on sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   fetched: nothing (memory empty)
+   slot 0: takes ' b' 0.03, ' c' 0.03, 'op' 0.03, ' crust' 0.03, ' milk' 0.03, 'hal' 0.03
+   slot 1: takes '.' 0.03, ',' 0.03, ' but' 0.03, 'ans' 0.03, ' takes' 0.03, 'ods' 0.03
+   slot 2: takes '.' 0.03, ' abundant' 0.03, ' takes' 0.03, ',' 0.03, ' the' 0.03, ' and' 0.03
+   slot 3: takes ',' 0.03, ' and' 0.03, ' abundant' 0.03, 'ans' 0.03, ' but' 0.03, 'ony' 0.03
+   gates open: 0/4; woke []; memory now 0 nodes
+
+FIRE on sentence 7: ' In turn, it often falls prey to larger sharks and possibly marine mammals.'
+   fetched: nothing (memory empty)
+   slot 0: takes '.' 0.07, ' it' 0.07, ' often' 0.07, ' larger' 0.07, ' marine' 0.07, ' sharks' 0.07
+   slot 1: takes '.' 0.07, ' larger' 0.07, ' prey' 0.07, ' marine' 0.07, ' often' 0.07, ' falls' 0.07
+   slot 2: takes '.' 0.07, ' often' 0.07, ' and' 0.07, ' possibly' 0.07, ' it' 0.07, ' larger' 0.07
+   slot 3: takes ' often' 0.07, ' marine' 0.07, ' possibly' 0.07, ' and' 0.07, ' it' 0.07, ' larger' 0.07
+   gates open: 0/4; woke []; memory now 0 nodes
+
+ASK ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' (truth ' crustaceans.')
+   LM with memory says ' other small fish,'; LM alone says ' other small fish,'
+
+ASK ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae,' (truth ' whose common name comes from an')
+   LM with memory says ' which includes the shark family,'; LM alone says ' which includes the shark family,'
+
+ASK ' In turn, it often falls prey to larger sharks' (truth ' and possibly marine mammals.')
+   LM with memory says ', which are more likely'; LM alone says ', which are more likely'
+step 120: blank nll 6.447, round trip 6.435, write cost 0.026, nodes / article 31.7, 53s
+step 240: blank nll 7.617, round trip 7.667, write cost 0.028, nodes / article 31.7, 106s
+step 360: blank nll 7.603, round trip 7.515, write cost 0.029, nodes / article 32.0, 159s
+step 480: blank nll 7.638, round trip 7.420, write cost 0.029, nodes / article 31.8, 211s
+step 600: blank nll 7.663, round trip 7.496, write cost 0.029, nodes / article 31.7, 263s
+
+==================== after 600 training steps
+
+FIRE on sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   fetched: nothing (memory empty)
+   slot 0: takes ' Indian' 0.02, ' an' 0.02, ' meat' 0.02, '.' 0.02, 'r' 0.02, ' of' 0.02
+   slot 1: takes ' part' 0.03, ' consumption' 0.02, 'idae' 0.02, ' lact' 0.02, 'ar' 0.02, ' C' 0.02
+   slot 2: takes ' meat' 0.02, '.' 0.02, ' an' 0.02, 'ut' 0.02, 'iz' 0.02, ' Indian' 0.02
+   slot 3: takes ' meat' 0.02, ' Indian' 0.02, ' an' 0.02, '.' 0.02, 'r' 0.02, 'iz' 0.02
+   -> NEW n0: says '"\n" " " " " " " "'; relations []
+   gates open: 1/4; woke []; memory now 1 nodes
+
+FIRE on sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   fetched n0 (written at sentence 0, key score +0.43): says '"\n" " " " " " " "'
+   slot 0: takes ' be' 0.02, '.' 0.02, '.' 0.02, ' measures' 0.02, ' (' 0.02, ' coastal' 0.02
+   slot 1: takes ' Indo' 0.02, '[n0 row]' 0.02, '[n0 row]' 0.02, '[n0 row]' 0.02, '[n0 row]' 0.02, '[n0 row]' 0.02
+   slot 2: takes '.' 0.02, '.' 0.02, ' (' 0.02, '.' 0.02, ' milk' 0.02, ' be' 0.02
+   slot 3: takes ' coastal' 0.02, ' be' 0.02, '.' 0.02, '.' 0.02, ' measures' 0.02, ' (' 0.02
+   -> NEW n1: says ' ge ge ge ge ge ge ge ge ge ge'; relations [('n0', 1.06)]
+   -> NEW n2: says ' all all all all all all all all all all'; relations [('n0', 1.27)]
+   -> NEW n3: says ' ge ge ge ge ge ge ge ge ge ge'; relations [('n0', 1.07)]
+   -> NEW n4: says ' ge ge ge ge ge ge ge ge ge ge'; relations [('n0', 0.99)]
+   gates open: 4/4; woke ['n0']; memory now 5 nodes
+
+FIRE on sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   fetched n0 (written at sentence 0, key score +0.38): says '"\n" " " " " " " "'
+   fetched n4 (written at sentence 1, key score +0.27): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n1 (written at sentence 1, key score +0.26): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n3 (written at sentence 1, key score +0.26): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n2 (written at sentence 1, key score +0.23): says ' all all all all all all all all all all'
+   slot 0: takes 'aries' 0.01, ' and' 0.01, ',' 0.01, ' est' 0.01, '.' 0.01, ' been' 0.01
+   slot 1: takes '[n0 row]' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01
+   slot 2: takes '.' 0.01, 'aries' 0.01, ',' 0.01, '660' 0.01, ' and' 0.01, 'u' 0.01
+   slot 3: takes 'aries' 0.02, ',' 0.01, ' and' 0.01, ' est' 0.01, ' rivers' 0.01, '.' 0.01
+   -> EDIT of n0 n0 (moved 27.00): says ', the "C" in the name of the'; relations [('n0', 0.75), ('n1', 0.78), ('n2', 0.79), ('n3', 0.79), ('n4', 0.77)]
+   -> EDIT of n0 n0 (moved 27.00): says ', the "C" in the name of the'; relations [('n0', 0.75), ('n1', 0.78), ('n2', 0.79), ('n3', 0.79), ('n4', 0.77)]
+   -> EDIT of n0 n0 (moved 27.00): says ', the "C" in the name of the'; relations [('n0', 0.75), ('n1', 0.78), ('n2', 0.79), ('n3', 0.79), ('n4', 0.77)]
+   -> EDIT of n0 n0 (moved 27.00): says ', the "C" in the name of the'; relations [('n0', 0.75), ('n1', 0.78), ('n2', 0.79), ('n3', 0.79), ('n4', 0.77)]
+   gates open: 4/4; woke ['n1', 'n2', 'n3', 'n4']; memory now 5 nodes
+
+FIRE on sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   fetched n4 (written at sentence 1, key score +0.23): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n1 (written at sentence 1, key score +0.23): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n3 (written at sentence 1, key score +0.22): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n2 (written at sentence 1, key score +0.20): says ' all all all all all all all all all all'
+   fetched n0 (written at sentence 0, key score -0.16): says ', the "C" in the name of the'
+   slot 0: takes '[n0 row]' 0.02, '[n4 row]' 0.02, '[n0 row]' 0.02, '[n2 row]' 0.02, '[n2 row]' 0.02, '[n2 row]' 0.02
+   slot 1: takes 'ass' 0.02, '.' 0.02, ' and' 0.02, 'r' 0.02, ' pools' 0.02, ' are' 0.02
+   slot 2: takes '[n0 row]' 0.02, '[n0 row]' 0.02, ' Juven' 0.02, '[n0 row]' 0.02, '[n2 row]' 0.02, '[n2 row]' 0.02
+   slot 3: takes '[n0 row]' 0.02, '[n0 row]' 0.02, '[n2 row]' 0.02, '[n2 row]' 0.02, '[n2 row]' 0.02, '[n2 row]' 0.02
+   -> EDIT of n0 n0 (moved 83.44): says '\n\n ( ( ( ( ( ( ( ('; relations [('n0', 1.17), ('n1', 1.16), ('n2', 1.17), ('n3', 1.17), ('n4', 1.16)]
+   -> EDIT of n0 n0 (moved 83.44): says '\n\n ( ( ( ( ( ( ( ('; relations [('n0', 1.17), ('n1', 1.16), ('n2', 1.17), ('n3', 1.17), ('n4', 1.16)]
+   -> EDIT of n0 n0 (moved 83.44): says '\n\n ( ( ( ( ( ( ( ('; relations [('n0', 1.17), ('n1', 1.16), ('n2', 1.17), ('n3', 1.17), ('n4', 1.16)]
+   -> EDIT of n0 n0 (moved 83.44): says '\n\n ( ( ( ( ( ( ( ('; relations [('n0', 1.17), ('n1', 1.16), ('n2', 1.17), ('n3', 1.17), ('n4', 1.16)]
+   gates open: 4/4; woke ['n1', 'n2', 'n3', 'n4']; memory now 5 nodes
+
+FIRE on sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   fetched n4 (written at sentence 1, key score +0.15): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n2 (written at sentence 1, key score +0.15): says ' all all all all all all all all all all'
+   fetched n1 (written at sentence 1, key score +0.15): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n3 (written at sentence 1, key score +0.15): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n0 (written at sentence 0, key score -0.05): says '\n\n ( ( ( ( ( ( ( ('
+   slot 0: takes '[n3 row]' 0.01, '[n3 row]' 0.01, '[n3 row]' 0.01, '[n3 row]' 0.01, '[n3 row]' 0.01, '[n3 row]' 0.01
+   slot 1: takes '[n0 row]' 0.02, '[n0 row]' 0.02, '[n0 row]' 0.02, '[n0 row]' 0.02, '[n0 row]' 0.02, '[n0 row]' 0.02
+   slot 2: takes '[n3 row]' 0.01, '[n3 row]' 0.01, '[n1 row]' 0.01, '[n1 row]' 0.01, '[n1 row]' 0.01, '[n3 row]' 0.01
+   slot 3: takes '[n3 row]' 0.02, '[n3 row]' 0.02, '[n3 row]' 0.02, '[n3 row]' 0.02, '[n3 row]' 0.02, '[n3 row]' 0.02
+   -> NEW n5: says ' a to to to to to to to to to'; relations [('n0', 0.9), ('n1', 0.94), ('n2', 0.93), ('n3', 0.94), ('n4', 0.93)]
+   -> NEW n6: says ' a to to to to to to to to to'; relations [('n0', 1.02), ('n1', 0.92), ('n2', 0.92), ('n3', 0.9), ('n4', 0.92)]
+   -> NEW n7: says ' a to to to to to to to to to'; relations [('n0', 0.94), ('n1', 0.95), ('n2', 0.95), ('n3', 0.95), ('n4', 0.94)]
+   -> NEW n8: says ' a to to to to to to to to to'; relations [('n0', 0.91), ('n1', 0.96), ('n2', 0.96), ('n3', 0.97), ('n4', 0.95)]
+   gates open: 4/4; woke ['n0', 'n1', 'n2', 'n3', 'n4']; memory now 9 nodes
+
+FIRE on sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   fetched n4 (written at sentence 1, key score +0.23): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n1 (written at sentence 1, key score +0.22): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n3 (written at sentence 1, key score +0.22): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n2 (written at sentence 1, key score +0.21): says ' all all all all all all all all all all'
+   fetched n0 (written at sentence 0, key score +0.03): says '\n\n ( ( ( ( ( ( ( ('
+   fetched n8 (written at sentence 4, key score -0.01): says ' a to to to to to to to to to'
+   fetched n7 (written at sentence 4, key score -0.01): says ' a to to to to to to to to to'
+   fetched n5 (written at sentence 4, key score -0.01): says ' a to to to to to to to to to'
+   fetched n6 (written at sentence 4, key score -0.02): says ' a to to to to to to to to to'
+   slot 0: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01
+   slot 1: takes ' its' 0.01, ' by' 0.01, ' in' 0.01, ' range' 0.01, ' the' 0.01, ' from' 0.01
+   slot 2: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01
+   slot 3: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01
+   -> NEW n9: says ' a to to to to ( ( ( ( ('; relations [('n0', 0.61), ('n1', 0.64), ('n2', 0.64), ('n3', 0.64), ('n4', 0.63), ('n5', 0.62), ('n6', 0.61), ('n7', 0.62), ('n8', 0.62)]
+   -> NEW n10: says '\n\n ( ( ( ( ( ( ( ('; relations [('n0', 0.62), ('n1', 0.55), ('n2', 0.55), ('n3', 0.55), ('n4', 0.56), ('n5', 0.6), ('n6', 0.61), ('n7', 0.59), ('n8', 0.59)]
+   -> NEW n11: says ' a to to to to to to ( ( ('; relations [('n0', 0.62), ('n1', 0.63), ('n2', 0.64), ('n3', 0.64), ('n4', 0.62), ('n5', 0.62), ('n6', 0.62), ('n7', 0.63), ('n8', 0.63)]
+   -> NEW n12: says ' a to to to to to ( ( ( ('; relations [('n0', 0.61), ('n1', 0.65), ('n2', 0.66), ('n3', 0.65), ('n4', 0.65), ('n5', 0.62), ('n6', 0.62), ('n7', 0.63), ('n8', 0.63)]
+   gates open: 4/4; woke ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8']; memory now 13 nodes
+
+FIRE on sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   fetched n4 (written at sentence 1, key score +0.21): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n1 (written at sentence 1, key score +0.21): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n3 (written at sentence 1, key score +0.21): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n2 (written at sentence 1, key score +0.20): says ' all all all all all all all all all all'
+   fetched n0 (written at sentence 0, key score +0.01): says '\n\n ( ( ( ( ( ( ( ('
+   fetched n8 (written at sentence 4, key score -0.03): says ' a to to to to to to to to to'
+   fetched n7 (written at sentence 4, key score -0.03): says ' a to to to to to to to to to'
+   fetched n5 (written at sentence 4, key score -0.03): says ' a to to to to to to to to to'
+   fetched n6 (written at sentence 4, key score -0.03): says ' a to to to to to to to to to'
+   fetched n9 (written at sentence 5, key score -0.14): says ' a to to to to ( ( ( ( ('
+   fetched n10 (written at sentence 5, key score -0.17): says '\n\n ( ( ( ( ( ( ( ('
+   fetched n11 (written at sentence 5, key score -0.14): says ' a to to to to to to ( ( ('
+   slot 0: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01
+   slot 1: takes ' also' 0.01, ' b' 0.01, ' c' 0.01, ' on' 0.01, ' but' 0.01, ',' 0.01
+   slot 2: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01
+   slot 3: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01
+   -> NEW n13: says ' a to to to to to to to to to'; relations [('n0', 0.49), ('n1', 0.52), ('n2', 0.52), ('n3', 0.52), ('n4', 0.52), ('n5', 0.5), ('n6', 0.5), ('n7', 0.5), ('n8', 0.5), ('n9', 0.5), ('n10', 0.5), ('n11', 0.49)]
+   -> NEW n14: says ' a to to to to to to to ( ('; relations [('n0', 0.5), ('n1', 0.45), ('n2', 0.45), ('n3', 0.45), ('n4', 0.45), ('n5', 0.49), ('n6', 0.5), ('n7', 0.48), ('n8', 0.48), ('n9', 0.5), ('n10', 0.5), ('n11', 0.5)]
+   -> NEW n15: says ' a to to to to to to to to to'; relations [('n0', 0.5), ('n1', 0.51), ('n2', 0.52), ('n3', 0.52), ('n4', 0.51), ('n5', 0.51), ('n6', 0.5), ('n7', 0.51), ('n8', 0.51), ('n9', 0.5), ('n10', 0.5), ('n11', 0.5)]
+   -> NEW n16: says ' a to to to to to to to to to'; relations [('n0', 0.5), ('n1', 0.53), ('n2', 0.53), ('n3', 0.53), ('n4', 0.52), ('n5', 0.5), ('n6', 0.5), ('n7', 0.51), ('n8', 0.51), ('n9', 0.5), ('n10', 0.49), ('n11', 0.49)]
+   gates open: 4/4; woke ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n11']; memory now 17 nodes
+
+FIRE on sentence 7: ' In turn, it often falls prey to larger sharks and possibly marine mammals.'
+   fetched n4 (written at sentence 1, key score +0.28): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n3 (written at sentence 1, key score +0.27): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n1 (written at sentence 1, key score +0.27): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n2 (written at sentence 1, key score +0.24): says ' all all all all all all all all all all'
+   fetched n0 (written at sentence 0, key score +0.12): says '\n\n ( ( ( ( ( ( ( ('
+   fetched n8 (written at sentence 4, key score +0.09): says ' a to to to to to to to to to'
+   fetched n7 (written at sentence 4, key score +0.09): says ' a to to to to to to to to to'
+   fetched n5 (written at sentence 4, key score +0.09): says ' a to to to to to to to to to'
+   fetched n6 (written at sentence 4, key score +0.09): says ' a to to to to to to to to to'
+   fetched n9 (written at sentence 5, key score -0.07): says ' a to to to to ( ( ( ( ('
+   fetched n10 (written at sentence 5, key score -0.11): says '\n\n ( ( ( ( ( ( ( ('
+   fetched n11 (written at sentence 5, key score -0.07): says ' a to to to to to to ( ( ('
+   slot 0: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01
+   slot 1: takes '.' 0.01, ' to' 0.01, ',' 0.01, ' prey' 0.01, ' it' 0.01, ' marine' 0.01
+   slot 2: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01
+   slot 3: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01
+   -> NEW n17: says ' a to to to to to to to to to'; relations [('n0', 0.57), ('n1', 0.6), ('n2', 0.6), ('n3', 0.6), ('n4', 0.59), ('n5', 0.58), ('n6', 0.57), ('n7', 0.58), ('n8', 0.58), ('n9', 0.57), ('n10', 0.57), ('n11', 0.57)]
+   -> NEW n18: says ' a to to to to to to to to to'; relations [('n0', 0.6), ('n1', 0.53), ('n2', 0.53), ('n3', 0.53), ('n4', 0.54), ('n5', 0.58), ('n6', 0.59), ('n7', 0.57), ('n8', 0.57), ('n9', 0.59), ('n10', 0.59), ('n11', 0.59)]
+   -> NEW n19: says ' a to to to to to to to to to'; relations [('n0', 0.58), ('n1', 0.59), ('n2', 0.59), ('n3', 0.59), ('n4', 0.58), ('n5', 0.58), ('n6', 0.58), ('n7', 0.59), ('n8', 0.59), ('n9', 0.58), ('n10', 0.57), ('n11', 0.57)]
+   -> NEW n20: says ' a to to to to to to to to to'; relations [('n0', 0.57), ('n1', 0.61), ('n2', 0.61), ('n3', 0.61), ('n4', 0.6), ('n5', 0.58), ('n6', 0.58), ('n7', 0.58), ('n8', 0.59), ('n9', 0.57), ('n10', 0.57), ('n11', 0.57)]
+   gates open: 4/4; woke ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n11']; memory now 21 nodes
+
+ASK ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' (truth ' crustaceans.')
+   fetched n4 (sentence 1): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n1 (sentence 1): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n3 (sentence 1): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n2 (sentence 1): says ' all all all all all all all all all all'
+   LM with memory says ',,,,'; LM alone says ' other small fish,'
+
+ASK ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae,' (truth ' whose common name comes from an')
+   fetched n2 (sentence 1): says ' all all all all all all all all all all'
+   fetched n1 (sentence 1): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n4 (sentence 1): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n3 (sentence 1): says ' ge ge ge ge ge ge ge ge ge ge'
+   LM with memory says ' in in in in in in'; LM alone says ' which includes the shark family,'
+
+ASK ' In turn, it often falls prey to larger sharks' (truth ' and possibly marine mammals.')
+   fetched n4 (sentence 1): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n3 (sentence 1): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n1 (sentence 1): says ' ge ge ge ge ge ge ge ge ge ge'
+   fetched n2 (sentence 1): says ' all all all all all all all all all all'
+   LM with memory says ', and,,,'; LM alone says ', which are more likely'
