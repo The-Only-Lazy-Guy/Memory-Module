@@ -14,3 +14,6 @@ Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/cs
 step 200: blank nll 3.547, round trip 4.299, write cost 0.031, nodes / article 31.5, 81s
 step 400: blank nll 3.386, round trip 3.970, write cost 0.032, nodes / article 31.8, 168s
 step 600: blank nll 3.342, round trip 3.938, write cost 0.029, nodes / article 31.5, 252s
+step 800: blank nll 3.385, round trip 3.868, write cost 0.028, nodes / article 31.4, 336s
+step 1000: blank nll 3.266, round trip 3.870, write cost 0.025, nodes / article 31.7, 418s
+step 1200: blank nll 3.134, round trip 3.789, write cost 0.024, nodes / article 31.5, 500s
