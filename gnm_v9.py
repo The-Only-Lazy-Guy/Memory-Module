@@ -681,7 +681,8 @@ class GNM(nn.Module):
         self.qry = nn.Linear(d, dk)
         self.gate = nn.Linear(d, 1)
         self.ptr = nn.Linear(d, dk)
-        self.new = nn.Parameter(torch.zeros(1))
+        self.new = nn.Parameter(torch.full((1,), 3.))      # start: a write is new (~.7 vs 8 fetched); editing is learned
+        #                                                     (11-14 review: at 0 an untrained pointer edited ~70% of the time)
         self.mark = nn.Parameter(torch.zeros(d))            # added to memory rows: "this is memory"
         nn.init.zeros_(self.val.weight)                      # rows start as pure mixtures of the step's token vectors
         nn.init.zeros_(self.val.bias)
