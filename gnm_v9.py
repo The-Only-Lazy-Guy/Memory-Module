@@ -760,7 +760,10 @@ class GNM(nn.Module):
             # each slot picks where its span starts; row j reads the token at start + j (in order, exact token vectors;
             # 11-14 oracle: sentence-sized nodes in write order are read at .945 vs .981 in context -- independent soft
             # rows lose order and identity). The start is a distribution, so the loss teaches where to cut.
-            Ps = F.softmax(self.spanq @ self.att(Hc).T / d ** .5 * self.tau.exp(), -1)          # (K, T)
+            lg_s = self.spanq @ self.att(Hc).T / d ** .5 * self.tau.exp()                       # (K, T)
+            if n_rows:                                       # a new node's words come from the new input; fetched memory
+                lg_s[:, :n_rows] = -1e9                      # is context (11-14 trace: spans re-copied old nodes instead)
+            Ps = F.softmax(lg_s, -1)
             Ps = F.one_hot(Ps.argmax(-1), T).float() + Ps - Ps.detach()  # hard start forward (the exact tokens: 11-14
             #                                                              trace -- a flat start blurred rows into junk),
             #                                                              gradient through the start probabilities
@@ -786,6 +789,11 @@ class GNM(nn.Module):
             fk = torch.stack([mem.k[i] for i in sel])
             P = F.softmax(torch.cat([F.normalize(self.ptr(pooled), dim=-1) @ fk.T / .1, self.new.expand(K, 1)], 1), -1)
         mass = A[:, :n_rows].view(K, m, n_rows).sum(1).detach() if n_rows else None   # (relations: read, not trained)
+        if self.wmode == "span" and P is not None:          # spans never start in memory: a node relates to the fetched
+            mass = torch.zeros(K, n_rows, device=dev)       # nodes its pointer looks at (as it would edit them); spread
+            for c, i in enumerate(sel):                     # over that node's rows so the per-node sum below / m = P
+                pos = [t for t, o in enumerate(owner) if o == i]
+                mass[:, pos] = P[:, c:c + 1].detach() * m / len(pos)
         written = []
         for j in range(K):
             if not train and g[j] <= .5:
