@@ -47,3 +47,11 @@ step 3200: blank nll 2.104, round trip 1.832, write cost 0.025, nodes / article 
 step 3400: blank nll 2.338, round trip 1.783, write cost 0.025, nodes / article 31.6, grad norm 540.38 (max 32563.2), row norm 1.67 (token vectors ~3.5), mark 0.82, 1347s
    largest grads (before clipping): key.weight 7.4e-01, qry.weight 5.1e-01, mark 3.5e-01, ptr.weight 1.6e-01
 step 3600: blank nll 2.259, round trip 1.762, write cost 0.025, nodes / article 31.4, grad norm 165.68 (max 4611.5), row norm 1.72 (token vectors ~3.5), mark 0.82, 1425s
+   largest grads (before clipping): key.weight 5.7e-01, qry.weight 5.5e-01, mark 5.3e-01, att.weight 1.8e-01
+step 3800: blank nll 2.435, round trip 1.710, write cost 0.025, nodes / article 31.7, grad norm 369.63 (max 17904.5), row norm 1.75 (token vectors ~3.5), mark 0.83, 1504s
+   largest grads (before clipping): qry.weight 5.9e-01, key.weight 5.8e-01, gate.weight 4.0e-01, mark 3.5e-01
+step 4000: blank nll 2.519, round trip 1.748, write cost 0.025, nodes / article 31.7, grad norm 612.33 (max 32596.7), row norm 1.69 (token vectors ~3.5), mark 0.84, 1583s
+   largest grads (before clipping): qry.weight 5.9e-01, key.weight 5.7e-01, mark 4.7e-01, spanq 2.0e-01
+step 4200: blank nll 2.205, round trip 1.649, write cost 0.025, nodes / article 31.7, grad norm 199.34 (max 4600.0), row norm 1.75 (token vectors ~3.5), mark 0.86, 1664s
+   largest grads (before clipping): key.weight 6.5e-01, mark 5.4e-01, qry.weight 4.7e-01, spanq 1.7e-01
+step 4400: blank nll 2.296, round trip 1.730, write cost 0.025, nodes / article 31.6, grad norm 203.17 (max 8858.7), row norm 1.73 (token vectors ~3.5), mark 0.88, 1741s
