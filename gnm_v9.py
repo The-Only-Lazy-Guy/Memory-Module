@@ -684,7 +684,7 @@ class GNM(nn.Module):
         with torch.no_grad():
             self.scale = nn.Parameter(M.transformer.wte.weight.norm(dim=-1).mean().reshape(1))
         nn.init.constant_(self.gate.bias, 1.)                # start by writing; the cost teaches restraint
-        self.cost = float(os.environ.get("WRITE_COST", ".01"))
+        self.cost = float(os.environ.get("WRITE_COST", ".001"))
 
     # ---------------------------------------------------------------- the LM
     def embed(self, ids):
@@ -722,26 +722,26 @@ class GNM(nn.Module):
     # ---------------------------------------------------------------- write (the loop's output)
     def write(self, mem, sel, owner, H, n_rows, train):
         """K slots attend over the step's LM states -> rows, key, gate, pointer (replace a fetched node / new),
-        relations (attention mass on each fetched node). Train: every slot written, scaled by a straight-through
-        gate (closed = zero rows, but the gate still learns what writing would have done). Eval: open slots only."""
+        relations (attention mass on each fetched node).
+        Train (soft, so both decisions learn from the loss -- 11-14 e1: a hard untrained pointer overwrote memory down to
+        ~2 nodes an article and the gates gave up): a slot's rows are scaled by its gate; its edit is a blend -- each
+        fetched node moves toward the slot by gate x pointer probability, the rest goes to a new node.
+        Eval: open slots only (gate > .5); the pointer's best choice replaces that node, or 'new' adds one."""
         K, m, d = self.K, self.m, self.d
         A = F.softmax(self.slotq @ self.att(H).T / d ** .5, -1)          # (K*m, T)
         X = A @ H
         rows = (F.normalize(self.val(X), dim=-1) * self.scale).view(K, m, d)
         pooled = X.view(K, m, d).mean(1)
         g = torch.sigmoid(self.gate(pooled)).squeeze(-1)
-        hard = (g > .5).float()
-        g_st = hard + g - g.detach()
         k = F.normalize(self.key(pooled), dim=-1)
-        choice = [None] * K
-        if sel:                                                            # pointer: no gradient in E1 (L3 trains it)
-            fk = torch.stack([mem.k[i] for i in sel]).detach()
-            lg = torch.cat([F.normalize(self.ptr(pooled), dim=-1) @ fk.T / .1, self.new.expand(K, 1)], 1)
-            choice = [int(c) for c in lg.argmax(-1)]
+        P = None
+        if sel:
+            fk = torch.stack([mem.k[i] for i in sel])
+            P = F.softmax(torch.cat([F.normalize(self.ptr(pooled), dim=-1) @ fk.T / .1, self.new.expand(K, 1)], 1), -1)
         mass = A[:, :n_rows].view(K, m, n_rows).sum(1).detach() if n_rows else None   # (relations: read, not trained)
         written = []
         for j in range(K):
-            if hard[j] == 0 and not train:
+            if not train and g[j] <= .5:
                 continue
             R = []
             if mass is not None:
@@ -749,12 +749,19 @@ class GNM(nn.Module):
                     w = float(mass[j, [t for t, o in enumerate(owner) if o == i]].sum())
                     if w > .1:
                         R.append((i, w))
-            V = rows[j] * g_st[j]
-            if choice[j] is not None and choice[j] < len(sel) and hard[j] == 1:
-                mem.replace(sel[choice[j]], V, k[j], R)
-                written.append(sel[choice[j]])
+            if train:
+                p_new = P[j, -1] if P is not None else 1.
+                for c, i in enumerate(sel):                                # soft edit of each fetched node
+                    a = g[j] * P[j, c]
+                    mem.V[i] = mem.V[i] * (1 - a) + rows[j] * a
+                    mem.k[i] = F.normalize(mem.k[i] * (1 - a) + k[j] * a, dim=-1)
+                written.append(mem.add(rows[j] * g[j] * p_new, k[j], R))
+            elif P is not None and int(P[j].argmax()) < len(sel):
+                i = sel[int(P[j].argmax())]
+                mem.replace(i, rows[j], k[j], R)
+                written.append(i)
             else:
-                written.append(mem.add(V, k[j], R))
+                written.append(mem.add(rows[j], k[j], R))
         return written, self.cost * g.sum()
 
     def step(self, mem, ids, train=False):
@@ -870,7 +877,7 @@ def train_e1(G, arts, steps, lr=3e-4, nq=4, log=200):
         opt.zero_grad()
         loss.backward()
         opt.step()
-        acc.append((float(l1), float(rt), float(cost), mem.n))
+        acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3)))
         if (st + 1) % log == 0:
             a = torch.tensor(acc[-log:])
             print(f"step {st + 1}: blank nll {a[:, 0].mean():.3f}, round trip {a[:, 1].mean():.3f}, write cost {a[:, 2].mean():.3f}, "
@@ -883,7 +890,8 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
     fits), the LM with GNM's memory of the article(s). nll / token accuracy / exact span (greedy)"""
     tk = lm()[0]
     rng = random.Random(seed)
-    res = {k: [0., 0., 0, 0] for k in ("LM alone", "LM + text in context", "LM + GNM memory")}
+    res = {k: [0., 0., 0, 0] for k in ("LM alone", "LM + text in context", "LM + GNM memory", "LM + another's memory")}
+    prev = None
     nodes = []
     for b in range(0, len(arts) - together + 1, together):
         group = arts[b:b + together]
@@ -894,7 +902,10 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
         ctx = [t for a in group for ids in a["ids"] for t in ids]
         for a in group:
             for p, t in quiz(a, rng, nq):
-                for name, m_, pre in (("LM alone", Memory(), []), ("LM + text in context", Memory(), ctx), ("LM + GNM memory", mem, [])):
+                readers = [("LM alone", Memory(), []), ("LM + text in context", Memory(), ctx), ("LM + GNM memory", mem, [])]
+                if prev is not None:                       # control: the memory of other article(s) -- is it the content that helps?
+                    readers.append(("LM + another's memory", prev, []))
+                for name, m_, pre in readers:
                     if len(pre) + len(p) + len(t) > 1000:
                         continue
                     nll, ac = G.say_nll(m_, pre + p, t)
@@ -904,6 +915,7 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
                     r[1] += ac
                     r[2] += ex
                     r[3] += 1
+        prev = mem
         if show and b < show * together:
             print(f"\n  -- {group[0]['title']}: {mem.n} nodes; what some say when the LM reads them alone:")
             for i in range(min(mem.n, 6)):
@@ -914,7 +926,7 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
     print(f"\n{together} article(s) per memory, {len(nodes)} memories, {sum(nodes) / max(1, len(nodes)):.0f} nodes each:")
     for name, (nll, ac, ex, n) in res.items():
         if n:
-            print(f"  {name:>22}: nll {nll / n:.3f} | token acc {ac / n:.3f} | exact span {ex}/{n}", flush=True)
+            print(f"  {name:>24}: nll {nll / n:.3f} | token acc {ac / n:.3f} | exact span {ex}/{n}", flush=True)
 
 
 if __name__ == "__main__":
