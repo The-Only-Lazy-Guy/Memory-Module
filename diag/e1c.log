@@ -21,3 +21,7 @@ step 1400: blank nll 3.300, round trip 3.836, write cost 0.024, nodes / article 
 step 1600: blank nll 3.282, round trip 3.848, write cost 0.024, nodes / article 31.5, 661s
 step 1800: blank nll 3.258, round trip 3.777, write cost 0.024, nodes / article 31.8, 744s
 step 2000: blank nll 3.278, round trip 3.802, write cost 0.024, nodes / article 31.7, 827s
+step 2200: blank nll 3.262, round trip 3.776, write cost 0.023, nodes / article 31.4, 912s
+step 2400: blank nll 3.244, round trip 3.757, write cost 0.023, nodes / article 31.7, 996s
+step 2600: blank nll 3.267, round trip 3.840, write cost 0.025, nodes / article 31.8, 1078s
+step 2800: blank nll 3.146, round trip 3.809, write cost 0.023, nodes / article 31.7, 1163s
