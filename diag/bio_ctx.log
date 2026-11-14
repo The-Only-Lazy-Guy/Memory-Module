@@ -1,12 +1,5 @@
 annotations resolve: demo 135 firings, held-out 60 firings
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3629.12it/s]
-demos: 10 articles, 52 sentences, 83 facts, 135 firings; nodes made: 0; fields named: 30
-Traceback (most recent call last):
-  File "/marimo/pv/bio_ctx/bio.py", line 326, in <module>
-    train(M, int(sys.argv[1]) if len(sys.argv) > 1 else 150)
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/marimo/pv/bio_ctx/bio.py", line 158, in train
-    node = M.nodes[int(M.route(bvec("fact"))[1:])]
-                   ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
-ValueError: invalid literal for int() with base 10: 'eep'
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3826.09it/s]
+demos: 10 articles, 52 sentences, 83 facts, 135 firings; nodes made: 1; fields named: 30
+epoch 25: loss 9.45
