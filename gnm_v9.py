@@ -9,6 +9,7 @@ The world below is kept only as a source of checkable questions (later tests). O
 import argparse
 import gzip
 import json
+import math
 import os
 import random
 import re
@@ -730,6 +731,7 @@ class GNM(nn.Module):
         Eval: open slots only (gate > .5); the pointer's best choice replaces that node, or 'new' adds one."""
         K, m, d = self.K, self.m, self.d
         A = F.softmax(self.slotq @ self.att(H).T / d ** .5, -1)          # (K*m, T)
+        self._A, self._H = A.detach(), H.detach()                        # (inspection only)
         X = A @ H
         rows = (F.normalize(self.val(X), dim=-1) * self.scale).view(K, m, d)
         pooled = X.view(K, m, d).mean(1)
@@ -931,6 +933,58 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
             print(f"  {name:>24}: nll {nll / n:.3f} | token acc {ac / n:.3f} | exact span {ex}/{n}", flush=True)
 
 
+# ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
+def inspect(G, arts, tr_arts, n=20):
+    """what the trained parts actually do: node collapse, write attention, retrieval vs a node's source, gradients"""
+    rng = random.Random(3)
+    per_art, att_ent, ret_hit, ret_n, hid = [], [], 0, 0, []
+    with torch.no_grad():
+        for a in arts[:n]:
+            mem, src = Memory(), []
+            for si, ids in enumerate(a["ids"]):
+                before = mem.n
+                G.step(mem, ids)
+                src += [si] * (mem.n - before)
+                A = G._A
+                ent = -(A.clamp_min(1e-9) * A.clamp_min(1e-9).log()).sum(-1) / math.log(A.shape[1])
+                att_ent.append(float(ent.mean()))
+                hid.append(G._H.mean(0))
+            if mem.n:
+                per_art.append((a["title"], torch.stack([v.mean(0) for v in mem.V]), src, mem))
+            for p, t in quiz(a, rng, 3):
+                si = next(i for i, ids in enumerate(a["ids"]) if ids[:len(p)] == p)
+                sel, _, _ = G.retrieve(mem, G.query(p))
+                top = sel[:G.topk]
+                ret_n += 1
+                ret_hit += any(i < len(src) and src[i] == si for i in top)
+    within, across = [], []
+    for x, (ta, Ra, _, _) in enumerate(per_art):
+        Ra = F.normalize(Ra, dim=-1)
+        if len(Ra) > 1:
+            c = Ra @ Ra.T
+            within.append(float(c[~torch.eye(len(Ra), dtype=torch.bool, device=c.device)].mean()))
+        for ta2, Rb, _, _ in per_art[x + 1:]:
+            across.append(float((Ra @ F.normalize(Rb, dim=-1).T).mean()))
+    Hm = F.normalize(torch.stack(hid), dim=-1)
+    print(f"nodes: mean cos within an article {sum(within) / len(within):.3f}, across articles {sum(across) / len(across):.3f} "
+          f"(near 1 = collapse); LM states (sentence means) mean cos across sentences {float((Hm @ Hm.T).mean()):.3f}")
+    print(f"write attention entropy / max {sum(att_ent) / len(att_ent):.3f} (1 = spread evenly over the step = an average)")
+    print(f"retrieval: a blank's top-{G.topk} holds a node written from its own sentence {ret_hit}/{ret_n} "
+          f"(memory has ~{sum(len(r[1]) for r in per_art) / max(1, len(per_art)):.0f} nodes an article)")
+    G.train()
+    mem = Memory()
+    cost, rt = read(G, mem, tr_arts[0], train=True)
+    qs = quiz(tr_arts[0], random.Random(0), 4)
+    l1 = sum(G.say_nll(mem, p, t)[0] for p, t in qs) / len(qs)
+    G.zero_grad()
+    (l1 + .3 * rt + cost).backward()
+    print("gradient norms: " + ", ".join(f"{nm} {float(p.grad.norm()) if p.grad is not None else 0:.2e}" for nm, p in G.named_parameters()))
+    title, R, src, mem = per_art[0]
+    print(f"\n{title}: per node, its source sentence and what it says alone")
+    for i in range(min(8, mem.n)):
+        print(f"   node {i} (sentence {src[i]}): {G.node_text(mem, i, 12)!r}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("task", nargs="?", default="e1")
@@ -939,6 +993,7 @@ if __name__ == "__main__":
     ap.add_argument("--steps", type=int, default=3000)
     ap.add_argument("--heldout", type=int, default=60)
     ap.add_argument("--save", default="")
+    ap.add_argument("--load", default="")
     ap.add_argument("--smoke", action="store_true")
     a = ap.parse_args()
     torch.manual_seed(0)
@@ -952,6 +1007,11 @@ if __name__ == "__main__":
         train = train + load_articles(a.train_data)
     print(f"E1: {len(arts)} articles ({len(train)} train, {len(held)} held out), LM {LM_NAME}, device {dev}", flush=True)
     G = GNM().to(dev)
+    if a.load:
+        G.load_state_dict(torch.load(a.load, map_location=dev))
+    if a.task == "inspect":
+        inspect(G, held, train)
+        raise SystemExit
     eval_e1(G, held[:10 if not a.smoke else 2], show=0)
     print("(above: before training)", flush=True)
     train_e1(G, train, a.steps, log=200 if not a.smoke else 2)
