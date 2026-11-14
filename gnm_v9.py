@@ -767,7 +767,7 @@ class GNM(nn.Module):
             X = torch.einsum("kt,tmd->kmd", Ps, win(Hc))
             pooled = X.mean(1)
             A = torch.zeros(K, m, T, device=dev)
-            for j in range(m):
+            for j in range(min(m, T)):                                # (11-14: inputs shorter than m crashed here)
                 A[:, j, j:] = Ps[:, :T - j]
             A = A.view(K * m, T)
         else:
