@@ -684,6 +684,10 @@ class GNM(nn.Module):
         self.new = nn.Parameter(torch.full((1,), 3.))      # start: a write is new (~.7 vs 8 fetched); editing is learned
         #                                                     (11-14 review: at 0 an untrained pointer edited ~70% of the time)
         self.mark = nn.Parameter(torch.zeros(d))            # added to memory rows: "this is memory"
+        self.tau = nn.Parameter(torch.tensor(math.log(8.)))   # sharpness of the slots' attention (11-14 trace: at 1x it
+        #                                                       stayed ~1/T after 1000 steps -- slots never picked tokens)
+        self.ctxfix = os.environ.get("CTXFIX", "0") == "1"    # the learned context correction on rows (off: it let the
+        #                                                       write skip picking tokens; trace 11-14)
         nn.init.zeros_(self.val.weight)                      # rows start as pure mixtures of the step's token vectors
         nn.init.zeros_(self.val.bias)
         self.register_buffer("hmu", torch.zeros(d))         # running mean of the LM's states (11-14 inspect: sentence
@@ -746,10 +750,10 @@ class GNM(nn.Module):
         Eval: open slots only (gate > .5); the pointer's best choice replaces that node, or 'new' adds one."""
         K, m, d = self.K, self.m, self.d
         Hc = self.center(H)
-        A = F.softmax(self.slotq @ self.att(Hc).T / d ** .5, -1)         # (K*m, T)
+        A = F.softmax(self.slotq @ self.att(Hc).T / d ** .5 * self.tau.exp(), -1)   # (K*m, T)
         self._A, self._H = A.detach(), Hc.detach()                       # (inspection only)
         X = A @ Hc
-        rows = (A @ embs + self.val(X)).view(K, m, d)
+        rows = (A @ embs + (self.val(X) if self.ctxfix else 0)).view(K, m, d)
         pooled = X.view(K, m, d).mean(1)
         g = torch.sigmoid(self.gate(pooled)).squeeze(-1)
         k = F.normalize(self.key(pooled), dim=-1)
@@ -900,6 +904,9 @@ def train_e1(G, arts, steps, lr=3e-4, nq=4, log=200):
         gn = float(torch.nn.utils.clip_grad_norm_([p for p in G.parameters() if p.requires_grad], 1.))   # (11-14 trace: diverged ~step 400)
         opt.step()
         rn = float(torch.stack([v.detach().norm(dim=-1).mean() for v in mem.V]).mean()) if mem.n else 0.
+        if (st + 1) % log == 0:                                # which parameter the gradient is largest on
+            gs = sorted(((float(p.grad.norm()), nm) for nm, p in G.named_parameters() if p.grad is not None), reverse=True)[:4]
+            print("   largest grads (before clipping): " + ", ".join(f"{nm} {g:.1e}" for g, nm in gs), flush=True)
         acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3), gn, rn))
         if (st + 1) % log == 0:
             a = torch.tensor(acc[-log:])
@@ -1051,6 +1058,38 @@ def trace(G, art, nq=3):
         print(f"   LM with memory says {tk.decode(G.say(mem, p_, len(t)))!r}; LM alone says {tk.decode(G.say(Memory(), p_, len(t)))!r}")
 
 
+@torch.no_grad()
+def oracle(G, arts, nq=6):
+    """read-path check: nodes made BY HAND from each sentence's exact token vectors (pieces of m tokens), keyed with the
+    same query function a question uses; then the blanks. Tests fetch + the LM reading memory, without the write head"""
+    G.eval()
+    rng = random.Random(1)
+    res = {k: [0., 0, 0] for k in ("LM alone", "LM + hand-made memory", "LM + text in context")}
+    hit = n_hit = 0
+    for a in arts:
+        mem, src = Memory(), []
+        for si, ids in enumerate(a["ids"]):
+            for c in range(0, len(ids), G.m):
+                piece = ids[c:c + G.m]
+                mem.add(G.embed(piece), G.query(piece), [])
+                src.append(si)
+        ctx = [t for ids in a["ids"] for t in ids]
+        for p, t in quiz(a, rng, nq):
+            si = next(i for i, ids in enumerate(a["ids"]) if ids[:len(p)] == p)
+            sel, _, _ = G.retrieve(mem, G.query(p))
+            hit += any(src[i] == si for i in sel[:G.topk])
+            n_hit += 1
+            for name, m_, pre in (("LM alone", Memory(), []), ("LM + hand-made memory", mem, []), ("LM + text in context", Memory(), ctx)):
+                nll, ac = G.say_nll(m_, pre + p, t)
+                r = res[name]
+                r[0] += float(nll)
+                r[1] += ac
+                r[2] += 1
+    print(f"oracle read path: a blank's top-{G.topk} holds a piece of its own sentence {hit}/{n_hit}")
+    for name, (nll, ac, n) in res.items():
+        print(f"  {name:>22}: nll {nll / n:.3f} | token acc {ac / n:.3f}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("task", nargs="?", default="e1")
@@ -1075,6 +1114,9 @@ if __name__ == "__main__":
     G = GNM().to(dev)
     if a.load:
         G.load_state_dict(torch.load(a.load, map_location=dev))
+    if a.task == "oracle":
+        oracle(G, held)
+        raise SystemExit
     if a.task == "inspect":
         inspect(G, held, train)
         raise SystemExit
