@@ -1,0 +1,332 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 5277.29it/s]
+E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
+
+FIRE on sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   fetched: nothing (memory empty)
+   slot 0: takes ' C' 0.02, 'Rh' 0.02, ' requ' 0.02, ' lact' 0.02, 'ut' 0.02, 'ar' 0.02
+   slot 1: takes ' The' 0.02, ' comes' 0.02, '.' 0.02, ' common' 0.02, 'op' 0.02, ' (' 0.02
+   slot 2: takes ' consumption' 0.02, 'ation' 0.02, ' promotes' 0.02, ' of' 0.02, '.' 0.02, ' (' 0.02
+   slot 3: takes ' a' 0.02, 'odon' 0.02, 'Rh' 0.02, ' whose' 0.02, 'r' 0.02, ' the' 0.02
+   -> NEW n0: says " the other's home.\n\n(b)"; relations []
+   -> NEW n1: says ' the one that is the one that is the one'; relations []
+   -> NEW n2: says " the other's home.\n\n(b)"; relations []
+   -> NEW n3: says ' the one that is the one that is the one'; relations []
+   gates open: 4/4; woke []; memory now 4 nodes
+
+FIRE on sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   fetched n0 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n3 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n2 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n1 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   slot 0: takes '-' 0.01, ' (' 0.01, ' Indo' 0.01, '[n0 row]' 0.01, '.' 0.01, ' throughout' 0.01
+   slot 1: takes '.' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01, '-' 0.01, ' The' 0.01, ' widely' 0.01
+   slot 2: takes '[n0 row]' 0.01, '.' 0.01, '.' 0.01, '.' 0.01, '6' 0.01, ' of' 0.01
+   slot 3: takes ' the' 0.01, ' typically' 0.01, ' its' 0.01, ' distributed' 0.01, ',' 0.01, '[n3 row]' 0.01
+   -> NEW n4: says ' position of the head of the head of the head'; relations [('n0', 0.1), ('n1', 0.1), ('n2', 0.1), ('n3', 0.1)]
+   -> NEW n5: says ' position of the head of the head of the head'; relations [('n0', 0.1), ('n1', 0.1), ('n2', 0.1), ('n3', 0.1)]
+   -> NEW n6: says ' position of the head of the head of the head'; relations [('n0', 0.1), ('n1', 0.1), ('n2', 0.1), ('n3', 0.1)]
+   -> NEW n7: says ' position of the last line of the last line of'; relations [('n0', 0.1), ('n1', 0.1), ('n2', 0.1), ('n3', 0.1)]
+   gates open: 4/4; woke ['n0', 'n1', 'n2', 'n3']; memory now 8 nodes
+
+FIRE on sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   fetched n0 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n3 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n2 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n1 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n7 (written at sentence 1, key score -0.13): says ' position of the last line of the last line of'
+   fetched n6 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n4 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n5 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   slot 0: takes ' Occ' 0.01, 'u' 0.01, ' (' 0.01, '[n0 row]' 0.01, '660' 0.01, ' a' 0.01
+   slot 1: takes '[n0 row]' 0.01, ' 200' 0.01, '[n0 row]' 0.01, 'u' 0.01, '660' 0.01, ' est' 0.01
+   slot 2: takes '[n0 row]' 0.01, '660' 0.01, ' has' 0.01, '.' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01
+   slot 3: takes '[n5 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01
+   -> NEW n8: says ' the other, and the other, and the other'; relations []
+   -> NEW n9: says ' the other, and the other, and the other'; relations []
+   -> NEW n10: says ' the other, and the other, and the other'; relations []
+   -> NEW n11: says ' the other.\n\n(2) The person'; relations []
+   gates open: 4/4; woke []; memory now 12 nodes
+
+FIRE on sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   fetched n0 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n3 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n2 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n1 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n7 (written at sentence 1, key score -0.13): says ' position of the last line of the last line of'
+   fetched n6 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n4 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n5 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   slot 0: takes ' se' 0.01, 'r' 0.01, '[n0 row]' 0.01, ' me' 0.01, 'ag' 0.01, 'ass' 0.01
+   slot 1: takes ' Juven' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01, 'iles' 0.01, ' se' 0.01, 'ass' 0.01
+   slot 2: takes '[n0 row]' 0.01, '[n5 row]' 0.01, '.' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01
+   slot 3: takes '[n5 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01
+   -> NEW n12: says ' the other, and the other, and the other'; relations [('n0', 0.1), ('n1', 0.1), ('n2', 0.1), ('n3', 0.1)]
+   -> NEW n13: says ' the other, and the other, and the other'; relations [('n0', 0.1), ('n2', 0.1), ('n3', 0.1)]
+   -> NEW n14: says ' the other, and the other, and the other'; relations [('n0', 0.1), ('n3', 0.1), ('n4', 0.1), ('n5', 0.1), ('n6', 0.1), ('n7', 0.1)]
+   -> NEW n15: says ' the other, and the other, and the other'; relations [('n1', 0.1), ('n3', 0.1), ('n4', 0.1), ('n5', 0.1), ('n6', 0.1), ('n7', 0.1)]
+   gates open: 4/4; woke ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7']; memory now 16 nodes
+
+FIRE on sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   fetched n0 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n3 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n2 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n1 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n7 (written at sentence 1, key score -0.13): says ' position of the last line of the last line of'
+   fetched n6 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n4 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n5 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n12 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n13 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n14 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n15 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   slot 0: takes ' sn' 0.01, 'esc' 0.01, ' nond' 0.01, ' a' 0.01, ' gray' 0.01, '[n0 row]' 0.01
+   slot 1: takes ' The' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01, ' milk' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01
+   slot 2: takes '[n0 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01
+   slot 3: takes 'esc' 0.01, ' a' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01
+   -> NEW n16: says ' position of the head of the head of the head'; relations []
+   -> NEW n17: says ' position of the head of the head of the head'; relations []
+   -> NEW n18: says ' position of the head of the head of the head'; relations []
+   -> NEW n19: says ' position of the head of the head of the head'; relations []
+   gates open: 4/4; woke []; memory now 20 nodes
+
+FIRE on sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   fetched n0 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n3 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n2 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n1 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n7 (written at sentence 1, key score -0.13): says ' position of the last line of the last line of'
+   fetched n6 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n4 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n5 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n12 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n13 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n14 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n15 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   slot 0: takes '[n0 row]' 0.01, ' seven' 0.01, ' ..' 0.01, ' fur' 0.01, ' be' 0.01, ' 15' 0.01
+   slot 1: takes ' This' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01, ' fur' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01
+   slot 2: takes '[n0 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01
+   slot 3: takes '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01
+   -> NEW n20: says ' the other.\n\n(2) The person'; relations []
+   -> NEW n21: says ' the other, and the other, and the other'; relations []
+   -> NEW n22: says ' the other, and the other, and the other'; relations []
+   -> NEW n23: says ' the other.\n\n(2) The person'; relations []
+   gates open: 4/4; woke []; memory now 24 nodes
+
+FIRE on sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   fetched n0 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n2 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n3 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n1 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n7 (written at sentence 1, key score -0.13): says ' position of the last line of the last line of'
+   fetched n6 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n4 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n5 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n12 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n13 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n14 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n15 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   slot 0: takes 'hal' 0.01, ' c' 0.01, ' b' 0.01, ' crust' 0.01, 'op' 0.01, 'ep' 0.01
+   slot 1: takes ' crust' 0.01, ' most' 0.01, ' Among' 0.01, ' small' 0.01, ' b' 0.01, '[n0 row]' 0.01
+   slot 2: takes '[n0 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01
+   slot 3: takes '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n12 row]' 0.01
+   -> NEW n24: says ' the other, and the other, and the other'; relations []
+   -> NEW n25: says ' the other, and the other, and the other'; relations []
+   -> NEW n26: says ' the other, and the other, and the other'; relations []
+   -> NEW n27: says ' the other, and the other, and the other'; relations []
+   gates open: 4/4; woke []; memory now 28 nodes
+
+FIRE on sentence 7: ' In turn, it often falls prey to larger sharks and possibly marine mammals.'
+   fetched n0 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n3 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n2 (written at sentence 0, key score -0.12): says " the other's home.\n\n(b)"
+   fetched n1 (written at sentence 0, key score -0.12): says ' the one that is the one that is the one'
+   fetched n7 (written at sentence 1, key score -0.13): says ' position of the last line of the last line of'
+   fetched n6 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n4 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n5 (written at sentence 1, key score -0.13): says ' position of the head of the head of the head'
+   fetched n12 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n13 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n14 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   fetched n15 (written at sentence 3, key score -0.13): says ' the other, and the other, and the other'
+   slot 0: takes '[n0 row]' 0.01, ' In' 0.01, '[n0 row]' 0.01, '.' 0.01, ' often' 0.01, ' marine' 0.01
+   slot 1: takes ' In' 0.01, '[n0 row]' 0.01, '[n0 row]' 0.01, ' falls' 0.01, ' larger' 0.01, '[n0 row]' 0.01
+   slot 2: takes '[n0 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01
+   slot 3: takes '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01, '[n15 row]' 0.01
+   -> NEW n28: says ' the other.\n\n(2) The person'; relations []
+   -> NEW n29: says ' the other, and the other, and the other'; relations []
+   -> NEW n30: says ' the other, and the other, and the other'; relations []
+   -> NEW n31: says ' the other.\n\n(2) The person'; relations []
+   gates open: 4/4; woke []; memory now 32 nodes
+
+ASK ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' (truth ' crustaceans.')
+   fetched n0 (sentence 0): says " the other's home.\n\n(b)"
+   fetched n2 (sentence 0): says " the other's home.\n\n(b)"
+   fetched n3 (sentence 0): says ' the one that is the one that is the one'
+   fetched n1 (sentence 0): says ' the one that is the one that is the one'
+   LM with memory says ' other fish.\n'; LM alone says ' other small fish,'
+
+ASK ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae,' (truth ' whose common name comes from an')
+   fetched n0 (sentence 0): says " the other's home.\n\n(b)"
+   fetched n2 (sentence 0): says " the other's home.\n\n(b)"
+   fetched n3 (sentence 0): says ' the one that is the one that is the one'
+   fetched n1 (sentence 0): says ' the one that is the one that is the one'
+   LM with memory says ' which is the largest shark in'; LM alone says ' which includes the shark family,'
+
+ASK ' In turn, it often falls prey to larger sharks' (truth ' and possibly marine mammals.')
+   fetched n0 (sentence 0): says " the other's home.\n\n(b)"
+   fetched n3 (sentence 0): says ' the one that is the one that is the one'
+   fetched n2 (sentence 0): says " the other's home.\n\n(b)"/marimo/pv/insp/gnm.py:903: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3), gn, rn))
+
+   fetched n1 (sentence 0): says ' the one that is the one that is the one'
+   LM with memory says '.\n\nThe shark'; LM alone says ', which are more likely'
+step 200: blank nll 3.633, round trip 4.425, write cost 0.024, nodes / article 31.8, grad norm 336.62 (max 18238.3), row norm 2.10 (token vectors ~3.5), mark 0.19, 83s
+step 400: blank nll 3.505, round trip 4.328, write cost 0.023, nodes / article 31.8, grad norm 1425.03 (max 127808.9), row norm 3.19 (token vectors ~3.5), mark 0.27, 165s
+step 600: blank nll 3.600, round trip 4.256, write cost 0.023, nodes / article 31.8, grad norm 1729.51 (max 121776.0), row norm 3.11 (token vectors ~3.5), mark 0.34, 249s
+step 800: blank nll 3.311, round trip 3.898, write cost 0.020, nodes / article 32.0, grad norm 103308.56 (max 20641842.0), row norm 4.01 (token vectors ~3.5), mark 0.40, 332s
+step 1000: blank nll 3.193, round trip 3.845, write cost 0.016, nodes / article 31.8, grad norm 1746.14 (max 332511.8), row norm 4.34 (token vectors ~3.5), mark 0.45, 416s
+
+==================== after 1000 training steps
+
+FIRE on sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   fetched: nothing (memory empty)
+   slot 0: takes 'idae' 0.02, ' part' 0.02, ' of' 0.02, 'us' 0.02, ' consumption' 0.02, ' The' 0.02
+   slot 1: takes ' a' 0.02, ' its' 0.02, ' whose' 0.02, ' promotes' 0.02, ')' 0.02, ' is' 0.02
+   slot 2: takes ' its' 0.02, 'r' 0.02, ' a' 0.02, ' Indian' 0.02, ')' 0.02, ' meat' 0.02
+   slot 3: takes ' of' 0.04, 'idae' 0.04, ' from' 0.04, ' part' 0.04, ' belief' 0.04, ' consumption' 0.04
+   -> NEW n0: says ', Lady of the Water Dragon, Pock P'; relations []
+   -> NEW n1: says ', the Blue Dragon of the 7th, the'; relations []
+   -> NEW n2: says ', the Blue Dragon of the Sky, the Blue'; relations []
+   -> NEW n3: says ' Pidge Pierce B.C.\n\nB'; relations []
+   gates open: 4/4; woke []; memory now 4 nodes
+
+FIRE on sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   fetched n2 (written at sentence 0, key score +0.54): says ', the Blue Dragon of the Sky, the Blue'
+   fetched n1 (written at sentence 0, key score +0.50): says ', the Blue Dragon of the 7th, the'
+   fetched n0 (written at sentence 0, key score +0.43): says ', Lady of the Water Dragon, Pock P'
+   fetched n3 (written at sentence 0, key score +0.06): says ' Pidge Pierce B.C.\n\nB'
+   slot 0: takes ' 1' 0.01, ' ft' 0.01, ',' 0.01, ' long' 0.01, '1' 0.01, ' member' 0.01
+   slot 1: takes '.' 0.01, ' be' 0.01, ' and' 0.01, ' the' 0.01, ' and' 0.01, ' the' 0.01
+   slot 2: takes '.' 0.02, ' be' 0.02, '.' 0.02, ' the' 0.02, ' and' 0.02, '.' 0.02
+   slot 3: takes ',' 0.02, ' ft' 0.02, ' member' 0.02, '[n2 row]' 0.02, '[n2 row]' 0.02, '[n1 row]' 0.02
+   -> NEW n4: says '\n\nThe first time I saw the new "'; relations [('n0', 0.11), ('n1', 0.11), ('n2', 0.11), ('n3', 0.1)]
+   -> NEW n5: says '\n\nThe first time I saw the new "'; relations [('n3', 0.1)]
+   -> NEW n6: says '\n\nThe first time I saw the new "'; relations [('n3', 0.1)]
+   gates open: 3/4; woke ['n0', 'n1', 'n2', 'n3']; memory now 7 nodes
+
+FIRE on sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   fetched n2 (written at sentence 0, key score +0.28): says ', the Blue Dragon of the Sky, the Blue'
+   fetched n1 (written at sentence 0, key score +0.27): says ', the Blue Dragon of the 7th, the'
+   fetched n0 (written at sentence 0, key score +0.25): says ', Lady of the Water Dragon, Pock P'
+   fetched n3 (written at sentence 0, key score +0.10): says ' Pidge Pierce B.C.\n\nB'
+   fetched n6 (written at sentence 1, key score -0.09): says '\n\nThe first time I saw the new "'
+   fetched n5 (written at sentence 1, key score -0.09): says '\n\nThe first time I saw the new "'
+   fetched n4 (written at sentence 1, key score -0.10): says '\n\nThe first time I saw the new "'
+   slot 0: takes ' ft' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01, '[n5 row]' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01
+   slot 1: takes ' been' 0.01, '.' 0.01, ' and' 0.01, ' is' 0.01, ' and' 0.01, ' a' 0.01
+   slot 2: takes ' been' 0.01, '.' 0.01, ' a' 0.01, ' rivers' 0.01, ' is' 0.01, ' and' 0.01
+   slot 3: takes ' ft' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01, '[n2 row]' 0.01, ' near' 0.01, '[n6 row]' 0.01
+   -> NEW n7: says ' "The best way to get a good deal on'; relations []
+   gates open: 1/4; woke []; memory now 8 nodes
+
+FIRE on sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   fetched n0 (written at sentence 0, key score +0.35): says ', Lady of the Water Dragon, Pock P'
+   fetched n1 (written at sentence 0, key score +0.35): says ', the Blue Dragon of the 7th, the'
+   fetched n2 (written at sentence 0, key score +0.34): says ', the Blue Dragon of the Sky, the Blue'
+   fetched n3 (written at sentence 0, key score +0.31): says ' Pidge Pierce B.C.\n\nB'
+   fetched n5 (written at sentence 1, key score -0.10): says '\n\nThe first time I saw the new "'
+   fetched n4 (written at sentence 1, key score -0.10): says '\n\nThe first time I saw the new "'
+   fetched n6 (written at sentence 1, key score -0.10): says '\n\nThe first time I saw the new "'
+   fetched n7 (written at sentence 2, key score -0.16): says ' "The best way to get a good deal on'
+   slot 0: takes '[n1 row]' 0.01, '[n5 row]' 0.01, '[n5 row]' 0.01, '[n1 row]' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01
+   slot 1: takes '.' 0.01, 'adows' 0.01, ' and' 0.01, 'iles' 0.01, ' are' 0.01, 'r' 0.01
+   slot 2: takes '.' 0.02, 'ass' 0.02, 'r' 0.02, 'adows' 0.02, ' and' 0.02, ' se' 0.02
+   slot 3: takes '[n1 row]' 0.02, ' inhabit' 0.02, '[n5 row]' 0.02, '[n2 row]' 0.02, '[n6 row]' 0.02, '[n6 row]' 0.02
+   gates open: 0/4; woke []; memory now 8 nodes
+
+FIRE on sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   fetched n7 (written at sentence 2, key score +0.30): says ' "The best way to get a good deal on'
+   fetched n6 (written at sentence 1, key score +0.24): says '\n\nThe first time I saw the new "'
+   fetched n5 (written at sentence 1, key score +0.21): says '\n\nThe first time I saw the new "'
+   fetched n4 (written at sentence 1, key score +0.17): says '\n\nThe first time I saw the new "'
+   fetched n2 (written at sentence 0, key score -0.16): says ', the Blue Dragon of the Sky, the Blue'
+   fetched n1 (written at sentence 0, key score -0.20): says ', the Blue Dragon of the 7th, the'
+   fetched n0 (written at sentence 0, key score -0.26): says ', Lady of the Water Dragon, Pock P'
+   fetched n3 (written at sentence 0, key score -0.47): says ' Pidge Pierce B.C.\n\nB'
+   slot 0: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n2 row]' 0.01, '[n7 row]' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01
+   slot 1: takes ' a' 0.01, ' a' 0.01, ' a' 0.01, ' is' 0.01, ' slender' 0.01, ' large' 0.01
+   slot 2: takes ' a' 0.01, ' a' 0.01, ' slender' 0.01, ',' 0.01, ' a' 0.01, ' pointed' 0.01
+   slot 3: takes ' below' 0.02, '[n1 row]' 0.01, '[n1 row]' 0.01, '[n2 row]' 0.01, '[n1 row]' 0.01, '[n2 row]' 0.01
+   -> NEW n8: says ' The "Bubble" is a rare species'; relations []
+   gates open: 1/4; woke []; memory now 9 nodes
+
+FIRE on sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   fetched n7 (written at sentence 2, key score +0.17): says ' "The best way to get a good deal on'
+   fetched n6 (written at sentence 1, key score +0.11): says '\n\nThe first time I saw the new "'
+   fetched n5 (written at sentence 1, key score +0.09): says '\n\nThe first time I saw the new "'
+   fetched n4 (written at sentence 1, key score +0.05): says '\n\nThe first time I saw the new "'
+   fetched n2 (written at sentence 0, key score -0.03): says ', the Blue Dragon of the Sky, the Blue'
+   fetched n1 (written at sentence 0, key score -0.07): says ', the Blue Dragon of the 7th, the'
+   fetched n8 (written at sentence 4, key score -0.10): says ' The "Bubble" is a rare species'
+   fetched n0 (written at sentence 0, key score -0.14): says ', Lady of the Water Dragon, Pock P'
+   fetched n3 (written at sentence 0, key score -0.39): says ' Pidge Pierce B.C.\n\nB'
+   slot 0: takes '[n2 row]' 0.01, '[n2 row]' 0.01, '[n8 row]' 0.01, '[n2 row]' 0.01, '[n7 row]' 0.01, '[n6 row]' 0.01
+   slot 1: takes ' its' 0.01, ' just' 0.01, ' pores' 0.01, ' enlarged' 0.01, ' its' 0.01, ' species' 0.01
+   slot 2: takes ' just' 0.01, ' be' 0.01, ' its' 0.01, ' similar' 0.01, ' to' 0.01, ' seven' 0.01
+   slot 3: takes ' above' 0.01, ' corners' 0.01, '[n8 row]' 0.01, '[n1 row]' 0.01, '[n1 row]' 0.01, '[n2 row]' 0.01
+   -> NEW n9: says ' The "B" in the name is a reference'; relations []
+   gates open: 1/4; woke []; memory now 10 nodes
+
+FIRE on sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   fetched n2 (written at sentence 0, key score +0.23): says ', the Blue Dragon of the Sky, the Blue'
+   fetched n1 (written at sentence 0, key score +0.20): says ', the Blue Dragon of the 7th, the'
+   fetched n0 (written at sentence 0, key score +0.15): says ', Lady of the Water Dragon, Pock P'
+   fetched n7 (written at sentence 2, key score -0.04): says ' "The best way to get a good deal on'
+   fetched n3 (written at sentence 0, key score -0.09): says ' Pidge Pierce B.C.\n\nB'
+   fetched n6 (written at sentence 1, key score -0.09): says '\n\nThe first time I saw the new "'
+   fetched n5 (written at sentence 1, key score -0.11): says '\n\nThe first time I saw the new "'
+   fetched n4 (written at sentence 1, key score -0.14): says '\n\nThe first time I saw the new "'
+   slot 0: takes ' Among' 0.01, '[n3 row]' 0.01, '[n3 row]' 0.01, '[n3 row]' 0.01, '[n3 row]' 0.01, '[n6 row]' 0.01
+   slot 1: takes 'ods' 0.01, 'ans' 0.01, '.' 0.01, ' takes' 0.01, ' and' 0.01, ' but' 0.01
+   slot 2: takes '.' 0.01, ' small' 0.01, ' milk' 0.01, ' and' 0.01, ' but' 0.01, ' most' 0.01
+   slot 3: takes ' Among' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01, '[n5 row]' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01
+   gates open: 0/4; woke []; memory now 10 nodes
+
+FIRE on sentence 7: ' In turn, it often falls prey to larger sharks and possibly marine mammals.'
+   fetched n2 (written at sentence 0, key score +0.48): says ', the Blue Dragon of the Sky, the Blue'
+   fetched n1 (written at sentence 0, key score +0.46): says ', the Blue Dragon of the 7th, the'
+   fetched n0 (written at sentence 0, key score +0.42): says ', Lady of the Water Dragon, Pock P'
+   fetched n3 (written at sentence 0, key score +0.21): says ' Pidge Pierce B.C.\n\nB'
+   fetched n8 (written at sentence 4, key score -0.17): says ' The "Bubble" is a rare species'
+   fetched n9 (written at sentence 5, key score -0.29): says ' The "B" in the name is a reference'
+   fetched n6 (written at sentence 1, key score -0.29): says '\n\nThe first time I saw the new "'
+   fetched n5 (written at sentence 1, key score -0.30): says '\n\nThe first time I saw the new "'
+   fetched n4 (written at sentence 1, key score -0.32): says '\n\nThe first time I saw the new "'
+   slot 0: takes '[n6 row]' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01, '[n5 row]' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01
+   slot 1: takes '.' 0.01, ' mammals' 0.01, ' possibly' 0.01, ' often' 0.01, ' sharks' 0.01, ' falls' 0.01
+   slot 2: takes '.' 0.02, ' often' 0.02, ' possibly' 0.02, ' falls' 0.02, ' mammals' 0.02, ' sharks' 0.02
+   slot 3: takes ' prey' 0.01, '[n6 row]' 0.01, '[n6 row]' 0.01, '[n2 row]' 0.01, '[n6 row]' 0.01, '[n5 row]' 0.01
+   gates open: 0/4; woke []; memory now 10 nodes
+
+ASK ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' (truth ' crustaceans.')
+   fetched n2 (sentence 0): says ', the Blue Dragon of the Sky, the Blue'
+   fetched n1 (sentence 0): says ', the Blue Dragon of the 7th, the'
+   fetched n0 (sentence 0): says ', Lady of the Water Dragon, Pock P'
+   fetched n7 (sentence 2): says ' "The best way to get a good deal on'
+   LM with memory says ' other small fish,'; LM alone says ' other small fish,'
+
+ASK ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae,' (truth ' whose common name comes from an')
+   fetched n7 (sentence 2): says ' "The best way to get a good deal on'
+   fetched n6 (sentence 1): says '\n\nThe first time I saw the new "'
+   fetched n5 (sentence 1): says '\n\nThe first time I saw the new "'
+   fetched n4 (sentence 1): says '\n\nThe first time I saw the new "'
+   LM with memory says ' which includes the large, long'; LM alone says ' which includes the shark family,'
+
+ASK ' In turn, it often falls prey to larger sharks' (truth ' and possibly marine mammals.')
+   fetched n2 (sentence 0): says ', the Blue Dragon of the Sky, the Blue'
+   fetched n1 (sentence 0): says ', the Blue Dragon of the 7th, the'
+   fetched n0 (sentence 0): says ', Lady of the Water Dragon, Pock P'
+   fetched n3 (sentence 0): says ' Pidge Pierce B.C.\n\nB'
+   LM with memory says ', the other is a'; LM alone says ', which are more likely'
