@@ -1,11 +1,14 @@
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4568.39it/s]
-/usr/local/lib/python3.13/site-packages/torch/nn/modules/transformer.py:531: UserWarning: The PyTorch API of nested tensors is in prototype stage and will change in the near future. We recommend specifying layout=torch.jagged when constructing a nested tensor, as this layout receives active development, has better operator coverage, and works with torch.compile. (Triggered internally at /pytorch/aten/src/ATen/NestedTensorImpl.cpp:178.)
-  output = torch._nested_tensor_from_mask(
-before: places 138 | lookup 17/50 | before 6/50 | coexist 5/50 | chain 4/50 | ops 7/50
-/marimo/frozen/e1/gnm.py:1659: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4917.24it/s]
+E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
+
+1 article(s) per memory, 10 memories, 4 nodes each:
+                LM alone: nll 3.554 | token acc 0.410 | exact span 3/60
+    LM + text in context: nll 0.148 | token acc 0.966 | exact span 54/60
+         LM + GNM memory: nll 3.810 | token acc 0.344 | exact span 3/60
+(above: before training)
+/marimo/pv/v9/gnm.py:873: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
 Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
-  moved = float(sum((p - q).norm() ** 2 for p, q in zip(tr.parameters(), old.m.parameters())) ** .5)
-episode: 1000 steps, loss 1.844, translator moved 5.30 | 146s
-stale graph, new translator: lookup 13/50 | before 3/50 | coexist 8/50 | chain 3/50 | ops 5/50
-re-transcribed: places 138 | lookup 11/50 | before 2/50 | coexist 6/50 | chain 5/50 | ops 4/50
+  acc.append((float(l1), float(rt), float(cost), mem.n))
+step 200: blank nll 3.426, round trip 4.235, write cost 0.223, nodes / article 7.3, 61s
+step 400: blank nll 3.224, round trip 3.974, write cost 0.166, nodes / article 14.6, 122s
