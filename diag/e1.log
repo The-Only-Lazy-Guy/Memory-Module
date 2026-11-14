@@ -12,3 +12,6 @@ Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/cs
   acc.append((float(l1), float(rt), float(cost), mem.n))
 step 200: blank nll 3.426, round trip 4.235, write cost 0.223, nodes / article 7.3, 61s
 step 400: blank nll 3.224, round trip 3.974, write cost 0.166, nodes / article 14.6, 122s
+step 600: blank nll 3.334, round trip 4.128, write cost 0.131, nodes / article 29.3, 184s
+step 800: blank nll 3.235, round trip 3.918, write cost 0.071, nodes / article 31.4, 245s
+step 1000: blank nll 3.176, round trip 3.873, write cost 0.035, nodes / article 31.5, 307s
