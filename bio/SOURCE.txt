@@ -1,1 +1,1 @@
-Species articles from WikiText-103 (Wikipedia, CC BY-SA 3.0): the 15 articles the bio test reads.
+species_used.json / species_e1.json: species articles from WikiText-103 (Wikipedia, CC BY-SA 3.0). species_e1.json = all 529 'is a species/genus of' articles, first 3 paragraphs.
