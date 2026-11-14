@@ -1,0 +1,201 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4834.37it/s]
+E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
+
+FIRE on sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   fetched: nothing (memory empty)
+   slot 0: span starts at ' part' (p 0.02): ' part' ' of' ' the' ' family' ' C' 'arch' 'ar' 'hin' 'idae' ',' ' whose' ' common' ' name' ' comes' ' from' ' an'
+   slot 1: span starts at ' consumption' (p 0.02): ' consumption' ' of' ' its' ' meat' ' promotes' ' lact' 'ation' '.'
+   slot 2: span starts at ' The' (p 0.02): ' The' ' milk' ' shark' ' (' 'Rh' 'iz' 'op' 'r' 'ion' 'odon' ' ac' 'ut' 'us' ')' ' is' ' a'
+   slot 3: span starts at ' The' (p 0.02): ' The' ' milk' ' shark' ' (' 'Rh' 'iz' 'op' 'r' 'ion' 'odon' ' ac' 'ut' 'us' ')' ' is' ' a'
+   -> NEW n0: says ' the-n-t-e-f-'; relations []
+   -> NEW n1: says ' thes of thes of thes of the'; relations []
+   -> NEW n2: says ' thes of thes of thes of the'; relations []
+   -> NEW n3: says ' the-n-t-e-f-'; relations []
+   gates open: 4/4; woke []; memory now 4 nodes
+
+FIRE on sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   fetched n0 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   fetched n1 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n2 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n3 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   slot 0: span starts at '[n0 row]' (p 0.01): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at ' throughout' (p 0.01): ' throughout' ' the' ' eastern' ' Atlantic' ' and' ' the' ' Indo' '-' 'Pacific' ' regions' '.'
+   slot 2: span starts at '[n3 row]' (p 0.01): '[n3 row]' ' The' ' largest' ' and' ' most' ' widely' ' distributed' ' member' ' of' ' its' ' genus' ',' ' the' ' milk' ' shark' ' typically'
+   slot 3: span starts at '[n3 row]' (p 0.01): '[n3 row]' ' The' ' largest' ' and' ' most' ' widely' ' distributed' ' member' ' of' ' its' ' genus' ',' ' the' ' milk' ' shark' ' typically'
+   -> NEW n4: says ' the-n-k-i-i-'; relations [('n1', 0.14), ('n2', 0.14), ('n3', 0.14)]
+   -> NEW n5: says ' the-the-f-f-f-'; relations [('n1', 0.14), ('n2', 0.15), ('n3', 0.14)]
+   -> NEW n6: says ' the-n-k-i-i-'; relations [('n1', 0.14), ('n2', 0.14), ('n3', 0.15)]
+   -> NEW n7: says ' the-the-f-f-f-'; relations [('n1', 0.15), ('n2', 0.15), ('n3', 0.15)]
+   gates open: 4/4; woke ['n1', 'n2', 'n3']; memory now 8 nodes
+
+FIRE on sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   fetched n0 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   fetched n1 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n2 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n3 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   fetched n4 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n5 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n6 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n7 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   slot 0: span starts at '[n0 row]' (p 0.01): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at ' near' (p 0.01): ' near' ' beaches' ' and' ' in' ' est' 'u' 'aries' ',' ' and' ' has' ' been' ' recorded' ' swimming' ' up' ' rivers' ' in'
+   slot 2: span starts at '[n5 row]' (p 0.01): '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]'
+   slot 3: span starts at '[n5 row]' (p 0.01): '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]'
+   -> NEW n8: says ' the-the-f-a-f-'; relations []
+   -> NEW n9: says ' the-the-f-a-l-'; relations []
+   -> NEW n10: says ' the- the- the- the- the-'; relations []
+   -> NEW n11: says ' the-the-f-f-f-'; relations []
+   gates open: 4/4; woke []; memory now 12 nodes
+
+FIRE on sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   fetched n0 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   fetched n1 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n2 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n3 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   fetched n4 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n5 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n6 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n7 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   slot 0: span starts at '[n0 row]' (p 0.01): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at ' inhabit' (p 0.01): ' inhabit' ' tidal' ' pools' ' and' ' se' 'ag' 'r' 'ass' ' me' 'adows' '.'
+   slot 2: span starts at '[n5 row]' (p 0.01): '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]'
+   slot 3: span starts at '[n5 row]' (p 0.01): '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]'
+   -> NEW n12: says ' the-the-f-f-f-'; relations [('n1', 0.11), ('n2', 0.11), ('n3', 0.11), ('n4', 0.11), ('n5', 0.11), ('n6', 0.11), ('n7', 0.11)]
+   -> NEW n13: says ' the-f-a-t-i-'; relations [('n1', 0.11), ('n2', 0.11), ('n3', 0.11), ('n4', 0.11), ('n5', 0.11), ('n6', 0.11), ('n7', 0.11)]
+   -> NEW n14: says ' the-n-t-e-f-'; relations [('n1', 0.11), ('n2', 0.11), ('n3', 0.11), ('n4', 0.11), ('n5', 0.11), ('n6', 0.11), ('n7', 0.11)]
+   -> NEW n15: says ' the-the-f-i-s-'; relations [('n1', 0.11), ('n2', 0.11), ('n3', 0.11), ('n4', 0.11), ('n5', 0.11), ('n6', 0.11), ('n7', 0.11)]
+   gates open: 4/4; woke ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7']; memory now 16 nodes
+
+FIRE on sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   fetched n0 (written at sentence 0, key score -0.07): says ' the-n-t-e-f-'
+   fetched n1 (written at sentence 0, key score -0.07): says ' thes of thes of thes of the'
+   fetched n2 (written at sentence 0, key score -0.07): says ' thes of thes of thes of the'
+   fetched n3 (written at sentence 0, key score -0.07): says ' the-n-t-e-f-'
+   fetched n4 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n5 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n6 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n7 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n12 (written at sentence 3, key score -0.09): says ' the-the-f-f-f-'
+   fetched n13 (written at sentence 3, key score -0.09): says ' the-f-a-t-i-'
+   fetched n14 (written at sentence 3, key score -0.09): says ' the-n-t-e-f-'
+   fetched n15 (written at sentence 3, key score -0.09): says ' the-the-f-i-s-'
+   slot 0: span starts at '[n0 row]' (p 0.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at ' above' (p 0.00): ' above' ' and' ' white' ' below' '.'
+   slot 2: span starts at '[n5 row]' (p 0.00): '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]'
+   slot 3: span starts at '[n14 row]' (p 0.00): '[n14 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]'
+   -> NEW n16: says ' the-the-f-f-f-'; relations []
+   -> NEW n17: says ' the-the-f-i-s-'; relations []
+   -> NEW n18: says ' the-the-f-i-s-'; relations []
+   -> NEW n19: says ' the-n-e-f-i-'; relations []
+   gates open: 4/4; woke []; memory now 20 nodes
+
+FIRE on sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   fetched n0 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   fetched n1 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n2 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n3 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   fetched n4 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n5 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n6 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n7 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n12 (written at sentence 3, key score -0.09): says ' the-the-f-f-f-'
+   fetched n13 (written at sentence 3, key score -0.09): says ' the-f-a-t-i-'
+   fetched n14 (written at sentence 3, key score -0.09): says ' the-n-t-e-f-'
+   fetched n15 (written at sentence 3, key score -0.09): says ' the-the-f-i-s-'
+   slot 0: span starts at '[n0 row]' (p 0.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at ' above' (p 0.00): ' above' ' them' ' ..'
+   slot 2: span starts at '[n5 row]' (p 0.00): '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]'
+   slot 3: span starts at '[n14 row]' (p 0.00): '[n14 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]'
+   -> NEW n20: says ' the-the-f-i-f-'; relations []
+   -> NEW n21: says ' the-the-f-i-f-'; relations []
+   -> NEW n22: says ' the- the- the- the- the-'; relations []
+   -> NEW n23: says ' the-the-f-f-f-'; relations []
+   gates open: 4/4; woke []; memory now 24 nodes
+
+FIRE on sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   fetched n0 (written at sentence 0, key score -0.07): says ' the-n-t-e-f-'
+   fetched n1 (written at sentence 0, key score -0.07): says ' thes of thes of thes of the'
+   fetched n2 (written at sentence 0, key score -0.07): says ' thes of thes of thes of the'
+   fetched n3 (written at sentence 0, key score -0.07): says ' the-n-t-e-f-'
+   fetched n4 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n5 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n6 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n7 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n12 (written at sentence 3, key score -0.09): says ' the-the-f-f-f-'
+   fetched n13 (written at sentence 3, key score -0.09): says ' the-f-a-t-i-'
+   fetched n14 (written at sentence 3, key score -0.09): says ' the-n-t-e-f-'
+   fetched n15 (written at sentence 3, key score -0.09): says ' the-the-f-i-s-'
+   slot 0: span starts at 'ep' (p 0.00): 'ep' 'hal' 'op' 'ods' ' and' ' crust' 'ace' 'ans' '.'
+   slot 1: span starts at ' within' (p 0.00): ' within' ' its' ' range' ',' ' the' ' milk' ' shark' ' feeds' ' primarily' ' on' ' small' ' b' 'ony' ' fishes' ',' ' but'
+   slot 2: span starts at ' its' (p 0.00): ' its' ' range' ',' ' the' ' milk' ' shark' ' feeds' ' primarily' ' on' ' small' ' b' 'ony' ' fishes' ',' ' but' ' also'
+   slot 3: span starts at '[n14 row]' (p 0.00): '[n14 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]'
+   -> NEW n24: says ' the-the-s, the-the-'; relations []
+   -> NEW n25: says ' the-n-e-f-i-'; relations []
+   -> NEW n26: says ' the-n-t-i-l-'; relations []
+   -> NEW n27: says ' the-n-e-f-i-'; relations []
+   gates open: 4/4; woke []; memory now 28 nodes
+
+FIRE on sentence 7: ' In turn, it often falls prey to larger sharks and possibly marine mammals.'
+   fetched n0 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   fetched n1 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n2 (written at sentence 0, key score -0.08): says ' thes of thes of thes of the'
+   fetched n3 (written at sentence 0, key score -0.08): says ' the-n-t-e-f-'
+   fetched n4 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n5 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n6 (written at sentence 1, key score -0.09): says ' the-n-k-i-i-'
+   fetched n7 (written at sentence 1, key score -0.09): says ' the-the-f-f-f-'
+   fetched n12 (written at sentence 3, key score -0.09): says ' the-the-f-f-f-'
+   fetched n13 (written at sentence 3, key score -0.09): says ' the-f-a-t-i-'
+   fetched n14 (written at sentence 3, key score -0.09): says ' the-n-t-e-f-'
+   fetched n15 (written at sentence 3, key score -0.09): says ' the-the-f-i-s-'
+   slot 0: span starts at '[n0 row]' (p 0.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at ' to' (p 0.01): ' to' ' larger' ' sharks' ' and' ' possibly' ' marine' ' mammals' '.'
+   slot 2: span starts at '[n5 row]' (p 0.00): '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]'
+   slot 3: span starts at '[n14 row]' (p 0.00): '[n14 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]' '[n15 row]'
+   -> NEW n28: says ' the-the-f-i-s-'; relations []
+   -> NEW n29: says ' the-the-f-f-f-'; relations []
+   -> NEW n30: says ' the-the-f-i-f-'; relations []
+   -> NEW n31: says ' the-the-f-i-f-'; relations []
+   gates open: 4/4; woke []; memory now 32 nodes
+
+ASK ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' (truth ' crustaceans.')
+   fetched n0 (sentence 0): says ' the-n-t-e-f-'
+   fetched n1 (sentence 0): says ' thes of thes of thes of the'
+   fetched n2 (sentence 0): says ' thes of thes of thes of the'
+   fetched n3 (sentence 0): says ' the-n-t-e-f-'
+   LM with memory says ' other small fish.'; LM alone says ' other small fish,'
+
+ASK ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae,' (truth ' whose common name comes from an')
+   fetched n0 (sentence 0): says ' the-n-t-e-f-'
+   fetched n1 (sentence 0): says ' thes of thes of thes of the'
+   fetched n2 (sentence 0): says ' thes of thes of thes of the'
+   fetched n3 (sentence 0): says ' the-n-t-e-f-'
+   LM with memory says ' which is the only known species'; LM alone says ' which includes the shark family,'
+
+ASK ' In turn, it often falls prey to larger sharks' (truth ' and possibly marine mammals.')/marimo/pv/insp/gnm.py:931: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3), gn, rn))
+
+   fetched n0 (sentence 0): says ' the-n-t-e-f-'
+   fetched n1 (sentence 0): says ' thes of thes of thes of the'
+   fetched n2 (sentence 0): says ' thes of thes of thes of the'
+   fetched n3 (sentence 0): says ' the-n-t-e-f-'
+   LM with memory says '.\n\nThe shark'; LM alone says ', which are more likely'
+Traceback (most recent call last):
+  File "/marimo/pv/insp/gnm.py", line 1153, in <module>
+    train_e1(G, train, a.steps, log=max(1, a.steps // 5))
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 919, in train_e1
+    cost, rt = read(G, mem, art, train=True)
+               ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 904, in read
+    written, _, c = G.step(mem, ids, train)
+                    ~~~~~~^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 817, in step
+    written, cost = self.write(mem, sel, owner, H, embs, 0 if rows is None else len(rows), train)
+                    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 771, in write
+    A[:, j, j:] = Ps[:, :T - j]
+    ~^^^^^^^^^^
+RuntimeError: The expanded size of the tensor (0) must match the existing size (12) at non-singleton dimension 1.  Target sizes: [4, 0].  Tensor sizes: [4, 12]
