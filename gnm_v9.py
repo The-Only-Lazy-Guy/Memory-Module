@@ -897,12 +897,15 @@ def train_e1(G, arts, steps, lr=3e-4, nq=4, log=200):
         loss = l1 + .3 * rt + cost
         opt.zero_grad()
         loss.backward()
+        gn = float(torch.nn.utils.clip_grad_norm_([p for p in G.parameters() if p.requires_grad], 1.))   # (11-14 trace: diverged ~step 400)
         opt.step()
-        acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3)))
+        rn = float(torch.stack([v.detach().norm(dim=-1).mean() for v in mem.V]).mean()) if mem.n else 0.
+        acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3), gn, rn))
         if (st + 1) % log == 0:
             a = torch.tensor(acc[-log:])
             print(f"step {st + 1}: blank nll {a[:, 0].mean():.3f}, round trip {a[:, 1].mean():.3f}, write cost {a[:, 2].mean():.3f}, "
-                  f"nodes / article {a[:, 3].mean():.1f}, {time.time() - t0:.0f}s", flush=True)
+                  f"nodes / article {a[:, 3].mean():.1f}, grad norm {a[:, 4].mean():.2f} (max {a[:, 4].max():.1f}), row norm {a[:, 5].mean():.2f} "
+                  f"(token vectors ~3.5), mark {float(G.mark.norm()):.2f}, {time.time() - t0:.0f}s", flush=True)
 
 
 @torch.no_grad()
