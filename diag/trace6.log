@@ -1,0 +1,381 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4843.80it/s]
+E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
+
+FIRE on sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   fetched: nothing (memory empty)
+   slot 0: span starts at ' part' (p 1.00): ' part' ' of' ' the' ' family' ' C' 'arch' 'ar' 'hin' 'idae' ',' ' whose' ' common' ' name' ' comes' ' from' ' an'
+   slot 1: span starts at ' consumption' (p 1.00): ' consumption' ' of' ' its' ' meat' ' promotes' ' lact' 'ation' '.'
+   slot 2: span starts at ' The' (p 1.00): ' The' ' milk' ' shark' ' (' 'Rh' 'iz' 'op' 'r' 'ion' 'odon' ' ac' 'ut' 'us' ')' ' is' ' a'
+   slot 3: span starts at ' The' (p 1.00): ' The' ' milk' ' shark' ' (' 'Rh' 'iz' 'op' 'r' 'ion' 'odon' ' ac' 'ut' 'us' ')' ' is' ' a'
+   -> NEW n0: says ' ancient Greek word meaning "crown."\n\n'; relations []
+   -> NEW n1: says ' the the the the the the the the the the'; relations []
+   -> NEW n2: says ' very large, predatory fish. It is a very'; relations []
+   -> NEW n3: says ' very large, predatory fish. It is a very'; relations []
+   gates open: 4/4; woke []; memory now 4 nodes
+
+FIRE on sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   fetched n0 (written at sentence 0, key score -0.08): says ' ancient Greek word meaning "crown."\n\n'
+   fetched n1 (written at sentence 0, key score -0.08): says ' the the the the the the the the the the'
+   fetched n2 (written at sentence 0, key score -0.08): says ' very large, predatory fish. It is a very'
+   fetched n3 (written at sentence 0, key score -0.08): says ' very large, predatory fish. It is a very'
+   slot 0: span starts at ' member' (p 1.00): ' member' ' of' ' its' ' genus' ',' ' the' ' milk' ' shark' ' typically' ' measures' ' 1' '.' '1' ' m' ' (' '3'
+   slot 1: span starts at '[n3 row]' (p 1.00): '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' ' The'
+   slot 2: span starts at '[n3 row]' (p 1.00): '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' ' The' ' largest' ' and' ' most' ' widely' ' distributed' ' member'
+   slot 3: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   -> NEW n4: says ' ft) long and weighs about 1.5 kg'; relations []
+   -> NEW n5: says 'ropodontid, a member of the family'; relations [('n3', 0.94)]
+   -> NEW n6: says ' of the genus. It is a member of the'; relations [('n3', 0.56)]
+   -> NEW n7: says ' the growth of the fish.\n\nThe species'; relations [('n0', 0.69), ('n1', 0.31)]
+   gates open: 4/4; woke ['n0', 'n1', 'n3']; memory now 8 nodes
+
+FIRE on sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   fetched n0 (written at sentence 0, key score -0.08): says ' ancient Greek word meaning "crown."\n\n'
+   fetched n1 (written at sentence 0, key score -0.08): says ' the the the the the the the the the the'
+   fetched n2 (written at sentence 0, key score -0.08): says ' very large, predatory fish. It is a very'
+   fetched n3 (written at sentence 0, key score -0.08): says ' very large, predatory fish. It is a very'
+   fetched n4 (written at sentence 1, key score -0.07): says ' ft) long and weighs about 1.5 kg'
+   fetched n5 (written at sentence 1, key score -0.07): says 'ropodontid, a member of the family'
+   fetched n6 (written at sentence 1, key score -0.07): says ' of the genus. It is a member of the'
+   fetched n7 (written at sentence 1, key score -0.08): says ' the growth of the fish.\n\nThe species'
+   slot 0: span starts at '[n7 row]' (p 1.00): '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' ' Occ' 'urring' ' from' ' the' ' surface' ' to' ' a' ' depth' ' of' ' 200' ' m' ' ('
+   slot 1: span starts at '[n4 row]' (p 1.00): '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n5 row]'
+   slot 2: span starts at '[n7 row]' (p 1.00): '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' ' Occ' 'urring' ' from' ' the' ' surface' ' to' ' a' ' depth'
+   slot 3: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   -> NEW n8: says '1,000 ft). The surface of the meat'; relations [('n7', 0.25)]
+   -> NEW n9: says '-dollars) long and weighs 1.'; relations [('n4', 0.94)]
+   -> NEW n10: says ' of about a foot.\n\nThe most common'; relations [('n7', 0.5)]
+   -> NEW n11: says ' the growth of the fish.\n\nThe species'; relations [('n0', 0.69), ('n1', 0.31)]
+   gates open: 4/4; woke ['n0', 'n1', 'n4', 'n7']; memory now 12 nodes
+
+FIRE on sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   fetched n0 (written at sentence 0, key score -0.08): says ' ancient Greek word meaning "crown."\n\n'
+   fetched n1 (written at sentence 0, key score -0.08): says ' the the the the the the the the the the'
+   fetched n3 (written at sentence 0, key score -0.08): says ' very large, predatory fish. It is a very'
+   fetched n4 (written at sentence 1, key score -0.07): says ' ft) long and weighs about 1.5 kg'
+   fetched n5 (written at sentence 1, key score -0.07): says 'ropodontid, a member of the family'
+   fetched n6 (written at sentence 1, key score -0.07): says ' of the genus. It is a member of the'
+   fetched n7 (written at sentence 1, key score -0.08): says ' the growth of the fish.\n\nThe species'
+   fetched n8 (written at sentence 2, key score -0.07): says '1,000 ft). The surface of the meat'
+   fetched n9 (written at sentence 2, key score -0.07): says '-dollars) long and weighs 1.'
+   fetched n10 (written at sentence 2, key score -0.07): says ' of about a foot.\n\nThe most common'
+   fetched n11 (written at sentence 2, key score -0.08): says ' the growth of the fish.\n\nThe species'
+   slot 0: span starts at '[n11 row]' (p 1.00): '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' ' Juven' 'iles' ' are' ' known' ' to' ' inhabit' ' tidal'
+   slot 1: span starts at '[n5 row]' (p 1.00): '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]'
+   slot 2: span starts at '[n7 row]' (p 1.00): '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' '[n7 row]' '[n8 row]' '[n8 row]' '[n8 row]' '[n8 row]' '[n8 row]' '[n8 row]' '[n8 row]' '[n8 row]'
+   slot 3: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   -> NEW n12: says ' pools of water, which are often filled with water'; relations [('n11', 0.56)]
+   -> NEW n13: says ' of the three species of the genus, and the'; relations [('n5', 0.31), ('n6', 0.69)]
+   -> NEW n14: says ' consumption of its meat promotes of its meat promotes of'; relations [('n7', 0.5), ('n8', 0.5)]
+   -> NEW n15: says ' the growth of the fish.\n\nThe fish'; relations [('n0', 0.69), ('n1', 0.31)]
+   gates open: 4/4; woke ['n0', 'n1', 'n5', 'n6', 'n7', 'n8', 'n11']; memory now 16 nodes
+
+FIRE on sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   fetched n3 (written at sentence 0, key score -0.07): says ' very large, predatory fish. It is a very'
+   fetched n4 (written at sentence 1, key score -0.07): says ' ft) long and weighs about 1.5 kg'
+   fetched n5 (written at sentence 1, key score -0.06): says 'ropodontid, a member of the family'
+   fetched n6 (written at sentence 1, key score -0.06): says ' of the genus. It is a member of the'
+   fetched n7 (written at sentence 1, key score -0.07): says ' the growth of the fish.\n\nThe species'
+   fetched n8 (written at sentence 2, key score -0.07): says '1,000 ft). The surface of the meat'
+   fetched n9 (written at sentence 2, key score -0.07): says '-dollars) long and weighs 1.'
+   fetched n10 (written at sentence 2, key score -0.07): says ' of about a foot.\n\nThe most common'
+   fetched n11 (written at sentence 2, key score -0.07): says ' the growth of the fish.\n\nThe species'
+   fetched n12 (written at sentence 3, key score -0.06): says ' pools of water, which are often filled with water'
+   fetched n13 (written at sentence 3, key score -0.07): says ' of the three species of the genus, and the'
+   fetched n14 (written at sentence 3, key score -0.06): says ' consumption of its meat promotes of its meat promotes of'
+   slot 0: span starts at '[n4 row]' (p 1.00): '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]' '[n4 row]'
+   slot 1: span starts at '[n9 row]' (p 1.00): '[n9 row]' '[n9 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]'
+   slot 2: span starts at '[n10 row]' (p 1.00): '[n10 row]' '[n10 row]' '[n10 row]' '[n10 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]' '[n11 row]'
+   slot 3: span starts at 'esc' (p 1.00): 'esc' 'ript' ' gray' ' above' ' and' ' white' ' below' '.'
+   -> NEW n16: says ' ft) long and weighs about 1.5 kg'; relations [('n4', 1.0)]
+   -> NEW n17: says ' the surface of the milk, the milk is often'; relations [('n9', 0.12), ('n10', 0.88)]
+   -> NEW n18: says " of the plant's leaves.\n\nThe plant"; relations [('n10', 0.25), ('n11', 0.75)]
+   -> NEW n19: says ' right-hand side of the body is the same'; relations []
+   gates open: 4/4; woke ['n4', 'n9', 'n10', 'n11']; memory now 20 nodes
+
+FIRE on sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   fetched n3 (written at sentence 0, key score -0.08): says ' very large, predatory fish. It is a very'
+   fetched n5 (written at sentence 1, key score -0.06): says 'ropodontid, a member of the family'
+   fetched n6 (written at sentence 1, key score -0.07): says ' of the genus. It is a member of the'
+   fetched n7 (written at sentence 1, key score -0.08): says ' the growth of the fish.\n\nThe species'
+   fetched n9 (written at sentence 2, key score -0.07): says '-dollars) long and weighs 1.'
+   fetched n10 (written at sentence 2, key score -0.07): says ' of about a foot.\n\nThe most common'
+   fetched n11 (written at sentence 2, key score -0.08): says ' the growth of the fish.\n\nThe species'
+   fetched n12 (written at sentence 3, key score -0.07): says ' pools of water, which are often filled with water'
+   fetched n13 (written at sentence 3, key score -0.07): says ' of the three species of the genus, and the'
+   fetched n14 (written at sentence 3, key score -0.07): says ' consumption of its meat promotes of its meat promotes of'
+   fetched n17 (written at sentence 4, key score -0.06): says ' the surface of the milk, the milk is often'
+   fetched n18 (written at sentence 4, key score -0.06): says " of the plant's leaves.\n\nThe plant"
+   slot 0: span starts at '[n17 row]' (p 1.00): '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n18 row]' '[n18 row]'
+   slot 1: span starts at '[n17 row]' (p 1.00): '[n17 row]' '[n17 row]' '[n17 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]'
+   slot 2: span starts at '[n18 row]' (p 1.00): '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' ' This' ' shark' ' can' ' be' ' distinguished' ' from' ' similar' ' species' ' in' ' its' ' range' ' by'
+   slot 3: span starts at '[n3 row]' (p 1.00): '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]'
+   -> NEW n20: says ' the heart, the heart is a source of energy'; relations [('n17', 0.88), ('n18', 0.12)]
+   -> NEW n21: says ' from the fact that it is a small, slender'; relations [('n17', 0.19), ('n18', 0.81)]
+   -> NEW n22: says ' the fact that it is a very large fish.'; relations [('n18', 0.25)]
+   -> NEW n23: says ' large, predatory fish that lives in the deep ocean'; relations [('n3', 1.0)]
+   gates open: 4/4; woke ['n3', 'n17', 'n18']; memory now 24 nodes
+
+FIRE on sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   fetched n3 (written at sentence 0, key score -0.07): says ' very large, predatory fish. It is a very'
+   fetched n5 (written at sentence 1, key score -0.06): says 'ropodontid, a member of the family'
+   fetched n6 (written at sentence 1, key score -0.06): says ' of the genus. It is a member of the'
+   fetched n9 (written at sentence 2, key score -0.07): says '-dollars) long and weighs 1.'
+   fetched n10 (written at sentence 2, key score -0.06): says ' of about a foot.\n\nThe most common'
+   fetched n11 (written at sentence 2, key score -0.07): says ' the growth of the fish.\n\nThe species'
+   fetched n12 (written at sentence 3, key score -0.06): says ' pools of water, which are often filled with water'
+   fetched n14 (written at sentence 3, key score -0.06): says ' consumption of its meat promotes of its meat promotes of'
+   fetched n17 (written at sentence 4, key score -0.05): says ' the surface of the milk, the milk is often'
+   fetched n18 (written at sentence 4, key score -0.06): says " of the plant's leaves.\n\nThe plant"
+   fetched n20 (written at sentence 5, key score -0.00): says ' the heart, the heart is a source of energy'
+   fetched n21 (written at sentence 5, key score -0.05): says ' from the fact that it is a small, slender'
+   slot 0: span starts at '[n20 row]' (p 1.00): '[n20 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]'
+   slot 1: span starts at '[n21 row]' (p 1.00): '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' ' Among' ' the' ' most' ' abundant' ' sharks' ' within' ' its' ' range' ',' ' the' ' milk'
+   slot 2: span starts at '[n20 row]' (p 1.00): '[n20 row]' '[n20 row]' '[n20 row]' '[n20 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]'
+   slot 3: span starts at ' crust' (p 1.00): ' crust' 'ace' 'ans' '.'
+   -> NEW n24: says ' is the "pig-tailed" (P'; relations [('n21', 0.94)]
+   -> NEW n25: says ' shark is the most abundant shark in the world.'; relations [('n21', 0.31)]
+   -> NEW n26: says ' a group of marine reptiles that includes the sea turtle'; relations [('n20', 0.25), ('n21', 0.75)]
+   -> NEW n27: says ' (1)\n\nI have a new book'; relations []
+   gates open: 4/4; woke ['n20', 'n21']; memory now 28 nodes
+
+FIRE on sentence 7: ' In turn, it often falls prey to larger sharks and possibly marine mammals.'
+   fetched n3 (written at sentence 0, key score -0.08): says ' very large, predatory fish. It is a very'
+   fetched n5 (written at sentence 1, key score -0.06): says 'ropodontid, a member of the family'
+   fetched n9 (written at sentence 2, key score -0.07): says '-dollars) long and weighs 1.'
+   fetched n10 (written at sentence 2, key score -0.07): says ' of about a foot.\n\nThe most common'
+   fetched n13 (written at sentence 3, key score -0.07): says ' of the three species of the genus, and the'/marimo/pv/insp/gnm.py:934: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3), gn, rn))
+
+   fetched n17 (written at sentence 4, key score -0.06): says ' the surface of the milk, the milk is often'
+   fetched n18 (written at sentence 4, key score -0.06): says " of the plant's leaves.\n\nThe plant"
+   fetched n20 (written at sentence 5, key score -0.01): says ' the heart, the heart is a source of energy'
+   fetched n21 (written at sentence 5, key score -0.06): says ' from the fact that it is a small, slender'
+   fetched n24 (written at sentence 6, key score -0.04): says ' is the "pig-tailed" (P'
+   fetched n25 (written at sentence 6, key score -0.07): says ' shark is the most abundant shark in the world.'
+   fetched n26 (written at sentence 6, key score -0.04): says ' a group of marine reptiles that includes the sea turtle'
+   slot 0: span starts at '[n20 row]' (p 1.00): '[n20 row]' '[n20 row]' '[n20 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]'
+   slot 1: span starts at '[n20 row]' (p 1.00): '[n20 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]' '[n21 row]'
+   slot 2: span starts at '[n17 row]' (p 1.00): '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n17 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]' '[n18 row]'
+   slot 3: span starts at '[n3 row]' (p 1.00): '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]'
+   -> NEW n28: says ' name is derived from the Greek word for "to'; relations [('n20', 0.19), ('n21', 0.81)]
+   -> NEW n29: says ' is the "pig-tailed" (P'; relations [('n21', 0.94)]
+   -> NEW n30: says 'aeological record.\n\nThe most important of'; relations [('n17', 0.69), ('n18', 0.31)]
+   -> NEW n31: says ' large, predatory fish that lives in the deep ocean'; relations [('n3', 1.0)]
+   gates open: 4/4; woke ['n3', 'n17', 'n18', 'n20', 'n21']; memory now 32 nodes
+
+ASK ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' (truth ' crustaceans.')
+   fetched n9 (sentence 2): says '-dollars) long and weighs 1.'
+   fetched n10 (sentence 2): says ' of about a foot.\n\nThe most common'
+   fetched n12 (sentence 3): says ' pools of water, which are often filled with water'
+   fetched n17 (sentence 4): says ' the surface of the milk, the milk is often'
+   LM with memory says ' other small fish,'; LM alone says ' other small fish,'
+
+ASK ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae,' (truth ' whose common name comes from an')
+   fetched n9 (sentence 2): says '-dollars) long and weighs 1.'
+   fetched n10 (sentence 2): says ' of about a foot.\n\nThe most common'
+   fetched n17 (sentence 4): says ' the surface of the milk, the milk is often'
+   fetched n18 (sentence 4): says " of the plant's leaves.\n\nThe plant"
+   LM with memory says ' which includes the milk shark,'; LM alone says ' which includes the shark family,'
+
+ASK ' In turn, it often falls prey to larger sharks' (truth ' and possibly marine mammals.')
+   fetched n9 (sentence 2): says '-dollars) long and weighs 1.'
+   fetched n10 (sentence 2): says ' of about a foot.\n\nThe most common'
+   fetched n17 (sentence 4): says ' the surface of the milk, the milk is often'
+   fetched n18 (sentence 4): says " of the plant's leaves.\n\nThe plant"
+   LM with memory says ', such as the shark'; LM alone says ', which are more likely'
+   largest grads (before clipping): key.weight 6.9e-01, qry.weight 5.8e-01, mark 3.8e-01, ptr.weight 1.4e-01
+step 200: blank nll 3.204, round trip 3.974, write cost 0.024, nodes / article 31.8, grad norm 475.20 (max 19887.1), row norm 1.26 (token vectors ~3.5), mark 0.32, 87s
+   largest grads (before clipping): qry.weight 7.3e-01, key.weight 6.2e-01, mark 2.3e-01, spanq 9.2e-02
+step 400: blank nll 3.055, round trip 3.310, write cost 0.025, nodes / article 31.8, grad norm 985.89 (max 111776.0), row norm 1.58 (token vectors ~3.5), mark 0.40, 172s
+   largest grads (before clipping): mark 6.9e-01, ptr.weight 4.6e-01, key.weight 4.6e-01, gate.weight 2.2e-01
+step 600: blank nll 3.046, round trip 3.118, write cost 0.025, nodes / article 31.8, grad norm 325.61 (max 29417.3), row norm 1.77 (token vectors ~3.5), mark 0.47, 258s
+   largest grads (before clipping): mark 6.9e-01, key.weight 4.3e-01, qry.weight 3.8e-01, gate.weight 3.0e-01
+step 800: blank nll 3.049, round trip 3.075, write cost 0.025, nodes / article 32.0, grad norm 797.09 (max 74892.4), row norm 1.66 (token vectors ~3.5), mark 0.55, 344s
+   largest grads (before clipping): qry.weight 7.3e-01, key.weight 5.4e-01, mark 3.3e-01, att.weight 1.4e-01
+step 1000: blank nll 2.835, round trip 3.210, write cost 0.026, nodes / article 31.8, grad norm 239.80 (max 8972.4), row norm 1.89 (token vectors ~3.5), mark 0.58, 429s
+
+==================== after 1000 training steps
+
+FIRE on sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   fetched: nothing (memory empty)
+   slot 0: span starts at ' milk' (p 1.00): ' milk' ' shark' ' (' 'Rh' 'iz' 'op' 'r' 'ion' 'odon' ' ac' 'ut' 'us' ')' ' is' ' a' ' species'
+   slot 1: span starts at 'odon' (p 1.00): 'odon' ' ac' 'ut' 'us' ')' ' is' ' a' ' species' ' of' ' requ' 'iem' ' shark' ',' ' and' ' part' ' of'
+   slot 2: span starts at ' species' (p 1.00): ' species' ' of' ' requ' 'iem' ' shark' ',' ' and' ' part' ' of' ' the' ' family' ' C' 'arch' 'ar' 'hin' 'idae'
+   slot 3: span starts at ' of' (p 1.00): ' of' ' requ' 'iem' ' shark' ',' ' and' ' part' ' of' ' the' ' family' ' C' 'arch' 'ar' 'hin' 'idae' ','
+   -> NEW n0: says ' of shark that is found in the Gulf of Mexico'; relations []
+   -> NEW n1: says ' the genus Acutus.\n\nThe species'; relations []
+   -> NEW n2: says '.\n\nThe shark is a member of the'; relations []
+   -> NEW n3: says ' which includes the shark, the shark, and the'; relations []
+   gates open: 4/4; woke []; memory now 4 nodes
+
+FIRE on sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   fetched n0 (written at sentence 0, key score +0.45): says ' of shark that is found in the Gulf of Mexico'
+   fetched n1 (written at sentence 0, key score +0.51): says ' the genus Acutus.\n\nThe species'
+   fetched n2 (written at sentence 0, key score +0.39): says '.\n\nThe shark is a member of the'
+   fetched n3 (written at sentence 0, key score +0.43): says ' which includes the shark, the shark, and the'
+   slot 0: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 2: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 3: span starts at '[n1 row]' (p 1.00): '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]'
+   -> NEW n4: says ' of the genus Rhizoprionodon.'; relations [('n0', 0.94)]
+   -> NEW n5: says ' of the genus Acutus.\n\nThe'; relations [('n0', 0.5), ('n1', 0.5)]
+   -> NEW n6: says ' of the family of sharks.\n\nThe species'; relations [('n1', 0.94)]
+   -> NEW n7: says ' of species of requiem shark, and part of'; relations [('n1', 0.5), ('n2', 0.5)]
+   gates open: 4/4; woke ['n0', 'n1', 'n2']; memory now 8 nodes
+
+FIRE on sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   fetched n0 (written at sentence 0, key score +0.80): says ' of shark that is found in the Gulf of Mexico'
+   fetched n1 (written at sentence 0, key score +0.70): says ' the genus Acutus.\n\nThe species'
+   fetched n2 (written at sentence 0, key score +0.67): says '.\n\nThe shark is a member of the'
+   fetched n3 (written at sentence 0, key score +0.69): says ' which includes the shark, the shark, and the'
+   fetched n4 (written at sentence 1, key score +0.76): says ' of the genus Rhizoprionodon.'
+   fetched n5 (written at sentence 1, key score +0.66): says ' of the genus Acutus.\n\nThe'
+   fetched n6 (written at sentence 1, key score +0.53): says ' of the family of sharks.\n\nThe species'
+   fetched n7 (written at sentence 1, key score +0.55): says ' of species of requiem shark, and part of'
+   slot 0: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 2: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 3: span starts at '[n1 row]' (p 1.00): '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]'
+   -> NEW n8: says ', and the species is found in the southern part'; relations [('n0', 0.94)]
+   -> NEW n9: says ' of the genus Acutus.\n\nThe'; relations [('n0', 0.5), ('n1', 0.5)]
+   -> NEW n10: says ' of the family of sharks.\n\nThe species'; relations [('n1', 0.94)]
+   -> NEW n11: says ' of species of requiem shark, and part of'; relations [('n1', 0.5), ('n2', 0.5)]
+   gates open: 4/4; woke ['n0', 'n1', 'n2']; memory now 12 nodes
+
+FIRE on sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   fetched n0 (written at sentence 0, key score +0.83): says ' of shark that is found in the Gulf of Mexico'
+   fetched n1 (written at sentence 0, key score +0.79): says ' the genus Acutus.\n\nThe species'
+   fetched n2 (written at sentence 0, key score +0.76): says '.\n\nThe shark is a member of the'
+   fetched n3 (written at sentence 0, key score +0.78): says ' which includes the shark, the shark, and the'
+   fetched n4 (written at sentence 1, key score +0.81): says ' of the genus Rhizoprionodon.'
+   fetched n5 (written at sentence 1, key score +0.75): says ' of the genus Acutus.\n\nThe'
+   fetched n6 (written at sentence 1, key score +0.65): says ' of the family of sharks.\n\nThe species'
+   fetched n7 (written at sentence 1, key score +0.58): says ' of species of requiem shark, and part of'
+   fetched n8 (written at sentence 2, key score +0.81): says ', and the species is found in the southern part'
+   fetched n9 (written at sentence 2, key score +0.75): says ' of the genus Acutus.\n\nThe'
+   fetched n10 (written at sentence 2, key score +0.65): says ' of the family of sharks.\n\nThe species'
+   fetched n11 (written at sentence 2, key score +0.58): says ' of species of requiem shark, and part of'
+   slot 0: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 2: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 3: span starts at '[n1 row]' (p 1.00): '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]' '[n2 row]'
+   -> NEW n12: says ', and the species is found in the southern part'; relations [('n0', 0.94)]
+   -> NEW n13: says ' of the genus Acutus.\n\nThe'; relations [('n0', 0.5), ('n1', 0.5)]
+   -> NEW n14: says ' of the family of sharks.\n\nThe species'; relations [('n1', 0.94)]
+   -> NEW n15: says ' of species of requiem shark, and part of'; relations [('n1', 0.5), ('n2', 0.5)]
+   gates open: 4/4; woke ['n0', 'n1', 'n2']; memory now 16 nodes
+
+FIRE on sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   fetched n0 (written at sentence 0, key score +0.81): says ' of shark that is found in the Gulf of Mexico'
+   fetched n1 (written at sentence 0, key score +0.88): says ' the genus Acutus.\n\nThe species'
+   fetched n3 (written at sentence 0, key score +0.84): says ' which includes the shark, the shark, and the'
+   fetched n5 (written at sentence 1, key score +0.85): says ' of the genus Acutus.\n\nThe'
+   fetched n6 (written at sentence 1, key score +0.82): says ' of the family of sharks.\n\nThe species'
+   fetched n7 (written at sentence 1, key score +0.69): says ' of species of requiem shark, and part of'
+   fetched n9 (written at sentence 2, key score +0.86): says ' of the genus Acutus.\n\nThe'
+   fetched n10 (written at sentence 2, key score +0.82): says ' of the family of sharks.\n\nThe species'
+   fetched n11 (written at sentence 2, key score +0.69): says ' of species of requiem shark, and part of'
+   fetched n13 (written at sentence 3, key score +0.85): says ' of the genus Acutus.\n\nThe'
+   fetched n14 (written at sentence 3, key score +0.82): says ' of the family of sharks.\n\nThe species'
+   fetched n15 (written at sentence 3, key score +0.71): says ' of species of requiem shark, and part of'
+   slot 0: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 2: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 3: span starts at '[n1 row]' (p 1.00): '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]'
+   -> NEW n16: says ', and the species is found in the southern part'; relations [('n0', 0.94)]
+   -> NEW n17: says ' of the genus Acutus.\n\nThe'; relations [('n0', 0.5), ('n1', 0.5)]
+   -> NEW n18: says ' of the family of sharks.\n\nThe species'; relations [('n1', 0.94)]
+   -> NEW n19: says ' requiem shark, and part of requiem shark'; relations [('n1', 0.5), ('n3', 0.5)]
+   gates open: 4/4; woke ['n0', 'n1', 'n3']; memory now 20 nodes
+
+FIRE on sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   fetched n0 (written at sentence 0, key score +0.78): says ' of shark that is found in the Gulf of Mexico'
+   fetched n1 (written at sentence 0, key score +0.84): says ' the genus Acutus.\n\nThe species'
+   fetched n3 (written at sentence 0, key score +0.78): says ' which includes the shark, the shark, and the'
+   fetched n5 (written at sentence 1, key score +0.80): says ' of the genus Acutus.\n\nThe'
+   fetched n6 (written at sentence 1, key score +0.75): says ' of the family of sharks.\n\nThe species'
+   fetched n7 (written at sentence 1, key score +0.67): says ' of species of requiem shark, and part of'
+   fetched n8 (written at sentence 2, key score +0.76): says ', and the species is found in the southern part'
+   fetched n9 (written at sentence 2, key score +0.80): says ' of the genus Acutus.\n\nThe'
+   fetched n10 (written at sentence 2, key score +0.75): says ' of the family of sharks.\n\nThe species'
+   fetched n11 (written at sentence 2, key score +0.67): says ' of species of requiem shark, and part of'
+   fetched n13 (written at sentence 3, key score +0.80): says ' of the genus Acutus.\n\nThe'
+   fetched n17 (written at sentence 4, key score +0.80): says ' of the genus Acutus.\n\nThe'
+   slot 0: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 2: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 3: span starts at '[n1 row]' (p 1.00): '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]'
+   -> NEW n20: says ', and the species is found in the southern part'; relations [('n0', 0.94)]
+   -> NEW n21: says ' of the genus Acutus.\n\nThe'; relations [('n0', 0.5), ('n1', 0.5)]
+   -> NEW n22: says ' of the family of sharks.\n\nThe species'; relations [('n1', 0.94)]
+   -> NEW n23: says ' requiem shark, and part of requiem shark'; relations [('n1', 0.5), ('n3', 0.5)]
+   gates open: 4/4; woke ['n0', 'n1', 'n3']; memory now 24 nodes
+
+FIRE on sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   fetched n0 (written at sentence 0, key score +0.68): says ' of shark that is found in the Gulf of Mexico'
+   fetched n1 (written at sentence 0, key score +0.73): says ' the genus Acutus.\n\nThe species'
+   fetched n3 (written at sentence 0, key score +0.69): says ' which includes the shark, the shark, and the'
+   fetched n5 (written at sentence 1, key score +0.69): says ' of the genus Acutus.\n\nThe'
+   fetched n6 (written at sentence 1, key score +0.64): says ' of the family of sharks.\n\nThe species'
+   fetched n7 (written at sentence 1, key score +0.55): says ' of species of requiem shark, and part of'
+   fetched n9 (written at sentence 2, key score +0.69): says ' of the genus Acutus.\n\nThe'
+   fetched n10 (written at sentence 2, key score +0.64): says ' of the family of sharks.\n\nThe species'
+   fetched n11 (written at sentence 2, key score +0.55): says ' of species of requiem shark, and part of'
+   fetched n13 (written at sentence 3, key score +0.69): says ' of the genus Acutus.\n\nThe'
+   fetched n17 (written at sentence 4, key score +0.69): says ' of the genus Acutus.\n\nThe'
+   fetched n21 (written at sentence 5, key score +0.69): says ' of the genus Acutus.\n\nThe'
+   slot 0: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 2: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 3: span starts at '[n1 row]' (p 1.00): '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]' '[n3 row]'
+   -> NEW n24: says ' of the genus Rhizoprionodon.'; relations [('n0', 0.94)]
+   -> NEW n25: says ' of the genus Acutus.\n\nThe'; relations [('n0', 0.5), ('n1', 0.5)]
+   -> NEW n26: says ' of the family of sharks.\n\nThe species'; relations [('n1', 0.94)]
+   -> NEW n27: says ' requiem shark, and part of requiem shark'; relations [('n1', 0.5), ('n3', 0.5)]
+   gates open: 4/4; woke ['n0', 'n1', 'n3']; memory now 28 nodes
+
+FIRE on sentence 7: ' In turn, it often falls prey to larger sharks and possibly marine mammals.'
+   fetched n0 (written at sentence 0, key score +0.68): says ' of shark that is found in the Gulf of Mexico'
+   fetched n1 (written at sentence 0, key score +0.74): says ' the genus Acutus.\n\nThe species'
+   fetched n5 (written at sentence 1, key score +0.67): says ' of the genus Acutus.\n\nThe'
+   fetched n6 (written at sentence 1, key score +0.60): says ' of the family of sharks.\n\nThe species'
+   fetched n7 (written at sentence 1, key score +0.55): says ' of species of requiem shark, and part of'
+   fetched n9 (written at sentence 2, key score +0.67): says ' of the genus Acutus.\n\nThe'
+   fetched n10 (written at sentence 2, key score +0.61): says ' of the family of sharks.\n\nThe species'
+   fetched n11 (written at sentence 2, key score +0.56): says ' of species of requiem shark, and part of'
+   fetched n13 (written at sentence 3, key score +0.67): says ' of the genus Acutus.\n\nThe'
+   fetched n17 (written at sentence 4, key score +0.67): says ' of the genus Acutus.\n\nThe'
+   fetched n21 (written at sentence 5, key score +0.67): says ' of the genus Acutus.\n\nThe'
+   fetched n25 (written at sentence 6, key score +0.67): says ' of the genus Acutus.\n\nThe'
+   slot 0: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n0 row]' '[n1 row]'
+   slot 1: span starts at '[n5 row]' (p 1.00): '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]' '[n6 row]'
+   slot 2: span starts at '[n0 row]' (p 1.00): '[n0 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]'
+   slot 3: span starts at '[n1 row]' (p 1.00): '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n1 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]' '[n5 row]'
+   -> NEW n28: says ' of the genus Rhizoprionodon.'; relations [('n0', 0.94)]
+   -> NEW n29: says ' species species species species species species species species species species'; relations [('n5', 0.5), ('n6', 0.5)]
+   -> NEW n30: says ' of the family of sharks.\n\nThe species'; relations [('n1', 0.94)]
+   -> NEW n31: says ' of the genus Carcharhinus.\n'; relations [('n1', 0.5), ('n5', 0.5)]
+   gates open: 4/4; woke ['n0', 'n1', 'n5', 'n6']; memory now 32 nodes
+
+ASK ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' (truth ' crustaceans.')
+   fetched n0 (sentence 0): says ' of shark that is found in the Gulf of Mexico'
+   fetched n1 (sentence 0): says ' the genus Acutus.\n\nThe species'
+   fetched n3 (sentence 0): says ' which includes the shark, the shark, and the'
+   fetched n5 (sentence 1): says ' of the genus Acutus.\n\nThe'
+   LM with memory says ' other small fish,'; LM alone says ' other small fish,'
+
+ASK ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae,' (truth ' whose common name comes from an')
+   fetched n2 (sentence 0): says '.\n\nThe shark is a member of the'
+   fetched n3 (sentence 0): says ' which includes the shark, the shark, and the'
+   fetched n5 (sentence 1): says ' of the genus Acutus.\n\nThe'
+   fetched n7 (sentence 1): says ' of species of requiem shark, and part of'
+   LM with memory says ' and part of the family C'; LM alone says ' which includes the shark family,'
+
+ASK ' In turn, it often falls prey to larger sharks' (truth ' and possibly marine mammals.')
+   fetched n0 (sentence 0): says ' of shark that is found in the Gulf of Mexico'
+   fetched n1 (sentence 0): says ' the genus Acutus.\n\nThe species'
+   fetched n5 (sentence 1): says ' of the genus Acutus.\n\nThe'
+   fetched n6 (sentence 1): says ' of the family of sharks.\n\nThe species'
+   LM with memory says ', which are more likely'; LM alone says ', which are more likely'
