@@ -1,27 +1,1 @@
 annotations resolve: demo 135 firings, held-out 60 firings
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3826.09it/s]
-demos: 10 articles, 52 sentences, 83 facts, 135 firings; nodes made: 1; fields named: 30
-epoch 25: loss 9.45
-epoch 50: loss 8.02
-epoch 75: loss 7.17
-epoch 100: loss 6.97
-epoch 125: loss 5.67
-epoch 150: loss 5.68
-trained 28s
-lockstep: firings 60 | want right 52 (of 'nothing more' firings: 13/21; of 'keep' firings: 39/39) | subject choice 39/39 | THING recall 51/80 precision 51/61, ATTR recall 89/127 precision 89/128, VAL recall 89/128 precision 89/129
-Traceback (most recent call last):
-  File "/marimo/pv/bio_ctx/bio.py", line 338, in <module>
-    t = grade(M, data, show)
-  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
-    return func(*args, **kwargs)
-  File "/marimo/pv/bio_ctx/bio.py", line 267, in grade
-    kept = mem.read(title, s, tr)
-  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
-    return func(*args, **kwargs)
-  File "/marimo/pv/bio_ctx/bio.py", line 236, in read
-    how = self.keep(ti, attr, val)
-  File "/marimo/pv/bio_ctx/bio.py", line 211, in keep
-    if lab is not None and float(f["lab"] @ lab) > JOIN:
-                                 ~~~~~~~~~^~~~~
-TypeError: unsupported operand type(s) for @: 'NoneType' and 'Tensor'
