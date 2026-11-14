@@ -738,7 +738,7 @@ class GNM(nn.Module):
             fk = torch.stack([mem.k[i] for i in sel]).detach()
             lg = torch.cat([F.normalize(self.ptr(pooled), dim=-1) @ fk.T / .1, self.new.expand(K, 1)], 1)
             choice = [int(c) for c in lg.argmax(-1)]
-        mass = A[:, :n_rows].view(K, m, n_rows).sum(1) if n_rows else None
+        mass = A[:, :n_rows].view(K, m, n_rows).sum(1).detach() if n_rows else None   # (relations: read, not trained)
         written = []
         for j in range(K):
             if hard[j] == 0 and not train:
