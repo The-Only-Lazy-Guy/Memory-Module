@@ -24,3 +24,27 @@ step 2200: blank nll 3.203, round trip 3.748, write cost 0.009, nodes / article 
 step 2400: blank nll 3.161, round trip 3.741, write cost 0.008, nodes / article 31.7, 742s
 step 2600: blank nll 3.081, round trip 3.748, write cost 0.008, nodes / article 31.8, 806s
 step 2800: blank nll 3.073, round trip 3.719, write cost 0.008, nodes / article 31.8, 868s
+step 3000: blank nll 3.176, round trip 3.715, write cost 0.007, nodes / article 31.8, 931s
+
+  -- Milk shark: 2 nodes; what some say when the LM reads them alone:
+     node 0: '\n\nAsteroid: Asteroid: Asteroid:'
+     node 1: '\n\nA large, dark-green, yellow-green, or'
+     blank: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' -> truth ' crustaceans.' | memory says ' other small fish,' | alone says ' other small fish,'
+
+  -- <unk> stingray: 2 nodes; what some say when the LM reads them alone:
+     node 0: '\n\nA large, dark-green, yellow-green, or'
+     node 1: '\n\nA large, black-and-white, black-and'
+     blank: ' It is seasonally migratory, overwintering in offshore waters and moving into coastal habitats for' -> truth ' summer.' | memory says ' the first' | alone says ' the first'
+
+  -- Danube crested newt: 1 nodes; what some say when the LM reads them alone:
+     node 0: '\n\nAsteroid: Asteroid: Asteroid:'
+     blank: ' The Danube crested newt or Danube newt (Triturus dobrogicus) is a species of newt found in central' -> truth ' and eastern Europe, along the' | memory says ' and southern Europe. It is' | alone says ' Europe. It is a very'
+
+1 article(s) per memory, 60 memories, 2 nodes each:
+                LM alone: nll 3.634 | token acc 0.375 | exact span 10/360
+    LM + text in context: nll 0.129 | token acc 0.981 | exact span 334/360
+         LM + GNM memory: nll 3.374 | token acc 0.372 | exact span 17/360
+
+20 article(s) per memory, 3 memories, 3 nodes each:
+                LM alone: nll 3.634 | token acc 0.375 | exact span 10/360
+         LM + GNM memory: nll 3.458 | token acc 0.370 | exact span 14/360
