@@ -24,7 +24,13 @@ JOIN = .8
 
 @torch.no_grad()
 def bvec(p):
-    return F.normalize(G.vecs(tok(BP[p])).mean(0), dim=-1)
+    """a purpose's label: its words' token embeddings (11-14: with contextual states every purpose came out the same
+    vector -- 'find the next fact' met 'keep the fact')"""
+    if G.VECS == "stand":
+        return F.normalize(G.vecs(tok(BP[p])).mean(0), dim=-1)
+    tk, m = G.lm()
+    ids = torch.tensor([tk(" " + BP[p])["input_ids"]], device=dev)
+    return F.normalize(m.wte(ids)[0].mean(0), dim=-1)
 
 
 def sents(p):
