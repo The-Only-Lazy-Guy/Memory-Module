@@ -23,3 +23,33 @@ step 1800: blank nll 3.025, round trip 3.579, write cost 0.029, nodes / article 
 step 2000: blank nll 3.123, round trip 3.591, write cost 0.029, nodes / article 31.8, 829s
 step 2200: blank nll 3.130, round trip 3.584, write cost 0.028, nodes / article 31.9, 910s
 step 2400: blank nll 3.072, round trip 3.583, write cost 0.029, nodes / article 31.7, 991s
+step 2600: blank nll 3.045, round trip 3.560, write cost 0.028, nodes / article 31.8, 1073s
+step 2800: blank nll 3.028, round trip 3.543, write cost 0.027, nodes / article 31.8, 1154s
+step 3000: blank nll 3.095, round trip 3.534, write cost 0.028, nodes / article 31.8, 1237s
+
+  -- Milk shark: 32 nodes; what some say when the LM reads them alone:
+     node 0: '\n\nLapis lupus (Lapis lup'
+     node 1: '\n\nThe name "Tiger" comes from the Japanese word for'
+     node 2: '\n\nDwarf-like creature with a long, pointed head'
+     node 3: '\n\nThe genus is a family of genera of the genus C'
+     node 4: '\n\nDwarf-like creatures, they are often found in'
+     node 5: '\n\nThe genus is a family of genera of the genus C'
+     blank: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' -> truth ' crustaceans.' | memory says ' other small fish.' | alone says ' other small fish,'
+
+  -- <unk> stingray: 32 nodes; what some say when the LM reads them alone:
+     node 0: '\n\nLapis lupus (Lapis lup'
+     node 1: '\n\nCapsule-like creatures that are often found in the'
+     node 2: '\n\nLapis lupus (Lapis lup'
+     node 3: '\n\nLapis lupus (Lapis lup'
+     node 4: '\n\nThe genus is a family of genera of the genus C'
+     node 5: '\n\nAsteroidoid-like creatures are found in the ocean'
+     blank: ' It is seasonally migratory, overwintering in offshore waters and moving into coastal habitats for' -> truth ' summer.' | memory says 'aging for' | alone says ' the first'
+
+  -- Danube crested newt: 32 nodes; what some say when the LM reads them alone:
+     node 0: '\n\nCapsule-like structures are found in the upper and'
+     node 1: '\n\nCapsule-like creatures that are found in the desert'
+     node 2: '\n\nCapsule-like structures are found in the mouth of'
+     node 3: '\n\nDwarf-like creature, usually found in the forests'
+     node 4: '\n\nAsteroid-like creatures that are found in the ocean'
+     node 5: '\n\nA large, black-and-white, black-and'
+     blank: ' The Danube crested newt or Danube newt (Triturus dobrogicus) is a species of newt found in central' -> truth ' and eastern Europe, along the' | memory says ' Australia. It is the only' | alone says ' Europe. It is a very'
