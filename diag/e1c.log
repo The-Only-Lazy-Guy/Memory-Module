@@ -1,0 +1,16 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4231.10it/s]
+E1: 528 articles (28788 train, 60 held out), LM gpt2, device cuda
+
+1 article(s) per memory, 10 memories, 4 nodes each:
+                  LM alone: nll 3.554 | token acc 0.410 | exact span 3/60
+      LM + text in context: nll 0.148 | token acc 0.966 | exact span 54/60
+           LM + GNM memory: nll 3.797 | token acc 0.346 | exact span 3/60
+     LM + another's memory: nll 3.894 | token acc 0.341 | exact span 3/54
+(above: before training)
+/marimo/pv/v9/gnm.py:882: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3)))
+step 200: blank nll 3.547, round trip 4.299, write cost 0.031, nodes / article 31.5, 81s
+step 400: blank nll 3.386, round trip 3.970, write cost 0.032, nodes / article 31.8, 168s
+step 600: blank nll 3.342, round trip 3.938, write cost 0.029, nodes / article 31.5, 252s
