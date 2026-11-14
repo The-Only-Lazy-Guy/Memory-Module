@@ -53,3 +53,14 @@ step 3000: blank nll 3.095, round trip 3.534, write cost 0.028, nodes / article 
      node 4: '\n\nAsteroid-like creatures that are found in the ocean'
      node 5: '\n\nA large, black-and-white, black-and'
      blank: ' The Danube crested newt or Danube newt (Triturus dobrogicus) is a species of newt found in central' -> truth ' and eastern Europe, along the' | memory says ' Australia. It is the only' | alone says ' Europe. It is a very'
+
+1 article(s) per memory, 60 memories, 32 nodes each:
+                  LM alone: nll 3.634 | token acc 0.375 | exact span 10/360
+      LM + text in context: nll 0.129 | token acc 0.981 | exact span 334/360
+           LM + GNM memory: nll 3.248 | token acc 0.404 | exact span 20/360
+     LM + another's memory: nll 3.262 | token acc 0.395 | exact span 18/354
+
+20 article(s) per memory, 3 memories, 638 nodes each:
+                  LM alone: nll 3.634 | token acc 0.375 | exact span 10/360
+           LM + GNM memory: nll 3.247 | token acc 0.398 | exact span 21/360
+     LM + another's memory: nll 3.332 | token acc 0.383 | exact span 12/240
