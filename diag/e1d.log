@@ -87,3 +87,11 @@ step 7200: blank nll 2.163, round trip 1.903, write cost 0.025, nodes / article 
 step 7400: blank nll 2.207, round trip 1.878, write cost 0.025, nodes / article 31.4, grad norm 62.45 (max 2248.6), row norm 1.59 (token vectors ~3.5), mark 1.13, 2891s
    largest grads (before clipping): qry.weight 5.0e-01, gate.weight 4.9e-01, key.weight 4.8e-01, mark 4.4e-01
 step 7600: blank nll 2.322, round trip 1.885, write cost 0.025, nodes / article 31.7, grad norm 274.16 (max 44009.9), row norm 1.56 (token vectors ~3.5), mark 1.16, 2968s
+   largest grads (before clipping): mark 7.4e-01, gate.weight 4.6e-01, key.weight 4.4e-01, qry.weight 1.7e-01
+step 7800: blank nll 2.244, round trip 1.904, write cost 0.025, nodes / article 31.7, grad norm 213.26 (max 10356.5), row norm 1.58 (token vectors ~3.5), mark 1.16, 3045s
+   largest grads (before clipping): mark 7.6e-01, spanq 3.7e-01, key.weight 3.4e-01, att.weight 3.1e-01
+step 8000: blank nll 2.308, round trip 1.917, write cost 0.025, nodes / article 31.6, grad norm 98.93 (max 1625.7), row norm 1.58 (token vectors ~3.5), mark 1.17, 3122s
+   largest grads (before clipping): mark 8.6e-01, key.weight 3.6e-01, qry.weight 2.6e-01, gate.weight 1.7e-01
+step 8200: blank nll 2.404, round trip 1.807, write cost 0.025, nodes / article 31.6, grad norm 180.50 (max 5029.2), row norm 1.65 (token vectors ~3.5), mark 1.18, 3199s
+   largest grads (before clipping): att.weight 7.8e-01, spanq 5.3e-01, mark 2.5e-01, qry.weight 1.5e-01
+step 8400: blank nll 2.352, round trip 1.785, write cost 0.025, nodes / article 31.6, grad norm 213.86 (max 8554.0), row norm 1.69 (token vectors ~3.5), mark 1.19, 3277s
