@@ -686,6 +686,7 @@ class GNM(nn.Module):
         self.mark = nn.Parameter(torch.zeros(d))            # added to memory rows: "this is memory"
         self.tau = nn.Parameter(torch.tensor(math.log(8.)))   # sharpness of the slots' attention (11-14 trace: at 1x it
         #                                                       stayed ~1/T after 1000 steps -- slots never picked tokens)
+        self.order = os.environ.get("RET_ORDER", "time")      # fetched nodes given to the LM in write order ('score' = by key)
         self.ctxfix = os.environ.get("CTXFIX", "0") == "1"    # the learned context correction on rows (off: it let the
         #                                                       write skip picking tokens; trace 11-14)
         nn.init.zeros_(self.val.weight)                      # rows start as pure mixtures of the step's token vectors
@@ -731,6 +732,8 @@ class GNM(nn.Module):
                 if j not in top and j not in hop and len(hop) < self.topk // 2:
                     hop.append(j)
         sel, rows, owner = top + hop, [], []
+        if self.order == "time":                           # memory comes back in the order it was written (11-14 oracle:
+            sel = sorted(sel)                              # pieces in score order capped the LM at .475 token acc)
         for i in sel:
             w = p[i] / p[i].detach() if i in top else 1.
             rows.append(mem.V[i] * w + self.mark)
@@ -1085,7 +1088,7 @@ def oracle(G, arts, nq=6):
                 r[0] += float(nll)
                 r[1] += ac
                 r[2] += 1
-    print(f"oracle read path: a blank's top-{G.topk} holds a piece of its own sentence {hit}/{n_hit}")
+    print(f"oracle read path (pieces of {G.m} tokens, order {G.order}): a blank's top-{G.topk} holds a piece of its own sentence {hit}/{n_hit}")
     for name, (nll, ac, n) in res.items():
         print(f"  {name:>22}: nll {nll / n:.3f} | token acc {ac / n:.3f}")
 
@@ -1100,6 +1103,7 @@ if __name__ == "__main__":
     ap.add_argument("--save", default="")
     ap.add_argument("--load", default="")
     ap.add_argument("--smoke", action="store_true")
+    ap.add_argument("--m", type=int, default=8)     # rows per node
     a = ap.parse_args()
     torch.manual_seed(0)
     random.seed(0)
@@ -1111,7 +1115,7 @@ if __name__ == "__main__":
     if os.path.exists(a.train_data) and not a.smoke:
         train = train + load_articles(a.train_data)
     print(f"E1: {len(arts)} articles ({len(train)} train, {len(held)} held out), LM {LM_NAME}, device {dev}", flush=True)
-    G = GNM().to(dev)
+    G = GNM(m=a.m).to(dev)
     if a.load:
         G.load_state_dict(torch.load(a.load, map_location=dev))
     if a.task == "oracle":
