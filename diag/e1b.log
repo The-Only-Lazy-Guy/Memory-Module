@@ -12,3 +12,6 @@ E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
 Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
   acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3)))
 step 200: blank nll 3.395, round trip 4.097, write cost 0.032, nodes / article 31.8, 87s
+step 400: blank nll 3.154, round trip 3.769, write cost 0.032, nodes / article 31.8, 173s
+step 600: blank nll 3.233, round trip 3.723, write cost 0.031, nodes / article 31.8, 259s
+step 800: blank nll 3.078, round trip 3.632, write cost 0.032, nodes / article 32.0, 343s
