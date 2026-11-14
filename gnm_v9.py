@@ -1001,6 +1001,50 @@ def inspect(G, arts, tr_arts, n=20):
         print(f"   node {i} (sentence {src[i]}): {G.node_text(mem, i, 12)!r}")
 
 
+@torch.no_grad()
+def trace(G, art, nq=3):
+    """fire the loop by hand on one article and print every firing: what was fetched, what each slot took (tokens),
+    its gate, new or which node it replaced, what the node says alone, its relations, what it woke; then questions"""
+    tk = lm()[0]
+    G.eval()
+    mem, src = Memory(), {}
+    say = lambda i: G.node_text(mem, i, 10)
+    for si, ids in enumerate(art["ids"]):
+        print(f"\nFIRE on sentence {si}: {tk.decode(ids)!r}")
+        q = G.query(ids)
+        sel, rows, owner = G.retrieve(mem, q)
+        if sel:
+            sc = torch.stack(mem.k) @ q
+            for i in sel:
+                print(f"   fetched n{i} (written at sentence {src.get(i)}, key score {float(sc[i]):+.2f}): says {say(i)!r}")
+        else:
+            print("   fetched: nothing (memory empty)")
+        n_before = mem.n
+        V_before = [v.clone() for v in mem.V]
+        written, woken, cost = G.step(mem, ids)
+        A = G._A.view(G.K, G.m, -1).sum(1)                 # per slot: attention over the step's positions
+        labels = [f"[n{o} row]" for o in owner] + [tk.decode([t]) for t in ids]
+        for j in range(G.K):
+            top = A[j].topk(min(6, A.shape[1]))
+            took = ", ".join(f"{labels[int(t)]!r} {float(w) / G.m:.2f}" for w, t in zip(top.values, top.indices))
+            print(f"   slot {j}: takes {took}")
+        for i in written:
+            kind = "NEW" if i >= n_before else ("EDIT of n%d" % i)
+            if i >= n_before:
+                src[i] = si
+            ch = "" if i >= n_before else f" (moved {float((mem.V[i] - V_before[i]).norm()):.2f})"
+            print(f"   -> {kind} n{i}{ch}: says {say(i)!r}; relations {[(f'n{t}', round(w, 2)) for t, w in mem.R[i]]}")
+        print(f"   gates open: {len(written)}/{G.K}; woke {['n%d' % w for w in woken]}; memory now {mem.n} nodes")
+    rng = random.Random(0)
+    for p_, t in quiz(art, rng, nq):
+        q = G.query(p_)
+        sel, _, _ = G.retrieve(mem, q)
+        print(f"\nASK {tk.decode(p_)!r} (truth {tk.decode(t)!r})")
+        for i in sel[:4]:
+            print(f"   fetched n{i} (sentence {src.get(i)}): says {say(i)!r}")
+        print(f"   LM with memory says {tk.decode(G.say(mem, p_, len(t)))!r}; LM alone says {tk.decode(G.say(Memory(), p_, len(t)))!r}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("task", nargs="?", default="e1")
@@ -1027,6 +1071,13 @@ if __name__ == "__main__":
         G.load_state_dict(torch.load(a.load, map_location=dev))
     if a.task == "inspect":
         inspect(G, held, train)
+        raise SystemExit
+    if a.task == "trace":                      # fire by hand: untrained, then after a short training
+        trace(G, held[0])
+        if a.steps:
+            train_e1(G, train, a.steps, log=max(1, a.steps // 5))
+            print("\n==================== after", a.steps, "training steps")
+            trace(G, held[0])
         raise SystemExit
     eval_e1(G, held[:10 if not a.smoke else 2], show=0)
     print("(above: before training)", flush=True)
