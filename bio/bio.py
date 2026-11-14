@@ -20,6 +20,8 @@ TAGS = ["O", "THING", "ATTR", "VAL"]          # (the node kind's 4 tag rows)
 BP = {"fact": "find the next fact in the sentence", "keep": "keep the fact", "done": "nothing more to keep"}
 BKEYS = list(BP)
 JOIN = .8
+FIELD = os.environ.get("FIELD", "attrval")       # a field named from: its attribute words + value ('attrval') or the words alone ('attr')
+KEYJOIN = .5                                         # a fact this near a field the teacher named is that field
 
 
 @torch.no_grad()
@@ -101,6 +103,10 @@ def sentence_firings(ts, facts, title):
     return out
 
 
+def field_words(attr, val):
+    return tuple(attr) + (("|",) + tuple(val) if FIELD == "attrval" else ())
+
+
 def article_firings(data):
     fs, attrs = [], []
     for title, ann in data.items():
@@ -108,8 +114,9 @@ def article_firings(data):
         for si, facts in ann.items():
             fs += sentence_firings(tok(ss[si]), facts, title)
             for f in facts:
-                _, a, _ = locate(tok(ss[si]), f)
-                attrs.append((tuple(tok(ss[si])[i] for i in a), f[3]))
+                _, a, v = locate(tok(ss[si]), f)
+                T_ = tok(ss[si])
+                attrs.append((field_words([T_[i] for i in a], [T_[i] for i in v]), f[3]))
     return fs, attrs
 
 
@@ -205,14 +212,16 @@ class Memory:
         return len(self.things) - 1
 
     def keep(self, ti, attr, val):
-        lab = self.M.label([attr])[0] if attr else None
+        """the fact's field: the field the teacher named that it reads nearest (attribute words + value), or its own
+        new field; a second value of a field is kept beside the first (range: several places) -- an edit keeps both"""
+        key, lab = field_key(self.M, attr, val, with_lab=True)
         T = self.things[ti]
         for f in T["fields"]:
-            if lab is not None and float(f["lab"] @ lab) > JOIN:
+            if (key is not None and f["key"] == key) or (key is None and f["key"] is None and float(f["lab"] @ lab) > JOIN):
                 f["vals"].append(val)
                 f["said"].append(attr)
-                return "edit"
-        T["fields"].append(dict(lab=lab, said=[attr], vals=[val]))
+                return "added"
+        T["fields"].append(dict(key=key, lab=lab, said=[attr], vals=[val]))
         return "new"
 
     @torch.no_grad()
@@ -241,11 +250,14 @@ class Memory:
         return kept
 
 
-def field_key(M, attr):
-    if not attr:
-        return None
-    lab = M.label([attr])[0]
-    return M.key_names[int((M.key_labs @ lab).argmax())]
+def field_key(M, attr, val, with_lab=False):
+    w = list(field_words(attr, val))
+    if not w:
+        return (None, None) if with_lab else None
+    lab = M.label([w])[0]
+    s = M.key_labs @ lab
+    k = M.key_names[int(s.argmax())] if float(s.max()) >= KEYJOIN else None
+    return (k, lab) if with_lab else k
 
 
 def f1(a, b):
@@ -277,7 +289,7 @@ def grade(M, data, show=()):
             if best[0] >= .5:
                 tot["val"] += 1
                 tot["exact"] += best[0] == 1
-                tot["key"] += field_key(M, best[1][2]) == f[3]
+                tot["key"] += field_key(M, best[1][2], best[1][3]) == f[3]
         for k in got:
             tot["extracted"] += 1
             tot["precise"] += any(f1(tok(f[4].split("#")[0]), k[3]) >= .5 for si, f in gold if si == k[0])
@@ -288,7 +300,7 @@ def grade(M, data, show=()):
             for t in mem.things:
                 print(f"    NODE {' '.join(t['name'])}")
                 for fd in t["fields"]:
-                    print(f"       {field_key(M, fd['said'][0]) or '?':>15} | said as: {' / '.join(' '.join(x) for x in fd['said'])} | value(s): {' ; '.join(' '.join(v) for v in fd['vals'])}")
+                    print(f"       {fd['key'] or '(new: ' + ' '.join(fd['said'][0]) + ')':>15} | said as: {' / '.join(' '.join(x) for x in fd['said'])} | value(s): {' ; '.join(' '.join(v) for v in fd['vals'])}")
     return tot
 
 
