@@ -761,6 +761,9 @@ class GNM(nn.Module):
             # 11-14 oracle: sentence-sized nodes in write order are read at .945 vs .981 in context -- independent soft
             # rows lose order and identity). The start is a distribution, so the loss teaches where to cut.
             Ps = F.softmax(self.spanq @ self.att(Hc).T / d ** .5 * self.tau.exp(), -1)          # (K, T)
+            Ps = F.one_hot(Ps.argmax(-1), T).float() + Ps - Ps.detach()  # hard start forward (the exact tokens: 11-14
+            #                                                              trace -- a flat start blurred rows into junk),
+            #                                                              gradient through the start probabilities
             idx = torch.arange(T, device=dev)[:, None] + torch.arange(m, device=dev)[None]   # (T, m)
             win = lambda Z: torch.cat([Z, Z.new_zeros(m, Z.shape[-1])])[idx]                 # (T, m, d)
             rows = torch.einsum("kt,tmd->kmd", Ps, win(embs))
