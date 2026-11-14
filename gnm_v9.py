@@ -669,7 +669,7 @@ class GNM(nn.Module):
     """the trained parts around the frozen LM: retrieval query, write head (K slots of m rows), keys, gates, pointer
     (which fetched node a slot replaces), relations from the write's own attention"""
 
-    def __init__(self, K=4, m=8, dk=256, topk=8):
+    def __init__(self, K=4, m=16, dk=256, topk=8):
         super().__init__()
         tk, M = lm()
         d = M.config.n_embd
@@ -686,6 +686,8 @@ class GNM(nn.Module):
         self.mark = nn.Parameter(torch.zeros(d))            # added to memory rows: "this is memory"
         self.tau = nn.Parameter(torch.tensor(math.log(8.)))   # sharpness of the slots' attention (11-14 trace: at 1x it
         #                                                       stayed ~1/T after 1000 steps -- slots never picked tokens)
+        self.wmode = os.environ.get("WRITE", "span")          # span: a node = a span of the input's tokens, in order
+        self.spanq = nn.Parameter(torch.randn(K, d) * .02)   # each slot's query for where its span starts
         self.order = os.environ.get("RET_ORDER", "time")      # fetched nodes given to the LM in write order ('score' = by key)
         self.ctxfix = os.environ.get("CTXFIX", "0") == "1"    # the learned context correction on rows (off: it let the
         #                                                       write skip picking tokens; trace 11-14)
@@ -753,11 +755,27 @@ class GNM(nn.Module):
         Eval: open slots only (gate > .5); the pointer's best choice replaces that node, or 'new' adds one."""
         K, m, d = self.K, self.m, self.d
         Hc = self.center(H)
-        A = F.softmax(self.slotq @ self.att(Hc).T / d ** .5 * self.tau.exp(), -1)   # (K*m, T)
+        T = embs.shape[0]
+        if self.wmode == "span":
+            # each slot picks where its span starts; row j reads the token at start + j (in order, exact token vectors;
+            # 11-14 oracle: sentence-sized nodes in write order are read at .945 vs .981 in context -- independent soft
+            # rows lose order and identity). The start is a distribution, so the loss teaches where to cut.
+            Ps = F.softmax(self.spanq @ self.att(Hc).T / d ** .5 * self.tau.exp(), -1)          # (K, T)
+            idx = torch.arange(T, device=dev)[:, None] + torch.arange(m, device=dev)[None]   # (T, m)
+            win = lambda Z: torch.cat([Z, Z.new_zeros(m, Z.shape[-1])])[idx]                 # (T, m, d)
+            rows = torch.einsum("kt,tmd->kmd", Ps, win(embs))
+            X = torch.einsum("kt,tmd->kmd", Ps, win(Hc))
+            pooled = X.mean(1)
+            A = torch.zeros(K, m, T, device=dev)
+            for j in range(m):
+                A[:, j, j:] = Ps[:, :T - j]
+            A = A.view(K * m, T)
+        else:
+            A = F.softmax(self.slotq @ self.att(Hc).T / d ** .5 * self.tau.exp(), -1)   # (K*m, T)
+            X = A @ Hc
+            rows = (A @ embs + (self.val(X) if self.ctxfix else 0)).view(K, m, d)
+            pooled = X.view(K, m, d).mean(1)
         self._A, self._H = A.detach(), Hc.detach()                       # (inspection only)
-        X = A @ Hc
-        rows = (A @ embs + (self.val(X) if self.ctxfix else 0)).view(K, m, d)
-        pooled = X.view(K, m, d).mean(1)
         g = torch.sigmoid(self.gate(pooled)).squeeze(-1)
         k = F.normalize(self.key(pooled), dim=-1)
         P = None
@@ -1041,6 +1059,11 @@ def trace(G, art, nq=3):
         A = G._A.view(G.K, G.m, -1).sum(1)                 # per slot: attention over the step's positions
         labels = [f"[n{o} row]" for o in owner] + [tk.decode([t]) for t in ids]
         for j in range(G.K):
+            if G.wmode == "span":
+                st = G._A.view(G.K, G.m, -1)[j, 0]
+                b0 = int(st.argmax())
+                print(f"   slot {j}: span starts at {labels[b0]!r} (p {float(st[b0]):.2f}): {' '.join(repr(x) for x in labels[b0:b0 + G.m])}")
+                continue
             top = A[j].topk(min(6, A.shape[1]))
             took = ", ".join(f"{labels[int(t)]!r} {float(w) / G.m:.2f}" for w, t in zip(top.values, top.indices))
             print(f"   slot {j}: takes {took}")
@@ -1103,7 +1126,7 @@ if __name__ == "__main__":
     ap.add_argument("--save", default="")
     ap.add_argument("--load", default="")
     ap.add_argument("--smoke", action="store_true")
-    ap.add_argument("--m", type=int, default=8)     # rows per node
+    ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
     a = ap.parse_args()
     torch.manual_seed(0)
     random.seed(0)
