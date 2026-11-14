@@ -700,11 +700,13 @@ class GNM(nn.Module):
         return out.hidden_states[-1][0].float(), out.logits[0].float()
 
     def center(self, H):
-        """the LM's states minus their running mean (what differs between inputs, not what all share)"""
+        """the LM's states minus their running mean (what differs between inputs, not what all share), then layer-
+        normalized (11-14 trace: GPT-2's raw last-layer values -- some dims in the hundreds -- saturated the gates shut,
+        made every slot attend alike, and blew up the value projection: blank nll 3.6 -> 7.6)"""
         if self.training:
             with torch.no_grad():
                 self.hmu.mul_(.99).add_(.01 * H.mean(0))
-        return H - self.hmu
+        return F.layer_norm(H - self.hmu, (H.shape[-1],))
 
     # ---------------------------------------------------------------- retrieve
     def query(self, ids):
@@ -762,7 +764,7 @@ class GNM(nn.Module):
             R = []
             if mass is not None:
                 for i in sorted(set(owner)):
-                    w = float(mass[j, [t for t, o in enumerate(owner) if o == i]].sum())
+                    w = float(mass[j, [t for t, o in enumerate(owner) if o == i]].sum()) / m   # (11-14 trace: was summed over m rows, > 1)
                     if w > .1:
                         R.append((i, w))
             if train:
