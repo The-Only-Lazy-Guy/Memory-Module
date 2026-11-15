@@ -630,7 +630,8 @@ def lm():
     if not _LM:
         from transformers import AutoModelForCausalLM, AutoTokenizer
         tk = AutoTokenizer.from_pretrained(LM_NAME)
-        m = AutoModelForCausalLM.from_pretrained(LM_NAME).to(dev).eval()
+        m = AutoModelForCausalLM.from_pretrained(LM_NAME, attn_implementation="eager").to(dev).eval()   # (eager: its attention
+        #                                                                       weights give a node's links)
         for p in m.parameters():
             p.requires_grad_(False)
         _LM.update(tk=tk, m=m)
@@ -698,14 +699,18 @@ class GNM(nn.Module):
         #                                                     means of GPT-2's last layer had cos .995 -- a constant)
         nn.init.constant_(self.gate.bias, 1.)                # start by writing; the cost teaches restraint
         self.cost = float(os.environ.get("WRITE_COST", ".001"))
+        self.dup_cost = float(os.environ.get("DUP_COST", ".02"))   # per token stored twice
 
     # ---------------------------------------------------------------- the LM
     def embed(self, ids):
         return lm()[1].transformer.wte(torch.as_tensor(ids, device=dev))
 
-    def run(self, embs):
+    def run(self, embs, attn=False):
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev == "cuda"):
-            out = lm()[1](inputs_embeds=embs[None], output_hidden_states=True)
+            out = lm()[1](inputs_embeds=embs[None], output_hidden_states=True, output_attentions=attn)
+        if attn:                                           # where the LM looked: mean over heads of its last 4 layers
+            Att = torch.stack([a[0].float().mean(0) for a in out.attentions[-4:]]).mean(0).detach()
+            return out.hidden_states[-1][0].float(), out.logits[0].float(), Att
         return out.hidden_states[-1][0].float(), out.logits[0].float()
 
     def center(self, H):
@@ -744,7 +749,7 @@ class GNM(nn.Module):
         return sel, torch.cat(rows), owner
 
     # ---------------------------------------------------------------- write (the loop's output)
-    def write(self, mem, sel, owner, H, embs, n_rows, train):
+    def write(self, mem, sel, owner, H, embs, n_rows, train, Att=None):
         """K slots of m rows; each row attends over the step (fetched memory rows + the change): WHAT it takes is chosen
         from the LM's centred states, what it holds is the step's own token vectors (+ a learned context correction,
         starting at zero) -- a node is a group of token vectors the LM reads natively (11-14 inspect: rows made from
@@ -796,16 +801,24 @@ class GNM(nn.Module):
             fk = torch.stack([mem.k[i] for i in sel])
             P = F.softmax(torch.cat([F.normalize(self.ptr(pooled), dim=-1) @ fk.T / .1, self.new.expand(K, 1)], 1), -1)
         mass = A[:, :n_rows].view(K, m, n_rows).sum(1).detach() if n_rows else None   # (relations: read, not trained)
-        if self.wmode == "span" and P is not None:          # spans never start in memory: a node relates to the fetched
-            mass = torch.zeros(K, n_rows, device=dev)       # nodes its pointer looks at (as it would edit them); spread
-            for c, i in enumerate(sel):                     # over that node's rows so the per-node sum below / m = P
-                pos = [t for t, o in enumerate(owner) if o == i]
-                mass[:, pos] = P[:, c:c + 1].detach() * m / len(pos)
+        link = {}
+        if self.wmode == "span" and n_rows and Att is not None:   # a node links to the fetched nodes the LM looked at
+            for j in range(K):                                    # while reading its span (share of the span's attention
+                b0 = int(Ps[j].argmax())                          # on memory; kept when above an even share). 11-14
+                span = list(range(b0, min(T, b0 + m)))            # trace: links from the pointer were all empty, so
+                tot = float(Att[span, :n_rows].sum()) + 1e-9      # nothing was ever woken
+                share = {i: float(Att[span][:, [t for t, o in enumerate(owner) if o == i]].sum()) / tot for i in sorted(set(owner))}
+                link[j] = [(i, w) for i, w in share.items() if w >= 1. / len(share)]
+            mass = None
+        dup = 0.
+        if self.wmode == "span":                                  # storing the same tokens twice costs (11-14 trace: 3
+            cover = sum(F.pad(Ps[:, :T - k], (k, 0)) for k in range(min(m, T)))   # of 4 slots copied one phrase and the
+            dup = F.relu((g[:, None] * cover).sum(0) - 1).sum()   # subject went unstored)
         written = []
         for j in range(K):
             if not train and g[j] <= .5:
                 continue
-            R = []
+            R = link.get(j, [])
             if mass is not None:
                 for i in sorted(set(owner)):
                     w = float(mass[j, [t for t, o in enumerate(owner) if o == i]].sum()) / m   # (11-14 trace: was summed over m rows, > 1)
@@ -824,15 +837,15 @@ class GNM(nn.Module):
                 written.append(i)
             else:
                 written.append(mem.add(rows[j], k[j], R))
-        return written, self.cost * g.sum()
+        return written, self.cost * g.sum() + self.dup_cost * dup
 
     def step(self, mem, ids, train=False):
         """one turn of the loop on a change given as text: retrieve -> LM step -> write. Returns the nodes written,
         the nodes woken (what the written nodes were written from: they are the next changes), the write cost"""
         sel, rows, owner = self.retrieve(mem, self.query(ids))
         embs = self.embed(ids) if rows is None else torch.cat([rows, self.embed(ids)])
-        H, _ = self.run(embs)
-        written, cost = self.write(mem, sel, owner, H, embs, 0 if rows is None else len(rows), train)
+        H, _, Att = self.run(embs, attn=True)
+        written, cost = self.write(mem, sel, owner, H, embs, 0 if rows is None else len(rows), train, Att)
         woken = sorted({i for w in written for i, _ in mem.R[w]} - set(written))
         return written, woken, cost
 
