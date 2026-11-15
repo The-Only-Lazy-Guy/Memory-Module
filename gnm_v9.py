@@ -1385,7 +1385,8 @@ def test1(n_demo=50, steps=400):
 #  - kept memory (G.ltm): solved nodes from demos and from its own checked right runs stay, across questions.
 #  - learning: ~50 demo traces imitated, then rounds of try -> check -> train on the right traces. A focus that fetches
 #    no skill well enough (while training on demos or on its own right runs) spawns a new skill node.
-_V10_AMP = [True]                                        # bf16 autocast (cache diagnosis switches it off)
+_V10_AMP = [False]   # bf16 autocast off: 11-15 cachediag -- in bf16, cached vs slow writing differed 2-13% (once 88%),
+#                      in fp32 0.000 in every case; v10 runs fp32 with TF32 matmuls
 
 
 class Experts:
@@ -2011,7 +2012,7 @@ def v10_cachediag(n=10):
             _V10_AMP[0] = amp
             m, f, mn = one(b, e)
             row.append(f"{name} {m:.3f}@{f}")
-        _V10_AMP[0] = True
+        _V10_AMP[0] = False
         print(f"case {case} (bias min {float(rb.min()):.2f} max {float(rb.max()):.2f}): " + " | ".join(row), flush=True)
 
 
@@ -2256,6 +2257,9 @@ if __name__ == "__main__":
     ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
     ap.add_argument("--together", type=int, default=1)   # articles read into one memory per training episode
     a = ap.parse_args()
+    if a.task in ("v10", "v10test"):
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
         v10_selftest()
         v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
