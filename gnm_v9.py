@@ -1931,13 +1931,19 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     def fit(traces, steps):
         G.train()
         L, run = torch.zeros(()), []
+        by_len = {}
+        for j, t in enumerate(traces):
+            by_len.setdefault(len(t[3]), []).append(j)
+        lens = list(by_len)
         for st in range(steps):
             if st % 50 == 0:
                 G.refresh_ltm()
             if st and st % 100 == 0:
                 print(f"    fit step {st}: mean loss {sum(run) / len(run):.3f}, skills {len(G.skills)}", flush=True)
                 run = []
-            i = random.randrange(len(traces))
+            # balanced by trace length (11-15 v10i: 55 of 77 kept runs were one-step answers; trained on them as they
+            # came, chains went 40 -> 12 -> 22%): pick a length first, then a trace of that length
+            i = random.choice(by_len[random.choice(lens)])
             facts, q, ans, tr = traces[i]
             saved = G.ltm
             if random.random() < .5:                     # half the traces without kept memory: must solve both ways,
@@ -1992,11 +1998,12 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
               f"{time.time() - t0:.0f}s trying", flush=True)
         print("  kept by kind/size (count, mean steps): " + ", ".join(
             f"{k}{s} {len(v)} {sum(v) / len(v):.1f}" for (k, s), v in sorted(seen.items())), flush=True)
-        l = fit(kept, 5 if smoke else 400)
+        # steps scale with the traces (11-15 v10i: 400 steps on ~125-190 traces -> loss .000, chains fell)
+        l = fit(kept, 5 if smoke else min(400, 2 * len(kept)))
         last = r == rounds
-        report(f"  loss {l:.3f}; with kept memory", *v10_eval(G, test_sizes, n=ne, show=1 if last else 0, skip_q=seen_q))
+        report(f"  loss {l:.3f}; with kept memory", *v10_eval(G, test_sizes, n=ne, show=1, skip_q=seen_q))
+        report("  kept memory empty", *v10_eval(G, test_sizes, n=ne, use_ltm=False, skip_q=seen_q))
         if last:
-            report("  kept memory empty", *v10_eval(G, test_sizes, n=ne, use_ltm=False, skip_q=seen_q))
             print("  " + v10_reuse(G, n=2 if smoke else 20), flush=True)
 
 
