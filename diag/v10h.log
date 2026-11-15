@@ -1,0 +1,52 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3597.24it/s]
+selftest 1-2: zero bias == no bias: True; next token without bias ' V', with the fact's tokens masked ' the' (max logit change 28.71)
+selftest 3: cached == slow: True (largest relative logit difference over 10 steps 0.0000; greedy texts ' V Vint. The of K is Vint' / ' V Vint. The of K is Vint')
+/marimo/pv/v10/gnm.py:1578: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if not train or float(sc[b]) >= self.spawn_at or n >= self.ex.n:
+selftest 6: fetch gradient on a fact's key with untrained control 1.20e+00: True
+selftest 4: skill nodes 2, gradient on skill keys 6.57e-06: True
+selftest 5: resolves 1, solved nodes in memory 1, kept 1, fetchable later 1: True
+v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('chain', 2), ('chain', 3), ('lookup', 1), ('compose', 1)]); kept memory starts with their 143 solved nodes; test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6), ('lookup', 1), ('compose', 1)] (add / chain longer than any demo)
+    fit step 100: mean loss 2.276, skills 1
+    fit step 200: mean loss 1.452, skills 1
+    fit step 300: mean loss 1.007, skills 1
+    fit step 400: mean loss 0.602, skills 1
+    fit step 500: mean loss 0.386, skills 1
+round 0 (demos only): loss 0.002, 115s
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 1 2
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 7 + 1 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 1 + carry 0 = ?' -> skill s0 writes ' digit 2, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 1 2' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> 1
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 5 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 5 + carry 0 = ?' -> skill s0 writes ' digit 2, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 1 1
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 5 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 5 + carry 0 = ?' -> skill s0 writes ' digit 2, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 1 1' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Mergor
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Bazek
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Bazek' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Samer
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Samer' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the age of Mutor? (truth 60) -> <|endoftext|>
+   focus ' What is the age of Mutor?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.93; kept nodes fetched 6)
+
+  [compose 1] Which family is Zekril in? (truth Ordun) -> <|endoftext|>
+   focus ' Which family is Zekril in?' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'Mugor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+  with kept memory | add2 0%, add4 0%, add6 0%, chain2 0%, chain4 5%, chain6 10%, lookup1 75%, compose1 0% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x360; chain: s0x212; lookup: s0x40; compose: s0x136
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 2%, chain4 10%, chain6 8%, lookup1 72%, compose1 0% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x1135; chain: s0x220; lookup: s0x40; compose: s0x102
+  reuse (n 20): first ask 0% in 1.6 steps; asked again 0% in 1.7 steps, 9% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
