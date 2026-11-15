@@ -59,3 +59,38 @@ round 0 (demos only): loss 0.028, 145s
    focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Lovin?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' Who is the neighbour of Lovin?' -> skill s0 writes ' Nedun' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Nedun' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Torsa
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Dunzek?' -> skill s0 writes ' Samer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Samer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Samer?' -> skill s0 writes ' Salo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Salo?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Salo?' -> skill s0 writes ' Torsa' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Torsa' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the age of Mutor? (truth 60) -> 60
+   focus ' What is the age of Mutor?' -> skill s0 writes ' 60' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Zekril in? (truth Ordun) -> Mugor
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which genus is Zekril in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Zekril in?' -> skill s0 writes ' Mugor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Mugor' (resolves it, done p 1.00; kept nodes fetched 6)
+  with kept memory | add2 0%, add4 0%, add6 0%, chain2 35%, chain4 2%, chain6 10%, lookup1 88%, compose1 25% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1271; chain: s0x600; lookup: s0x40; compose: s0x229
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 12%, chain4 8%, chain6 8%, lookup1 82%, compose1 10% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x878; chain: s0x431; lookup: s0x40; compose: s0x158
+
+  [recall chain 2] Who is the friend of the friend of Kagor? (truth Torlo) -> <|endoftext|>
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [recall chain 4] Who is the friend of the friend of the friend of the friend of Gorril? (truth Gorzek) -> <|endoftext|>
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [recall lookup 1] What is the age of Torgor? (truth 31) -> 75
+   focus ' What is the age of Torgor?' -> skill s0 writes ' 75' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [recall compose 1] Which family is Zektha in? (truth Netha) -> in:
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Which genus is Zektha in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Zektha in?' -> skill s0 writes ' Zektha' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zektha in?' -> skill s0 writes ' in:' (resolves it, done p 1.00; kept nodes fetched 6)
+  recall (facts read earlier, none given; kept memory 736 nodes): chain2 0%, chain4 0%, lookup1 3%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 25%, chain4 17%, lookup1 67%, compose1 15%
+  reuse (n 20): first ask 5% in 8.0 steps; asked again 0% in 7.5 steps, 50% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 10%, without 10%
