@@ -96,3 +96,38 @@ round 1: right runs found 5/200 (kept traces 53, kept memory 8 nodes), 921s tryi
    focus ' 1, carry 0 = ?' -> skill s0 writes ' 1, carry 0 What is 7 + 7 plus carry 0, followed by 7' (sub-step, done p 0.24; kept nodes fetched 6)
    focus ' 1, carry 0 What is 7 + 7 plus carry 0, followed by 7' -> skill s0 writes '?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus '?' -> skill s0 writes ' 1, carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 1 1 2
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 7 + 8 0 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 8 0 + carry 0 = ?' -> skill s0 writes ' digit 2, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 1 1 2' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Who is the boss of Zekor? Who is the boss of Zek
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor? Who is the boss of Zek' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> None
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of the neighbour of Dunmu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Dunmu?' -> skill s0 writes ' Who is the neighbour of Dunmu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmu?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Dunmu?' -> skill s0 writes ' Who is the neighbour of Dunmu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmu?' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes "Theresa May has said she will not rule out a second referendum on Britain's" (sub-step, done p 0.03; kept nodes fetched 6)
+   focus "Theresa May has said she will not rule out a second referendum on Britain's" -> skill s0 writes ' membership of the European Union.\nThe Prime Minister said she would not rule out' (sub-step, done p 0.02; kept nodes fetched 6)
+   focus ' membership of the European Union.\nThe Prime Minister said she would not rule out' -> skill s0 writes " a second referendum on Britain's membership of the European Union.\nThe Prime Minister" (sub-step, done p 0.10; kept nodes fetched 6)
+   focus " a second referendum on Britain's membership of the European Union.\nThe Prime Minister" -> skill s0 writes " said she would not rule out a second referendum on Britain's membership of the European" (sub-step, done p 0.03; kept nodes fetched 6)
+   focus " said she would not rule out a second referendum on Britain's membership of the European" -> skill s0 writes ' Union.\nTheresa May has said she would not rule out a second referendum' (sub-step, done p 0.07; kept nodes fetched 6)
+   focus ' Union.\nTheresa May has said she would not rule out a second referendum' -> skill s0 writes " on Britain's membership of the European Union." (sub-step, done p 0.01; kept nodes fetched 6)
+   focus " on Britain's membership of the European Union." -> skill s0 writes '\nTheresa May has said she would not rule out a second referendum on Britain' (sub-step, done p 0.12; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Who is the boss of Dunzek? Tortor
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek? Tortor' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the age of Mutor? (truth 60) -> 60
+   focus ' What is the age of Mutor?' -> skill s0 writes ' 60' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Zekril in? (truth Ordun) -> Which genus is Zekril in? Mugor Which family is the genus Mug
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which genus is Zekril in? Mugor Which family is the genus Mug' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 0.164; with kept memory | add2 0%, add4 0%, add6 0%, chain2 12%, chain4 0%, chain6 0%, lookup1 85%, compose1 5% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1490; chain: s0x1179; lookup: s0x40; compose: s0x217
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 30%, chain4 0%, chain6 0%, lookup1 85%, compose1 18% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x818; chain: s0x499; lookup: s0x40; compose: s0x352
