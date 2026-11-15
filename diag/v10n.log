@@ -444,3 +444,30 @@ round 6: right runs found 60/200 (kept traces 403, kept memory 5135 nodes), 209s
    focus ' Which family is it?' -> skill s0 writes ' Gordun' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Which family is Zekmu in?' -> skill s0 writes ' Gordun' (resolves it, done p 1.00; kept nodes fetched 6)
   loss 0.477; with kept memory | add2 0%, add4 0%, add6 0%, chain2 28%, chain4 10%, chain6 5%, lookup1 78%, compose1 10% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1992; chain: s0x493; lookup: s0x40; compose: s0x122
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 18%, chain4 10%, chain6 2%, lookup1 80%, compose1 12% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x842; chain: s0x473; lookup: s0x40; compose: s0x140
+
+  [recall chain 2] Who is the friend of the friend of Kagor? (truth Torlo) -> Rilpel
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes ' Who is the friend of Kagor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Kagor?' -> skill s0 writes ' Vinpel' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes ' Who is the friend of Vinpel?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Vinpel?' -> skill s0 writes ' Bazek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes ' Who is the friend of Bazek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Bazek?' -> skill s0 writes ' Rilpel' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes ' Rilpel' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [recall chain 4] Who is the friend of the friend of the friend of the friend of Gorril? (truth Gorzek) -> Rilgor
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' Who is the friend of Gorrilril?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorrilril?' -> skill s0 writes ' Dunzek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' Who is the friend of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Dunzek?' -> skill s0 writes ' Rilgor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' Rilgor' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [recall lookup 1] What is the age of Torgor? (truth 31) -> 86
+   focus ' What is the age of Torgor?' -> skill s0 writes ' 86' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [recall compose 1] Which family is Zektha in? (truth Netha) -> Orvin
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Which family is it?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is it?' -> skill s0 writes ' Oror' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Orvin' (resolves it, done p 1.00; kept nodes fetched 6)
+  recall (facts read earlier, none given; kept memory 5728 nodes): chain2 0%, chain4 7%, lookup1 47%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 83%, chain4 82%, lookup1 100%, compose1 71%
+  reuse (n 20): first ask 10% in 5.1 steps; asked again 10% in 5.1 steps, 5% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
