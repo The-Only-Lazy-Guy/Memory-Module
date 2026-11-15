@@ -335,3 +335,7 @@ round 4: right runs found 72/200 (kept traces 282, kept memory 3288 nodes), 88s 
   loss 4.123; with kept memory | add2 2%, add4 0%, add6 0%, chain2 18%, chain4 15%, chain6 8%, lookup1 95%, compose1 8% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1402; chain: s0x883; lookup: s0x40; compose: s0x136
   kept memory empty | add2 0%, add4 0%, add6 0%, chain2 18%, chain4 20%, chain6 5%, lookup1 98%, compose1 12% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x914; chain: s0x794; lookup: s0x40; compose: s0x144
   recall (facts read earlier, none given; kept memory 3882 nodes): chain2 3%, chain4 3%, lookup1 53%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 64%, chain4 50%, lookup1 97%, compose1 76%
+round 5: right runs found 61/200 (kept traces 343, kept memory 4259 nodes), 191s trying
+  fetch-training pairs 4265
+  kept by kind/size (count, mean steps): add1 1 3.0, chain1 1 1.0, chain2 2 5.0, chain3 3 5.0, chain4 1 5.0, chain5 1 7.0, chain8 1 7.0, compose1 10 3.8, lookup1 41 1.0
+    fit step 100: mean loss 1.053, skills 1
