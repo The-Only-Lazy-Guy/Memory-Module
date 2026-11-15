@@ -1,0 +1,70 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3850.63it/s]
+selftest 1-2: zero bias == no bias: True; next token without bias ' V', with the fact's tokens masked ' the' (max logit change 28.71)
+selftest 3: cached == slow: True (largest relative logit difference over 10 steps 0.0000; greedy texts ' the boss boss boss boss boss boss boss boss boss' / ' the boss boss boss boss boss boss boss boss boss')
+/marimo/pv/v10/gnm.py:1578: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if not train or float(sc[b]) >= self.spawn_at or n >= self.ex.n:
+selftest 6: fetch gradient on a fact's key with untrained control 1.24e+00: True
+selftest 4: skill nodes 2, gradient on skill keys 2.85e-04: True
+selftest 5: resolves 1, solved nodes in memory 1, kept 1, fetchable later 1: True
+v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('chain', 2), ('chain', 3), ('lookup', 1), ('compose', 1)]); kept memory starts empty (own checked runs go in); test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6), ('lookup', 1), ('compose', 1)] (add / chain longer than any demo)
+    fit step 100: mean loss 2.131, skills 1
+    fit step 200: mean loss 0.646, skills 1
+    fit step 300: mean loss 0.358, skills 1
+    fit step 400: mean loss 0.227, skills 1
+    fit step 500: mean loss 0.182, skills 1
+round 0 (demos only): loss 0.272, 109s
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 8
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 7 + 1 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' 7 + 1 + carry 0 = ?' -> skill s0 writes ' digit 8, carry 0' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 8' (resolves it, done p 1.00; kept nodes fetched 0)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> 8
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s0 writes ' digit 8, carry 0' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 8' (resolves it, done p 1.00; kept nodes fetched 0)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 1 1 1 1
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 5 + 6 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' 5 + 6 + carry 0 = ?' -> skill s0 writes ' digit 1, carry 1' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 1 1 1 1' (resolves it, done p 1.00; kept nodes fetched 0)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Kamer
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Mermu' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Mermu' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Muzek' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Muzek?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Who is the boss of Muzek?' -> skill s0 writes ' Kamer' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Kamer' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Kamer' (resolves it, done p 1.00; kept nodes fetched 0)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Dunmu
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Bazek' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Bazek?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Who is the neighbour of Bazek?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 0)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Tortor
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of the boss of the boss of Rildun?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Who is the boss of the boss of the boss of Rildun?' -> skill s0 writes ' Tortor' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Tortor' (resolves it, done p 1.00; kept nodes fetched 0)
+
+  [lookup 1] What is the age of Mutor? (truth 60) -> 60
+   focus ' What is the age of Mutor?' -> skill s0 writes ' 60' (resolves it, done p 1.00; kept nodes fetched 0)
+
+  [compose 1] Which family is Zekril in? (truth Ordun) -> Ordun
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which genus is Zekril in?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Which genus is Zekril in?' -> skill s0 writes ' Mugor' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which family is the genus Mugor in?' (sub-step, done p 0.00; kept nodes fetched 0)
+   focus ' Which family is the genus Mugor in?' -> skill s0 writes ' Ordun' (resolves it, done p 1.00; kept nodes fetched 0)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Ordun' (resolves it, done p 1.00; kept nodes fetched 0)
+  with kept memory | add2 0%, add4 0%, add6 0%, chain2 40%, chain4 12%, chain6 8%, lookup1 90%, compose1 22% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x400; chain: s0x894; lookup: s0x40; compose: s0x375
