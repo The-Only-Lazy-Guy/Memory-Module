@@ -1,0 +1,8 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3676.38it/s]
+selftest: zero bias == no bias: True; next token without bias ' V', with the fact's tokens masked ' the' (max logit change 28.50)
+v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('chain', 2), ('chain', 3)]); test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6)] (longer than any demo)
+  before training: add2 0%, add4 0%, add6 0%, chain2 0%, chain4 0%, chain6 0%
+/marimo/pv/v10/gnm.py:1487: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if float(sc[b]) >= self.spawn_at or not train or n >= self.EK.shape[0]:
