@@ -410,3 +410,90 @@ round 6: right runs found 67/200 (kept traces 430, kept memory 5188 nodes), 109s
 
   [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> 5 5 5 2
    focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 5 5 5 2' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 5 5 5 8 3
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 5 5 5 8 3' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> None
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Mermu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Mermu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Mermu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mermu?' -> skill s0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Vinba
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Lovin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Lovin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lovin?' -> skill s0 writes ' Vinba' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Vinba' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Vinba' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Samer
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Samer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Samer' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the weight of Tordun? (truth 91) -> 91
+   focus ' What is the weight of Tordun?' -> skill s0 writes ' 91' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Muor in? (truth Gordun) -> Ortor
+   focus ' Which family is Muor in?' -> skill s0 writes ' Which family is the genus Muor in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Muor in?' -> skill s0 writes ' Ortor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Muor in?' -> skill s0 writes ' Ortor' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 1.105; with kept memory | add2 2%, add4 0%, add6 0%, chain2 22%, chain4 5%, chain6 5%, lookup1 100%, compose1 20% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x658; chain: s0x847; lookup: s0x40; compose: s0x235; needed fact fetched: chain 89% compose 95% lookup 100%
+  kept memory empty | add2 2%, add4 0%, add6 0%, chain2 25%, chain4 10%, chain6 5%, lookup1 100%, compose1 28% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x1070; chain: s0x947; lookup: s0x40; compose: s0x219; needed fact fetched: chain 89% compose 100% lookup 100%
+
+  [recall chain 2] Who is the friend of the friend of Kagor? (truth Torlo) -> Vinba
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes ' Who is the friend of Kagor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Kagor?' -> skill s0 writes ' Vinba' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes ' Vinba' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of Kagor?': 'The friend of Kagor is Neor.' (-2.0); 'The friend of Kagor is Vinpel.' (-2.1, own); 'The neighbour of Kagor is Bavin.' (-3.5)
+     fetched for ' Who is the friend of Kagor?': 'The friend of Kagor is Vinpel.' (-2.2, own); 'The friend of Kagor is Neor.' (-2.2); 'The neighbour of Kagor is Bavin.' (-3.3)
+     fetched for ' Who is the friend of the friend of Kagor?': 'The friend of Kagor is Neor.' (-2.0); 'The friend of Kagor is Vinpel.' (-2.1, own); 'The neighbour of Kagor is Bavin.' (-3.5)
+
+  [recall chain 4] Who is the friend of the friend of the friend of the friend of Gorril? (truth Gorzek) -> Vinba
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' Who is the friend of Gorvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorvin?' -> skill s0 writes ' Gorvin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' Who is the friend of Gorvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorvin?' -> skill s0 writes ' Who is the friend of Gorvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorvin?' -> skill s0 writes ' Who is the friend of Gorvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorvin?' -> skill s0 writes ' Who is the friend of Gorvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorvin?' -> skill s0 writes ' Who is the friend of Gorvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorvin?' -> skill s0 writes ' Who is the friend of Gorvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorvin?' -> skill s0 writes ' Who is the friend of Gorvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorvin?' -> skill s0 writes ' Who is the friend of Gorvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'The friend of Gorril is Dunzek.' (-2.2, own); 'The friend of Gorril is Lozek.' (-2.2); 'The friend of Gorril is Bator.' (-2.3)
+     fetched for ' Who is the friend of Gorvin?': 'The friend of Gorvin is Torzek.' (-2.3); 'The friend of Gorvin is Thaba.' (-2.3); 'The friend of Gorvin is Rilka.' (-2.3)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'The friend of Gorril is Dunzek.' (-2.2, own); 'The friend of Gorril is Lozek.' (-2.2); 'The friend of Gorril is Bator.' (-2.3)
+     fetched for ' Who is the friend of Gorvin?': 'The friend of Gorvin is Torzek.' (-2.3); 'The friend of Gorvin is Thaba.' (-2.3); 'The friend of Gorvin is Rilka.' (-2.3)
+     fetched for ' Who is the friend of Gorvin?': 'The friend of Gorvin is Torzek.' (-2.3); 'The friend of Gorvin is Thaba.' (-2.3); 'The friend of Gorvin is Rilka.' (-2.3)
+     fetched for ' Who is the friend of Gorvin?': 'The friend of Gorvin is Torzek.' (-2.3); 'The friend of Gorvin is Thaba.' (-2.3); 'The friend of Gorvin is Rilka.' (-2.3)
+     fetched for ' Who is the friend of Gorvin?': 'The friend of Gorvin is Torzek.' (-2.3); 'The friend of Gorvin is Thaba.' (-2.3); 'The friend of Gorvin is Rilka.' (-2.3)
+     fetched for ' Who is the friend of Gorvin?': 'The friend of Gorvin is Torzek.' (-2.3); 'The friend of Gorvin is Thaba.' (-2.3); 'The friend of Gorvin is Rilka.' (-2.3)
+     fetched for ' Who is the friend of Gorvin?': 'The friend of Gorvin is Torzek.' (-2.3); 'The friend of Gorvin is Thaba.' (-2.3); 'The friend of Gorvin is Rilka.' (-2.3)
+     fetched for ' Who is the friend of Gorvin?': 'The friend of Gorvin is Torzek.' (-2.3); 'The friend of Gorvin is Thaba.' (-2.3); 'The friend of Gorvin is Rilka.' (-2.3)
+
+  [recall lookup 1] What is the age of Torgor? (truth 31) -> 86
+   focus ' What is the age of Torgor?' -> skill s0 writes ' 86' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' What is the age of Torgor?': 'The depth of Torgor is 99.' (-2.7); 'The age of Torgor is 86.' (-2.7); 'The age of Torgor is 31.' (-2.8, own)
+
+  [recall compose 1] Which family is Zektha in? (truth Netha) -> Pelba
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Which family is the genus Dunzek in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Dunzek in?' -> skill s0 writes ' Pelba' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Pelba' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' Which family is Zektha in?': 'Zektha is in the genus Mersa.' (-2.2); 'Zektha is in the genus Dunzek.' (-2.2, own); 'Zektha is in the genus Orvin.' (-2.2)
+     fetched for ' Which family is the genus Dunzek in?': 'The genus Dunzek is in the family Dunril.' (-2.3); 'The genus Dunzek is in the family Dunne.' (-2.5); 'The genus Dunzek is in the family Kadun.' (-2.5)
+     fetched for ' Which family is Zektha in?': 'Zektha is in the genus Mersa.' (-2.2); 'Zektha is in the genus Dunzek.' (-2.2, own); 'Zektha is in the genus Orvin.' (-2.2)
+  recall (facts read earlier, none given; kept memory 5781 nodes): chain2 3%, chain4 0%, lookup1 53%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 83%, chain4 69%, lookup1 100%, compose1 73% | ... the fact the step needs: chain2 97%, chain4 100%, lookup1 100%, compose1 90%
+  saved /marimo/out/v10o.pt (kept memory 5188 nodes)
