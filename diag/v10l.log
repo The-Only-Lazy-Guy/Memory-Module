@@ -117,3 +117,56 @@ round 1: right runs found 65/200 (kept traces 113, kept memory 896 nodes), 179s 
    focus '5 + carry 0 = ?' -> skill s0 writes ' digit 0, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
    focus '<|endoftext|>' -> skill s0 writes ' 1 0' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 5 plus carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> None
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Pelpel' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Pelpel' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> None
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.01; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.10; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.39; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (resolves it, done p 0.81; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (resolves it, done p 0.96; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Rildun
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the age of Mutor? (truth 60) -> 60
+   focus ' What is the age of Mutor?' -> skill s0 writes ' 60' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Zekril in? (truth Ordun) -> Merlo
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which genus is Zekril in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Zekril in?' -> skill s0 writes ' Mugor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which family is the genus Mugor in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Mugor in?' -> skill s0 writes ' Merlo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which genus is the genus Merlo in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Merlo in?' -> skill s0 writes ' Merlo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which family is the genus Merlo in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Merlo in?' -> skill s0 writes ' Merlo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Merlo' (resolves it, done p 1.00; kept nodes fetched 6)
