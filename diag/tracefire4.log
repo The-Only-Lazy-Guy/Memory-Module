@@ -1,0 +1,87 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4460.10it/s]
+E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
+/marimo/pv/insp/gnm.py:876: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if train and float(sc.max()) < self.spawn_at and n < self.FI.shape[0]:
+
+INPUT sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   firing f2 (score +0.01), fetched []: produced ' The shark is a member of the family' (new tokens 12%), gate 0.81 -> n0; links []; woke []
+   firing f2 (score -0.00), fetched ['n0']: produced '\n\nThe shark is a member of' (new tokens 38%), gate 0.54 -> n1; links []; woke []
+   firing f2 (score -0.00), fetched ['n0', 'n1']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.54 -> n2; links [('n1', 0.55)]; woke ['n1']
+
+INPUT sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n2']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.64 -> n3; links [('n0', 0.43), ('n1', 0.35)]; woke ['n0', 'n1']
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n2', 'n3']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.55 -> n4; links [('n1', 0.27), ('n2', 0.25)]; woke ['n1', 'n2']
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n2', 'n3', 'n4']: produced ' The shark is a member of The shark' (new tokens 0%), gate 0.55 -> n5; links [('n0', 0.34), ('n1', 0.25)]; woke ['n0', 'n1']
+
+INPUT sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.50 -> nothing written; links [('n0', 0.34), ('n1', 0.25)]; woke ['n0', 'n1']
+
+INPUT sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   firing f2 (score +0.00), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.51 -> n6; links [('n0', 0.31), ('n1', 0.23)]; woke ['n0', 'n1']
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6']: produced ' The shark is a member of The shark' (new tokens 0%), gate 0.55 -> n7; links [('n0', 0.16), ('n5', 0.19), ('n6', 0.25)]; woke ['n0', 'n5', 'n6']
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7']: produced ' The shark is a member of The shark' (new tokens 0%), gate 0.53 -> n8; links [('n0', 0.26), ('n1', 0.17), ('n6', 0.14)]; woke ['n0', 'n1', 'n6']
+
+INPUT sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   firing f2 (score +0.00), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8']: produced ' The shark is a member of the family' (new tokens 0%), gate 0.79 -> n9; links [('n0', 0.4), ('n1', 0.18)]; woke ['n0', 'n1']
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9']: produced ' The shark is a member of The shark' (new tokens 0%), gate 0.55 -> n10; links [('n0', 0.17), ('n1', 0.13), ('n6', 0.1), ('n9', 0.2)]; woke ['n0', 'n1', 'n6', 'n9']
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10']: produced ' The shark is a member of The shark' (new tokens 0%), gate 0.55 -> n11; links [('n0', 0.13), ('n1', 0.11), ('n9', 0.15), ('n10', 0.17)]; woke ['n0', 'n1', 'n9', 'n10']
+
+INPUT sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   firing f2 (score +0.00), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n11']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.53 -> n12; links [('n0', 0.22), ('n1', 0.15), ('n2', 0.09), ('n9', 0.1), ('n10', 0.1)]; woke ['n0', 'n1', 'n2', 'n9', 'n10']
+   firing f2 (score -0.00), fetched ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n11', 'n12']: produced ' The shark The shark is a member of' (new tokens 0%), gate 0.55 -> n13; links [('n1', 0.13), ('n9', 0.13), ('n10', 0.09), ('n12', 0.19)]; woke ['n1', 'n9', 'n10', 'n12']
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n3', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n11', 'n12', 'n13']: produced ' The shark is a member of The shark' (new tokens 0%), gate 0.55 -> n14; links [('n0', 0.12), ('n1', 0.09), ('n9', 0.09), ('n10', 0.12), ('n12', 0.13), ('n13', 0.09)]; woke ['n0', 'n1', 'n9', 'n10', 'n12', 'n13']
+
+INPUT sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   firing f2 (score +0.00), fetched ['n0', 'n1', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n11', 'n12', 'n13', 'n14']: produced ' The milk shark is a member of the' (new tokens 0%), gate 0.81 -> n15; links [('n0', 0.37), ('n1', 0.17)]; woke ['n0', 'n1']
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n5', 'n7', 'n8', 'n9', 'n10', 'n11', 'n12', 'n13', 'n14', 'n15']: produced ' milk shark is a member of the milk' (new tokens 0%), gate 0.85 -> n16; links [('n0', 0.09), ('n12', 0.11), ('n15', 0.4)]; woke ['n0', 'n12', 'n15']
+   firing f2 (score -0.00), fetched ['n0', 'n1', 'n5', 'n7', 'n8', 'n9', 'n10', 'n11', 'n12', 'n13', 'n14', 'n15']: produced ' The shark is a member of The shark' (new tokens 0%), gate 0.55 -> n17; links [('n0', 0.1), ('n12', 0.13), ('n15', 0.34)]; woke ['n0', 'n12', 'n15']
+
+HELD-OUT ' In turn, it often falls prey' (truth ' to larger sharks and possibly marine')
+   memory says " to the shark's predatory instincts"; alone says ' to the same kind of "'; with the other sentences in context ' to the large, white-'
+step 40: held-out blank nll 3.742, cost 0.224, nodes 21.0, firings 21.0, new tokens in outputs 7%, functions 8, grad norm 58.8, 130s
+step 80: held-out blank nll 3.794, cost 0.224, nodes 20.9, firings 20.9, new tokens in outputs 10%, functions 8, grad norm 308.0, 259s
+step 120: held-out blank nll 3.613, cost 0.226, nodes 21.0, firings 21.0, new tokens in outputs 9%, functions 9, grad norm 336.4, 389s
+step 160: held-out blank nll 3.820, cost 0.223, nodes 20.8, firings 20.8, new tokens in outputs 10%, functions 10, grad norm 69.7, 516s
+step 200: held-out blank nll 3.649, cost 0.226, nodes 21.0, firings 21.0, new tokens in outputs 12%, functions 12, grad norm 15909.1, 645s
+
+==================== after 200 training steps
+
+INPUT sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   firing f4 (score +0.75), fetched []: produced '\n\nThe shark is a large,' (new tokens 50%), gate 0.77 -> n0; links []; woke []
+   firing f4 (score +0.74), fetched ['n0']: produced '\n\nThe shark is a large,' (new tokens 0%), gate 0.69 -> n1; links []; woke []
+   firing f4 (score +0.74), fetched ['n0', 'n1']: produced '\n\nThe shark is a large,' (new tokens 0%), gate 0.69 -> n2; links [('n0', 0.53)]; woke ['n0']
+
+INPUT sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   firing f4 (score +0.78), fetched ['n0', 'n1', 'n2']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.57 -> n3; links [('n0', 0.64)]; woke ['n0']
+   firing f9 (score +0.58), fetched ['n0', 'n1', 'n2', 'n3']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.68 -> n4; links [('n0', 0.33), ('n3', 0.32)]; woke ['n0', 'n3']
+   firing f4 (score +0.74), fetched ['n0', 'n1', 'n2', 'n3', 'n4']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.68 -> n5; links [('n0', 0.24), ('n3', 0.25)]; woke ['n0', 'n3']
+
+INPUT sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   firing f4 (score +0.91), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5']: produced '\n\nThe shark is a large,' (new tokens 0%), gate 0.69 -> n6; links [('n0', 0.45), ('n1', 0.22)]; woke ['n0', 'n1']
+   firing f4 (score +0.74), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.68 -> n7; links [('n0', 0.19), ('n3', 0.18), ('n6', 0.16)]; woke ['n0', 'n3', 'n6']
+   firing f4 (score +0.74), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.69 -> n8; links [('n0', 0.18), ('n3', 0.15), ('n7', 0.17)]; woke ['n0', 'n3', 'n7']
+
+INPUT sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   firing f4 (score +0.89), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8']: produced '\n\nThe shark is a large,' (new tokens 0%), gate 0.69 -> n9; links [('n0', 0.36), ('n1', 0.18)]; woke ['n0', 'n1']
+   firing f4 (score +0.74), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.70 -> n10; links [('n0', 0.16), ('n3', 0.14), ('n9', 0.11)]; woke ['n0', 'n3', 'n9']
+   firing f4 (score +0.74), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.81 -> n11; links [('n0', 0.15), ('n3', 0.12), ('n10', 0.13)]; woke ['n0', 'n3', 'n10']
+
+INPUT sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   firing f4 (score +0.92), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n11']: produced ' The shark is a large,\n\n' (new tokens 0%), gate 0.70 -> n12; links [('n0', 0.38), ('n1', 0.2), ('n3', 0.09)]; woke ['n0', 'n1', 'n3']
+   firing f4 (score +0.77), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n12']: produced 'The shark is a member of The shark' (new tokens 0%), gate 0.80 -> n13; links [('n0', 0.14), ('n3', 0.1), ('n12', 0.19)]; woke ['n0', 'n3', 'n12']
+   firing f4 (score +0.74), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n12']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.69 -> n14; links [('n0', 0.15), ('n3', 0.11), ('n10', 0.09), ('n12', 0.16)]; woke ['n0', 'n3', 'n10', 'n12']
+
+INPUT sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   firing f4 (score +0.88), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n9', 'n12', 'n13', 'n14']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.72 -> n15; links [('n0', 0.29), ('n1', 0.1), ('n3', 0.09), ('n14', 0.19)]; woke ['n0', 'n1', 'n3', 'n14']
+   firing f9 (score +0.58), fetched ['n0', 'n3', 'n4', 'n5', 'n7', 'n8', 'n9', 'n10', 'n11', 'n12', 'n14', 'n15']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.69 -> n16; links [('n0', 0.16), ('n3', 0.1), ('n9', 0.09), ('n12', 0.12), ('n14', 0.11), ('n15', 0.1)]; woke ['n0', 'n3', 'n9', 'n12', 'n14', 'n15']
+   firing f4 (score +0.74), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n12', 'n15']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.69 -> n17; links [('n0', 0.15), ('n3', 0.11), ('n12', 0.09), ('n15', 0.17)]; woke ['n0', 'n3', 'n12', 'n15']
+
+INPUT sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   firing f4 (score +0.85), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n6', 'n9', 'n12', 'n13', 'n14', 'n16', 'n17']: produced ' The milk shark is a member of the' (new tokens 0%), gate 0.79 -> n18; links [('n0', 0.34), ('n1', 0.13), ('n3', 0.09), ('n4', 0.09), ('n14', 0.1)]; woke ['n0', 'n1', 'n3', 'n4', 'n14']
+   firing f9 (score +0.47), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n6', 'n9', 'n12', 'n13', 'n14', 'n16', 'n18']: produced ' shark is a member of The shark is' (new tokens 0%), gate 0.68 -> n19; links [('n0', 0.09), ('n14', 0.11), ('n18', 0.4)]; woke ['n0', 'n14', 'n18']
+   firing f4 (score +0.74), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n9', 'n12', 'n15', 'n18']: produced '\n\nThe shark is a member of' (new tokens 0%), gate 0.69 -> n20; links [('n0', 0.12), ('n15', 0.12), ('n18', 0.32)]; woke ['n0', 'n15', 'n18']
+
+HELD-OUT ' In turn, it often falls prey' (truth ' to larger sharks and possibly marine')
+   memory says " to the shark's prey,"; alone says ' to the same kind of "'; with the other sentences in context ' to the large, white-'
