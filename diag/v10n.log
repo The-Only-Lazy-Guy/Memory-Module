@@ -235,3 +235,34 @@ round 3: right runs found 65/200 (kept traces 210, kept memory 2487 nodes), 161s
    focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 5 + 8 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' 5 + 8 + carry 0 = ?' -> skill s0 writes ' digit 2, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 1 2' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Muzek
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekmer?' -> skill s0 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Muzek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Muzek' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Dunmu
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Muka
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Muka' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Muka' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the weight of Baba? (truth 86) -> 86
+   focus ' What is the weight of Baba?' -> skill s0 writes ' 86' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Saril in? (truth Dunmu) -> Mugor
+   focus ' Which family is Saril in?' -> skill s0 writes ' Which genus is Saril in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Saril in?' -> skill s0 writes ' Mugor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Saril in?' -> skill s0 writes ' Mugor' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 0.552; with kept memory | add2 0%, add4 0%, add6 0%, chain2 18%, chain4 12%, chain6 0%, lookup1 98%, compose1 18% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x360; chain: s0x394; lookup: s0x40; compose: s0x124
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 22%, chain4 12%, chain6 8%, lookup1 95%, compose1 18% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x574; chain: s0x424; lookup: s0x40; compose: s0x142
+  recall (facts read earlier, none given; kept memory 3082 nodes): chain2 7%, chain4 0%, lookup1 87%, compose1 3% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 89%, chain4 60%, lookup1 97%, compose1 83%
+round 4: right runs found 72/200 (kept traces 282, kept memory 3288 nodes), 88s trying
+  fetch-training pairs 3388
+  kept by kind/size (count, mean steps): add1 1 3.0, chain1 1 1.0, chain4 1 5.0, chain5 1 5.0, chain6 1 3.0, compose1 16 3.0, lookup1 51 1.0
