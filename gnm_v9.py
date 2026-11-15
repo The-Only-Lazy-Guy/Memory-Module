@@ -1371,22 +1371,28 @@ def test1(n_demo=50, steps=400):
     lora.remove()
 
 
-# ====================================================================== v10 (2026-11-15): nodes with meaning + control, skill experts, recursion
+# ====================================================================== v10 (2026-11-15): nodes with meaning + control, skill nodes, recursion, kept memory
 # User 11-15: don't start small; nodes that act as weights / helpers; "for each token we add another vector, it only
-# affects its weighting and does not interfere with the semantic vector". Design (docs/GNM_v10.md):
+# affects its weighting and does not interfere with the semantic vector". Design + claim table: docs/GNM_v10.md.
 #  - a memory token = (meaning: its token embedding, untouched; control: a small vector that only sets how much the LM
 #    attends to it -- an additive attention bias in every layer -- and gives the node's key)
-#  - one node kind (fact, question, sub-step, result, instruction); skill nodes carry a LoRA expert on the LM
-#  - a step: focus + fetched nodes -> LM (+ the focus's expert) writes the next node; 'done' says whether it resolves
-#    the focus (then focus returns to the parent) or becomes the next focus (a sub-step). Root resolved -> the answer.
-#  - learning: ~50 demo traces imitated, then rounds of try -> check -> train on the right traces; experts spawned for
-#    focus keys that meet none.
+#  - one node kind (fact, question, sub-step, result, solved = "question + its result", skill). A skill node carries a
+#    LoRA expert instead of text; it is fetched by key like any node (same query), and the fetched skill's expert runs
+#    the step. Which skill is fetched is learned (the expert's output is scaled by its fetch weight).
+#  - a step: focus + fetched nodes -> LM (+ the fetched skill's expert) writes the next node; 'done' says whether it
+#    resolves the focus (then "focus + result" is written to memory as a solved node and focus returns to the parent)
+#    or becomes the next focus (a sub-step). Root resolved -> the answer.
+#  - kept memory (G.ltm): solved nodes from demos and from its own checked right runs stay, across questions.
+#  - learning: ~50 demo traces imitated, then rounds of try -> check -> train on the right traces. A focus that fetches
+#    no skill well enough (while training on demos or on its own right runs) spawns a new skill node.
 class Experts:
-    """LoRA experts on the frozen LM (attention and MLP input projections); one active at a time"""
+    """LoRA experts on the frozen LM (attention and MLP input projections); one active at a time -- the fetched skill
+    node's. Its output is scaled by w, the skill's fetch weight (1 in value; carries the gradient that teaches which
+    skill to fetch)"""
 
     def __init__(self, n=32, r=8, scale=2.):
         M = lm()[1]
-        self.n, self.scale, self.active = n, scale, None
+        self.n, self.scale, self.active, self.w = n, scale, None, None
         self.A, self.B, self.hooks = [], [], []
         for blk in M.transformer.h:
             for mod in (blk.attn.c_attn, blk.mlp.c_fc):
@@ -1402,7 +1408,10 @@ class Experts:
             if self.active is None:
                 return out
             e = self.active
-            return out + ((inp[0].float() @ A[e]) @ B[e]).to(out.dtype) * self.scale
+            d = ((inp[0].float() @ A[e]) @ B[e]) * self.scale
+            if self.w is not None:
+                d = d * self.w
+            return out + d.to(out.dtype)
         return h
 
     def params(self):
@@ -1410,11 +1419,14 @@ class Experts:
 
 
 class Node10:
-    """a node: token ids, meaning rows (token embeddings), control rows, key, parent, done, expert that made it"""
+    """a node: token ids, control rows C, key, parent; H = cached LM states over its tokens (kept / skill nodes, so
+    their control and key can be recomputed as the parts learn); expert (skill nodes); src (which trace wrote it);
+    of (the focus a solved node records)"""
 
     def __init__(self, ids, C, key, parent=None, kind=""):
         self.ids, self.C, self.key, self.parent, self.kind = list(ids), C, key, parent, kind
         self.children, self.result = [], None
+        self.H, self.expert, self.src, self.of = None, None, None, None
 
 
 class GNM10(nn.Module):
@@ -1431,27 +1443,29 @@ class GNM10(nn.Module):
         self.keyc = nn.Linear(dc, dk)                    # a node's control rows -> its key
         self.done = nn.Linear(d, 1)                      # does the new node resolve the focus?
         self.ex = Experts(n=n_exp)
-        self.EK = nn.Parameter(F.normalize(torch.randn(n_exp, dk), dim=-1))   # experts' labels
-        self.register_buffer("n_ex", torch.tensor(0))
+        self.EK = nn.Parameter(torch.zeros(n_exp, dk))   # each skill node's own learned key offset
         self.spawn_at = float(os.environ.get("SPAWN_AT", ".5"))
+        self.skills, self.ltm, self._ltm_ids = [], [], set()   # skill nodes; kept memory (solved nodes)
 
     def eparams(self):
         return self.ex.params()
 
     # ---------------------------------------------------------------- the LM with per-token attention bias
-    def lm_run(self, ids, bias=None):
-        """the LM over token ids; bias: per key position additive attention bias (memory tokens' control) -- the
-        meaning (embedding) of every token is untouched"""
+    def lm_run(self, ids, bias=None, past=None, cache=False):
+        """the LM over token ids; bias: additive attention bias per key position (all past + new positions) -- the
+        meaning (embedding) of every token is untouched. past: cached keys/values of earlier positions"""
         M = lm()[1]
         T = len(ids)
+        P = 0 if past is None else past.get_seq_length()
         x = torch.tensor([ids], device=dev)
-        mask = torch.full((T, T), float("-inf"), device=dev).triu(1)
+        mask = torch.full((T, P + T), float("-inf"), device=dev).triu(P + 1)
         if bias is not None:
             mask = mask + bias[None, :]
-        mask = mask[None, None]
+        pos = torch.arange(P, P + T, device=dev)[None]
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev == "cuda"):
-            out = M(input_ids=x, attention_mask=mask.to(torch.bfloat16 if dev == "cuda" else torch.float32), output_hidden_states=True)
-        return out.hidden_states[-1][0].float(), out.logits[0].float()
+            out = M(input_ids=x, attention_mask=mask[None, None].to(torch.bfloat16 if dev == "cuda" else torch.float32),
+                    position_ids=pos, past_key_values=past, use_cache=cache, output_hidden_states=True)
+        return out.hidden_states[-1][0].float(), out.logits[0].float(), (out.past_key_values if cache else None)
 
     def node_from(self, ids, H, parent=None, kind=""):
         C = self.ctl(H)                                  # control rows from the LM's states over the node's tokens
@@ -1460,17 +1474,42 @@ class GNM10(nn.Module):
         return Node10(ids, C, key, parent, kind)
 
     def store(self, mem, text_ids, kind="fact"):
-        H, _ = self.lm_run(text_ids)
+        H, _, _ = self.lm_run(text_ids)
         n = self.node_from(text_ids, H, kind=kind)
         mem.append(n)
         return n
 
     def query(self, ids):
-        H, _ = self.lm_run(ids)
+        H, _, _ = self.lm_run(ids)
         return F.normalize(self.qry(H.mean(0)), dim=-1)
 
-    def fetch(self, mem, q, exclude=()):
-        cands = [n for n in mem if n not in exclude]
+    # ---------------------------------------------------------------- kept memory (across questions)
+    @torch.no_grad()
+    def keep(self, ids, src):
+        """a solved node ("focus + its result") into kept memory; same text kept once"""
+        t = tuple(ids)
+        if t in self._ltm_ids:
+            return
+        H, _, _ = self.lm_run(list(ids))
+        n = Node10(ids, None, None, kind="kept")
+        n.H, n.src = H, src
+        self._refresh(n)
+        self.ltm.append(n)
+        self._ltm_ids.add(t)
+
+    @torch.no_grad()
+    def _refresh(self, n):
+        n.C = self.ctl(n.H)
+        n.key = F.normalize(self.qry(n.H.mean(0)) + self.keyc(n.C.mean(0)), dim=-1)
+
+    def refresh_ltm(self):
+        """kept nodes' control and keys from their cached states with the current parts (they learn meanwhile)"""
+        for n in self.ltm:
+            self._refresh(n)
+
+    def fetch(self, mem, q, exclude=(), src_skip=None):
+        cands = [n for n in list(mem) + self.ltm
+                 if n not in exclude and n.of not in exclude and not (src_skip is not None and n.src == src_skip)]
         if not cands:
             return [], []                                # (11-15: None crashed an empty fetch)
         sc = torch.stack([n.key for n in cands]) @ q
@@ -1479,33 +1518,54 @@ class GNM10(nn.Module):
         sel = sorted(top)                                # (write order)
         return [cands[i] for i in sel], [p[i] / p[i].detach() for i in sel]
 
-    def route(self, q, train):
-        n = int(self.n_ex)
+    # ---------------------------------------------------------------- skill nodes (carry a LoRA expert)
+    def skill_keys(self):
+        """skill nodes' keys, like any node's (query + control of their label tokens) plus their own learned offset"""
+        H = [s.H for s in self.skills]
+        K = torch.stack([self.qry(h.mean(0)) + self.keyc(self.ctl(h).mean(0)) for h in H])
+        K = K + self.EK[[s.expert for s in self.skills]]
+        return F.normalize(K, dim=-1)
+
+    def pick_skill(self, q, focus, train):
+        """fetch the skill node whose key best meets the focus's query; none good enough while training -> spawn a new
+        skill node, labelled by this focus, its expert a copy of the closest one's"""
+        n = len(self.skills)
+        b = None
+        if not n and not train:
+            return None, None, 0.                        # no skill yet: the plain LM
         if n:
-            sc = F.normalize(self.EK[:n], dim=-1) @ q
+            sc = self.skill_keys() @ q
             b = int(sc.argmax())
-            if float(sc[b]) >= self.spawn_at or not train or n >= self.EK.shape[0]:
-                return b, float(sc[b])
-        with torch.no_grad():                            # a skill for this kind of focus: a new expert, labelled by it
-            self.EK.data[n] = q.detach()
-            if n:
+            if not train or float(sc[b]) >= self.spawn_at or n >= self.ex.n:
+                p = F.softmax(sc / .1, 0)
+                return self.skills[b].expert, p[b] / p[b].detach(), float(sc[b])
+        with torch.no_grad():
+            e = n
+            if b is not None:
+                src = self.skills[b].expert
                 for A, B in zip(self.ex.A, self.ex.B):
-                    A.data[n] = A.data[b]
-                    B.data[n] = B.data[b]
-            self.n_ex += 1
-        return n, 1.
+                    A.data[e] = A.data[src]
+                    B.data[e] = B.data[src]
+            H, _, _ = self.lm_run(focus.ids)
+            s = Node10(focus.ids, None, None, kind="skill")
+            s.H, s.expert = H, e
+            self.EK.data[e] = 0.
+            self.skills.append(s)
+        return e, None, 1.
 
     # ---------------------------------------------------------------- one step: focus + fetched -> the next node
-    def context(self, mem, focus, train):
+    def context(self, mem, focus, train, src_skip=None):
         """the step's input: fetched nodes (meaning ids + their control as attention bias), the focus's chain of
-        ancestors and its results so far, then the focus; returns ids, bias, the chosen expert"""
+        ancestors and its results so far, then the focus; the fetched skill. Returns ids, bias, expert, its weight,
+        how many kept nodes were fetched"""
         q = self.query(focus.ids)
         chain, f = [], focus
         while f is not None:
             chain.append(f)
             f = f.parent
         chain = chain[::-1]
-        fetched, w = self.fetch(mem, q, exclude=set(chain) | {c for x in chain for c in x.children})
+        excl = set(chain) | {c for x in chain for c in x.children}
+        fetched, w = self.fetch(mem, q, exclude=excl, src_skip=src_skip)
         ids, bias = [], []
         for n, wi in zip(fetched, w):
             ids += n.ids
@@ -1517,71 +1577,128 @@ class GNM10(nn.Module):
                 if c.result is not None:
                     ids += c.ids + c.result.ids
                     bias += [self.bias(c.C).squeeze(-1), self.bias(c.result.C).squeeze(-1)]
-        e, esc = self.route(q, train)
-        return ids, torch.cat(bias) if bias else None, e
+        e, ew, esc = self.pick_skill(q, focus, train)
+        return ids, (torch.cat(bias) if bias else None), e, ew, sum(n.kind == "kept" for n in fetched)
 
-    def step_loss(self, mem, focus, target_ids, target_done):
-        """imitation of one step: the LM (+ expert) must write the target node and say whether it resolves the focus"""
-        ids, bias, e = self.context(mem, focus, True)
+    def step_loss(self, mem, focus, target_ids, target_done, src_skip=None):
+        """imitation of one step: the LM (+ fetched skill's expert) must write the target node and say whether it
+        resolves the focus"""
+        ids, bias, e, ew, _ = self.context(mem, focus, True, src_skip)
         tgt = target_ids + [lm()[0].eos_token_id]
         allids = ids + tgt
         b = torch.cat([bias, torch.zeros(len(tgt), device=dev)]) if bias is not None else None
-        self.ex.active = e
-        H, lg = self.lm_run(allids, b)
-        self.ex.active = None
+        self.ex.active, self.ex.w = e, ew
+        H, lg, _ = self.lm_run(allids, b)
+        self.ex.active, self.ex.w = None, None
         P = len(ids)
         L = F.cross_entropy(lg[P - 1:P - 1 + len(tgt)], torch.tensor(tgt, device=dev))
         L = L + F.binary_cross_entropy_with_logits(self.done(H[-1]).squeeze(), torch.tensor(float(target_done), device=dev))
         return L, H[P:]
 
     @torch.no_grad()
-    def step(self, mem, focus, temp=0., maxlen=16):
-        ids, bias, e = self.context(mem, focus, False)
+    def gen(self, ids, bias, temp=0., maxlen=16):
+        """write a node with cached keys/values (the context runs once, then one token at a time); returns the
+        tokens, the LM states over them (the eos state if none), and the state after the closing eos (for 'done')"""
         eos = lm()[0].eos_token_id
-        out = []
-        self.ex.active = e
-        for _ in range(maxlen):
-            b = torch.cat([bias, torch.zeros(len(out), device=dev)]) if bias is not None else None
-            H, lg = self.lm_run(ids + out, b)
-            p = F.softmax(lg[-1] / max(temp, 1e-6), -1) if temp else None
-            t = int(torch.multinomial(p, 1)) if temp else int(lg[-1].argmax())
+        H, lg, past = self.lm_run(ids, bias, cache=True)
+        allb = bias if bias is not None else torch.zeros(len(ids), device=dev)
+        out, rows = [], []
+        nxt = lg[-1]
+        for i in range(maxlen + 1):
+            if i == maxlen:
+                t = eos                                  # cut: close it anyway
+            elif temp:
+                t = int(torch.multinomial(F.softmax(nxt / temp, -1), 1))
+            else:
+                t = int(nxt.argmax())
+            allb = torch.cat([allb, torch.zeros(1, device=dev)])
+            h, l, past = self.lm_run([t], allb, past=past, cache=True)
             if t == eos:
-                break
+                return out, (torch.stack(rows) if rows else h), h[-1]
             out.append(t)
-        b = torch.cat([bias, torch.zeros(len(out) + 1, device=dev)]) if bias is not None else None
-        H, _ = self.lm_run(ids + out + [eos], b)
+            rows.append(h[-1])
+            nxt = l[-1]
+
+    @torch.no_grad()
+    def step(self, mem, focus, temp=0., maxlen=16):
+        ids, bias, e, _, nk = self.context(mem, focus, False)
+        self.ex.active = e
+        out, rows, hd = self.gen(ids, bias, temp, maxlen)
         self.ex.active = None
-        pd = float(torch.sigmoid(self.done(H[-1])))
+        pd = float(torch.sigmoid(self.done(hd)))
         done = (random.random() < pd) if temp else pd > .5
-        node = self.node_from(out or [eos], H[len(ids):len(ids) + max(1, len(out))], parent=focus)
-        return node, done, e, pd
+        node = self.node_from(out or [lm()[0].eos_token_id], rows, parent=focus)
+        return node, done, e, pd, nk
 
 
-def solve(G, mem, question_ids, temp=0., max_steps=24, trace=None):
+def _resolve(G, mem, focus, node):
+    """focus is resolved by node: it becomes the focus's result; "focus + result" is written to memory (a solved
+    node); returns the next focus (the parent; None at the root)"""
+    focus.result = node
+    s = G.store(mem, focus.ids + node.ids, kind="solved")
+    s.of = focus
+    if focus.parent is not None:
+        focus.parent.children.append(focus)
+    return focus.parent
+
+
+def solve(G, mem, question_ids, temp=0., max_steps=48, trace=None):
     """recursion through nodes: the question is a node; each step writes a node that either resolves the focus (it
-    becomes the focus's result, focus returns to the parent) or becomes the new focus (a sub-step)"""
+    becomes the focus's result, focus returns to the parent) or becomes the new focus (a sub-step).
+    -> (answer text or None, steps [(focus, node, done)], solved pairs [(focus ids, result ids)])"""
     tk = lm()[0]
     root = G.store(mem, question_ids, kind="question")
-    focus, steps = root, []
+    focus, steps, pairs = root, [], []
     for _ in range(max_steps):
-        node, done, e, pd = G.step(mem, focus, temp)
+        node, done, e, pd, nk = G.step(mem, focus, temp)
         steps.append((focus, node, done))
         if trace is not None:
-            trace.append(f"   focus {tk.decode(focus.ids)!r} -> expert e{e} writes {tk.decode(node.ids)!r} "
-                         f"({'resolves it' if done else 'sub-step'}, done p {pd:.2f})")
+            trace.append(f"   focus {tk.decode(focus.ids)!r} -> skill s{e} writes {tk.decode(node.ids)!r} "
+                         f"({'resolves it' if done else 'sub-step'}, done p {pd:.2f}; kept nodes fetched {nk})")
         if done:
-            focus.result = node
-            if focus.parent is not None:
-                focus.parent.children.append(focus)
+            pairs.append((focus.ids, node.ids))
+            nxt = _resolve(G, mem, focus, node)
             if focus is root:
-                return tk.decode(node.ids).strip(), steps
-            focus = focus.parent
+                return tk.decode(node.ids).strip(), steps, pairs
+            focus = nxt
         else:
             focus = node
-    return None, steps
+    return None, steps, pairs
+
+
+def trace_pairs(q_ids, steps_ids):
+    """the solved pairs (focus ids, result ids) of a trace given as [(node ids, done)], by the same focus rules"""
+    focus, stack, pairs = q_ids, [], []
+    for ids, done in steps_ids:
+        if done:
+            pairs.append((focus, ids))
+            if not stack:
+                break
+            focus = stack.pop()
+        else:
+            stack.append(focus)
+            focus = ids
+    return pairs
 
 
 # ---------------------------------------------------------------- checkable tasks + demo traces (the teacher's ~50)
+def _chain_world(rng, size):
+    names = [_nm(rng) for _ in range(size + 1)]
+    rel = rng.choice(["boss", "friend", "teacher", "neighbour"])
+    facts = [f"The {rel} of {names[i]} is {names[i + 1]}." for i in range(size)]
+    for _ in range(3):
+        facts.append(f"The {rel} of {_nm(rng)} is {_nm(rng)}.")
+    rng.shuffle(facts)
+    qtext = lambda k, i: f"Who is the {rel} of " + "".join(f"the {rel} of " for _ in range(k - 1)) + f"{names[i]}?"
+
+    def steps(k, i):                                     # k hops left, starting from names[i]
+        if k == 1:
+            return [(names[i + 1], 1)]                   # one hop: answered by what is fetched
+        return ([(qtext(1, i), 0), (names[i + 1], 1), (qtext(k - 1, i + 1), 0)] + steps(k - 1, i + 1)
+                + [(names[i + k], 1)])
+    return names, facts, qtext, steps
+
+
 def v10_task(kind, rng, size):
     """-> (facts, question, answer, demo steps [(node text, done)] in the order solving writes them).
     Reduce-and-recurse (11-15 trace: demos that hung every sub-step under the question made it count hops and answer
@@ -1605,25 +1722,28 @@ def v10_task(kind, rng, size):
             return sub + [(qtext(*nxt), 0)] + rest + [(rest[-1][0], 1)]
         q = qtext(str(a), str(b), 0, "")
         return [], q, sp(a + b), steps(str(a), str(b), 0, "")
-    names = [_nm(rng) for _ in range(size + 1)]
-    rel = rng.choice(["boss", "friend", "teacher", "neighbour"])
-    facts = [f"The {rel} of {names[i]} is {names[i + 1]}." for i in range(size)]
-    for _ in range(3):
-        facts.append(f"The {rel} of {_nm(rng)} is {_nm(rng)}.")
-    rng.shuffle(facts)
-    qtext = lambda k, i: f"Who is the {rel} of " + "".join(f"the {rel} of " for _ in range(k - 1)) + f"{names[i]}?"
-
-    def steps(k, i):                                     # k hops left, starting from names[i]
-        if k == 1:
-            return [(names[i + 1], 1)]                   # one hop: answered by what is fetched
-        return ([(qtext(1, i), 0), (names[i + 1], 1), (qtext(k - 1, i + 1), 0)] + steps(k - 1, i + 1)
-                + [(names[i + k], 1)])
+    if kind == "lookup":                                 # one fact among others about the same thing
+        t, u = _nm(rng), _nm(rng)
+        attrs = rng.sample(["size", "weight", "age", "depth", "length"], 3)
+        vals = {a: rng.randint(2, 99) for a in attrs}
+        facts = [f"The {a} of {t} is {vals[a]}." for a in attrs] + [f"The {attrs[0]} of {u} is {rng.randint(2, 99)}."]
+        rng.shuffle(facts)
+        a = rng.choice(attrs)
+        return facts, f"What is the {a} of {t}?", str(vals[a]), [(str(vals[a]), 1)]
+    if kind == "compose":                                # two different relations, one after the other
+        x, y, z, w, v, x2 = (_nm(rng) for _ in range(6))
+        facts = [f"{x} is in the genus {y}.", f"The genus {y} is in the family {z}.", f"The genus {w} is in the family {v}.",
+                 f"{x2} is in the genus {w}."]
+        rng.shuffle(facts)
+        return facts, f"Which family is {x} in?", z, [(f"Which genus is {x} in?", 0), (y, 1),
+                                                       (f"Which family is the genus {y} in?", 0), (z, 1), (z, 1)]
+    names, facts, qtext, steps = _chain_world(rng, size)
     return facts, qtext(size, 0), names[size], steps(size, 0)
 
 
-def v10_demo_loss(G, facts, q, steps):
-    """imitate a trace with the same focus rules as solving: done -> the node is the focus's result and focus returns
-    to the parent; not done -> the node is the next focus"""
+def v10_demo_loss(G, facts, q, steps, src=None):
+    """imitate a trace with the same focus rules as solving (and the same solved-node writes); kept nodes written
+    from this same trace are not fetched (they would hold its answers)"""
     tk = lm()[0]
     mem = []
     for f in facts:
@@ -1632,42 +1752,113 @@ def v10_demo_loss(G, facts, q, steps):
     focus, L, n = root, 0., 0
     for text, done in steps:
         ids = tk(" " + text)["input_ids"]
-        l, H = G.step_loss(mem, focus, ids, done)
+        l, H = G.step_loss(mem, focus, ids, done, src_skip=src)
         L, n = L + l, n + 1
         node = G.node_from(ids, H[:len(ids)], parent=focus)
         if done:
-            focus.result = node
-            if focus.parent is not None:
-                focus.parent.children.append(focus)
+            nxt = _resolve(G, mem, focus, node)
             if focus is root:
                 break
-            focus = focus.parent
+            focus = nxt
         else:
             focus = node
     return L / max(1, n)
 
 
+def keep_trace(G, q, steps, src):
+    """a checked-right (or demo) trace's solved nodes go to kept memory"""
+    tk = lm()[0]
+    for f, r in trace_pairs(tk(" " + q)["input_ids"], [(tk(" " + t)["input_ids"], d) for t, d in steps]):
+        G.keep(f + r, src)
+
+
+V10_KINDS = ("add", "chain", "lookup", "compose")
+
+
 @torch.no_grad()
-def v10_eval(G, kinds_sizes, n=40, seed=11, show=0):
+def v10_eval(G, kinds_sizes, n=40, seed=11, show=0, use_ltm=True, skip_q=frozenset()):
+    """accuracy on new problems (questions seen in training skipped); kept memory read-only (writes inside a question
+    stay in that question); also: share of steps that fetched a kept node, skills used per kind"""
     tk = lm()[0]
     G.eval()
+    G.refresh_ltm()
+    saved = G.ltm
+    if not use_ltm:
+        G.ltm = []
     rng = random.Random(seed)
-    out = {}
+    out, used = {}, {}
+    nk_steps = n_steps = 0
     for kind, size in kinds_sizes:
-        hit = 0
-        for j in range(n):
+        hit = j = 0
+        while j < n:
             facts, q, ans, _ = v10_task(kind, rng, size)
+            if q in skip_q:
+                continue
             mem = []
             for f in facts:
                 G.store(mem, tk(" " + f)["input_ids"], kind="fact")
-            tr = [] if j < show else None
-            got, steps = solve(G, mem, tk(" " + q)["input_ids"], trace=tr)
+            tr = []
+            got, steps, _ = solve(G, mem, tk(" " + q)["input_ids"], trace=tr)
             hit += got == ans
-            if tr is not None:
+            n_steps += len(tr)
+            nk_steps += sum(not t.endswith("fetched 0)") for t in tr)
+            for t in tr:
+                s = t.split(" -> skill ")[1].split(" ")[0]
+                used.setdefault(kind, {}).setdefault(s, 0)
+                used[kind][s] += 1
+            if j < show:
                 print(f"\n  [{kind} {size}] {q} (truth {ans}) -> {got}\n" + "\n".join(tr[:14]), flush=True)
+            j += 1
         out[f"{kind}{size}"] = hit / n
+    G.ltm = saved
     G.train()
-    return out
+    return out, nk_steps / max(1, n_steps), used
+
+
+@torch.no_grad()
+def v10_reuse(G, n=20, seed=23):
+    """take in once, keep it: in a new chain world, ask a question, keep what it wrote (unchecked), ask it again and
+    ask a longer one. Reports: second-time accuracy and steps, share of steps fetching a node written by the first
+    question, the longer one with vs without the first question's nodes"""
+    tk = lm()[0]
+    G.eval()
+    G.refresh_ltm()
+    rng = random.Random(seed)
+    res = {"first": 0, "again": 0, "steps1": 0, "steps2": 0, "fetch_own": 0, "steps_all": 0, "longer_with": 0, "longer_without": 0}
+    base, base_ids = list(G.ltm), set(G._ltm_ids)
+    for _ in range(n):
+        names, facts, qtext, _ = _chain_world(rng, 6)
+        ans3 = names[3]
+        for with_first in (True, False):
+            G.ltm, G._ltm_ids = list(base), set(base_ids)
+            mem = []
+            for f in facts:
+                G.store(mem, tk(" " + f)["input_ids"], kind="fact")
+            if with_first:
+                got, st, pairs = solve(G, list(mem), tk(" " + qtext(3, 0))["input_ids"])
+                res["first"] += got == ans3
+                res["steps1"] += len(st)
+                n0 = len(G.ltm)
+                for f, r in pairs:
+                    G.keep(f + r, "reuse")
+                own = set(map(id, G.ltm[n0:]))
+                tr = []
+                got2, st2, _ = solve(G, list(mem), tk(" " + qtext(3, 0))["input_ids"], trace=tr)
+                res["again"] += got2 == ans3
+                res["steps2"] += len(st2)
+                # which steps fetched one of the first question's kept nodes
+                for focus, node, done in st2:
+                    q = G.query(focus.ids)
+                    fetched, _ = G.fetch([], q)
+                    res["fetch_own"] += any(id(x) in own for x in fetched)
+                    res["steps_all"] += 1
+            got5, _, _ = solve(G, list(mem), tk(" " + qtext(5, 0))["input_ids"])
+            res["longer_with" if with_first else "longer_without"] += got5 == names[5]
+    G.ltm, G._ltm_ids = base, base_ids
+    G.train()
+    return (f"reuse (n {n}): first ask {res['first'] / n:.0%} in {res['steps1'] / n:.1f} steps; asked again {res['again'] / n:.0%} "
+            f"in {res['steps2'] / n:.1f} steps, {res['fetch_own'] / max(1, res['steps_all']):.0%} of its steps fetch a node the "
+            f"first ask wrote; longer question (5 hops) with the first ask kept {res['longer_with'] / n:.0%}, without {res['longer_without'] / n:.0%}")
 
 
 def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
@@ -1681,74 +1872,152 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     rng = random.Random(5)
     # demos up to 3 (11-15 v10b trace: with demos up to 2 the smaller question written after one step was always a
     # 1-step question, so "drop one step and ask again" for a longer one was never shown); tests stay longer (4, 6)
-    train_sizes = [(k, s) for k in ("add", "chain") for s in (1, 2, 3)]
-    test_sizes = [("add", 2), ("add", 4), ("add", 6), ("chain", 2), ("chain", 4), ("chain", 6)]
+    train_sizes = [(k, s) for k in ("add", "chain") for s in (1, 2, 3)] + [("lookup", 1), ("compose", 1)]
+    test_sizes = [("add", 2), ("add", 4), ("add", 6), ("chain", 2), ("chain", 4), ("chain", 6), ("lookup", 1), ("compose", 1)]
     demos = [v10_task(k, rng, s) for k, s in train_sizes for _ in range(n_demo // len(train_sizes))]
-    print(f"v10: {len(demos)} demo traces (sizes {train_sizes}); test sizes {test_sizes} (longer than any demo)", flush=True)
-    print("  before training: " + ", ".join(f"{k} {v:.0%}" for k, v in v10_eval(G, test_sizes, n=2 if smoke else 10).items()), flush=True)
+    seen_q = {d[1] for d in demos}
+    for i, (facts, q, ans, st) in enumerate(demos):
+        keep_trace(G, q, st, i)
+    print(f"v10: {len(demos)} demo traces (sizes {train_sizes}); kept memory starts with their {len(G.ltm)} solved nodes; "
+          f"test sizes {test_sizes} (add / chain longer than any demo)", flush=True)
+    ne = 2 if smoke else 40
+
+    def report(tag, res, fk, used, extra=""):
+        print(f"{tag} | " + ", ".join(f"{k} {v:.0%}" for k, v in res.items())
+              + f" | steps fetching a kept node {fk:.0%}; skills {len(G.skills)}; skills used per kind "
+              + "; ".join(f"{k}: " + " ".join(f"{s}x{c}" for s, c in sorted(u.items())) for k, u in used.items()) + extra, flush=True)
 
     def fit(traces, steps):
         G.train()
+        L = torch.zeros(())
         for st in range(steps):
-            facts, q, ans, tr = random.choice(traces)
-            L = v10_demo_loss(G, facts, q, tr)
+            if st % 50 == 0:
+                G.refresh_ltm()
+            i = random.randrange(len(traces))
+            facts, q, ans, tr = traces[i]
+            L = v10_demo_loss(G, facts, q, tr, src=i)
             opt.zero_grad()
             L.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.)
             opt.step()
         return float(L)
 
+    t0 = time.time()
     l = fit(demos, 5 if smoke else 600)
-    res = v10_eval(G, test_sizes, n=2 if smoke else 40, show=2)
-    print(f"round 0 (demos only): loss {l:.3f}, experts {int(G.n_ex)} | " + ", ".join(f"{k} {v:.0%}" for k, v in res.items()), flush=True)
+    print(f"round 0 (demos only): loss {l:.3f}, {time.time() - t0:.0f}s", flush=True)
+    report("  with kept memory", *v10_eval(G, test_sizes, n=ne, show=1, skip_q=seen_q))
+    report("  kept memory empty", *v10_eval(G, test_sizes, n=ne, use_ltm=False, skip_q=seen_q))
+    print("  " + v10_reuse(G, n=2 if smoke else 20), flush=True)
     kept = list(demos)
     for r in range(1, rounds + 1):                       # try -> check -> train on the right traces (no new demos)
+        t0 = time.time()
         G.eval()
+        G.refresh_ltm()
         got_right, seen = 0, {}
         for _ in range(per_round):
-            kind = rng.choice(["add", "chain"])
-            size = rng.randint(1, 3 + r)
+            kind = rng.choice(V10_KINDS)
+            size = rng.randint(1, 3 + r) if kind in ("add", "chain") else 1
             facts, q, ans, _ = v10_task(kind, rng, size)
             right = []
-            for _ in range(tries):
+            for t in range(tries):
                 mem = []
                 for f in facts:
                     G.store(mem, tk(" " + f)["input_ids"], kind="fact")
                 with torch.no_grad():
-                    got, steps = solve(G, mem, tk(" " + q)["input_ids"], temp=.7)
+                    got, steps, _ = solve(G, mem, tk(" " + q)["input_ids"], temp=.7)
                 if got == ans:                           # its own right run, as a trace to imitate (same focus rules)
                     tr = [(tk.decode(node.ids).strip(), int(done)) for focus, node, done in steps]
-                    if all(t for t, _ in tr):
+                    if all(x for x, _ in tr):
                         right.append(tr)
-            # keep only when right in >= 2 tries (v10b round 1: a chain's answer is one of ~8 names, so one lucky guess
-            # in 4 tries is common; kept guesses taught it to answer at once -- chain2 60 -> 22%)
+                # keep only when right in >= 2 tries (v10b round 1: a chain's answer is one of ~8 names, so one lucky
+                # guess in 4 tries is common; kept guesses taught it to answer at once -- chain2 60 -> 22%)
+                if len(right) >= 2 or len(right) + (tries - t - 1) < 2:
+                    break
             if len(right) >= 2:
                 kept.append((facts, q, ans, right[0]))
+                keep_trace(G, q, right[0], len(kept) - 1)
+                seen_q.add(q)
                 got_right += 1
                 seen.setdefault((kind, size), []).append(len(right[0]))
+        print(f"round {r}: right runs found {got_right}/{per_round} (kept traces {len(kept)}, kept memory {len(G.ltm)} nodes), "
+              f"{time.time() - t0:.0f}s trying", flush=True)
         print("  kept by kind/size (count, mean steps): " + ", ".join(
             f"{k}{s} {len(v)} {sum(v) / len(v):.1f}" for (k, s), v in sorted(seen.items())), flush=True)
         l = fit(kept, 5 if smoke else 400)
-        res = v10_eval(G, test_sizes, n=2 if smoke else 40, show=1 if r == rounds else 0)
-        print(f"round {r}: right runs found {got_right}/{per_round} (kept {len(kept)}), loss {l:.3f}, experts {int(G.n_ex)} | "
-              + ", ".join(f"{k} {v:.0%}" for k, v in res.items()), flush=True)
+        last = r == rounds
+        report(f"  loss {l:.3f}; with kept memory", *v10_eval(G, test_sizes, n=ne, show=1 if last else 0, skip_q=seen_q))
+        if last:
+            report("  kept memory empty", *v10_eval(G, test_sizes, n=ne, use_ltm=False, skip_q=seen_q))
+            print("  " + v10_reuse(G, n=2 if smoke else 20), flush=True)
 
 
 @torch.no_grad()
 def v10_selftest():
-    """does a token's control really change attention (and nothing else)? a large negative bias on a fact's tokens must
-    change the answer; a zero bias must equal no bias"""
+    """checks that fail on a fake: (1) zero control = no change, (2) control masking changes the answer, (3) cached
+    writing == writing without a cache, (4) the skill choice gets a gradient, (5) a solved node is written to memory and
+    kept nodes are fetch candidates in a later question"""
     tk = lm()[0]
     G = GNM10().to(dev)
     ids = tk(" The boss of Kalo is Vintor. Who is the boss of Kalo? The boss of Kalo is")["input_ids"]
-    _, l0 = G.lm_run(ids)
-    _, lz = G.lm_run(ids, torch.zeros(len(ids), device=dev))
+    _, l0, _ = G.lm_run(ids)
+    _, lz, _ = G.lm_run(ids, torch.zeros(len(ids), device=dev))
     b = torch.zeros(len(ids), device=dev)
     b[:8] = -1e4
-    _, lb = G.lm_run(ids, b)
-    print(f"selftest: zero bias == no bias: {torch.allclose(l0[-1], lz[-1], atol=1e-2)}; "
-          f"next token without bias {tk.decode([int(l0[-1].argmax())])!r}, with the fact's tokens masked {tk.decode([int(lb[-1].argmax())])!r} "
-          f"(max logit change {float((l0[-1] - lb[-1]).abs().max()):.2f})", flush=True)
+    _, lb, _ = G.lm_run(ids, b)
+    ok1 = torch.allclose(l0[-1], lz[-1], atol=1e-2)
+    ok2 = int(l0[-1].argmax()) != int(lb[-1].argmax())
+    print(f"selftest 1-2: zero bias == no bias: {ok1}; next token without bias {tk.decode([int(l0[-1].argmax())])!r}, "
+          f"with the fact's tokens masked {tk.decode([int(lb[-1].argmax())])!r} (max logit change {float((l0[-1] - lb[-1]).abs().max()):.2f})", flush=True)
+    # (3) cached greedy writing == the slow way (whole sequence each token), with a bias and an expert on
+    G.pick_skill(G.query(ids), Node10(ids, None, None), True)
+    for A, B in zip(G.ex.A, G.ex.B):
+        B.data[0].normal_(0, .02)
+    rb = torch.randn(len(ids), device=dev)
+    G.ex.active = 0
+    out, rows, hd = G.gen(ids, rb, 0., 10)
+    slow = []
+    for _ in range(10):
+        _, lg, _ = G.lm_run(ids + slow, torch.cat([rb, torch.zeros(len(slow), device=dev)]))
+        t = int(lg[-1].argmax())
+        if t == tk.eos_token_id:
+            break
+        slow.append(t)
+    Hs, _, _ = G.lm_run(ids + slow + [tk.eos_token_id], torch.cat([rb, torch.zeros(len(slow) + 1, device=dev)]))
+    G.ex.active = None
+    rel = float((Hs[-1] - hd).norm() / Hs[-1].norm())
+    ok3 = out == slow and rel < .03
+    print(f"selftest 3: cached == slow: {ok3} ({tk.decode(out)!r} vs {tk.decode(slow)!r}; done-state relative diff {rel:.4f})", flush=True)
+    # (4) two skill nodes; a step's loss reaches the skill keys (EK, qry) through the expert weight
+    with torch.enable_grad():
+        G.spawn_at = 2.                                  # force a second skill
+        mem = []
+        G.store(mem, tk(" The boss of Kalo is Vintor.")["input_ids"])
+        root = G.store(mem, tk(" Who is the friend of Kalo?")["input_ids"], kind="question")
+        G.step_loss(mem, root, tk(" Vintor")["input_ids"], 1)
+        G.spawn_at = -2.
+        L, _ = G.step_loss(mem, root, tk(" Vintor")["input_ids"], 1)
+        L.backward()
+        g = float(G.EK.grad.abs().sum()) if G.EK.grad is not None else 0.
+        G.spawn_at = .5
+    ok4 = len(G.skills) == 2 and g > 0
+    print(f"selftest 4: skill nodes {len(G.skills)}, gradient on skill keys {g:.2e}: {ok4}", flush=True)
+    # (5) a solved node is written; kept nodes are fetch candidates later
+    mem = []
+    G.store(mem, tk(" The boss of Kalo is Vintor.")["input_ids"])
+    G.done.bias.data += 20.                              # resolve at once, so there is a solved node to check
+    got, st, pairs = solve(G, mem, tk(" Who is the boss of Kalo?")["input_ids"], max_steps=3)
+    G.done.bias.data -= 20.
+    n_solved = sum(n.kind == "solved" for n in mem)
+    for f, r in pairs:
+        G.keep(f + r, "t")
+    cands_later = len(G.ltm)
+    G.topk = 100
+    fetched, _ = G.fetch([], G.query(tk(" Who is the boss of Kalo?")["input_ids"]))
+    G.topk = 6
+    ok5 = len(pairs) == 1 and (n_solved == len(pairs)) and (cands_later == len(pairs)) and (len(fetched) == len(pairs))
+    print(f"selftest 5: resolves {len(pairs)}, solved nodes in memory {n_solved}, kept {cands_later}, fetchable later {len(fetched)}: {ok5}", flush=True)
+    assert ok1 and ok2 and ok3 and ok4 and ok5, "v10 selftest failed"
+    G.ltm, G._ltm_ids, G.skills = [], set(), []
 
 
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
