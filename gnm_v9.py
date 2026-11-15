@@ -753,7 +753,7 @@ class GNM(nn.Module):
         for i in sel:
             w = p[i] / p[i].detach() if i in top else 1.
             rows.append(mem.V[i] * w + self.mark)
-            owner += [i] * self.m
+            owner += [i] * len(mem.V[i])                    # (11-15: was self.m -- firing outputs have m_out rows)
         return sel, torch.cat(rows), owner
 
     # ---------------------------------------------------------------- write (the loop's output)
