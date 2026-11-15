@@ -1258,6 +1258,119 @@ def trace_fire(G, art):
     del rng
 
 
+# ====================================================================== test 1 (11-15): can the executor do ONE step?
+# P1 for the small-core design: the LM reads an instruction node + exact input nodes and must produce the right output.
+# Step kinds are generated and checkable; names are made up (no prior knowledge); facts come in random order with a
+# distractor. Executors: the LM frozen; the LM + LoRA trained on 50 examples per kind. Nothing here is the design --
+# it is the measurement that decides whether the design can work with this executor.
+_SY = ("ka", "lo", "mer", "vin", "tor", "sa", "ne", "ril", "dun", "ba", "zek", "or", "pel", "mu", "tha", "gor")
+
+
+def _nm(rng):
+    return "".join(rng.choice(_SY) for _ in range(2)).capitalize()
+
+
+def t1_example(kind, rng):
+    """-> (instruction text, input node texts, the right output text)"""
+    if kind == "add":
+        a, b, c = rng.randint(0, 9), rng.randint(0, 9), rng.randint(0, 1)
+        s = a + b + c
+        return ("Add the two digits and the carry. Say the result digit and the new carry.",
+                [f"First digit: {a}.", f"Second digit: {b}.", f"Carry: {c}."], f" digit {s % 10}, carry {s // 10}.")
+    if kind == "compose":
+        x, y, z, w, v = (_nm(rng) for _ in range(5))
+        facts = [f"{x} is in the genus {y}.", f"The genus {y} is in the family {z}.", f"The genus {w} is in the family {v}."]
+        rng.shuffle(facts)
+        return (f"Which family is {x} in?", facts, f" {z}.")
+    t, u = _nm(rng), _nm(rng)
+    attrs = rng.sample(["size", "weight", "age", "depth", "length"], 3)
+    vals = {a: rng.randint(2, 99) for a in attrs}
+    facts = [f"The {a} of {t} is {vals[a]}." for a in attrs] + [f"The {attrs[0]} of {u} is {rng.randint(2, 99)}."]
+    rng.shuffle(facts)
+    q = rng.choice(attrs)
+    return (f"What is the {q} of {t}?", facts, f" {vals[q]}.")
+
+
+def t1_ids(instr, facts, out=None):
+    """the step's input as nodes (grouped tokens): the instruction node, then each input node, then 'Answer:'"""
+    tk = lm()[0]
+    p = tk("Instruction: " + instr + " Facts: " + " ".join(facts) + " Answer:")["input_ids"]
+    return p, (tk(out)["input_ids"] if out is not None else None)
+
+
+class LoRA:
+    """a small low-rank adapter on every attention and MLP input projection of the frozen LM (the executor adapts)"""
+
+    def __init__(self, r=8, scale=2.):
+        M = lm()[1]
+        self.params, self.hooks = [], []
+        for blk in M.transformer.h:
+            for mod in (blk.attn.c_attn, blk.mlp.c_fc):
+                din, dout = mod.weight.shape                 # (GPT-2 Conv1D: weight is (in, out))
+                A = torch.nn.Parameter(torch.randn(din, r, device=dev) * .01)
+                B = torch.nn.Parameter(torch.zeros(r, dout, device=dev))
+                self.params += [A, B]
+                self.hooks.append(mod.register_forward_hook(lambda m, i, o, A=A, B=B: o + (i[0].to(A.dtype) @ A @ B).to(o.dtype) * scale))
+
+    def remove(self):
+        for h in self.hooks:
+            h.remove()
+
+
+def t1_acc(kinds, n=200, seed=7):
+    tk, M = lm()
+    rng = random.Random(seed)
+    out = {}
+    with torch.no_grad():
+        for kind in kinds:
+            hit = 0
+            for _ in range(n):
+                instr, facts, ans = t1_example(kind, rng)
+                p, a = t1_ids(instr, facts, ans)
+                ids = torch.tensor([p], device=dev)
+                gen = []
+                for _ in range(len(a)):
+                    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev == "cuda"):
+                        lg = M(input_ids=ids).logits[0, -1]
+                    t = int(lg.argmax())
+                    gen.append(t)
+                    ids = torch.cat([ids, torch.tensor([[t]], device=dev)], 1)
+                hit += gen == a
+            out[kind] = hit / n
+    return out
+
+
+def test1(n_demo=50, steps=400):
+    kinds = ("add", "compose", "lookup")
+    print("TEST 1: one step, the executor reads an instruction node + input nodes and must produce the output", flush=True)
+    rng = random.Random(1)
+    ex = t1_example("compose", rng)
+    print(f"  example: instruction {ex[0]!r}; input nodes {ex[1]}; right output {ex[2]!r}", flush=True)
+    print(f"  LM frozen ({LM_NAME}):            " + ", ".join(f"{k} {v:.0%}" for k, v in t1_acc(kinds).items()), flush=True)
+    tk, M = lm()
+    lora = LoRA()
+    opt = torch.optim.AdamW(lora.params, lr=1e-3)
+    rng = random.Random(2)
+    demos = [(k,) + t1_example(k, rng) for k in kinds for _ in range(n_demo)]   # 50 per kind (seed 2; tests use seed 7)
+    for st in range(steps):
+        batch = random.sample(demos, 16)
+        L = 0
+        for k, instr, facts, ans in batch:
+            p, a = t1_ids(instr, facts, ans)
+            ids = torch.tensor([p + a], device=dev)
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev == "cuda"):
+                lg = M(input_ids=ids).logits[0].float()
+            L = L + F.cross_entropy(lg[len(p) - 1:len(p) - 1 + len(a)], torch.tensor(a, device=dev))
+        opt.zero_grad()
+        (L / len(batch)).backward()
+        opt.step()
+        if (st + 1) % 100 == 0:
+            print(f"  LoRA step {st + 1}: loss {float(L) / len(batch):.3f}; held-out " +
+                  ", ".join(f"{k} {v:.0%}" for k, v in t1_acc(kinds, n=100).items()), flush=True)
+    print(f"  LM + LoRA, {n_demo} demos per kind: " + ", ".join(f"{k} {v:.0%}" for k, v in t1_acc(kinds).items()), flush=True)
+    lora.remove()
+
+
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
 def inspect(G, arts, tr_arts, n=20):
     """what the trained parts actually do: node collapse, write attention, retrieval vs a node's source, gradients"""
@@ -1405,6 +1518,9 @@ if __name__ == "__main__":
     ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
     ap.add_argument("--together", type=int, default=1)   # articles read into one memory per training episode
     a = ap.parse_args()
+    if a.task == "test1":                      # can the executor do ONE step? (frozen vs LoRA on 50 demos per kind)
+        test1()
+        raise SystemExit
     torch.manual_seed(0)
     random.seed(0)
     arts = load_articles(a.data)
