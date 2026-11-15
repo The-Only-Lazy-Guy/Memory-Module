@@ -72,3 +72,27 @@ round 0 (demos only): loss 0.097, 120s
   with kept memory | add2 0%, add4 0%, add6 0%, chain2 75%, chain4 5%, chain6 0%, lookup1 82%, compose1 35% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x302; chain: s0x1330; lookup: s0x40; compose: s0x279
   kept memory empty | add2 0%, add4 0%, add6 0%, chain2 75%, chain4 5%, chain6 0%, lookup1 82%, compose1 35% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x302; chain: s0x1330; lookup: s0x40; compose: s0x279
   reuse (n 20): first ask 0% in 14.6 steps; asked again 0% in 36.6 steps, 100% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 5%
+round 1: right runs found 5/200 (kept traces 53, kept memory 8 nodes), 921s trying
+  kept by kind/size (count, mean steps): chain4 1 3.0, compose1 1 5.0, lookup1 3 1.0
+    fit step 100: mean loss 0.313, skills 1
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 1 2
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 7 + 8 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 8 + carry 0 = ?' -> skill s0 writes ' digit 2, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 1 2' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> None
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s0 writes ' digit 7, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' What is 7 + 7 plus carry 0, followed by 7?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 + 7 plus carry 0, followed by 7?' -> skill s0 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s0 writes ' digit 7, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 + 7 plus carry 0, followed by 7?' -> skill s0 writes ' 7' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1, carry 0 What is 7 + 7 plus carry 0, followed by 7' (sub-step, done p 0.03; kept nodes fetched 6)
+   focus ' 1, carry 0 What is 7 + 7 plus carry 0, followed by 7' -> skill s0 writes '?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '?' -> skill s0 writes ' 1, carry 0 What is 7 + 7 plus carry 0, followed by 7' (sub-step, done p 0.19; kept nodes fetched 6)
+   focus ' 1, carry 0 What is 7 + 7 plus carry 0, followed by 7' -> skill s0 writes '?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '?' -> skill s0 writes ' 1, carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1, carry 0 = ?' -> skill s0 writes ' 1, carry 0 What is 7 + 7 plus carry 0, followed by 7' (sub-step, done p 0.24; kept nodes fetched 6)
+   focus ' 1, carry 0 What is 7 + 7 plus carry 0, followed by 7' -> skill s0 writes '?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '?' -> skill s0 writes ' 1, carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
