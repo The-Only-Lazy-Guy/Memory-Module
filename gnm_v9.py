@@ -1902,15 +1902,19 @@ def v10_recall(G, kinds_sizes, n=30, seed=31, show=True):
         for _ in range(n):
             facts, q, ans, _ = v10_task(kind, rng, size)
             keep_facts(G, facts, "recall")
-            qs.append((kind, size, q, ans))
+            qs.append((kind, size, q, ans, {tuple(tk(" " + f)["input_ids"]) for f in facts}))
     G.refresh_ltm()
-    out, nk, ns, shown = {}, 0, 0, set()
-    for kind, size, q, ans in qs:
+    out, nk, ns, shown, hit = {}, 0, 0, set(), {}
+    for kind, size, q, ans, own in qs:
         tr = []
-        got, _, _ = solve(G, [], tk(" " + q)["input_ids"], trace=tr)
+        got, steps, _ = solve(G, [], tk(" " + q)["input_ids"], trace=tr)
         out.setdefault(f"{kind}{size}", []).append(got == ans)
         ns += len(tr)
         nk += sum(not t.endswith("fetched 0)") for t in tr)
+        # fetch hit: at each step, is one of this question's own facts among the fetched kept nodes?
+        for focus, node, done in steps:
+            fetched, _ = G.fetch([], G.query(focus.ids))
+            hit.setdefault(f"{kind}{size}", []).append(any(tuple(x.ids) in own for x in fetched))
         if show and (kind, size) not in shown:
             shown.add((kind, size))
             print(f"\n  [recall {kind} {size}] {q} (truth {ans}) -> {got}\n" + "\n".join(tr[:10]), flush=True)
@@ -1918,7 +1922,8 @@ def v10_recall(G, kinds_sizes, n=30, seed=31, show=True):
     G.ltm, G._ltm_ids = base, base_ids
     G.train()
     return (f"recall (facts read earlier, none given; kept memory {n_kept} nodes): "
-            + ", ".join(f"{k} {sum(v) / len(v):.0%}" for k, v in out.items()) + f" | steps fetching a kept node {nk / max(1, ns):.0%}")
+            + ", ".join(f"{k} {sum(v) / len(v):.0%}" for k, v in out.items()) + f" | steps fetching a kept node {nk / max(1, ns):.0%}"
+            + " | steps whose top-6 kept holds one of its own facts: " + ", ".join(f"{k} {sum(v) / max(1, len(v)):.0%}" for k, v in hit.items()))
 
 
 @torch.no_grad()
