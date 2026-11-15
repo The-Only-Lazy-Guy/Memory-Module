@@ -876,8 +876,8 @@ class GNM(nn.Module):
         if train and float(sc.max()) < self.spawn_at and n < self.FI.shape[0]:
             with torch.no_grad():                            # a new function, made for this want: its label is the want
                 b = int(sc.argmax())                         # (11-15: a copy of the best kept the low score and spawned
-                self.FI[n] = self.FI[b] + torch.randn_like(self.FI[b]) * .02   # again, recursively, out of memory)
-                self.FK[n] = q.detach()
+                self.FI.data[n] = self.FI.data[b] + torch.randn_like(self.FI.data[b]) * .02   # again, recursively, out of memory)
+                self.FK.data[n] = q.detach()                 # (.data: the slot changes outside this episode's graph)
                 self.n_fn += 1
             return self.route(q, train)
         p = F.softmax(sc / .1, 0)
