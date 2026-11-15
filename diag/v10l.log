@@ -170,3 +170,4 @@ round 1: right runs found 65/200 (kept traces 113, kept memory 896 nodes), 179s 
    focus ' Which family is Zekril in?' -> skill s0 writes ' Which family is the genus Merlo in?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' Which family is the genus Merlo in?' -> skill s0 writes ' Merlo' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Which family is Zekril in?' -> skill s0 writes ' Merlo' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 1.492; with kept memory | add2 0%, add4 0%, add6 0%, chain2 12%, chain4 8%, chain6 0%, lookup1 90%, compose1 15% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x907; chain: s0x3600; lookup: s0x40; compose: s0x407
