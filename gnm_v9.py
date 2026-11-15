@@ -1444,6 +1444,11 @@ class GNM10(nn.Module):
         nn.init.zeros_(self.bias.weight)
         nn.init.zeros_(self.bias.bias)
         self.qry = nn.Linear(d, dk)                      # focus / question -> query
+        self.sqry = nn.Linear(d, dk)                     # skill space: focus -> skill query, skill label -> skill key
+        #  (11-15 v10f: skills keyed in the fetch space spawned 29 skills -- fetch training moved the space, cosines fell
+        #   under the spawn line; own space, trained only by the skill choice, centred by the running mean of focus states)
+        self.register_buffer("smu", torch.zeros(d))
+        self.register_buffer("smu_n", torch.zeros(()))
         self.keyc = nn.Linear(dc, dk)                    # a node's control rows -> its key
         self.done = nn.Linear(d, 1)                      # does the new node resolve the focus?
         self.ex = Experts(n=n_exp)
@@ -1544,14 +1549,18 @@ class GNM10(nn.Module):
         return out, w
 
     # ---------------------------------------------------------------- skill nodes (carry a LoRA expert)
+    def skill_query(self, H, train=False):
+        """a focus's (or skill label's) point in skill space: its control-pooled states, centred, projected"""
+        Hp = self.pool(H, self.ctl(H))[0]
+        if train:
+            with torch.no_grad():
+                self.smu_n += 1
+                self.smu += (Hp.detach() - self.smu) / float(self.smu_n)
+        return self.sqry(Hp - self.smu)
+
     def skill_keys(self):
-        """skill nodes' keys, like any node's (query + control of their label tokens) plus their own learned offset"""
-        K = []
-        for s in self.skills:
-            Hp, Cp = self.pool(s.H, self.ctl(s.H))
-            K.append(self.qry(Hp) + self.keyc(Cp))
-        K = torch.stack(K)
-        K = K + self.EK[[s.expert for s in self.skills]]
+        """skill nodes' keys: their label's point in skill space plus their own learned offset"""
+        K = torch.stack([self.skill_query(s.H) for s in self.skills]) + self.EK[[s.expert for s in self.skills]]
         return F.normalize(K, dim=-1)
 
     def pick_skill(self, q, focus, train):
@@ -1586,7 +1595,9 @@ class GNM10(nn.Module):
         """the step's input: fetched nodes (meaning ids + their control as attention bias), the focus's chain of
         ancestors and its results so far, then the focus; the fetched skill. Returns ids, bias, expert, its weight,
         how many kept nodes were fetched"""
-        q = self.query(focus.ids)
+        Hf, _, _ = self.lm_run(focus.ids)
+        q = F.normalize(self.qry(self.pool(Hf, self.ctl(Hf))[0]), dim=-1)
+        sq = F.normalize(self.skill_query(Hf, train), dim=-1)
         chain, f = [], focus
         while f is not None:
             chain.append(f)
@@ -1605,7 +1616,7 @@ class GNM10(nn.Module):
                 if c.result is not None:
                     ids += c.ids + c.result.ids
                     bias += [self.bias(c.C).squeeze(-1), self.bias(c.result.C).squeeze(-1)]
-        e, ew, esc = self.pick_skill(q, focus, train)
+        e, ew, esc = self.pick_skill(sq, focus, train)
         return ids, (torch.cat(bias) if bias else None), e, ew, sum(n.kind == "kept" for n in fetched)
 
     def step_loss(self, mem, focus, target_ids, target_done, src_skip=None):
@@ -1917,10 +1928,13 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
 
     def fit(traces, steps):
         G.train()
-        L = torch.zeros(())
+        L, run = torch.zeros(()), []
         for st in range(steps):
             if st % 50 == 0:
                 G.refresh_ltm()
+            if st and st % 100 == 0:
+                print(f"    fit step {st}: mean loss {sum(run) / len(run):.3f}, skills {len(G.skills)}", flush=True)
+                run = []
             i = random.randrange(len(traces))
             facts, q, ans, tr = traces[i]
             L = v10_demo_loss(G, facts, q, tr, src=i)
@@ -1928,6 +1942,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
             L.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.)
             opt.step()
+            run.append(float(L))
         return float(L)
 
     t0 = time.time()
@@ -1986,7 +2001,7 @@ def v10_cachediag(n=10):
     tk = lm()[0]
     G = GNM10().to(dev)
     ids = tk(" The boss of Kalo is Vintor. Who is the boss of Kalo? The boss of Kalo is")["input_ids"]
-    G.pick_skill(G.query(ids), Node10(ids, None, None), True)
+    G.pick_skill(F.normalize(G.skill_query(G.lm_run(ids)[0]), dim=-1), Node10(ids, None, None), True)
     for A, B in zip(G.ex.A, G.ex.B):
         B.data[0].normal_(0, .02)
 
@@ -2040,7 +2055,7 @@ def v10_selftest():
     print(f"selftest 1-2: zero bias == no bias: {ok1}; next token without bias {tk.decode([int(l0[-1].argmax())])!r}, "
           f"with the fact's tokens masked {tk.decode([int(lb[-1].argmax())])!r} (max logit change {float((l0[-1] - lb[-1]).abs().max()):.2f})", flush=True)
     # (3) cached greedy writing == the slow way (whole sequence each token), with a bias and an expert on
-    G.pick_skill(G.query(ids), Node10(ids, None, None), True)
+    G.pick_skill(F.normalize(G.skill_query(G.lm_run(ids)[0]), dim=-1), Node10(ids, None, None), True)
     for A, B in zip(G.ex.A, G.ex.B):
         B.data[0].normal_(0, .02)
     rb = torch.randn(len(ids), device=dev)
