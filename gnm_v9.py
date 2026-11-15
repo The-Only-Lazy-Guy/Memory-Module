@@ -1447,6 +1447,10 @@ class GNM10(nn.Module):
         self.sqry = nn.Linear(d, dk)                     # skill space: focus -> skill query, skill label -> skill key
         #  (11-15 v10f: skills keyed in the fetch space spawned 29 skills -- fetch training moved the space, cosines fell
         #   under the spawn line; own space, trained only by the skill choice, centred by the running mean of focus states)
+        # kept memory's "nothing relevant" option in its fetch softmax (scores are cosine / .1; 5 = cosine .5).
+        # 11-15 v10j round 1: kept memory empty chain2 55%, with it 18% -- the best kept node always got full attention
+        # (weight relative to the best), even Q/A pairs about other worlds
+        self.kept_null = nn.Parameter(torch.tensor(5.))
         self.register_buffer("smu", torch.zeros(d))
         self.register_buffer("smu_n", torch.zeros(()))
         self.keyc = nn.Linear(dc, dk)                    # a node's control rows -> its key
@@ -1536,18 +1540,22 @@ class GNM10(nn.Module):
         two sources, each its own top-k; kept side sampled while training (Gumbel top-k) so it can learn."""
         ok = lambda n: n not in exclude and n.of not in exclude and not (src_skip is not None and n.src == src_skip)
         out, w = [], []
-        for cands, explore in (([n for n in mem if ok(n)], False), ([n for n in self.ltm if ok(n)], train)):
+        for cands, kept in (([n for n in mem if ok(n)], False), ([n for n in self.ltm if ok(n)], True)):
             if not cands:
                 continue
             sc = torch.stack([n.key for n in cands]) @ q
             g = sc.detach() / .1
-            if explore:
+            if kept and train:
                 g = g - torch.log(-torch.log(torch.rand_like(g).clamp(1e-9, 1 - 1e-9)))
             sel = sorted(g.topk(min(self.topk, len(cands))).indices.tolist())   # (write order)
-            lp = F.log_softmax(sc, 0)
-            best = lp[sel].max().detach()
+            if kept:                                     # absolute: against the learned "nothing relevant" option
+                lp = F.log_softmax(torch.cat([sc / .1, self.kept_null[None]]), 0)
+                w += [lp[i] for i in sel]
+            else:                                        # this question's own nodes: relative to the best
+                lp = F.log_softmax(sc, 0)
+                best = lp[sel].max().detach()
+                w += [lp[i] - best for i in sel]
             out += [cands[i] for i in sel]
-            w += [lp[i] - best for i in sel]
         return out, w
 
     # ---------------------------------------------------------------- skill nodes (carry a LoRA expert)
