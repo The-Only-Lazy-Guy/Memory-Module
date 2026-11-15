@@ -1,0 +1,13 @@
+TEST 1: one step, the executor reads an instruction node + input nodes and must produce the output
+  example: instruction 'Which family is Tormer in?'; input nodes ['The genus Gorpel is in the family Nevin.', 'Tormer is in the genus Dunvin.', 'The genus Dunvin is in the family Gortha.']; right output ' Gortha.'
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3686.29it/s]
+  LM frozen (gpt2):            add 0%, compose 0%, lookup 0%
+/marimo/pv/t1/gnm.py:1368: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"  LoRA step {st + 1}: loss {float(L) / len(batch):.3f}; held-out " +
+  LoRA step 100: loss 0.084; held-out add 26%, compose 83%, lookup 97%
+  LoRA step 200: loss 0.064; held-out add 26%, compose 75%, lookup 100%
+  LoRA step 300: loss 0.006; held-out add 45%, compose 71%, lookup 96%
+  LoRA step 400: loss 0.000; held-out add 42%, compose 78%, lookup 97%
+  LM + LoRA, 50 demos per kind: add 36%, compose 78%, lookup 96%
