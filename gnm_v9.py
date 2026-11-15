@@ -1583,67 +1583,67 @@ def solve(G, mem, question_ids, temp=0., max_steps=24, trace=None):
 
 # ---------------------------------------------------------------- checkable tasks + demo traces (the teacher's ~50)
 def v10_task(kind, rng, size):
-    """-> (facts, question, answer, demo trace [(focus path index, node text, done)] as nested steps)"""
+    """-> (facts, question, answer, demo steps [(node text, done)] in the order solving writes them).
+    Reduce-and-recurse (11-15 trace: demos that hung every sub-step under the question made it count hops and answer
+    after one; here every level has the same shape -- one small step, then a smaller question, answered first)"""
+    sp = lambda v: " ".join(str(v))
     if kind == "add":
-        digits = size
-        a, b = rng.randint(10 ** (digits - 1), 10 ** digits - 1), rng.randint(10 ** (digits - 1), 10 ** digits - 1)
-        sp = lambda v: " ".join(str(v))
-        q = f"What is {sp(a)} + {sp(b)}?"
-        da, db = str(a)[::-1], str(b)[::-1]
-        trace, c, res = [], 0, []
-        for i in range(digits):
-            x, y = int(da[i]), int(db[i])
-            s = x + y + c
-            trace.append(("sub", f"{x} + {y} + carry {c} = ?"))
-            trace.append(("res", f"digit {s % 10}, carry {s // 10}"))
-            res.append(str(s % 10))
-            c = s // 10
-        ans = sp(a + b)
-        trace.append(("ans", ans))
-        return [], q, ans, trace
+        a, b = rng.randint(10 ** (size - 1), 10 ** size - 1), rng.randint(10 ** (size - 1), 10 ** size - 1)
+        qtext = lambda da, db, c, suf: (f"What is {sp(da)} + {sp(db)} plus carry {c}" + (f", followed by {sp(suf)}" if suf else "") + "?")
+
+        def steps(da, db, c, suf):                       # da, db: digit strings (top first); suf: digits found so far
+            if not da:
+                return [(sp((str(c) if c else "") + suf), 1)]
+            x, y = int(da[-1]), int(db[-1])
+            t = x + y + c
+            d, c2 = t % 10, t // 10
+            sub = [(f"{x} + {y} + carry {c} = ?", 0), (f"digit {d}, carry {c2}", 1)]
+            nxt = (da[:-1], db[:-1], c2, str(d) + suf)
+            rest = steps(*nxt)
+            if not nxt[0]:                               # nothing left: the answer comes straight after the column
+                return sub + rest
+            return sub + [(qtext(*nxt), 0)] + rest + [(rest[-1][0], 1)]
+        q = qtext(str(a), str(b), 0, "")
+        return [], q, sp(a + b), steps(str(a), str(b), 0, "")
     names = [_nm(rng) for _ in range(size + 1)]
     rel = rng.choice(["boss", "friend", "teacher", "neighbour"])
     facts = [f"The {rel} of {names[i]} is {names[i + 1]}." for i in range(size)]
     for _ in range(3):
         facts.append(f"The {rel} of {_nm(rng)} is {_nm(rng)}.")
     rng.shuffle(facts)
-    q = f"Who is the {rel} of " + " ".join([f"the {rel} of"] * (size - 1)) + f" {names[0]}?"
-    trace = []
-    for i in range(size):
-        trace.append(("sub", f"Who is the {rel} of {names[i]}?"))
-        trace.append(("res", names[i + 1]))
-    trace.append(("ans", names[size]))
-    return facts, q, names[size], trace
+    qtext = lambda k, i: f"Who is the {rel} of " + "".join(f"the {rel} of " for _ in range(k - 1)) + f"{names[i]}?"
+
+    def steps(k, i):                                     # k hops left, starting from names[i]
+        if k == 1:
+            return [(names[i + 1], 1)]                   # one hop: answered by what is fetched
+        return ([(qtext(1, i), 0), (names[i + 1], 1), (qtext(k - 1, i + 1), 0)] + steps(k - 1, i + 1)
+                + [(names[i + k], 1)])
+    return facts, qtext(size, 0), names[size], steps(size, 0)
 
 
-def v10_demo_loss(G, facts, q, trace):
-    """imitate one demo: each sub-step is written under the root (done=0, becomes the focus), its result resolves it
-    (done=1, focus returns to the root); the final answer resolves the root"""
+def v10_demo_loss(G, facts, q, steps):
+    """imitate a trace with the same focus rules as solving: done -> the node is the focus's result and focus returns
+    to the parent; not done -> the node is the next focus"""
     tk = lm()[0]
     mem = []
     for f in facts:
         G.store(mem, tk(" " + f)["input_ids"], kind="fact")
     root = G.store(mem, tk(" " + q)["input_ids"], kind="question")
-    L, n = 0., 0
-    i = 0
-    while i < len(trace):
-        kind, text = trace[i]
+    focus, L, n = root, 0., 0
+    for text, done in steps:
         ids = tk(" " + text)["input_ids"]
-        if kind == "sub":
-            l, H = G.step_loss(mem, root, ids, 0)
-            sub = G.node_from(ids, H[:len(ids)], parent=root)
-            L, n = L + l, n + 1
-            rk, rt = trace[i + 1]
-            rids = tk(" " + rt)["input_ids"]
-            l, H = G.step_loss(mem, sub, rids, 1)
-            sub.result = G.node_from(rids, H[:len(rids)], parent=sub)
-            root.children.append(sub)
-            L, n = L + l, n + 1
-            i += 2
+        l, H = G.step_loss(mem, focus, ids, done)
+        L, n = L + l, n + 1
+        node = G.node_from(ids, H[:len(ids)], parent=focus)
+        if done:
+            focus.result = node
+            if focus.parent is not None:
+                focus.parent.children.append(focus)
+            if focus is root:
+                break
+            focus = focus.parent
         else:
-            l, _ = G.step_loss(mem, root, ids, 1)
-            L, n = L + l, n + 1
-            i += 1
+            focus = node
     return L / max(1, n)
 
 
@@ -1713,17 +1713,9 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
                     G.store(mem, tk(" " + f)["input_ids"], kind="fact")
                 with torch.no_grad():
                     got, steps = solve(G, mem, tk(" " + q)["input_ids"], temp=.7)
-                if got == ans:                           # its own right run, as a trace to imitate
-                    tr = []
-                    for focus, node, done in steps:
-                        txt = tk.decode(node.ids).strip()
-                        if focus.kind == "question" and not done:
-                            tr.append(("sub", txt))
-                        elif focus.kind == "question" and done:
-                            tr.append(("ans", txt))
-                        else:
-                            tr.append(("res", txt))
-                    if all(tr[i][0] != "res" or (i > 0 and tr[i - 1][0] == "sub") for i in range(len(tr))):
+                if got == ans:                           # its own right run, as a trace to imitate (same focus rules)
+                    tr = [(tk.decode(node.ids).strip(), int(done)) for focus, node, done in steps]
+                    if all(t for t, _ in tr):
                         kept.append((facts, q, ans, tr))
                         got_right += 1
                     break
