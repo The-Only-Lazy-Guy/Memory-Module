@@ -1453,7 +1453,9 @@ class GNM10(nn.Module):
         self.done = nn.Linear(d, 1)                      # does the new node resolve the focus?
         self.ex = Experts(n=n_exp)
         self.EK = nn.Parameter(torch.zeros(n_exp, dk))   # each skill node's own learned key offset
-        self.spawn_at = float(os.environ.get("SPAWN_AT", ".5"))
+        # spawning off (-2: never): 11-15 fitdiag, 300 demo steps -- 9-10 spawned skills: loss 2.3 -> 2.2 (no learning);
+        # one skill: 2.0 -> 0.77. Returns when interference between skills is measured (my 11-15 plan)
+        self.spawn_at = float(os.environ.get("SPAWN_AT", "-2"))
         self.skills, self.ltm, self._ltm_ids = [], [], set()   # skill nodes; kept memory (solved nodes)
 
     def eparams(self):
