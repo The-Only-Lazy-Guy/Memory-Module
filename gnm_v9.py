@@ -1797,15 +1797,27 @@ def v10_demo_loss(G, facts, q, steps, src=None, recall=None):
     and none are given with the question (v10l)"""
     tk = lm()[0]
     saved = G.ltm
+    Lr = 0.
     if recall is not None:
         texts = list(facts) + list(recall)
         random.shuffle(texts)
+        own = {tuple(tk(" " + f)["input_ids"]) for f in facts}
         kt = []
         for f in texts:
             G.store(kt, tk(" " + f)["input_ids"], kind="kept")
+        # fetch signal (my proposal, v10m): the facts read together with this question should score above every
+        # other kept node, for the question and each sub-question it asks (11-15 v10l: recall 0% with 736 kept nodes;
+        # fetch learned only through the attention weight, recall imitation then taught guessing -- loss .21 -> 1.49)
+        cands = kt + random.sample(saved, min(256, len(saved)))
+        K = torch.stack([n.key for n in cands])
+        pos = torch.tensor([tuple(n.ids) in own for n in cands], device=dev)
+        asks = [tk(" " + q)["input_ids"]] + [tk(" " + t)["input_ids"] for t, d in steps if not d]
+        for a in asks:
+            sc = (K @ G.query(a)) / .1
+            Lr = Lr + (torch.logsumexp(sc, 0) - torch.logsumexp(sc[pos], 0)) / len(asks)
         G.ltm, facts = saved + kt, []
     try:
-        return _demo_loss(G, facts, q, steps, src)
+        return _demo_loss(G, facts, q, steps, src) + Lr
     finally:
         G.ltm = saved
 
