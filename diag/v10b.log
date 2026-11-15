@@ -73,3 +73,4 @@ Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/cs
    focus ' Who is the friend of Saril?' -> expert e0 writes ' Sane' (resolves it, done p 1.00)
    focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e0 writes ' Sane' (resolves it, done p 1.00)
 round 0 (demos only): loss 0.185, experts 1 | add2 0%, add4 0%, add6 0%, chain2 60%, chain4 8%, chain6 18%
+round 1: right runs found 48/200 (kept 96), loss 0.002, experts 2 | add2 0%, add4 0%, add6 0%, chain2 22%, chain4 10%, chain6 5%
