@@ -1,0 +1,48 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3963.64it/s]
+E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
+
+1 article(s) per memory, 10 memories, 32 nodes each; a blank's top-8 holds a node of its own sentence 33/60:
+                  LM alone: nll 3.554 | token acc 0.410 | exact span 3/60
+      LM + text in context: nll 0.148 | token acc 0.966 | exact span 54/60
+           LM + GNM memory: nll 2.230 | token acc 0.591 | exact span 18/60
+     LM + another's memory: nll 3.296 | token acc 0.427 | exact span 5/54
+(above: before training)
+
+  -- Milk shark: 32 nodes; what some say when the LM reads them alone:
+     node 0: ' the earth is the center of the universe.\n\n"The idea'
+     node 1: 'idae.\n\nThe shark is a member of the family Carch'
+     node 2: ' is the "Carcharhinidae" (Carcharhin'
+     node 3: ' word for "crown" (carcharhin) and whose'
+     node 4: ') long and weighs about 1.4 kg (2.1 lb'
+     node 5: ' ft) long and weighs about 1.4 kg (2.2'
+     blank: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' -> truth ' crustaceans.' | memory says ' other small fish,' | alone says ' other small fish,'
+
+  -- <unk> stingray: 32 nodes; what some say when the LM reads them alone:
+     node 0: ' United States. The species is found in the Gulf of Mexico, the'
+     node 1: ' Mediterranean.\n\nThe species is found in the Mediterranean, the Mediterranean'
+     node 2: '.\n\nThe study, published in the journal Science, also found'
+     node 3: ' Mediterranean Sea, the Mediterranean Sea and the Arabian Peninsula.\n\nThe'
+     node 4: ' . . . . . . . . . . . . . .'
+     node 5: '. The species is found in the northern and southern parts of the United'
+     blank: ' It is seasonally migratory, overwintering in offshore waters and moving into coastal habitats for' -> truth ' summer.' | memory says ' the first' | alone says ' the first'
+
+  -- Danube crested newt: 32 nodes; what some say when the LM reads them alone:
+     node 0: ' the Danube River.\n\nThe Danube River is a major'
+     node 1: ' the Mediterranean Sea.\n\nThe discovery, which was made by a'
+     node 2: '\n\nThe Dnieper delta is a major source of water for'
+     node 3: ' The Dnieper delta is the largest delta in the world. The'
+     node 4: ' the underside of the abdomen, which is then covered with a thick,'
+     node 5: '\n\nThe following is a list of the most common and common species'
+     blank: ' The Danube crested newt or Danube newt (Triturus dobrogicus) is a species of newt found in central' -> truth ' and eastern Europe, along the' | memory says ' and eastern Europe, along the' | alone says ' Europe. It is a very'
+
+1 article(s) per memory, 60 memories, 32 nodes each; a blank's top-8 holds a node of its own sentence 198/360:
+                  LM alone: nll 3.634 | token acc 0.375 | exact span 10/360
+      LM + text in context: nll 0.129 | token acc 0.981 | exact span 334/360
+           LM + GNM memory: nll 2.370 | token acc 0.573 | exact span 92/360
+     LM + another's memory: nll 3.514 | token acc 0.372 | exact span 15/354
+
+20 article(s) per memory, 3 memories, 640 nodes each; a blank's top-8 holds a node of its own sentence 21/360:
+                  LM alone: nll 3.634 | token acc 0.375 | exact span 10/360
+           LM + GNM memory: nll 3.341 | token acc 0.381 | exact span 18/360
+     LM + another's memory: nll 3.465 | token acc 0.357 | exact span 7/240
