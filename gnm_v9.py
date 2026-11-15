@@ -1385,6 +1385,9 @@ def test1(n_demo=50, steps=400):
 #  - kept memory (G.ltm): solved nodes from demos and from its own checked right runs stay, across questions.
 #  - learning: ~50 demo traces imitated, then rounds of try -> check -> train on the right traces. A focus that fetches
 #    no skill well enough (while training on demos or on its own right runs) spawns a new skill node.
+_V10_AMP = [True]                                        # bf16 autocast (cache diagnosis switches it off)
+
+
 class Experts:
     """LoRA experts on the frozen LM (attention and MLP input projections); one active at a time -- the fetched skill
     node's. Its output is scaled by w, the skill's fetch weight (1 in value; carries the gradient that teaches which
@@ -1462,8 +1465,9 @@ class GNM10(nn.Module):
         if bias is not None:
             mask = mask + bias[None, :]
         pos = torch.arange(P, P + T, device=dev)[None]
-        with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev == "cuda"):
-            out = M(input_ids=x, attention_mask=mask[None, None].to(torch.bfloat16 if dev == "cuda" else torch.float32),
+        amp = dev == "cuda" and _V10_AMP[0]
+        with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp):
+            out = M(input_ids=x, attention_mask=mask[None, None].to(torch.bfloat16 if amp else torch.float32),
                     position_ids=pos, past_key_values=past, use_cache=cache, output_hidden_states=True)
         return out.hidden_states[-1][0].float(), out.logits[0].float(), (out.past_key_values if cache else None)
 
@@ -1969,6 +1973,49 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
 
 
 @torch.no_grad()
+def v10_cachediag(n=10):
+    """11-15: selftest 3 failed in a run (cached vs slow logits 88% apart) but passed alone. Per case: largest relative
+    logit difference under the same tokens, and the first step where it is > 3%, for: as is / no bias / no expert / fp32"""
+    tk = lm()[0]
+    G = GNM10().to(dev)
+    ids = tk(" The boss of Kalo is Vintor. Who is the boss of Kalo? The boss of Kalo is")["input_ids"]
+    G.pick_skill(G.query(ids), Node10(ids, None, None), True)
+    for A, B in zip(G.ex.A, G.ex.B):
+        B.data[0].normal_(0, .02)
+
+    def one(rb, expert):
+        G.ex.active = expert
+        slow, slow_lg = [], []
+        for _ in range(10):
+            _, lg, _ = G.lm_run(ids + slow, None if rb is None else torch.cat([rb, torch.zeros(len(slow), device=dev)]))
+            slow_lg.append(lg[-1])
+            t = int(lg[-1].argmax())
+            if t == tk.eos_token_id:
+                break
+            slow.append(t)
+        _, lg, past = G.lm_run(ids, rb, cache=True)
+        fast, allb = [lg[-1]], (rb if rb is not None else torch.zeros(len(ids), device=dev))
+        for t in slow[:len(slow_lg) - 1]:
+            allb = torch.cat([allb, torch.zeros(1, device=dev)])
+            _, lg, past = G.lm_run([t], allb, past=past, cache=True)
+            fast.append(lg[-1])
+        G.ex.active = None
+        r = [float((a - b).abs().max() / b.abs().max()) for a, b in zip(fast, slow_lg)]
+        first = next((i for i, x in enumerate(r) if x > .03), -1)
+        return max(r), first, float(rb.min()) if rb is not None else 0.
+    for case in range(n):
+        torch.manual_seed(case)
+        rb = torch.randn(len(ids), device=dev)
+        row = []
+        for name, b, e, amp in (("as is", rb, 0, True), ("no bias", None, 0, True), ("no expert", rb, None, True), ("fp32", rb, 0, False)):
+            _V10_AMP[0] = amp
+            m, f, mn = one(b, e)
+            row.append(f"{name} {m:.3f}@{f}")
+        _V10_AMP[0] = True
+        print(f"case {case} (bias min {float(rb.min()):.2f} max {float(rb.max()):.2f}): " + " | ".join(row), flush=True)
+
+
+@torch.no_grad()
 def v10_selftest():
     """checks that fail on a fake: (1) zero control = no change, (2) control masking changes the answer, (3) cached
     writing == writing without a cache, (4) the skill choice gets a gradient, (5) a solved node is written to memory and
@@ -2212,6 +2259,9 @@ if __name__ == "__main__":
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
         v10_selftest()
         v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
+        raise SystemExit
+    if a.task == "cachediag":
+        v10_cachediag()
         raise SystemExit
     if a.task == "v10test":
         v10_selftest()
