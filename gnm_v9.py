@@ -2173,6 +2173,83 @@ def v10_save(G, path):
     print(f"  saved {path} (kept memory {len(G.ltm)} nodes)", flush=True)
 
 
+def v10_load(path):
+    """a model saved by v10_save, with its skills and kept memory"""
+    ck = torch.load(path, map_location=dev, weights_only=False)
+    G = GNM10().to(dev)
+    G.load_state_dict(ck["state"])
+    for t, v in zip(G.ex.params(), ck["ex"]):
+        t.data.copy_(v.to(dev))
+    for ids, H, e in ck["skills"]:
+        n = Node10(ids, None, None, kind="skill")
+        n.H, n.expert = H.to(dev), e
+        G.skills.append(n)
+    with torch.no_grad():
+        for ids, H, src in ck["ltm"]:
+            n = Node10(ids, None, None, kind="kept")
+            n.H, n.src = H.to(dev), src
+            G._refresh(n)
+            G.ltm.append(n)
+            G._ltm_ids.add(tuple(ids))
+            G._kept_by_ids[tuple(ids)] = n
+    G.eval()
+    return G
+
+
+@torch.no_grad()
+def v10_readdiag(path, n=30, seed=41):
+    """11-15 v10o: the needed fact is fetched 90-100% of steps, yet chains / compose are right 5-20%. Is the reading
+    step drowned by what else is in view, or can the executor not do the step? On the CORRECT solution path (the
+    task's own steps, eval only): at each step the executor writes (a) with its normal context (fetched nodes + path),
+    (b) with only the fact the step needs + the path, (c) with all of the question's facts + the path, no kept memory.
+    Reports exact-match of the written node vs the correct one, by kind and by step type"""
+    tk = lm()[0]
+    G = v10_load(path)
+    rng = random.Random(seed)
+    res = {}
+    for kind, size in (("chain", 2), ("chain", 3), ("compose", 1), ("lookup", 1)):
+        for _ in range(n):
+            facts, q, ans, steps = v10_task(kind, rng, size)
+            fids = [tk(" " + f)["input_ids"] for f in facts]
+            for mode in ("normal", "needed fact only", "all facts, no kept"):
+                mem = [] if mode == "needed fact only" else None
+                saved = G.ltm
+                if mode != "normal":
+                    G.ltm = []
+                if mem is None:
+                    mem = []
+                    for f in fids:
+                        G.store(mem, f, kind="fact")
+                root = G.store(mem, tk(" " + q)["input_ids"], kind="question")
+                focus = root
+                for text, done in steps:
+                    want = tk.decode(tk(" " + text)["input_ids"]).strip()
+                    if mode == "needed fact only":     # this step's working memory = only the fact it needs
+                        names = [w.strip("?.,") for w in tk.decode(focus.ids).split() if w[:1].isupper() and w not in ("Who", "What", "Which", "The")]
+                        need = [f for f in fids if names and all(nm in tk.decode(f) for nm in names)]
+                        mem[:] = [root]
+                        for f in need:
+                            G.store(mem, f, kind="fact")
+                    node, d, e, pd, nk = G.step(mem, focus)
+                    got = tk.decode(node.ids).strip()
+                    key = (mode, kind + str(size), "sub-question" if not done else "answer")
+                    res.setdefault(key, []).append(got == want)
+                    # continue on the correct path, whatever it wrote
+                    ids = tk(" " + text)["input_ids"]
+                    H, _, _ = G.lm_run(ids)
+                    nd = G.node_from(ids, H, parent=focus)
+                    if done:
+                        nxt = _resolve(G, mem, focus, nd)
+                        if focus is root:
+                            break
+                        focus = nxt
+                    else:
+                        focus = nd
+                G.ltm = saved
+    for mode in ("normal", "needed fact only", "all facts, no kept"):
+        print(f"readdiag {mode}: " + ", ".join(f"{k[1]} {k[2]} {sum(v) / len(v):.0%}" for k, v in sorted(res.items()) if k[0] == mode), flush=True)
+
+
 def v10_fitdiag(steps=300):
     """11-15 v10g: demo fit stuck at mean loss ~1.9 with 10 skills. Same 48 demos, fresh model per variant: as is /
     one skill / no kept memory / both; mean loss per 100 steps (lower = imitates the demos)"""
@@ -2507,6 +2584,9 @@ if __name__ == "__main__":
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
         v10_selftest()
         v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
+        raise SystemExit
+    if a.task == "readdiag":
+        v10_readdiag(os.environ.get("V10_LOAD", "/marimo/out/v10o.pt"))
         raise SystemExit
     if a.task == "fitdiag":
         v10_fitdiag()
