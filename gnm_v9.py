@@ -1467,10 +1467,16 @@ class GNM10(nn.Module):
                     position_ids=pos, past_key_values=past, use_cache=cache, output_hidden_states=True)
         return out.hidden_states[-1][0].float(), out.logits[0].float(), (out.past_key_values if cache else None)
 
+    def pool(self, H, C):
+        """a node's states pooled by its tokens' control (attention-like weights) -- 11-15 v10d: a plain mean made keys
+        about the sentence pattern ("Who is the boss of X?"), not the names; control sets what counts"""
+        w = F.softmax(self.bias(C).squeeze(-1), 0)[:, None]
+        return (w * H).sum(0), (w * C).sum(0)
+
     def node_from(self, ids, H, parent=None, kind=""):
         C = self.ctl(H)                                  # control rows from the LM's states over the node's tokens
-        key = F.normalize(self.qry(H.mean(0)) + self.keyc(C.mean(0)), dim=-1)   # asked-for like a query (11-14: 296 / 360
-        #                                                                         found) + what its control adds
+        Hp, Cp = self.pool(H, C)
+        key = F.normalize(self.qry(Hp) + self.keyc(Cp), dim=-1)   # asked-for like a query + what its control adds
         return Node10(ids, C, key, parent, kind)
 
     def store(self, mem, text_ids, kind="fact"):
@@ -1481,7 +1487,7 @@ class GNM10(nn.Module):
 
     def query(self, ids):
         H, _, _ = self.lm_run(ids)
-        return F.normalize(self.qry(H.mean(0)), dim=-1)
+        return F.normalize(self.qry(self.pool(H, self.ctl(H))[0]), dim=-1)
 
     # ---------------------------------------------------------------- kept memory (across questions)
     @torch.no_grad()
@@ -1500,29 +1506,40 @@ class GNM10(nn.Module):
     @torch.no_grad()
     def _refresh(self, n):
         n.C = self.ctl(n.H)
-        n.key = F.normalize(self.qry(n.H.mean(0)) + self.keyc(n.C.mean(0)), dim=-1)
+        Hp, Cp = self.pool(n.H, n.C)
+        n.key = F.normalize(self.qry(Hp) + self.keyc(Cp), dim=-1)
 
     def refresh_ltm(self):
         """kept nodes' control and keys from their cached states with the current parts (they learn meanwhile)"""
         for n in self.ltm:
             self._refresh(n)
 
-    def fetch(self, mem, q, exclude=(), src_skip=None):
+    def fetch(self, mem, q, exclude=(), src_skip=None, train=False):
+        """top-k nodes by key (sampled while training: Gumbel top-k, so a node not yet on top can show it helps);
+        returns them with their fetch weight as an attention bias (log-probability, 0 for the best) -- 11-15 v10d:
+        the weight used to multiply a control bias that starts at 0, so fetching got no gradient and never learned"""
         cands = [n for n in list(mem) + self.ltm
                  if n not in exclude and n.of not in exclude and not (src_skip is not None and n.src == src_skip)]
         if not cands:
             return [], []                                # (11-15: None crashed an empty fetch)
         sc = torch.stack([n.key for n in cands]) @ q
-        top = sc.topk(min(self.topk, len(cands))).indices.tolist()
-        p = F.softmax(sc / .1, 0)
+        g = sc.detach() / .1
+        if train:
+            g = g - torch.log(-torch.log(torch.rand_like(g).clamp(1e-9, 1 - 1e-9)))
+        top = g.topk(min(self.topk, len(cands))).indices.tolist()
+        lp = F.log_softmax(sc, 0)
         sel = sorted(top)                                # (write order)
-        return [cands[i] for i in sel], [p[i] / p[i].detach() for i in sel]
+        best = lp[sel].max().detach()
+        return [cands[i] for i in sel], [lp[i] - best for i in sel]
 
     # ---------------------------------------------------------------- skill nodes (carry a LoRA expert)
     def skill_keys(self):
         """skill nodes' keys, like any node's (query + control of their label tokens) plus their own learned offset"""
-        H = [s.H for s in self.skills]
-        K = torch.stack([self.qry(h.mean(0)) + self.keyc(self.ctl(h).mean(0)) for h in H])
+        K = []
+        for s in self.skills:
+            Hp, Cp = self.pool(s.H, self.ctl(s.H))
+            K.append(self.qry(Hp) + self.keyc(Cp))
+        K = torch.stack(K)
         K = K + self.EK[[s.expert for s in self.skills]]
         return F.normalize(K, dim=-1)
 
@@ -1565,11 +1582,11 @@ class GNM10(nn.Module):
             f = f.parent
         chain = chain[::-1]
         excl = set(chain) | {c for x in chain for c in x.children}
-        fetched, w = self.fetch(mem, q, exclude=excl, src_skip=src_skip)
+        fetched, w = self.fetch(mem, q, exclude=excl, src_skip=src_skip, train=train)
         ids, bias = [], []
         for n, wi in zip(fetched, w):
             ids += n.ids
-            bias.append(self.bias(n.C).squeeze(-1) * wi)
+            bias.append(self.bias(n.C).squeeze(-1) + wi)
         for x in chain:                                  # the path to the focus, with each node's finished sub-steps
             ids += x.ids
             bias.append(self.bias(x.C).squeeze(-1))
@@ -2000,6 +2017,22 @@ def v10_selftest():
         g = float(G.EK.grad.abs().sum()) if G.EK.grad is not None else 0.
         G.spawn_at = .5
     ok4 = len(G.skills) == 2 and g > 0
+    # (6) fetching learns from the start: with untrained (zero) control bias, a fetched fact's key gets a gradient
+    with torch.enable_grad():
+        G2 = GNM10().to(dev)
+        mem = []
+        fact = G2.store(mem, tk(" The boss of Kalo is Vintor.")["input_ids"])
+        G2.store(mem, tk(" The boss of Mira is Tolde.")["input_ids"])
+        fact.key.retain_grad()
+        root = G2.store(mem, tk(" Who is the boss of Kalo?")["input_ids"], kind="question")
+        L, _ = G2.step_loss(mem, root, tk(" Vintor")["input_ids"], 1)
+        L.backward()
+        g6 = float(fact.key.grad.abs().sum()) if fact.key.grad is not None else 0.
+        for h in G2.ex.hooks:
+            h.remove()
+        del G2
+    ok6 = g6 > 0
+    print(f"selftest 6: fetch gradient on a fact's key with untrained control {g6:.2e}: {ok6}", flush=True)
     print(f"selftest 4: skill nodes {len(G.skills)}, gradient on skill keys {g:.2e}: {ok4}", flush=True)
     # (5) a solved node is written; kept nodes are fetch candidates later
     mem = []
@@ -2016,7 +2049,7 @@ def v10_selftest():
     G.topk = 6
     ok5 = len(pairs) == 1 and (n_solved == len(pairs)) and (cands_later == len(pairs)) and (len(fetched) == len(pairs))
     print(f"selftest 5: resolves {len(pairs)}, solved nodes in memory {n_solved}, kept {cands_later}, fetchable later {len(fetched)}: {ok5}", flush=True)
-    assert ok1 and ok2 and ok3 and ok4 and ok5, "v10 selftest failed"
+    assert ok1 and ok2 and ok3 and ok4 and ok5 and ok6, "v10 selftest failed"
     G.ltm, G._ltm_ids, G.skills = [], set(), []
 
 
