@@ -64,3 +64,5 @@ round 0 (demos only): loss 0.482, 108s
    focus ' Which genus is Zekril in?' -> skill s0 writes 'The Pelgor' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Which family is Zekril in?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
   with kept memory | add2 0%, add4 0%, add6 0%, chain2 0%, chain4 0%, chain6 0%, lookup1 2%, compose1 0% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x322; chain: s0x1346; lookup: s0x40; compose: s0x156
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 0%, chain4 0%, chain6 0%, lookup1 0%, compose1 0% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x4400; chain: s0x3006; lookup: s0x264; compose: s0x319
+  reuse (n 20): first ask 0% in 10.3 steps; asked again 0% in 10.3 steps, 1% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
