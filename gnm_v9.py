@@ -1679,7 +1679,9 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     params = [p for nm, p in G.named_parameters() if p.requires_grad] + G.eparams()
     opt = torch.optim.AdamW(params, lr=1e-3)
     rng = random.Random(5)
-    train_sizes = [("add", 1), ("add", 2), ("chain", 1), ("chain", 2)]
+    # demos up to 3 (11-15 v10b trace: with demos up to 2 the smaller question written after one step was always a
+    # 1-step question, so "drop one step and ask again" for a longer one was never shown); tests stay longer (4, 6)
+    train_sizes = [(k, s) for k in ("add", "chain") for s in (1, 2, 3)]
     test_sizes = [("add", 2), ("add", 4), ("add", 6), ("chain", 2), ("chain", 4), ("chain", 6)]
     demos = [v10_task(k, rng, s) for k, s in train_sizes for _ in range(n_demo // len(train_sizes))]
     print(f"v10: {len(demos)} demo traces (sizes {train_sizes}); test sizes {test_sizes} (longer than any demo)", flush=True)
@@ -1702,11 +1704,12 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     kept = list(demos)
     for r in range(1, rounds + 1):                       # try -> check -> train on the right traces (no new demos)
         G.eval()
-        got_right = 0
+        got_right, seen = 0, {}
         for _ in range(per_round):
             kind = rng.choice(["add", "chain"])
             size = rng.randint(1, 3 + r)
             facts, q, ans, _ = v10_task(kind, rng, size)
+            right = []
             for _ in range(tries):
                 mem = []
                 for f in facts:
@@ -1716,9 +1719,15 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
                 if got == ans:                           # its own right run, as a trace to imitate (same focus rules)
                     tr = [(tk.decode(node.ids).strip(), int(done)) for focus, node, done in steps]
                     if all(t for t, _ in tr):
-                        kept.append((facts, q, ans, tr))
-                        got_right += 1
-                    break
+                        right.append(tr)
+            # keep only when right in >= 2 tries (v10b round 1: a chain's answer is one of ~8 names, so one lucky guess
+            # in 4 tries is common; kept guesses taught it to answer at once -- chain2 60 -> 22%)
+            if len(right) >= 2:
+                kept.append((facts, q, ans, right[0]))
+                got_right += 1
+                seen.setdefault((kind, size), []).append(len(right[0]))
+        print("  kept by kind/size (count, mean steps): " + ", ".join(
+            f"{k}{s} {len(v)} {sum(v) / len(v):.1f}" for (k, s), v in sorted(seen.items())), flush=True)
         l = fit(kept, 5 if smoke else 400)
         res = v10_eval(G, test_sizes, n=2 if smoke else 40, show=1 if r == rounds else 0)
         print(f"round {r}: right runs found {got_right}/{per_round} (kept {len(kept)}), loss {l:.3f}, experts {int(G.n_ex)} | "
