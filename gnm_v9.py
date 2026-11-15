@@ -1994,6 +1994,44 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
             print("  " + v10_reuse(G, n=2 if smoke else 20), flush=True)
 
 
+def v10_fitdiag(steps=300):
+    """11-15 v10g: demo fit stuck at mean loss ~1.9 with 10 skills. Same 48 demos, fresh model per variant: as is /
+    one skill / no kept memory / both; mean loss per 100 steps (lower = imitates the demos)"""
+    rng = random.Random(5)
+    train_sizes = [(k, s) for k in ("add", "chain") for s in (1, 2, 3)] + [("lookup", 1), ("compose", 1)]
+    demos = [v10_task(k, rng, s) for k, s in train_sizes for _ in range(50 // len(train_sizes))]
+    for name, spawn, kept in (("as is", None, True), ("one skill", -2., True), ("no kept memory", None, False), ("one skill, no kept", -2., False)):
+        torch.manual_seed(0)
+        random.seed(0)
+        G = GNM10().to(dev)
+        if spawn is not None:
+            G.spawn_at = spawn
+        if kept:
+            for i, (facts, q, ans, st) in enumerate(demos):
+                keep_trace(G, q, st, i)
+        params = [p for nm, p in G.named_parameters() if p.requires_grad] + G.eparams()
+        opt = torch.optim.AdamW(params, lr=1e-3)
+        run, curve = [], []
+        for st in range(1, steps + 1):
+            if st % 50 == 1:
+                G.refresh_ltm()
+            i = random.randrange(len(demos))
+            facts, q, ans, tr = demos[i]
+            L = v10_demo_loss(G, facts, q, tr, src=i)
+            opt.zero_grad()
+            L.backward()
+            torch.nn.utils.clip_grad_norm_(params, 1.)
+            opt.step()
+            run.append(float(L))
+            if st % 100 == 0:
+                curve.append(f"{sum(run) / len(run):.3f}")
+                run = []
+        for h in G.ex.hooks:
+            h.remove()
+        print(f"fitdiag {name}: mean loss per 100 steps {' '.join(curve)}; skills {len(G.skills)}", flush=True)
+        del G, opt
+
+
 @torch.no_grad()
 def v10_cachediag(n=10):
     """11-15: selftest 3 failed in a run (cached vs slow logits 88% apart) but passed alone. Per case: largest relative
@@ -2284,6 +2322,9 @@ if __name__ == "__main__":
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
         v10_selftest()
         v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
+        raise SystemExit
+    if a.task == "fitdiag":
+        v10_fitdiag()
         raise SystemExit
     if a.task == "cachediag":
         v10_cachediag()
