@@ -299,3 +299,36 @@ round 4: right runs found 71/200 (kept traces 293, kept memory 3309 nodes), 92s 
    focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' What is the difference in?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' What is the difference in?' -> skill s0 writes ' 0 9' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8' (resolves it, done p 0.87; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Pelpel
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Mermu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Pelpel' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Pelpel' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Dunmu
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Lovin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Lovin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lovin?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Samer
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Samer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Samer' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the weight of Baba? (truth 86) -> 86
+   focus ' What is the weight of Baba?' -> skill s0 writes ' 86' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Saril in? (truth Dunmu) -> Dunmu
+   focus ' Which family is Saril in?' -> skill s0 writes ' Which family is the genus Mugor in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Mugor in?' -> skill s0 writes ' Which family is the genus Mugor in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Mugor in?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is the genus Mugor in?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Saril in?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 1.008; with kept memory | add2 0%, add4 0%, add6 0%, chain2 28%, chain4 18%, chain6 5%, lookup1 98%, compose1 35% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1328; chain: s0x766; lookup: s0x40; compose: s0x365; needed fact fetched: chain 89% compose 87% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 28%, chain4 12%, chain6 8%, lookup1 98%, compose1 38% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x438; chain: s0x885; lookup: s0x40; compose: s0x540; needed fact fetched: chain 87% compose 83% lookup 100%
+  recall (facts read earlier, none given; kept memory 3903 nodes): chain2 10%, chain4 0%, lookup1 67%, compose1 3% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 86%, chain4 82%, lookup1 100%, compose1 74% | ... the fact the step needs: chain2 99%, chain4 97%, lookup1 100%, compose1 86%
+  saved /marimo/out/v10o.pt (kept memory 3309 nodes)
