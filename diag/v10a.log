@@ -2,3 +2,93 @@ Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF
 Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3748.17it/s]
 selftest: zero bias == no bias: True; next token without bias ' V', with the fact's tokens masked ' the' (max logit change 28.50)
 v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('chain', 1), ('chain', 2)]); test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6)] (longer than any demo)
+  before training: add2 0%, add4 0%, add6 0%, chain2 0%, chain4 0%, chain6 0%
+/marimo/pv/v10/gnm.py:1487: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if float(sc[b]) >= self.spawn_at or not train or n >= self.EK.shape[0]:
+
+  [add 2] What is 6 7 + 8 1? (truth 1 4 8) -> <|endoftext|>
+   focus ' What is 6 7 + 8 1?' -> expert e0 writes ' 7 + 1 + carry 0 = ?' (sub-step, done p 0.00)
+   focus ' 7 + 1 + carry 0 = ?' -> expert e0 writes ' digit 6, carry 1' (resolves it, done p 1.00)
+   focus ' What is 6 7 + 8 1?' -> expert e0 writes '<|endoftext|>' (resolves it, done p 1.00)
+
+  [add 2] What is 6 9 + 6 7? (truth 1 3 6) -> 1
+   focus ' What is 6 9 + 6 7?' -> expert e0 writes ' 9 + 7 + carry 0 = ?' (sub-step, done p 0.00)
+   focus ' 9 + 7 + carry 0 = ?' -> expert e0 writes ' digit 6, carry 1' (resolves it, done p 1.00)
+   focus ' What is 6 9 + 6 7?' -> expert e0 writes ' 9 + carry 1 = ?' (sub-step, done p 0.00)
+   focus ' 9 + carry 1 = ?' -> expert e0 writes ' digit 1, carry 1' (resolves it, done p 1.00)
+   focus ' What is 6 9 + 6 7?' -> expert e0 writes ' 1' (resolves it, done p 1.00)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7? (truth 1 5 3 8 8) -> 1
+   focus ' What is 7 5 1 1 + 7 8 7 7?' -> expert e0 writes ' 5 1 + carry 0 = ?' (sub-step, done p 0.00)
+   focus ' 5 1 + carry 0 = ?' -> expert e0 writes ' digit 6, carry 1' (resolves it, done p 1.00)
+   focus ' What is 7 5 1 1 + 7 8 7 7?' -> expert e0 writes ' 1' (resolves it, done p 1.00)
+
+  [add 4] What is 2 1 9 6 + 4 2 5 2? (truth 6 4 4 8) -> 1
+   focus ' What is 2 1 9 6 + 4 2 5 2?' -> expert e0 writes ' 1 9 + carry 0 = ?' (sub-step, done p 0.00)
+   focus ' 1 9 + carry 0 = ?' -> expert e0 writes ' digit 2, carry 1' (resolves it, done p 1.00)
+   focus ' What is 2 1 9 6 + 4 2 5 2?' -> expert e0 writes ' 1' (resolves it, done p 1.00)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5? (truth 1 7 1 4 5 7 1) -> None
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5?' -> expert e0 writes ' 7 5 + carry 0 = ?' (sub-step, done p 0.00)
+   focus ' 7 5 + carry 0 = ?' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes ' 6 + carry 0 = ?' (sub-step, done p 0.00)
+   focus ' 6 + carry 0 = ?' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes ' 6' (resolves it, done p 1.00)
+   focus ' 6 + carry 0 = ?' -> expert e0 writes ' + carry 0 = ?' (sub-step, done p 0.00)
+   focus ' + carry 0 = ?' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes ' 6' (resolves it, done p 1.00)
+   focus ' + carry 0 = ?' -> expert e0 writes ' + carry 0 = ?' (sub-step, done p 0.00)
+   focus ' + carry 0 = ?' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes ' 6' (resolves it, done p 1.00)
+   focus ' + carry 0 = ?' -> expert e0 writes ' + carry 0 = ?' (sub-step, done p 0.00)
+   focus ' + carry 0 = ?' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes ' 6' (resolves it, done p 1.00)
+
+  [add 6] What is 5 1 0 6 3 3 + 3 6 9 4 6 4? (truth 8 8 0 0 9 7) -> 1 1
+   focus ' What is 5 1 0 6 3 3 + 3 6 9 4 6 4?' -> expert e0 writes ' 1 1' (resolves it, done p 1.00)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> <|endoftext|>
+   focus ' Who is the boss of the boss of Zekor?' -> expert e0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Zekor?' -> expert e0 writes ' Mermu' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of Zekor?' -> expert e0 writes ' Who is the boss of Mermu?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Mermu?' -> expert e0 writes ' Mermu' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of Zekor?' -> expert e0 writes '<|endoftext|>' (resolves it, done p 1.00)
+
+  [chain 2] Who is the friend of the friend of Merka? (truth Gorka) -> Gorka
+   focus ' Who is the friend of the friend of Merka?' -> expert e0 writes ' Who is the friend of Merka?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Merka?' -> expert e0 writes ' Bator' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of Merka?' -> expert e0 writes ' Who is the friend of Bator?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Bator?' -> expert e0 writes ' Gorka' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of Merka?' -> expert e0 writes ' Gorka' (resolves it, done p 1.00)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Dunmu
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> expert e0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00)
+   focus ' Who is the neighbour of Rilne?' -> expert e0 writes ' Dunmu' (resolves it, done p 1.00)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> expert e0 writes ' Dunmu' (resolves it, done p 1.00)
+
+  [chain 4] Who is the boss of the boss of the boss of the boss of Basa? (truth Thamer) -> Rildun
+   focus ' Who is the boss of the boss of the boss of the boss of Basa?' -> expert e0 writes ' Who is the boss of Basa?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Basa?' -> expert e0 writes ' Rildun' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of the boss of the boss of Basa?' -> expert e0 writes ' Rildun' (resolves it, done p 1.00)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> None
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> expert e0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Dunzek?' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes 'What is the boss of Dunzek?' (sub-step, done p 0.00)
+   focus 'What is the boss of Dunzek?' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes 'What is the boss of Dunzek?' (sub-step, done p 0.00)
+   focus 'What is the boss of Dunzek?' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes 'The boss of the world is the boss of the world.' (sub-step, done p 0.00)
+   focus 'The boss of the world is the boss of the world.' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes 'The boss of the world is the boss of the world.' (sub-step, done p 0.00)
+   focus 'The boss of the world is the boss of the world.' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes 'The boss of the world is the boss of the world.' (sub-step, done p 0.00)
+   focus 'The boss of the world is the boss of the world.' -> expert e0 writes '<|endoftext|>' (sub-step, done p 0.00)
+   focus '<|endoftext|>' -> expert e0 writes 'The boss of the world is the boss of the world.' (sub-step, done p 0.00)
+
+  [chain 6] Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel? (truth Sane) -> Ortha
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e0 writes ' Who is the friend of Orpel?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Orpel?' -> expert e0 writes ' Ortha' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e0 writes ' Ortha' (resolves it, done p 1.00)
