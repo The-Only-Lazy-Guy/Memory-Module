@@ -259,3 +259,23 @@ round 3: right runs found 52/200 (kept traces 222, kept memory 2512 nodes), 101s
    focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Lovin?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' Who is the neighbour of Lovin?' -> skill s0 writes ' Sane' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Sane' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Tortor
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Tortor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Tortor' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the weight of Baba? (truth 86) -> 86
+   focus ' What is the weight of Baba?' -> skill s0 writes ' 86' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Gorsa in? (truth Netha) -> Gorsa
+   focus ' Which family is Gorsa in?' -> skill s0 writes ' Which family is Gorsa in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is Gorsa in?' -> skill s0 writes ' Gorsa' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Gorsa in?' -> skill s0 writes ' Gorsa' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 1.185; with kept memory | add2 0%, add4 0%, add6 0%, chain2 15%, chain4 12%, chain6 0%, lookup1 92%, compose1 10% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x562; chain: s0x833; lookup: s0x40; compose: s0x196; needed fact fetched: chain 81% compose 100% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 15%, chain4 18%, chain6 5%, lookup1 92%, compose1 15% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x544; chain: s0x621; lookup: s0x40; compose: s0x120; needed fact fetched: chain 85% compose 100% lookup 100%
+  recall (facts read earlier, none given; kept memory 3107 nodes): chain2 13%, chain4 0%, lookup1 73%, compose1 3% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 99%, chain4 97%, lookup1 100%, compose1 88% | ... the fact the step needs: chain2 100%, chain4 100%, lookup1 100%, compose1 99%
+  saved /marimo/out/v10o.pt (kept memory 2512 nodes)
+round 4: right runs found 71/200 (kept traces 293, kept memory 3309 nodes), 92s trying
+  fetch-training pairs 3203
+  kept by kind/size (count, mean steps): add1 1 3.0, chain1 2 1.0, chain2 1 3.0, chain4 1 9.0, chain5 2 3.0, chain7 1 3.0, compose1 12 2.8, lookup1 51 1.0
