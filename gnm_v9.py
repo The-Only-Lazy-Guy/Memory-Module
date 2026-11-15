@@ -644,6 +644,7 @@ class Memory:
 
     def __init__(self):
         self.V, self.k, self.R, self.s, self.text = [], [], [], [], []
+        self.by = {}                                   # node -> the function that made it
 
     @property
     def n(self):
@@ -687,7 +688,7 @@ class GNM(nn.Module):
         self.mark = nn.Parameter(torch.zeros(d))            # added to memory rows: "this is memory"
         self.tau = nn.Parameter(torch.tensor(math.log(8.)))   # sharpness of the slots' attention (11-14 trace: at 1x it
         #                                                       stayed ~1/T after 1000 steps -- slots never picked tokens)
-        self.wmode = os.environ.get("WRITE", "span")          # span: a node = a span of the input's tokens, in order
+        self.wmode = os.environ.get("WRITE", "fire")          # fire: a node = what a function's firing PRODUCED (§8); span: the copier (control)
         self.spanq = nn.Parameter(torch.randn(K, d) * .02)   # each slot's query for where its span starts
         self.symkey = os.environ.get("SYMKEY", "1") == "1"   # node keys from the query function on the node's tokens
         self.order = os.environ.get("RET_ORDER", "time")      # fetched nodes given to the LM in write order ('score' = by key)
@@ -700,6 +701,13 @@ class GNM(nn.Module):
         nn.init.constant_(self.gate.bias, 1.)                # start by writing; the cost teaches restraint
         self.cost = float(os.environ.get("WRITE_COST", ".001"))
         self.dup_cost = float(os.environ.get("DUP_COST", ".02"))   # per token stored twice
+        self.FI = nn.Parameter(torch.randn(32, 4, d) * .11)   # §8 F1: function nodes (instruction rows), 32 slots
+        self.register_buffer("n_fn", torch.tensor(4))        # active functions (spawned up to 32)
+        self._fk = None
+        self.spawn_at = float(os.environ.get("SPAWN_AT", ".3"))
+        self.m_out = int(os.environ.get("M_OUT", "8"))       # rows a firing produces
+        self.tau_o = 1.
+        self.fire_cost = float(os.environ.get("FIRE_COST", ".01"))
 
     # ---------------------------------------------------------------- the LM
     def embed(self, ids):
@@ -848,6 +856,110 @@ class GNM(nn.Module):
         written, cost = self.write(mem, sel, owner, H, embs, 0 if rows is None else len(rows), train, Att)
         woken = sorted({i for w in written for i, _ in mem.R[w]} - set(written))
         return written, woken, cost
+
+    # ---------------------------------------------------------------- firing (§8): a function node, executed by the LM
+    def rows_query(self, rows):
+        """the query function on rows (a change, a node, a function's instruction): what it is about"""
+        h, _ = self.run(rows)
+        return F.normalize(self.qry(self.center(h).mean(0)), dim=-1)
+
+    def fn_keys(self):
+        """F2: each active function's key = the query function on its instruction rows (cached for an episode)"""
+        if self._fk is None:
+            self._fk = torch.stack([self.rows_query(self.FI[f] + self.mark) for f in range(int(self.n_fn))])
+        return self._fk
+
+    def route(self, q, train):
+        """F1 / F3: the change's signal meets the functions' keys; none good enough -> spawn one (copy of the best)"""
+        sc = self.fn_keys() @ q
+        n = len(sc)
+        if train and float(sc.max()) < self.spawn_at and n < self.FI.shape[0]:
+            with torch.no_grad():
+                b = int(sc.argmax())
+                self.FI[n] = self.FI[b] + torch.randn_like(self.FI[b]) * .02
+                self.n_fn += 1
+            self._fk = None
+            return self.route(q, train)
+        p = F.softmax(sc / .1, 0)
+        f = int(torch.multinomial(p, 1)) if train else int(p.argmax())
+        return f, p[f] / p[f].detach(), float(sc[f])       # (value 1; the gradient reaches the routing score)
+
+    def fire(self, mem, change_rows, change_ids, train):
+        """F4-F6: the LM reads [function rows + fetched nodes + the change] and PRODUCES the output node: m_out decode
+        steps, each row = the expected token vector of its next-token distribution (nothing copied from the input)"""
+        M = lm()[1]
+        wte = M.transformer.wte.weight
+        q = self.rows_query(change_rows)
+        f, w, fsc = self.route(q, train)
+        sel, rows, owner = self.retrieve(mem, q)
+        n_i, n_rows = self.FI.shape[1], (0 if rows is None else len(rows))
+        inp = torch.cat([self.FI[f] * w] + ([rows] if rows is not None else []) + [change_rows])
+        ac = torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev == "cuda")
+        with ac:
+            o = M(inputs_embeds=inp[None], use_cache=True, output_attentions=True, output_hidden_states=True)
+        outs, ids_out = [], []
+        att_mem = torch.zeros(max(1, n_rows), device=dev)
+        for t in range(self.m_out):
+            p = F.softmax(o.logits[0, -1].float() / self.tau_o, -1)
+            e = p @ wte
+            outs.append(e)
+            ids_out.append(int(p.argmax()))
+            with ac:
+                o = M(inputs_embeds=e[None, None], past_key_values=o.past_key_values, use_cache=True,
+                      output_attentions=True, output_hidden_states=True)
+            if n_rows:                                       # where the LM looked while producing this row
+                a = torch.stack([x[0, :, -1].float().mean(0) for x in o.attentions[-4:]]).mean(0)
+                att_mem += a[n_i:n_i + n_rows].detach()
+        h_last = self.center(o.hidden_states[-1][0, -1:].float())[0]
+        V = torch.stack(outs)
+        g = torch.sigmoid(self.gate(h_last)).squeeze()
+        k = self.rows_query(V + self.mark)
+        R = []
+        if n_rows:                                           # F6 links: fetched nodes it attended to, above an even share
+            tot = float(att_mem.sum()) + 1e-9
+            share = {i: float(att_mem[[t for t, o_ in enumerate(owner) if o_ == i]].sum()) / tot for i in sorted(set(owner))}
+            R = [(i, s) for i, s in share.items() if s >= 1. / len(share)]
+        P = None
+        if sel:                                              # F6 pointer: replace a fetched node, or new
+            fk = torch.stack([mem.k[i] for i in sel])
+            P = F.softmax(torch.cat([F.normalize(self.ptr(h_last), dim=-1) @ fk.T / .1, self.new.reshape(1)]), -1)
+        written = None
+        if train:
+            for c, i in enumerate(sel):                      # soft edit of each fetched node
+                a_ = g * P[c]
+                mem.V[i] = mem.V[i] * (1 - a_) + V * a_ if mem.V[i].shape == V.shape else mem.V[i]
+                mem.k[i] = F.normalize(mem.k[i] * (1 - a_) + k * a_, dim=-1)
+            written = mem.add(V * g * (P[-1] if P is not None else 1.), k, R)
+        elif g > .5:
+            if P is not None and int(P.argmax()) < len(sel):
+                written = sel[int(P.argmax())]
+                mem.replace(written, V, k, R)
+            else:
+                written = mem.add(V, k, R)
+        if written is not None:
+            mem.text[written] = ids_out
+            mem.by[written] = f
+        seen_in = set(change_ids) | {t for i in sel for t in (mem.text[i] or [])}
+        novelty = sum(t not in seen_in for t in ids_out) / len(ids_out)
+        woken = sorted({i for i, _ in R} - ({written} if written is not None else set()))
+        return dict(written=written, woken=woken, cost=self.cost * g + self.fire_cost, f=f, fsc=fsc, ids=ids_out,
+                    novelty=novelty, sel=sel, R=R, g=float(g))
+
+    def read_fire(self, mem, ids, train, budget=3):
+        """F7 / F8: reading = firing(s) on the input; each output is a change (it fires next, and wakes what it links
+        to); the raw input is never stored"""
+        queue, infos, cost = [(self.embed(ids), list(ids))], [], 0.
+        while queue and len(infos) < budget:
+            rows_c, ids_c = queue.pop(0)
+            r = self.fire(mem, rows_c, ids_c, train)
+            infos.append(r)
+            cost = cost + r["cost"]
+            if r["written"] is not None and (train or r["g"] > .5):
+                i = r["written"]
+                queue.append((mem.V[i] + self.mark, mem.text[i] or []))
+                for wk in r["woken"]:
+                    queue.append((mem.V[wk] + self.mark, mem.text[wk] or []))
+        return infos, cost
 
     # ---------------------------------------------------------------- say (the LM speaks from memory)
     def say_nll(self, mem, prompt, target):
@@ -1024,6 +1136,127 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
             print(f"  {name:>24}: nll {nll / n:.3f} | token acc {ac / n:.3f} | exact span {ex}/{n}", flush=True)
 
 
+# ====================================================================== E1h: held-out sentence (§8 F9) -- copying cannot answer it
+def heldout(art, rng, nq):
+    """one sentence of the article is held out (never read); blanks are cut from it"""
+    h = rng.randrange(len(art["ids"]))
+    ids, qs = art["ids"][h], []
+    for _ in range(nq):
+        if len(ids) < 6:
+            break
+        cut = rng.randint(max(3, len(ids) // 2), len(ids) - 2)
+        qs.append((ids[:cut], ids[cut:cut + 6]))
+    return h, qs
+
+
+def read_but(G, mem, art, h, train):
+    """read every sentence but the held-out one: firings (WRITE=fire) or the span copier (WRITE=span, the control)"""
+    cost, infos = 0., []
+    for si, ids in enumerate(art["ids"]):
+        if si == h:
+            continue
+        if G.wmode == "fire":
+            inf, c = G.read_fire(mem, ids, train)
+            infos += inf
+        else:
+            _, _, c = G.step(mem, ids, train)
+        cost = cost + c
+    return cost, infos
+
+
+def train_e1h(G, arts, steps, lr=3e-4, log=100):
+    opt = torch.optim.AdamW([p for p in G.parameters() if p.requires_grad], lr=lr)
+    G.train()
+    rng = random.Random(0)
+    t0, acc = time.time(), []
+    for st in range(steps):
+        art = rng.choice(arts)
+        h, qs = heldout(art, rng, 3)
+        if not qs:
+            continue
+        mem = Memory()
+        G._fk = None
+        cost, infos = read_but(G, mem, art, h, True)
+        l1 = sum(G.say_nll(mem, p, t)[0] for p, t in qs) / len(qs)
+        loss = l1 + cost
+        opt.zero_grad()
+        loss.backward()
+        gn = float(torch.nn.utils.clip_grad_norm_([p for p in G.parameters() if p.requires_grad], 1.))
+        opt.step()
+        G._fk = None
+        nov = sum(r["novelty"] for r in infos) / max(1, len(infos))
+        acc.append((float(l1), float(cost), mem.n, nov, len(infos), gn))
+        if (st + 1) % log == 0:
+            a = torch.tensor(acc[-log:])
+            print(f"step {st + 1}: held-out blank nll {a[:, 0].mean():.3f}, cost {a[:, 1].mean():.3f}, nodes {a[:, 2].mean():.1f}, "
+                  f"firings {a[:, 4].mean():.1f}, new tokens in outputs {a[:, 3].mean():.0%}, functions {int(G.n_fn)}, "
+                  f"grad norm {a[:, 5].mean():.1f}, {time.time() - t0:.0f}s", flush=True)
+
+
+@torch.no_grad()
+def eval_e1h(G, arts, seed=1, nq=3):
+    """the held-out sentence's blanks: LM alone / LM with the other sentences in context / LM with GNM's memory of them
+    / LM with another article's memory (control); and how new the firings' outputs are"""
+    G.eval()
+    G._fk = None
+    rng = random.Random(seed)
+    res = {k: [0., 0., 0, 0] for k in ("LM alone", "LM + other sentences in context", "LM + GNM memory", "LM + another's memory")}
+    prev, nodes, novs = None, [], []
+    for a in arts:
+        h, qs = heldout(a, rng, nq)
+        mem = Memory()
+        _, infos = read_but(G, mem, a, h, False)
+        nodes.append(mem.n)
+        novs += [r["novelty"] for r in infos]
+        ctx = [t for i, ids in enumerate(a["ids"]) if i != h for t in ids]
+        for p, t in qs:
+            readers = [("LM alone", Memory(), []), ("LM + other sentences in context", Memory(), ctx), ("LM + GNM memory", mem, [])]
+            if prev is not None:
+                readers.append(("LM + another's memory", prev, []))
+            for name, m_, pre in readers:
+                if len(pre) + len(p) + len(t) > 1000:
+                    continue
+                nll, ac = G.say_nll(m_, pre + p, t)
+                r = res[name]
+                r[0] += float(nll)
+                r[1] += ac
+                r[2] += G.say(m_, pre + p, len(t)) == t
+                r[3] += 1
+        prev = mem
+    print(f"\nheld-out sentence ({G.wmode}): {len(arts)} articles, {sum(nodes) / max(1, len(nodes)):.0f} nodes each, "
+          f"new tokens in firing outputs {sum(novs) / max(1, len(novs)):.0%}, functions {int(G.n_fn)}")
+    for name, (nll, ac, ex, n) in res.items():
+        if n:
+            print(f"  {name:>32}: nll {nll / n:.3f} | token acc {ac / n:.3f} | exact span {ex}/{n}", flush=True)
+
+
+@torch.no_grad()
+def trace_fire(G, art):
+    """every firing: the function it used, what it fetched, what it PRODUCED, how much of that is new, the gate, links,
+    what it woke; then the held-out sentence's blanks"""
+    tk = lm()[0]
+    G.eval()
+    G._fk = None
+    mem = Memory()
+    h = len(art["ids"]) - 1
+    for si, ids in enumerate(art["ids"]):
+        if si == h:
+            continue
+        print(f"\nINPUT sentence {si}: {tk.decode(ids)!r}")
+        infos, _ = G.read_fire(mem, ids, False)
+        for r in infos:
+            dst = f"n{r['written']}" if r["written"] is not None else "nothing written"
+            print(f"   firing f{r['f']} (score {r['fsc']:+.2f}), fetched {['n%d' % i for i in r['sel']]}: produced {tk.decode(r['ids'])!r} "
+                  f"(new tokens {r['novelty']:.0%}), gate {r['g']:.2f} -> {dst}; links {[(f'n{i}', round(w, 2)) for i, w in r['R']]}; woke {['n%d' % i for i in r['woken']]}")
+    rng = random.Random(0)
+    for p, t in [(art["ids"][h][:max(3, len(art["ids"][h]) // 2)], art["ids"][h][max(3, len(art["ids"][h]) // 2):][:6])]:
+        ctx = [x for i, ids in enumerate(art["ids"]) if i != h for x in ids]
+        print(f"\nHELD-OUT {tk.decode(p)!r} (truth {tk.decode(t)!r})")
+        print(f"   memory says {tk.decode(G.say(mem, p, len(t)))!r}; alone says {tk.decode(G.say(Memory(), p, len(t)))!r}; "
+              f"with the other sentences in context {tk.decode(G.say(Memory(), ctx + p, len(t)))!r}")
+    del rng
+
+
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
 def inspect(G, arts, tr_arts, n=20):
     """what the trained parts actually do: node collapse, write attention, retrieval vs a node's source, gradients"""
@@ -1184,6 +1417,22 @@ if __name__ == "__main__":
     G = GNM(m=a.m).to(dev)
     if a.load:
         G.load_state_dict(torch.load(a.load, map_location=dev))
+    if a.task == "e1h":                        # §8: firing = computation, held-out sentence
+        eval_e1h(G, held[:20])
+        print("(above: before training)", flush=True)
+        if a.steps:
+            train_e1h(G, train, a.steps, log=max(1, min(100, a.steps // 5)))
+        eval_e1h(G, held)
+        if a.save:
+            torch.save(G.state_dict(), a.save)
+        raise SystemExit
+    if a.task == "tracefire":
+        trace_fire(G, held[0])
+        if a.steps:
+            train_e1h(G, train, a.steps, log=max(1, a.steps // 5))
+            print("\n==================== after", a.steps, "training steps")
+            trace_fire(G, held[0])
+        raise SystemExit
     if a.task == "oracle":
         oracle(G, held)
         raise SystemExit
