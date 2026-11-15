@@ -95,3 +95,4 @@ Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/cs
 round 0 (demos only): loss 0.456, experts 1 | add2 0%, add4 0%, add6 0%, chain2 42%, chain4 12%, chain6 2%
 round 1: right runs found 37/200 (kept 85), loss 0.320, experts 1 | add2 0%, add4 0%, add6 0%, chain2 48%, chain4 8%, chain6 8%
 round 2: right runs found 35/200 (kept 120), loss 0.000, experts 1 | add2 0%, add4 0%, add6 0%, chain2 70%, chain4 8%, chain6 2%
+round 3: right runs found 36/200 (kept 156), loss 1.667, experts 1 | add2 0%, add4 0%, add6 0%, chain2 62%, chain4 2%, chain6 5%
