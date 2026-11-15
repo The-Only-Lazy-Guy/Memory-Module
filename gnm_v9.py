@@ -2028,8 +2028,14 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     seen_q = {d[1] for d in demos}
     # kept memory: the facts it read (all of them, v10l) + solved nodes of its own checked right runs -- not the demos'
     # solved nodes (11-15 v10h: with those in every context each demo was unique, it memorised them)
+    # probe switches (11-16 mixprobe; defaults = the design as built): V10_KEEP keep the demos' facts, V10_RECALL recall
+    # training, V10_FETCHL fetch-training loss, V10_FIT0 demo steps before round 0
+    use_keep, use_recall, use_fetchl = (os.environ.get(k, "1") == "1" for k in ("V10_KEEP", "V10_RECALL", "V10_FETCHL"))
+    fit0 = int(os.environ.get("V10_FIT0", "600"))
+    print(f"v10 switches: keep demo facts {use_keep}, recall training {use_recall}, fetch loss {use_fetchl}, demo steps {fit0}", flush=True)
     for i, d in enumerate(demos):
-        keep_facts(G, d[0], i)
+        if use_keep:
+            keep_facts(G, d[0], i)
     recall_sizes = [("chain", 2), ("chain", 4), ("lookup", 1), ("compose", 1)]
     print(f"v10: {len(demos)} demo traces (sizes {train_sizes}); kept memory starts with the demos' facts ({len(G.ltm)}); "
           f"test sizes {test_sizes} (add / chain longer than any demo)", flush=True)
@@ -2061,7 +2067,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
             if random.random() < .5:                     # half the traces without kept memory: must solve both ways,
                 G.ltm = []                               # cannot memorise a trace by its unique kept context
             rec = None
-            if facts and random.random() < .5:           # recall: its facts were read earlier, among other worlds' facts
+            if use_recall and facts and random.random() < .5:   # recall: its facts were read earlier, among other worlds' facts
                 rec = [f for j in random.sample(range(len(traces)), min(8, len(traces))) if j != i for f in traces[j][0]]
             L = v10_demo_loss(G, facts, q, tr, src=i, recall=rec)
             G.ltm = saved
@@ -2090,7 +2096,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
         add_pairs([tk(" " + d[1])["input_ids"]] + [tk(" " + t)["input_ids"] for t, dn in d[3] if not dn], d[0])
 
     def fetch_loss(k=8, n_neg=256):
-        if not fetch_pairs or len(G.ltm) < 10:
+        if not use_fetchl or not fetch_pairs or len(G.ltm) < 10:
             return 0.
         neg = random.sample(G.ltm, min(n_neg, len(G.ltm)))
         Kn = torch.stack([G.key_of(n) for n in neg])
@@ -2108,7 +2114,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
         return L / max(1, m)
 
     t0 = time.time()
-    l = fit(demos, 5 if smoke else 600)
+    l = fit(demos, 5 if smoke else fit0)
     print(f"round 0 (demos only): loss {l:.3f}, {time.time() - t0:.0f}s", flush=True)
     report("  with kept memory", *v10_eval(G, test_sizes, n=ne, show=1, skip_q=seen_q))
     report("  kept memory empty", *v10_eval(G, test_sizes, n=ne, use_ltm=False, skip_q=seen_q))
