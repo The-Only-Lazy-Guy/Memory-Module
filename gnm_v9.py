@@ -1790,9 +1790,27 @@ def v10_task(kind, rng, size):
     return facts, qtext(size, 0), names[size], steps(size, 0)
 
 
-def v10_demo_loss(G, facts, q, steps, src=None):
+def v10_demo_loss(G, facts, q, steps, src=None, recall=None):
     """imitate a trace with the same focus rules as solving (and the same solved-node writes); kept nodes written
-    from this same trace are not fetched (they would hold its answers)"""
+    from this same trace are not fetched (they would hold its answers).
+    recall (a list of other facts): this trace's facts were read earlier -- they sit in kept memory among those others,
+    and none are given with the question (v10l)"""
+    tk = lm()[0]
+    saved = G.ltm
+    if recall is not None:
+        texts = list(facts) + list(recall)
+        random.shuffle(texts)
+        kt = []
+        for f in texts:
+            G.store(kt, tk(" " + f)["input_ids"], kind="kept")
+        G.ltm, facts = saved + kt, []
+    try:
+        return _demo_loss(G, facts, q, steps, src)
+    finally:
+        G.ltm = saved
+
+
+def _demo_loss(G, facts, q, steps, src):
     tk = lm()[0]
     mem = []
     for f in facts:
@@ -1819,6 +1837,13 @@ def keep_trace(G, q, steps, src):
     tk = lm()[0]
     for f, r in trace_pairs(tk(" " + q)["input_ids"], [(tk(" " + t)["input_ids"], d) for t, d in steps]):
         G.keep(f + r, src)
+
+
+def keep_facts(G, facts, src):
+    """every fact read is kept (taken in once, kept) -- v10l"""
+    tk = lm()[0]
+    for f in facts:
+        G.keep(tk(" " + f)["input_ids"], src)
 
 
 V10_KINDS = ("add", "chain", "lookup", "compose")
@@ -1862,6 +1887,38 @@ def v10_eval(G, kinds_sizes, n=40, seed=11, show=0, use_ltm=True, skip_q=frozens
     G.ltm = saved
     G.train()
     return out, nk_steps / max(1, n_steps), used
+
+
+@torch.no_grad()
+def v10_recall(G, kinds_sizes, n=30, seed=31, show=True):
+    """read once, asked later (v10l): every world's facts are read into kept memory first, among all that is kept
+    already; then each question comes with NO facts given -- it must fetch the right kept facts and reason over them"""
+    tk = lm()[0]
+    G.eval()
+    rng = random.Random(seed)
+    base, base_ids = list(G.ltm), set(G._ltm_ids)
+    qs = []
+    for kind, size in kinds_sizes:
+        for _ in range(n):
+            facts, q, ans, _ = v10_task(kind, rng, size)
+            keep_facts(G, facts, "recall")
+            qs.append((kind, size, q, ans))
+    G.refresh_ltm()
+    out, nk, ns, shown = {}, 0, 0, set()
+    for kind, size, q, ans in qs:
+        tr = []
+        got, _, _ = solve(G, [], tk(" " + q)["input_ids"], trace=tr)
+        out.setdefault(f"{kind}{size}", []).append(got == ans)
+        ns += len(tr)
+        nk += sum(not t.endswith("fetched 0)") for t in tr)
+        if show and (kind, size) not in shown:
+            shown.add((kind, size))
+            print(f"\n  [recall {kind} {size}] {q} (truth {ans}) -> {got}\n" + "\n".join(tr[:10]), flush=True)
+    n_kept = len(G.ltm)
+    G.ltm, G._ltm_ids = base, base_ids
+    G.train()
+    return (f"recall (facts read earlier, none given; kept memory {n_kept} nodes): "
+            + ", ".join(f"{k} {sum(v) / len(v):.0%}" for k, v in out.items()) + f" | steps fetching a kept node {nk / max(1, ns):.0%}")
 
 
 @torch.no_grad()
@@ -1925,9 +1982,12 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     test_sizes = [("add", 2), ("add", 4), ("add", 6), ("chain", 2), ("chain", 4), ("chain", 6), ("lookup", 1), ("compose", 1)]
     demos = [v10_task(k, rng, s) for k, s in train_sizes for _ in range(n_demo // len(train_sizes))]
     seen_q = {d[1] for d in demos}
-    # kept memory holds only its own checked right runs, not the demos' nodes (11-15 v10h: with the demos' solved nodes
-    # in every context each demo was unique, it memorised them -- loss .002 -- and answered chains in one step)
-    print(f"v10: {len(demos)} demo traces (sizes {train_sizes}); kept memory starts empty (own checked runs go in); "
+    # kept memory: the facts it read (all of them, v10l) + solved nodes of its own checked right runs -- not the demos'
+    # solved nodes (11-15 v10h: with those in every context each demo was unique, it memorised them)
+    for i, d in enumerate(demos):
+        keep_facts(G, d[0], i)
+    recall_sizes = [("chain", 2), ("chain", 4), ("lookup", 1), ("compose", 1)]
+    print(f"v10: {len(demos)} demo traces (sizes {train_sizes}); kept memory starts with the demos' facts ({len(G.ltm)}); "
           f"test sizes {test_sizes} (add / chain longer than any demo)", flush=True)
     ne = 2 if smoke else 40
 
@@ -1956,7 +2016,10 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
             saved = G.ltm
             if random.random() < .5:                     # half the traces without kept memory: must solve both ways,
                 G.ltm = []                               # cannot memorise a trace by its unique kept context
-            L = v10_demo_loss(G, facts, q, tr, src=i)
+            rec = None
+            if facts and random.random() < .5:           # recall: its facts were read earlier, among other worlds' facts
+                rec = [f for j in random.sample(range(len(traces)), min(8, len(traces))) if j != i for f in traces[j][0]]
+            L = v10_demo_loss(G, facts, q, tr, src=i, recall=rec)
             G.ltm = saved
             opt.zero_grad()
             L.backward()
@@ -1970,6 +2033,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     print(f"round 0 (demos only): loss {l:.3f}, {time.time() - t0:.0f}s", flush=True)
     report("  with kept memory", *v10_eval(G, test_sizes, n=ne, show=1, skip_q=seen_q))
     report("  kept memory empty", *v10_eval(G, test_sizes, n=ne, use_ltm=False, skip_q=seen_q))
+    print("  " + v10_recall(G, recall_sizes, n=2 if smoke else 30), flush=True)
     print("  " + v10_reuse(G, n=2 if smoke else 20), flush=True)
     kept = list(demos)
     for r in range(1, rounds + 1):                       # try -> check -> train on the right traces (no new demos)
@@ -2002,6 +2066,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
                 seen_q.add(q)
                 got_right += 1
                 seen.setdefault((kind, size), []).append(len(right[0]))
+            keep_facts(G, facts, len(kept) - 1 if kept[-1][1] == q else "read")   # what it read stays
         print(f"round {r}: right runs found {got_right}/{per_round} (kept traces {len(kept)}, kept memory {len(G.ltm)} nodes), "
               f"{time.time() - t0:.0f}s trying", flush=True)
         print("  kept by kind/size (count, mean steps): " + ", ".join(
@@ -2011,6 +2076,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
         last = r == rounds
         report(f"  loss {l:.3f}; with kept memory", *v10_eval(G, test_sizes, n=ne, show=1, skip_q=seen_q))
         report("  kept memory empty", *v10_eval(G, test_sizes, n=ne, use_ltm=False, skip_q=seen_q))
+        print("  " + v10_recall(G, recall_sizes, n=2 if smoke else 30, show=last), flush=True)
         if last:
             print("  " + v10_reuse(G, n=2 if smoke else 20), flush=True)
 
@@ -2186,7 +2252,13 @@ def v10_selftest():
     G.topk = 6
     ok5 = len(pairs) == 1 and (n_solved == len(pairs)) and (cands_later == len(pairs)) and (len(fetched) == len(pairs))
     print(f"selftest 5: resolves {len(pairs)}, solved nodes in memory {n_solved}, kept {cands_later}, fetchable later {len(fetched)}: {ok5}", flush=True)
-    assert ok1 and ok2 and ok3 and ok4 and ok5 and ok6, "v10 selftest failed"
+    # (7) a fact read once is kept and found later with nothing given
+    fid = tk(" The teacher of Mira is Dolan.")["input_ids"]
+    keep_facts(G, [" The teacher of Mira is Dolan.".strip()], "t7")
+    fetched, _ = G.fetch([], G.query(tk(" Who is the teacher of Mira?")["input_ids"]))
+    ok7 = any(n.ids == fid for n in fetched)
+    print(f"selftest 7: a fact read once is kept and fetched later with no facts given: {ok7}", flush=True)
+    assert ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7, "v10 selftest failed"
     G.ltm, G._ltm_ids, G.skills = [], set(), []
 
 
