@@ -208,3 +208,9 @@ round 2: right runs found 66/200 (kept traces 170, kept memory 1738 nodes), 110s
    focus ' Which family is the genus Mertha in?' -> skill s0 writes ' Mertha' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Which family is Mertha in?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.91; kept nodes fetched 6)
   loss 2.319; with kept memory | add2 0%, add4 0%, add6 0%, chain2 20%, chain4 12%, chain6 2%, lookup1 72%, compose1 5% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x360; chain: s0x992; lookup: s0x40; compose: s0x178; needed fact fetched: chain 90% compose 100% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 18%, chain4 12%, chain6 0%, lookup1 82%, compose1 10% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x448; chain: s0x814; lookup: s0x40; compose: s0x216; needed fact fetched: chain 94% compose 100% lookup 100%
+  recall (facts read earlier, none given; kept memory 2336 nodes): chain2 17%, chain4 0%, lookup1 57%, compose1 7% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 49%, chain4 56%, lookup1 100%, compose1 86% | ... the fact the step needs: chain2 97%, chain4 100%, lookup1 100%, compose1 94%
+  saved /marimo/out/v10o.pt (kept memory 1738 nodes)
+round 3: right runs found 52/200 (kept traces 222, kept memory 2512 nodes), 101s trying
+  fetch-training pairs 2572
+  kept by kind/size (count, mean steps): add1 1 3.0, chain1 5 2.6, chain2 3 5.7, chain3 2 5.0, chain4 2 7.0, compose1 6 3.7, lookup1 33 1.0
