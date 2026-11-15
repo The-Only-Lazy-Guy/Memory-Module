@@ -6,3 +6,88 @@ v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('
 /marimo/pv/v10/gnm.py:1487: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
 Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
   if float(sc[b]) >= self.spawn_at or not train or n >= self.EK.shape[0]:
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 7 + 1 + carry 0 = ?, carry 1 1 1 1 1 1
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> expert e3 writes ' 7 + 1 + carry 0 = ?, carry 1 1 1 1 1 1' (resolves it, done p 1.00)
+
+  [add 2] What is 6 9 + 6 7 plus carry 0? (truth 1 3 6) -> 9 + 7 + carry 0 = ?, carry 1 1 1 1 1 1
+   focus ' What is 6 9 + 6 7 plus carry 0?' -> expert e3 writes ' 9 + 7 + carry 0 = ?, carry 1 1 1 1 1 1' (resolves it, done p 1.00)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> 1 + 7 + carry 0 = ?, carry 0 1 1 1 1 1
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> expert e3 writes ' 1 + 7 + carry 0 = ?, carry 0 1 1 1 1 1' (resolves it, done p 1.00)
+
+  [add 4] What is 2 1 9 6 + 4 2 5 2 plus carry 0? (truth 6 4 4 8) -> 6 + 5 + carry 0 = ?, carry 1 1 1 1 1 1
+   focus ' What is 2 1 9 6 + 4 2 5 2 plus carry 0?' -> expert e3 writes ' 6 + 5 + carry 0 = ?, carry 1 1 1 1 1 1' (resolves it, done p 1.00)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 1 0 1 0
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> expert e3 writes ' 5 + 6 + carry 0 = ? and 0 + carry 0 = ? and' (sub-step, done p 0.00)
+   focus ' 5 + 6 + carry 0 = ? and 0 + carry 0 = ? and' -> expert e3 writes ' carry 0 1 0 1 0' (resolves it, done p 1.00)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> expert e3 writes ' 1 0 1 0' (resolves it, done p 1.00)
+
+  [add 6] What is 5 1 0 6 3 3 + 3 6 9 4 6 4 plus carry 0? (truth 8 8 0 0 9 7) -> 3 + 4 + carry 0 = ? and carry 0 What is 5 1 0
+   focus ' What is 5 1 0 6 3 3 + 3 6 9 4 6 4 plus carry 0?' -> expert e3 writes ' 3 + 4 + carry 0 = ? and carry 0 What is 5 1 0' (resolves it, done p 0.54)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Mermu
+   focus ' Who is the boss of the boss of Zekor?' -> expert e3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Zekor?' -> expert e3 writes ' Mergor' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of Zekor?' -> expert e3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Zekor?' -> expert e3 writes ' Mergor' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of Zekor?' -> expert e3 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Mergor?' -> expert e3 writes ' Mermu' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of Zekor?' -> expert e3 writes ' Mermu' (resolves it, done p 1.00)
+
+  [chain 2] Who is the friend of the friend of Merka? (truth Gorka) -> Gorka
+   focus ' Who is the friend of the friend of Merka?' -> expert e3 writes ' Who is the friend of Merka?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Merka?' -> expert e3 writes ' Bamer' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of Merka?' -> expert e3 writes ' Who is the friend of Bamer?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Bamer?' -> expert e3 writes ' Gorka' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of Merka?' -> expert e3 writes ' Gorka' (resolves it, done p 1.00)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Dunmu
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> expert e3 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00)
+   focus ' Who is the neighbour of Rilne?' -> expert e3 writes ' Lovin' (resolves it, done p 1.00)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> expert e3 writes ' Who is the neighbour of Lovin?' (sub-step, done p 0.00)
+   focus ' Who is the neighbour of Lovin?' -> expert e3 writes ' Bazek' (resolves it, done p 1.00)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> expert e3 writes ' Who is the neighbour of Bazek?' (sub-step, done p 0.00)
+   focus ' Who is the neighbour of Bazek?' -> expert e3 writes ' Dunmu' (resolves it, done p 1.00)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> expert e3 writes ' Dunmu' (resolves it, done p 1.00)
+
+  [chain 4] Who is the boss of the boss of the boss of the boss of Basa? (truth Thamer) -> Tormer
+   focus ' Who is the boss of the boss of the boss of the boss of Basa?' -> expert e3 writes ' Who is the boss of the boss of Basa?' (sub-step, done p 0.00)
+   focus ' Who is the boss of the boss of Basa?' -> expert e3 writes ' Rildun' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of the boss of the boss of Basa?' -> expert e3 writes ' Who is the boss of Rildun?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Rildun?' -> expert e3 writes ' Tormer' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of the boss of the boss of Basa?' -> expert e3 writes ' Tormer' (resolves it, done p 1.00)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> None
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> expert e3 writes ' Who is the boss of the boss of the boss of Dunzek?' (sub-step, done p 0.00)
+   focus ' Who is the boss of the boss of the boss of Dunzek?' -> expert e3 writes ' Who is the boss of the boss of Dunzek?' (sub-step, done p 0.00)
+   focus ' Who is the boss of the boss of Dunzek?' -> expert e3 writes ' Muka' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of the boss of Dunzek?' -> expert e3 writes ' Who is the boss of Muka?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Muka?' -> expert e3 writes ' Gorzek' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of the boss of Dunzek?' -> expert e3 writes ' Gorzek' (resolves it, done p 1.00)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> expert e3 writes ' Who is the boss of the boss of Gorzek?' (sub-step, done p 0.00)
+   focus ' Who is the boss of the boss of Gorzek?' -> expert e3 writes ' Who is the boss of Gorzek?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Gorzek?' -> expert e3 writes ' Ormer Who is the boss of Ormer?' (sub-step, done p 0.00)
+   focus ' Ormer Who is the boss of Ormer?' -> expert e3 writes ' Ormer' (resolves it, done p 1.00)
+   focus ' Who is the boss of Gorzek?' -> expert e3 writes ' Who is the boss of Ormer?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Ormer?' -> expert e3 writes ' Ormer' (resolves it, done p 1.00)
+   focus ' Who is the boss of Gorzek?' -> expert e3 writes ' Who is the boss of Ormer?' (sub-step, done p 0.00)
+   focus ' Who is the boss of Ormer?' -> expert e3 writes ' Ormer' (resolves it, done p 0.82)
+
+  [chain 6] Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel? (truth Sane) -> None
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e3 writes ' Who is the friend of Orpel?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Orpel?' -> expert e3 writes ' Karil' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e3 writes ' Who is the friend of Orpel?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Orpel?' -> expert e3 writes ' Karil' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e3 writes ' Who is the friend of Orpel?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Orpel?' -> expert e3 writes ' Karil' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e3 writes ' Who is the friend of Orpel?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Orpel?' -> expert e3 writes ' Karil' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e3 writes ' Who is the friend of Orpel?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Orpel?' -> expert e3 writes ' Karil' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e3 writes ' Who is the friend of Orpel?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Orpel?' -> expert e3 writes ' Karil' (resolves it, done p 1.00)
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e3 writes ' Who is the friend of Orpel?' (sub-step, done p 0.00)
+   focus ' Who is the friend of Orpel?' -> expert e3 writes ' Karil' (resolves it, done p 1.00)
+round 0 (demos only): loss 0.267, experts 4 | add2 0%, add4 0%, add6 0%, chain2 45%, chain4 10%, chain6 0%
