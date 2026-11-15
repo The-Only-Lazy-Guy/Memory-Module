@@ -68,3 +68,5 @@ round 0 (demos only): loss 0.128, 125s
    focus ' Which genus is Zekril in?' -> skill s0 writes ' Katha' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Which family is Zekril in?' -> skill s0 writes ' Katha' (resolves it, done p 1.00; kept nodes fetched 6)
   with kept memory | add2 0%, add4 0%, add6 0%, chain2 2%, chain4 0%, chain6 0%, lookup1 0%, compose1 0% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x308; chain: s0x1444; lookup: s0x44; compose: s0x124
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 8%, chain4 5%, chain6 2%, lookup1 80%, compose1 10% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x120; chain: s0x2261; lookup: s0x40; compose: s0x282
+  reuse (n 20): first ask 0% in 18.1 steps; asked again 0% in 15.1 steps, 52% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
