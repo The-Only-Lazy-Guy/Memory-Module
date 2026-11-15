@@ -1386,7 +1386,7 @@ def test1(n_demo=50, steps=400):
 #  - learning: ~50 demo traces imitated, then rounds of try -> check -> train on the right traces. A focus that fetches
 #    no skill well enough (while training on demos or on its own right runs) spawns a new skill node.
 _V10_AMP = [False]   # bf16 autocast off: 11-15 cachediag -- in bf16, cached vs slow writing differed 2-13% (once 88%),
-#                      in fp32 0.000 in every case; v10 runs fp32 with TF32 matmuls
+#                      in fp32 0.000 in every case; v10 runs plain fp32 (TF32: 4%)
 
 
 class Experts:
@@ -2257,9 +2257,9 @@ if __name__ == "__main__":
     ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
     ap.add_argument("--together", type=int, default=1)   # articles read into one memory per training episode
     a = ap.parse_args()
-    if a.task in ("v10", "v10test"):
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
+    if a.task in ("v10", "v10test"):              # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
         v10_selftest()
         v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
