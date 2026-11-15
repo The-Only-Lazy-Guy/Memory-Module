@@ -1,0 +1,98 @@
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3946.98it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
+/marimo/pv/insp/gnm.py:876: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if train and float(sc.max()) < self.spawn_at and n < self.FI.shape[0]:
+
+INPUT sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   firing f3 (score +0.99), fetched []: produced ' The shark is is a is ( (' (new tokens 0%), gate 0.81 -> n0; links []; woke []
+   firing f0 (score +0.99), fetched ['n0']: produced ' the the the the the the the the' (new tokens 100%), gate 0.79 -> n1; links []; woke []
+   firing f1 (score +0.99), fetched ['n0', 'n1']: produced ' the the the the the the the the' (new tokens 0%), gate 0.79 -> n2; links [('n0', 0.73)]; woke ['n0']
+
+INPUT sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2']: produced ' The largest shark is a largest common in' (new tokens 12%), gate 0.79 -> n3; links [('n0', 0.7)]; woke ['n0']
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3']: produced ' The the the the the the the the' (new tokens 0%), gate 0.80 -> n4; links [('n3', 0.5)]; woke ['n3']
+   firing f0 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4']: produced ' the the the the the the the the' (new tokens 0%), gate 0.80 -> n5; links [('n3', 0.37), ('n4', 0.23)]; woke ['n3', 'n4']
+
+INPUT sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   firing f0 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5']: produced ' The species is a most common in the' (new tokens 12%), gate 0.81 -> n6; links [('n0', 0.35), ('n3', 0.34)]; woke ['n0', 'n3']
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6']: produced ' the the the the the the the the' (new tokens 0%), gate 0.79 -> n7; links [('n3', 0.18), ('n5', 0.16), ('n6', 0.29)]; woke ['n3', 'n5', 'n6']
+   firing f0 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7']: produced ' the the the the the the the the' (new tokens 0%), gate 0.79 -> n8; links [('n3', 0.18), ('n6', 0.22), ('n7', 0.13)]; woke ['n3', 'n6', 'n7']
+
+INPUT sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8']: produced '\n\nThe juvenile is known the most' (new tokens 50%), gate 0.81 -> n9; links [('n0', 0.26), ('n3', 0.27), ('n6', 0.18)]; woke ['n0', 'n3', 'n6']
+   firing f3 (score +0.99), fetched ['n0', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9']: produced '\n\nThe most is the the the' (new tokens 0%), gate 0.59 -> n10; links [('n0', 0.12), ('n3', 0.17), ('n6', 0.12), ('n9', 0.37)]; woke ['n0', 'n3', 'n6', 'n9']
+   firing f0 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10']: produced ' the the the the the the the the' (new tokens 0%), gate 0.56 -> n11; links [('n0', 0.11), ('n3', 0.13), ('n6', 0.11), ('n9', 0.14), ('n10', 0.23)]; woke ['n0', 'n3', 'n6', 'n9', 'n10']
+
+INPUT sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n11']: produced ' The body is a most common in the' (new tokens 0%), gate 0.81 -> n12; links [('n0', 0.21), ('n3', 0.16), ('n6', 0.1), ('n9', 0.17), ('n10', 0.16)]; woke ['n0', 'n3', 'n6', 'n9', 'n10']
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10', 'n12']: produced ' the the the the the the the the' (new tokens 0%), gate 0.55 -> n13; links [('n0', 0.09), ('n3', 0.11), ('n9', 0.09), ('n10', 0.12), ('n12', 0.28)]; woke ['n0', 'n3', 'n9', 'n10', 'n12']
+   firing f0 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n6', 'n7', 'n9', 'n10', 'n11', 'n12', 'n13']: produced ' the the the the the the the the' (new tokens 0%), gate 0.56 -> n14; links [('n10', 0.11), ('n11', 0.13), ('n12', 0.27), ('n13', 0.1)]; woke ['n10', 'n11', 'n12', 'n13']
+
+INPUT sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n6', 'n7', 'n9', 'n10', 'n11', 'n12', 'n13']: produced ' the shark is the most common in the' (new tokens 0%), gate 0.81 -> n15; links [('n0', 0.18), ('n3', 0.14), ('n6', 0.09), ('n9', 0.15), ('n10', 0.13), ('n12', 0.13)]; woke ['n0', 'n3', 'n6', 'n9', 'n10', 'n12']
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n6', 'n7', 'n9', 'n10', 'n12', 'n13', 'n14', 'n15']: produced ' the the the the the the the the' (new tokens 0%), gate 0.53 -> n16; links [('n12', 0.11), ('n13', 0.12), ('n14', 0.12), ('n15', 0.23)]; woke ['n12', 'n13', 'n14', 'n15']
+   firing f0 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n6', 'n9', 'n10', 'n11', 'n12', 'n13', 'n15']: produced ' the the the the the the the the' (new tokens 0%), gate 0.56 -> n17; links [('n10', 0.09), ('n11', 0.12), ('n12', 0.2), ('n13', 0.09), ('n15', 0.16)]; woke ['n10', 'n11', 'n12', 'n13', 'n15']
+
+INPUT sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n12', 'n15']: produced ' The most is the largest common in the' (new tokens 0%), gate 0.81 -> n18; links [('n0', 0.17), ('n3', 0.14), ('n9', 0.21), ('n12', 0.14), ('n15', 0.13)]; woke ['n0', 'n3', 'n9', 'n12', 'n15']
+   firing f1 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n6', 'n9', 'n10', 'n12', 'n13', 'n14', 'n15', 'n18']: produced ' the the the the the the the the' (new tokens 0%), gate 0.53 -> n19; links [('n12', 0.1), ('n13', 0.13), ('n14', 0.1), ('n15', 0.19), ('n18', 0.11)]; woke ['n12', 'n13', 'n14', 'n15', 'n18']
+   firing f0 (score +0.99), fetched ['n0', 'n1', 'n2', 'n3', 'n6', 'n9', 'n10', 'n11', 'n12', 'n13', 'n15', 'n18']: produced ' the most common in the the the the' (new tokens 0%), gate 0.56 -> n20; links [('n12', 0.16), ('n13', 0.09), ('n15', 0.17), ('n18', 0.16)]; woke ['n12', 'n13', 'n15', 'n18']
+
+HELD-OUT ' In turn, it often falls prey' (truth ' to larger sharks and possibly marine')
+   memory says ' to the most common of the'; alone says ' to the same kind of "'; with the other sentences in context ' to the large, white-'
+Traceback (most recent call last):
+  File "/marimo/pv/insp/gnm.py", line 1432, in <module>
+    train_e1h(G, train, a.steps, log=max(1, a.steps // 5))
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 1179, in train_e1h
+    cost, infos = read_but(G, mem, art, h, True)
+                  ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 1159, in read_but
+    inf, c = G.read_fire(mem, ids, train)
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 954, in read_fire
+    r = self.fire(mem, rows_c, ids_c, train)
+  File "/marimo/pv/insp/gnm.py", line 893, in fire
+    f, w, fsc = self.route(q, train)
+                ~~~~~~~~~~^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 882, in route
+    return self.route(q, train)
+           ~~~~~~~~~~^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 882, in route
+    return self.route(q, train)
+           ~~~~~~~~~~^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 882, in route
+    return self.route(q, train)
+           ~~~~~~~~~~^^^^^^^^^^
+  [Previous line repeated 12 more times]
+  File "/marimo/pv/insp/gnm.py", line 874, in route
+    sc = self.fn_keys() @ q
+         ~~~~~~~~~~~~^^
+  File "/marimo/pv/insp/gnm.py", line 869, in fn_keys
+    self._fk = torch.stack([self.rows_query(self.FI[f] + self.mark) for f in range(int(self.n_fn))])
+                            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 863, in rows_query
+    h, _ = self.run(rows)
+           ~~~~~~~~^^^^^^
+  File "/marimo/pv/insp/gnm.py", line 718, in run
+    out = lm()[1](inputs_embeds=embs[None], output_hidden_states=True, output_attentions=attn)
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/site-packages/transformers/utils/generic.py", line 911, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/site-packages/transformers/models/gpt2/modeling_gpt2.py", line 699, in forward
+    logits = self.lm_head(hidden_states[:, slice_indices, :])
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/site-packages/torch/nn/modules/linear.py", line 134, in forward
+    return F.linear(input, self.weight, self.bias)
+           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 74.00 MiB. GPU 0 has a total capacity of 94.97 GiB of which 59.56 MiB is free. Process 1 has 94.91 GiB memory in use. Of the allocated memory 94.19 GiB is allocated by PyTorch, and 35.87 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
