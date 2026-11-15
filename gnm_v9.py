@@ -1917,9 +1917,9 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     test_sizes = [("add", 2), ("add", 4), ("add", 6), ("chain", 2), ("chain", 4), ("chain", 6), ("lookup", 1), ("compose", 1)]
     demos = [v10_task(k, rng, s) for k, s in train_sizes for _ in range(n_demo // len(train_sizes))]
     seen_q = {d[1] for d in demos}
-    for i, (facts, q, ans, st) in enumerate(demos):
-        keep_trace(G, q, st, i)
-    print(f"v10: {len(demos)} demo traces (sizes {train_sizes}); kept memory starts with their {len(G.ltm)} solved nodes; "
+    # kept memory holds only its own checked right runs, not the demos' nodes (11-15 v10h: with the demos' solved nodes
+    # in every context each demo was unique, it memorised them -- loss .002 -- and answered chains in one step)
+    print(f"v10: {len(demos)} demo traces (sizes {train_sizes}); kept memory starts empty (own checked runs go in); "
           f"test sizes {test_sizes} (add / chain longer than any demo)", flush=True)
     ne = 2 if smoke else 40
 
@@ -1939,7 +1939,11 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
                 run = []
             i = random.randrange(len(traces))
             facts, q, ans, tr = traces[i]
+            saved = G.ltm
+            if random.random() < .5:                     # half the traces without kept memory: must solve both ways,
+                G.ltm = []                               # cannot memorise a trace by its unique kept context
             L = v10_demo_loss(G, facts, q, tr, src=i)
+            G.ltm = saved
             opt.zero_grad()
             L.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.)
