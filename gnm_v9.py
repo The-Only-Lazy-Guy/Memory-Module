@@ -959,16 +959,23 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
     rng = random.Random(seed)
     res = {k: [0., 0., 0, 0] for k in ("LM alone", "LM + text in context", "LM + GNM memory", "LM + another's memory")}
     prev = None
-    nodes = []
+    nodes, hits = [], [0, 0]
     for b in range(0, len(arts) - together + 1, together):
         group = arts[b:b + together]
-        mem = Memory()
-        for a in group:
-            read(G, mem, a)
+        mem, src = Memory(), []
+        for ai, a in enumerate(group):
+            for si, ids in enumerate(a["ids"]):
+                before = mem.n
+                G.step(mem, ids)
+                src += [(ai, si)] * (mem.n - before)
         nodes.append(mem.n)
         ctx = [t for a in group for ids in a["ids"] for t in ids]
-        for a in group:
+        for ai, a in enumerate(group):
             for p, t in quiz(a, rng, nq):
+                si = next(i for i, ids in enumerate(a["ids"]) if ids[:len(p)] == p)
+                sel = G.retrieve(mem, G.query(p))[0][:G.topk]
+                hits[0] += any(i < len(src) and src[i] == (ai, si) for i in sel)
+                hits[1] += 1
                 readers = [("LM alone", Memory(), []), ("LM + text in context", Memory(), ctx), ("LM + GNM memory", mem, [])]
                 if prev is not None:                       # control: the memory of other article(s) -- is it the content that helps?
                     readers.append(("LM + another's memory", prev, []))
@@ -990,7 +997,8 @@ def eval_e1(G, arts, seed=1, nq=6, together=1, show=0):
             p, t = quiz(group[0], random.Random(b), 1)[0]
             print(f"     blank: {tk.decode(p)!r} -> truth {tk.decode(t)!r} | memory says {tk.decode(G.say(mem, p, len(t)))!r} | "
                   f"alone says {tk.decode(G.say(Memory(), p, len(t)))!r}")
-    print(f"\n{together} article(s) per memory, {len(nodes)} memories, {sum(nodes) / max(1, len(nodes)):.0f} nodes each:")
+    print(f"\n{together} article(s) per memory, {len(nodes)} memories, {sum(nodes) / max(1, len(nodes)):.0f} nodes each; "
+          f"a blank's top-{G.topk} holds a node of its own sentence {hits[0]}/{hits[1]}:")
     for name, (nll, ac, ex, n) in res.items():
         if n:
             print(f"  {name:>24}: nll {nll / n:.3f} | token acc {ac / n:.3f} | exact span {ex}/{n}", flush=True)
