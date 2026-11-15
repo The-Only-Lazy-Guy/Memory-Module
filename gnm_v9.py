@@ -1878,7 +1878,7 @@ def v10_eval(G, kinds_sizes, n=40, seed=11, show=0, use_ltm=True, skip_q=frozens
     if not use_ltm:
         G.ltm = []
     rng = random.Random(seed)
-    out, used = {}, {}
+    out, used, need_hit = {}, {}, {}
     nk_steps = n_steps = 0
     for kind, size in kinds_sizes:
         hit = j = 0
@@ -1892,6 +1892,15 @@ def v10_eval(G, kinds_sizes, n=40, seed=11, show=0, use_ltm=True, skip_q=frozens
             tr = []
             got, steps, _ = solve(G, mem, tk(" " + q)["input_ids"], trace=tr)
             hit += got == ans
+            # diagnosis only (never trained on): at each step, is the fact the step needs (a given fact holding every
+            # capitalised name of the step's text) among what was fetched?
+            own = [tuple(tk(" " + f)["input_ids"]) for f in facts]
+            for focus, node, done in steps:
+                names = [w.strip("?.,") for w in tk.decode(focus.ids).split() if w[:1].isupper() and w not in ("Who", "What", "Which", "The")]
+                need = {o for o in own if names and all(nm in tk.decode(list(o)) for nm in names)}
+                if need:
+                    fetched, _ = G.fetch(mem, G.query(focus.ids), exclude={focus})
+                    need_hit.setdefault(kind, []).append(any(tuple(x.ids) in need for x in fetched))
             n_steps += len(tr)
             nk_steps += sum(not t.endswith("fetched 0)") for t in tr)
             for t in tr:
@@ -1904,6 +1913,7 @@ def v10_eval(G, kinds_sizes, n=40, seed=11, show=0, use_ltm=True, skip_q=frozens
         out[f"{kind}{size}"] = hit / n
     G.ltm = saved
     G.train()
+    used["needed fact fetched"] = {k: f"{sum(v) / max(1, len(v)):.0%}" for k, v in need_hit.items()}
     return out, nk_steps / max(1, n_steps), used
 
 
@@ -1922,26 +1932,37 @@ def v10_recall(G, kinds_sizes, n=30, seed=31, show=True):
             keep_facts(G, facts, "recall")
             qs.append((kind, size, q, ans, {tuple(tk(" " + f)["input_ids"]) for f in facts}))
     G.refresh_ltm()
-    out, nk, ns, shown, hit = {}, 0, 0, set(), {}
+    out, nk, ns, shown, hit, need_hit = {}, 0, 0, set(), {}, {}
     for kind, size, q, ans, own in qs:
         tr = []
         got, steps, _ = solve(G, [], tk(" " + q)["input_ids"], trace=tr)
         out.setdefault(f"{kind}{size}", []).append(got == ans)
         ns += len(tr)
         nk += sum(not t.endswith("fetched 0)") for t in tr)
-        # fetch hit: at each step, is one of this question's own facts among the fetched kept nodes?
+        # fetch hit: at each step, is one of this question's own facts among the fetched kept nodes? and the fact this
+        # step needs (diagnosis only, never trained on: an own fact holding every capitalised name of the step's text)
+        lines = []
         for focus, node, done in steps:
-            fetched, _ = G.fetch([], G.query(focus.ids))
+            fetched, wts = G.fetch([], G.query(focus.ids))
             hit.setdefault(f"{kind}{size}", []).append(any(tuple(x.ids) in own for x in fetched))
+            names = [w.strip("?.,") for w in tk.decode(focus.ids).split() if w[:1].isupper() and w not in ("Who", "What", "Which", "The")]
+            need = [o for o in own if names and all(nm in tk.decode(list(o)) for nm in names)]
+            if need:
+                need_hit.setdefault(f"{kind}{size}", []).append(any(tuple(x.ids) in need for x in fetched))
+            if show and (kind, size) not in shown:
+                top = sorted(zip(wts, fetched), key=lambda z: -float(z[0]))[:3]
+                lines.append(f"     fetched for {tk.decode(focus.ids)!r}: " + "; ".join(
+                    f"{tk.decode(x.ids).strip()!r} ({float(w_):.1f}{', own' if tuple(x.ids) in own else ''})" for w_, x in top))
         if show and (kind, size) not in shown:
             shown.add((kind, size))
-            print(f"\n  [recall {kind} {size}] {q} (truth {ans}) -> {got}\n" + "\n".join(tr[:10]), flush=True)
+            print(f"\n  [recall {kind} {size}] {q} (truth {ans}) -> {got}\n" + "\n".join(tr[:10]) + "\n" + "\n".join(lines[:10]), flush=True)
     n_kept = len(G.ltm)
     G.ltm, G._ltm_ids = base, base_ids
     G.train()
     return (f"recall (facts read earlier, none given; kept memory {n_kept} nodes): "
             + ", ".join(f"{k} {sum(v) / len(v):.0%}" for k, v in out.items()) + f" | steps fetching a kept node {nk / max(1, ns):.0%}"
-            + " | steps whose top-6 kept holds one of its own facts: " + ", ".join(f"{k} {sum(v) / max(1, len(v)):.0%}" for k, v in hit.items()))
+            + " | steps whose top-6 kept holds one of its own facts: " + ", ".join(f"{k} {sum(v) / max(1, len(v)):.0%}" for k, v in hit.items())
+            + " | ... the fact the step needs: " + ", ".join(f"{k} {sum(v) / max(1, len(v)):.0%}" for k, v in need_hit.items()))
 
 
 @torch.no_grad()
@@ -2017,7 +2038,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     def report(tag, res, fk, used, extra=""):
         print(f"{tag} | " + ", ".join(f"{k} {v:.0%}" for k, v in res.items())
               + f" | steps fetching a kept node {fk:.0%}; skills {len(G.skills)}; skills used per kind "
-              + "; ".join(f"{k}: " + " ".join(f"{s}x{c}" for s, c in sorted(u.items())) for k, u in used.items()) + extra, flush=True)
+              + "; ".join(f"{k}: " + " ".join(f"{s}x{c}" if isinstance(c, int) else f"{s} {c}" for s, c in sorted(u.items())) for k, u in used.items()) + extra, flush=True)
 
     def fit(traces, steps):
         G.train()
@@ -2137,8 +2158,19 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
         report(f"  loss {l:.3f}; with kept memory", *v10_eval(G, test_sizes, n=ne, show=1, skip_q=seen_q))
         report("  kept memory empty", *v10_eval(G, test_sizes, n=ne, use_ltm=False, skip_q=seen_q))
         print("  " + v10_recall(G, recall_sizes, n=2 if smoke else 30, show=last), flush=True)
+        v10_save(G, os.environ.get("V10_SAVE", ""))
         if last:
             print("  " + v10_reuse(G, n=2 if smoke else 20), flush=True)
+
+
+def v10_save(G, path):
+    """the model + its skills + kept memory (ids, cached states, source) -- for diagnosis without retraining"""
+    if not path:
+        return
+    torch.save({"state": G.state_dict(), "ex": [t.detach().cpu() for t in G.ex.params()],
+                "skills": [(s.ids, s.H.cpu(), s.expert) for s in G.skills],
+                "ltm": [(n.ids, n.H.cpu(), n.src) for n in G.ltm]}, path)
+    print(f"  saved {path} (kept memory {len(G.ltm)} nodes)", flush=True)
 
 
 def v10_fitdiag(steps=300):
