@@ -377,3 +377,20 @@ round 5: right runs found 70/200 (kept traces 363, kept memory 4309 nodes), 213s
    focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Lovin' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Lovin' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Samer
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Samer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Samer' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the weight of Tordun? (truth 91) -> 91
+   focus ' What is the weight of Tordun?' -> skill s0 writes ' 91' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Sagor in? (truth Rillo) -> Merril
+   focus ' Which family is Sagor in?' -> skill s0 writes ' Which family is the genus Gordun in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Gordun in?' -> skill s0 writes ' Merril' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Sagor in?' -> skill s0 writes ' Merril' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 0.549; with kept memory | add2 0%, add4 0%, add6 0%, chain2 22%, chain4 0%, chain6 5%, lookup1 95%, compose1 15% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x764; chain: s0x432; lookup: s0x40; compose: s0x162; needed fact fetched: chain 100% compose 100% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 30%, chain4 0%, chain6 0%, lookup1 98%, compose1 20% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x891; chain: s0x531; lookup: s0x40; compose: s0x221; needed fact fetched: chain 100% compose 100% lookup 100%
+  recall (facts read earlier, none given; kept memory 4902 nodes): chain2 10%, chain4 0%, lookup1 60%, compose1 13% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 97%, chain4 92%, lookup1 100%, compose1 73% | ... the fact the step needs: chain2 100%, chain4 100%, lookup1 100%, compose1 96%
+  saved /marimo/out/v10o.pt (kept memory 4309 nodes)
