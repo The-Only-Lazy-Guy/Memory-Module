@@ -1,0 +1,165 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4547.00it/s]
+E1: 528 articles (468 train, 60 held out), LM gpt2, device cuda
+
+FIRE on sentence 0: ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae, whose common name comes from an Indian belief that consumption of its meat promotes lactation.'
+   fetched: nothing (memory empty)
+   slot 0: span starts at ' family' (p 1.00): ' family' ' C' 'arch' 'ar' 'hin' 'idae' ',' ' whose' ' common' ' name' ' comes' ' from' ' an' ' Indian' ' belief' ' that'
+   slot 1: span starts at ' a' (p 1.00): ' a' ' species' ' of' ' requ' 'iem' ' shark' ',' ' and' ' part' ' of' ' the' ' family' ' C' 'arch' 'ar' 'hin'
+   slot 2: span starts at ' shark' (p 1.00): ' shark' ',' ' and' ' part' ' of' ' the' ' family' ' C' 'arch' 'ar' 'hin' 'idae' ',' ' whose' ' common' ' name'
+   slot 3: span starts at ' of' (p 1.00): ' of' ' the' ' family' ' C' 'arch' 'ar' 'hin' 'idae' ',' ' whose' ' common' ' name' ' comes' ' from' ' an' ' Indian'
+   -> NEW n0: says ' the earth is the center of the universe.\n'; relations []
+   -> NEW n1: says 'idae.\n\nThe shark is a member of'; relations []
+   -> NEW n2: says ' is the "Carcharhinidae" ('; relations []
+   -> NEW n3: says ' word for "crown" (carchar'; relations []
+   gates open: 4/4; woke []; memory now 4 nodes
+
+FIRE on sentence 1: ' The largest and most widely distributed member of its genus, the milk shark typically measures 1.1 m (3.6 ft) long, and can be found in coastal tropical waters throughout the eastern Atlantic and the Indo-Pacific regions.'
+   fetched n0 (written at sentence 0, key score +0.56): says ' the earth is the center of the universe.\n'
+   fetched n1 (written at sentence 0, key score +0.61): says 'idae.\n\nThe shark is a member of'
+   fetched n2 (written at sentence 0, key score +0.60): says ' is the "Carcharhinidae" ('
+   fetched n3 (written at sentence 0, key score +0.57): says ' word for "crown" (carchar'
+   slot 0: span starts at ' genus' (p 1.00): ' genus' ',' ' the' ' milk' ' shark' ' typically' ' measures' ' 1' '.' '1' ' m' ' (' '3' '.' '6' ' ft'
+   slot 1: span starts at ' its' (p 1.00): ' its' ' genus' ',' ' the' ' milk' ' shark' ' typically' ' measures' ' 1' '.' '1' ' m' ' (' '3' '.' '6'
+   slot 2: span starts at ')' (p 1.00): ')' ' long' ',' ' and' ' can' ' be' ' found' ' in' ' coastal' ' tropical' ' waters' ' throughout' ' the' ' eastern' ' Atlantic' ' and'
+   slot 3: span starts at ' throughout' (p 1.00): ' throughout' ' the' ' eastern' ' Atlantic' ' and' ' the' ' Indo' '-' 'Pacific' ' regions' '.'
+   -> NEW n4: says ') long and weighs about 1.4 kg ('; relations []
+   -> NEW n5: says ' ft) long and weighs about 1.4 kg'; relations []
+   -> NEW n6: says ' Pacific oceans.\n\nThe species is found in'; relations []
+   -> NEW n7: says ' The first known example of a large-scale,'; relations []
+   gates open: 4/4; woke []; memory now 8 nodes
+
+FIRE on sentence 2: ' Occurring from the surface to a depth of 200 m (660 ft), this species is common near beaches and in estuaries, and has been recorded swimming up rivers in Cambodia.'
+   fetched n0 (written at sentence 0, key score +0.70): says ' the earth is the center of the universe.\n'
+   fetched n1 (written at sentence 0, key score +0.74): says 'idae.\n\nThe shark is a member of'
+   fetched n2 (written at sentence 0, key score +0.73): says ' is the "Carcharhinidae" ('
+   fetched n3 (written at sentence 0, key score +0.71): says ' word for "crown" (carchar'
+   fetched n4 (written at sentence 1, key score +0.68): says ') long and weighs about 1.4 kg ('
+   fetched n5 (written at sentence 1, key score +0.73): says ' ft) long and weighs about 1.4 kg'
+   fetched n6 (written at sentence 1, key score +0.80): says ' Pacific oceans.\n\nThe species is found in'
+   fetched n7 (written at sentence 1, key score +0.81): says ' The first known example of a large-scale,'
+   slot 0: span starts at '660' (p 1.00): '660' ' ft' '),' ' this' ' species' ' is' ' common' ' near' ' beaches' ' and' ' in' ' est' 'u' 'aries' ',' ' and'
+   slot 1: span starts at ' this' (p 1.00): ' this' ' species' ' is' ' common' ' near' ' beaches' ' and' ' in' ' est' 'u' 'aries' ',' ' and' ' has' ' been' ' recorded'
+   slot 2: span starts at ' Cambodia' (p 1.00): ' Cambodia' '.'
+   slot 3: span starts at ' near' (p 1.00): ' near' ' beaches' ' and' ' in' ' est' 'u' 'aries' ',' ' and' ' has' ' been' ' recorded' ' swimming' ' up' ' rivers' ' in'
+   -> NEW n8: says ' is a member of the family of the "H'; relations []
+   -> NEW n9: says ' in the wild for more than 100 years.\n'; relations []
+   -> NEW n10: says '\n\nThe following is a list of the most'; relations []
+   -> NEW n11: says ' the Mediterranean.\n\nThe researchers say the findings'; relations []
+   gates open: 4/4; woke []; memory now 12 nodes
+
+FIRE on sentence 3: ' Juveniles are known to inhabit tidal pools and seagrass meadows.'
+   fetched n1 (written at sentence 0, key score +0.68): says 'idae.\n\nThe shark is a member of'
+   fetched n2 (written at sentence 0, key score +0.68): says ' is the "Carcharhinidae" ('
+   fetched n6 (written at sentence 1, key score +0.78): says ' Pacific oceans.\n\nThe species is found in'
+   fetched n7 (written at sentence 1, key score +0.76): says ' The first known example of a large-scale,'
+   fetched n8 (written at sentence 2, key score +0.80): says ' is a member of the family of the "H'
+   fetched n9 (written at sentence 2, key score +0.73): says ' in the wild for more than 100 years.\n'
+   fetched n10 (written at sentence 2, key score +0.67): says '\n\nThe following is a list of the most'
+   fetched n11 (written at sentence 2, key score +0.65): says ' the Mediterranean.\n\nThe researchers say the findings'
+   slot 0: span starts at ' known' (p 1.00): ' known' ' to' ' inhabit' ' tidal' ' pools' ' and' ' se' 'ag' 'r' 'ass' ' me' 'adows' '.'
+   slot 1: span starts at ' tidal' (p 1.00): ' tidal' ' pools' ' and' ' se' 'ag' 'r' 'ass' ' me' 'adows' '.'
+   slot 2: span starts at 'iles' (p 1.00): 'iles' ' are' ' known' ' to' ' inhabit' ' tidal' ' pools' ' and' ' se' 'ag' 'r' 'ass' ' me' 'adows' '.'
+   slot 3: span starts at ' known' (p 1.00): ' known' ' to' ' inhabit' ' tidal' ' pools' ' and' ' se' 'ag' 'r' 'ass' ' me' 'adows' '.'
+   -> NEW n12: says ' A.D. 150-150.\n\n'; relations []
+   -> NEW n13: says '\n\nThe first of these was the "B'; relations []
+   -> NEW n14: says '.\n\nThe species is found in the eastern'; relations []
+   -> NEW n15: says ' A.D. 150-150.\n\n'; relations []
+   gates open: 4/4; woke []; memory now 16 nodes
+
+FIRE on sentence 4: ' The milk shark has a slender body with a long, pointed snout and large eyes, and is a nondescript gray above and white below.'
+   fetched n1 (written at sentence 0, key score +0.72): says 'idae.\n\nThe shark is a member of'
+   fetched n2 (written at sentence 0, key score +0.70): says ' is the "Carcharhinidae" ('
+   fetched n3 (written at sentence 0, key score +0.68): says ' word for "crown" (carchar'
+   fetched n5 (written at sentence 1, key score +0.70): says ' ft) long and weighs about 1.4 kg'
+   fetched n6 (written at sentence 1, key score +0.76): says ' Pacific oceans.\n\nThe species is found in'
+   fetched n7 (written at sentence 1, key score +0.75): says ' The first known example of a large-scale,'
+   fetched n8 (written at sentence 2, key score +0.82): says ' is a member of the family of the "H'
+   fetched n9 (written at sentence 2, key score +0.72): says ' in the wild for more than 100 years.\n'
+   slot 0: span starts at ' milk' (p 1.00): ' milk' ' shark' ' has' ' a' ' slender' ' body' ' with' ' a' ' long' ',' ' pointed' ' sn' 'out' ' and' ' large' ' eyes'
+   slot 1: span starts at ' a' (p 1.00): ' a' ' long' ',' ' pointed' ' sn' 'out' ' and' ' large' ' eyes' ',' ' and' ' is' ' a' ' nond' 'esc' 'ript'
+   slot 2: span starts at ' eyes' (p 1.00): ' eyes' ',' ' and' ' is' ' a' ' nond' 'esc' 'ript' ' gray' ' above' ' and' ' white' ' below' '.'
+   slot 3: span starts at ' milk' (p 1.00): ' milk' ' shark' ' has' ' a' ' slender' ' body' ' with' ' a' ' long' ',' ' pointed' ' sn' 'out' ' and' ' large' ' eyes'
+   -> NEW n16: says '. It is a great fin fin fin, and'; relations []
+   -> NEW n17: says ', white-haired man in a black suit and'; relations []
+   -> NEW n18: says ' are mostly black and brown, with a few white'; relations []
+   -> NEW n19: says '. It is a great fin fin fin, and'; relations []
+   gates open: 4/4; woke []; memory now 20 nodes
+
+FIRE on sentence 5: ' This shark can be distinguished from similar species in its range by the long furrows at the corners of its mouth, and seven to 15 enlarged pores just above them ..'
+   fetched n1 (written at sentence 0, key score +0.69): says 'idae.\n\nThe shark is a member of'
+   fetched n2 (written at sentence 0, key score +0.67): says ' is the "Carcharhinidae" ('
+   fetched n5 (written at sentence 1, key score +0.65): says ' ft) long and weighs about 1.4 kg'
+   fetched n6 (written at sentence 1, key score +0.81): says ' Pacific oceans.\n\nThe species is found in'
+   fetched n7 (written at sentence 1, key score +0.75): says ' The first known example of a large-scale,'
+   fetched n8 (written at sentence 2, key score +0.83): says ' is a member of the family of the "H'
+   fetched n9 (written at sentence 2, key score +0.76): says ' in the wild for more than 100 years.\n'
+   fetched n11 (written at sentence 2, key score +0.67): says ' the Mediterranean.\n\nThe researchers say the findings'
+   slot 0: span starts at ' corners' (p 1.00): ' corners' ' of' ' its' ' mouth' ',' ' and' ' seven' ' to' ' 15' ' enlarged' ' pores' ' just' ' above' ' them' ' ..'
+   slot 1: span starts at ' its' (p 1.00): ' its' ' mouth' ',' ' and' ' seven' ' to' ' 15' ' enlarged' ' pores' ' just' ' above' ' them' ' ..'
+   slot 2: span starts at ' mouth' (p 1.00): ' mouth' ',' ' and' ' seven' ' to' ' 15' ' enlarged' ' pores' ' just' ' above' ' them' ' ..'
+   slot 3: span starts at ' from' (p 1.00): ' from' ' similar' ' species' ' in' ' its' ' range' ' by' ' the' ' long' ' fur' 'rows' ' at' ' the' ' corners' ' of' ' its'
+   -> NEW n20: says ' The water-filled pores are the most important of'; relations []
+   -> NEW n21: says ' .. .. .. .. .. .. .. .. .. ..'; relations []
+   -> NEW n22: says ' .. .. .. .. .. .. .. .. .. ..'; relations []
+   -> NEW n23: says ' mouth.\n\nThe species is found in the'; relations []
+   gates open: 4/4; woke []; memory now 24 nodes
+
+FIRE on sentence 6: ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and crustaceans.'
+   fetched n1 (written at sentence 0, key score +0.67): says 'idae.\n\nThe shark is a member of'
+   fetched n2 (written at sentence 0, key score +0.66): says ' is the "Carcharhinidae" ('
+   fetched n6 (written at sentence 1, key score +0.78): says ' Pacific oceans.\n\nThe species is found in'
+   fetched n7 (written at sentence 1, key score +0.73): says ' The first known example of a large-scale,'
+   fetched n8 (written at sentence 2, key score +0.80): says ' is a member of the family of the "H'
+   fetched n9 (written at sentence 2, key score +0.73): says ' in the wild for more than 100 years.\n'
+   fetched n20 (written at sentence 5, key score +0.69): says ' The water-filled pores are the most important of'
+   fetched n23 (written at sentence 5, key score +0.76): says ' mouth.\n\nThe species is found in the'
+   slot 0: span starts at ' within' (p 1.00): ' within' ' its' ' range' ',' ' the' ' milk' ' shark' ' feeds' ' primarily' ' on' ' small' ' b' 'ony' ' fishes' ',' ' but'
+   slot 1: span starts at 'ony' (p 1.00): 'ony' ' fishes' ',' ' but' ' also' ' takes' ' c' 'ep' 'hal' 'op' 'ods' ' and' ' crust' 'ace' 'ans' '.'
+   slot 2: span starts at ' fishes' (p 1.00): ' fishes' ',' ' but' ' also' ' takes' ' c' 'ep' 'hal' 'op' 'ods' ' and' ' crust' 'ace' 'ans' '.'
+   slot 3: span starts at ' within' (p 1.00): ' within' ' its' ' range' ',' ' the' ' milk' ' shark' ' feeds' ' primarily' ' on' ' small' ' b' 'ony' ' fishes' ',' ' but'
+   -> NEW n24: says ' also on large fish such as the large bluefin'; relations []
+   -> NEW n25: says "\n\nThe team also found that the fish's"; relations []
+   -> NEW n26: says ')\n\nThe first known example of a c'; relations []
+   -> NEW n27: says ' also on large fish such as the large bluefin'; relations []
+   gates open: 4/4; woke []; memory now 28 nodes
+
+FIRE on sentence 7: ' In turn, it often falls prey to larger sharks and possibly marine mammals.'
+   fetched n6 (written at sentence 1, key score +0.81): says ' Pacific oceans.\n\nThe species is found in'
+   fetched n8 (written at sentence 2, key score +0.82): says ' is a member of the family of the "H'
+   fetched n9 (written at sentence 2, key score +0.81): says ' in the wild for more than 100 years.\n'
+   fetched n11 (written at sentence 2, key score +0.75): says ' the Mediterranean.\n\nThe researchers say the findings'
+   fetched n20 (written at sentence 5, key score +0.74): says ' The water-filled pores are the most important of'
+   fetched n23 (written at sentence 5, key score +0.81): says ' mouth.\n\nThe species is found in the'
+   fetched n24 (written at sentence 6, key score +0.70): says ' also on large fish such as the large bluefin'
+   fetched n27 (written at sentence 6, key score +0.70): says ' also on large fish such as the large bluefin'
+   slot 0: span starts at ' turn' (p 1.00): ' turn' ',' ' it' ' often' ' falls' ' prey' ' to' ' larger' ' sharks' ' and' ' possibly' ' marine' ' mammals' '.'
+   slot 1: span starts at ' larger' (p 1.00): ' larger' ' sharks' ' and' ' possibly' ' marine' ' mammals' '.'
+   slot 2: span starts at ' sharks' (p 1.00): ' sharks' ' and' ' possibly' ' marine' ' mammals' '.'
+   slot 3: span starts at ' turn' (p 1.00): ' turn' ',' ' it' ' often' ' falls' ' prey' ' to' ' larger' ' sharks' ' and' ' possibly' ' marine' ' mammals' '.'
+   -> NEW n28: says ', it often falls prey to larger sharks and possibly'; relations []
+   -> NEW n29: says '\n\nThe shark is a large, fast-'; relations []
+   -> NEW n30: says '\n\nThe first known species of fish was found'; relations []
+   -> NEW n31: says ' the shark is a large, fast-moving,'; relations []
+   gates open: 4/4; woke []; memory now 32 nodes
+
+ASK ' Among the most abundant sharks within its range, the milk shark feeds primarily on small bony fishes, but also takes cephalopods and' (truth ' crustaceans.')
+   fetched n1 (sentence 0): says 'idae.\n\nThe shark is a member of'
+   fetched n2 (sentence 0): says ' is the "Carcharhinidae" ('
+   fetched n6 (sentence 1): says ' Pacific oceans.\n\nThe species is found in'
+   fetched n7 (sentence 1): says ' The first known example of a large-scale,'
+   LM with memory says ' other small fish,'; LM alone says ' other small fish,'
+
+ASK ' The milk shark (Rhizoprionodon acutus) is a species of requiem shark, and part of the family Carcharhinidae,' (truth ' whose common name comes from an')
+   fetched n1 (sentence 0): says 'idae.\n\nThe shark is a member of'
+   fetched n4 (sentence 1): says ') long and weighs about 1.4 kg ('
+   fetched n5 (sentence 1): says ' ft) long and weighs about 1.4 kg'
+   fetched n6 (sentence 1): says ' Pacific oceans.\n\nThe species is found in'
+   LM with memory says ' the milk shark typically measures 1'; LM alone says ' which includes the shark family,'
+
+ASK ' In turn, it often falls prey to larger sharks' (truth ' and possibly marine mammals.')
+   fetched n1 (sentence 0): says 'idae.\n\nThe shark is a member of'
+   fetched n2 (sentence 0): says ' is the "Carcharhinidae" ('
+   fetched n6 (sentence 1): says ' Pacific oceans.\n\nThe species is found in'
+   fetched n8 (sentence 2): says ' is a member of the family of the "H'
+   LM with memory says ', and is often found'; LM alone says ', which are more likely'
