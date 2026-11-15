@@ -393,3 +393,54 @@ round 6: right runs found 60/200 (kept traces 403, kept memory 5135 nodes), 209s
   kept by kind/size (count, mean steps): chain1 1 1.0, chain2 1 23.0, chain4 1 7.0, chain7 1 1.0, compose1 11 4.5, lookup1 45 1.0
     fit step 100: mean loss 0.946, skills 1
     fit step 200: mean loss 0.934, skills 1
+    fit step 300: mean loss 0.906, skills 1
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> 1 4
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s0 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1 4' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 7 9
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.01; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Vindun
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Vindun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Vindun' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Bazeka
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Lovin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Lovin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lovin?' -> skill s0 writes ' Bazeka' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Bazeka' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Baka
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Baka' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the weight of Baba? (truth 86) -> 86
+   focus ' What is the weight of Baba?' -> skill s0 writes ' 86' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Zekmu in? (truth Vingor) -> Gordun
+   focus ' Which family is Zekmu in?' -> skill s0 writes ' Which family is it?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is it?' -> skill s0 writes ' Gordun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekmu in?' -> skill s0 writes ' Gordun' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 0.477; with kept memory | add2 0%, add4 0%, add6 0%, chain2 28%, chain4 10%, chain6 5%, lookup1 78%, compose1 10% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1992; chain: s0x493; lookup: s0x40; compose: s0x122
