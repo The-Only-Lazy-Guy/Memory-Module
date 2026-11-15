@@ -1,0 +1,28 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3938.29it/s]
+selftest: zero bias == no bias: True; next token without bias ' V', with the fact's tokens masked ' the' (max logit change 28.50)
+v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('chain', 1), ('chain', 2)]); test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6)] (longer than any demo)
+Traceback (most recent call last):
+  File "/marimo/pv/v10/gnm.py", line 1899, in <module>
+    v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/v10/gnm.py", line 1683, in v10_run
+    print("  before training: " + ", ".join(f"{k} {v:.0%}" for k, v in v10_eval(G, test_sizes, n=10).items()), flush=True)
+                                                                       ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/marimo/pv/v10/gnm.py", line 1664, in v10_eval
+    got, steps = solve(G, mem, tk(" " + q)["input_ids"], trace=tr)
+                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/v10/gnm.py", line 1567, in solve
+    node, done, e, pd = G.step(mem, focus, temp)
+                        ~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/marimo/pv/v10/gnm.py", line 1539, in step
+    ids, bias, e = self.context(mem, focus, False)
+                   ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/marimo/pv/v10/gnm.py", line 1510, in context
+    for n, wi in zip(fetched, w):
+                 ~~~^^^^^^^^^^^^
+TypeError: 'NoneType' object is not iterable
