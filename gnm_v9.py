@@ -1992,18 +1992,27 @@ def v10_selftest():
     rb = torch.randn(len(ids), device=dev)
     G.ex.active = 0
     out, rows, hd = G.gen(ids, rb, 0., 10)
-    slow = []
+    slow, slow_lg = [], []
     for _ in range(10):
         _, lg, _ = G.lm_run(ids + slow, torch.cat([rb, torch.zeros(len(slow), device=dev)]))
+        slow_lg.append(lg[-1])
         t = int(lg[-1].argmax())
         if t == tk.eos_token_id:
             break
         slow.append(t)
-    Hs, _, _ = G.lm_run(ids + slow + [tk.eos_token_id], torch.cat([rb, torch.zeros(len(slow) + 1, device=dev)]))
+    # the same tokens through the cache, one at a time: logits must match the slow way at every step (11-15 v10e:
+    # comparing greedy texts failed on a bf16 near-tie -- 'the of the' vs 'of of the', states 0.14% apart)
+    _, lg, past = G.lm_run(ids, rb, cache=True)
+    fast_lg, allb = [lg[-1]], rb
+    for t in slow[:len(slow_lg) - 1]:
+        allb = torch.cat([allb, torch.zeros(1, device=dev)])
+        _, lg, past = G.lm_run([t], allb, past=past, cache=True)
+        fast_lg.append(lg[-1])
     G.ex.active = None
-    rel = float((Hs[-1] - hd).norm() / Hs[-1].norm())
-    ok3 = out == slow and rel < .03
-    print(f"selftest 3: cached == slow: {ok3} ({tk.decode(out)!r} vs {tk.decode(slow)!r}; done-state relative diff {rel:.4f})", flush=True)
+    rel = max(float((a - b).abs().max() / b.abs().max()) for a, b in zip(fast_lg, slow_lg))
+    ok3 = rel < .03 and len(fast_lg) == len(slow_lg)
+    print(f"selftest 3: cached == slow: {ok3} (largest relative logit difference over {len(slow_lg)} steps {rel:.4f}; "
+          f"greedy texts {tk.decode(out)!r} / {tk.decode(slow)!r})", flush=True)
     # (4) two skill nodes; a step's loss reaches the skill keys (EK, qry) through the expert weight
     with torch.enable_grad():
         G.spawn_at = 2.                                  # force a second skill
