@@ -11,3 +11,5 @@ E1: 528 articles (28788 train, 60 held out), LM gpt2, device cuda
 /marimo/pv/v9/gnm.py:945: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
 Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
   acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3), gn, rn))
+   largest grads (before clipping): mark 6.5e-01, key.weight 4.8e-01, qry.weight 4.6e-01, gate.weight 2.4e-01
+step 200: blank nll 2.952, round trip 1.727, write cost 0.100, nodes / article 125.9, grad norm 38002.11 (max 7366350.5), row norm 1.64 (token vectors ~3.5), mark 1.31, 311s
