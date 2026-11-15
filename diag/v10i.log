@@ -75,3 +75,4 @@ round 1: right runs found 77/200 (kept traces 125, kept memory 108 nodes), 93s t
     fit step 100: mean loss 0.335, skills 1
     fit step 200: mean loss 0.237, skills 1
     fit step 300: mean loss 0.267, skills 1
+  loss 0.000; with kept memory | add2 0%, add4 0%, add6 0%, chain2 12%, chain4 0%, chain6 8%, lookup1 80%, compose1 20% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1949; chain: s0x1525; lookup: s0x40; compose: s0x278
