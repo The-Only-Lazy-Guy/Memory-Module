@@ -91,3 +91,4 @@ Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/cs
    focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Orpel?' -> expert e3 writes ' Who is the friend of Orpel?' (sub-step, done p 0.00)
    focus ' Who is the friend of Orpel?' -> expert e3 writes ' Karil' (resolves it, done p 1.00)
 round 0 (demos only): loss 0.267, experts 4 | add2 0%, add4 0%, add6 0%, chain2 45%, chain4 10%, chain6 0%
+  kept by kind/size (count, mean steps): chain1 22 1.0, chain2 10 6.0, chain3 6 8.0, chain4 3 7.7
