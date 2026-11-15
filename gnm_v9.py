@@ -688,6 +688,7 @@ class GNM(nn.Module):
         #                                                       stayed ~1/T after 1000 steps -- slots never picked tokens)
         self.wmode = os.environ.get("WRITE", "span")          # span: a node = a span of the input's tokens, in order
         self.spanq = nn.Parameter(torch.randn(K, d) * .02)   # each slot's query for where its span starts
+        self.symkey = os.environ.get("SYMKEY", "1") == "1"   # node keys from the query function on the node's tokens
         self.order = os.environ.get("RET_ORDER", "time")      # fetched nodes given to the LM in write order ('score' = by key)
         self.ctxfix = os.environ.get("CTXFIX", "0") == "1"    # the learned context correction on rows (off: it let the
         #                                                       write skip picking tokens; trace 11-14)
@@ -783,7 +784,13 @@ class GNM(nn.Module):
             pooled = X.view(K, m, d).mean(1)
         self._A, self._H = A.detach(), Hc.detach()                       # (inspection only)
         g = torch.sigmoid(self.gate(pooled)).squeeze(-1)
-        k = F.normalize(self.key(pooled), dim=-1)
+        if self.symkey:                                  # a node's key = the query function on its own tokens: it is
+            k = torch.stack([F.normalize(self.qry(self.center(self.run(rows[j])[0]).mean(0)), dim=-1)   # labelled the
+                             for j in range(K)])        # way it is asked for (11-14: separate key / query projections
+            #                                             found the own sentence 33 / 60 in a 32-node memory; the
+            #                                             oracle, keyed this way untrained, 351 / 360)
+        else:
+            k = F.normalize(self.key(pooled), dim=-1)
         P = None
         if sel:
             fk = torch.stack([mem.k[i] for i in sel])
