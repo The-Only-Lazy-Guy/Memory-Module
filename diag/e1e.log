@@ -13,3 +13,5 @@ Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/cs
   acc.append((float(l1), float(rt), float(cost), sum(1 for v in mem.V if float(v.detach().norm()) > 1e-3), gn, rn))
    largest grads (before clipping): mark 6.5e-01, key.weight 4.8e-01, qry.weight 4.6e-01, gate.weight 2.4e-01
 step 200: blank nll 2.952, round trip 1.727, write cost 0.100, nodes / article 125.9, grad norm 38002.11 (max 7366350.5), row norm 1.64 (token vectors ~3.5), mark 1.31, 311s
+   largest grads (before clipping): mark 6.5e-01, key.weight 5.5e-01, qry.weight 4.5e-01, gate.weight 1.7e-01
+step 400: blank nll 2.939, round trip 1.725, write cost 0.101, nodes / article 126.4, grad norm 2306.32 (max 291754.7), row norm 1.64 (token vectors ~3.5), mark 1.31, 724s
