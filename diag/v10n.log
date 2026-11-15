@@ -212,3 +212,5 @@ round 2: right runs found 57/200 (kept traces 145, kept memory 1699 nodes), 100s
    focus ' Which family is it?' -> skill s0 writes ' Kane' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Which family is Mertha in?' -> skill s0 writes ' Kane' (resolves it, done p 1.00; kept nodes fetched 6)
   loss 0.966; with kept memory | add2 0%, add4 0%, add6 0%, chain2 28%, chain4 15%, chain6 0%, lookup1 92%, compose1 22% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x430; chain: s0x1179; lookup: s0x40; compose: s0x294
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 15%, chain4 20%, chain6 2%, lookup1 95%, compose1 32% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x490; chain: s0x1341; lookup: s0x40; compose: s0x354
+  recall (facts read earlier, none given; kept memory 2297 nodes): chain2 10%, chain4 0%, lookup1 70%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 60%, chain4 44%, lookup1 100%, compose1 77%
