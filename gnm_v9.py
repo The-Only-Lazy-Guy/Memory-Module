@@ -2250,6 +2250,70 @@ def v10_readdiag(path, n=30, seed=41):
         print(f"readdiag {mode}: " + ", ".join(f"{k[1]} {k[2]} {sum(v) / len(v):.0%}" for k, v in sorted(res.items()) if k[0] == mode), flush=True)
 
 
+@torch.no_grad()
+def _path_acc(G, kinds_sizes, n=30, seed=41):
+    """per step written-node exact match on the CORRECT solution path (facts given, no kept memory)"""
+    tk = lm()[0]
+    G.eval()
+    saved, G.ltm = G.ltm, []
+    rng = random.Random(seed)
+    res = {}
+    for kind, size in kinds_sizes:
+        for _ in range(n):
+            facts, q, ans, steps = v10_task(kind, rng, size)
+            mem = []
+            for f in facts:
+                G.store(mem, tk(" " + f)["input_ids"], kind="fact")
+            root = G.store(mem, tk(" " + q)["input_ids"], kind="question")
+            focus = root
+            for text, done in steps:
+                ids = tk(" " + text)["input_ids"]
+                node, d, e, pd, nk = G.step(mem, focus)
+                res.setdefault(f"{kind}{size} {'answer' if done else 'sub-q'}", []).append(tk.decode(node.ids).strip() == tk.decode(ids).strip())
+                H, _, _ = G.lm_run(ids)
+                nd = G.node_from(ids, H, parent=focus)
+                if done:
+                    nxt = _resolve(G, mem, focus, nd)
+                    if focus is root:
+                        break
+                    focus = nxt
+                else:
+                    focus = nd
+    G.ltm = saved
+    G.train()
+    return {k: sum(v) / len(v) for k, v in sorted(res.items())}
+
+
+def v10_dataprobe(sizes=(48, 192, 768), steps=1500):
+    """11-16 probe (measurement only, not the design): is the executor (GPT-2 small + LoRA) short of data or of
+    capacity? Fresh model per size, trained on that many teacher traces (facts given, no kept memory), same steps;
+    per-step accuracy on the correct path + end-to-end accuracy"""
+    train_sizes = [(k, s) for k in ("add", "chain") for s in (1, 2, 3)] + [("lookup", 1), ("compose", 1)]
+    probe = [("chain", 2), ("chain", 3), ("compose", 1), ("lookup", 1), ("add", 2)]
+    for nd in sizes:
+        torch.manual_seed(0)
+        random.seed(0)
+        rng = random.Random(5)
+        G = GNM10().to(dev)
+        demos = [v10_task(k, rng, s_) for k, s_ in train_sizes for _ in range(nd // len(train_sizes))]
+        params = [p for nm, p in G.named_parameters() if p.requires_grad] + G.eparams()
+        opt = torch.optim.AdamW(params, lr=1e-3)
+        for st in range(steps):
+            facts, q, ans, tr = random.choice(demos)
+            L = v10_demo_loss(G, facts, q, tr)
+            opt.zero_grad()
+            L.backward()
+            torch.nn.utils.clip_grad_norm_(params, 1.)
+            opt.step()
+        pa = _path_acc(G, probe)
+        ee, _, _ = v10_eval(G, [("chain", 2), ("chain", 4), ("compose", 1), ("lookup", 1), ("add", 2)], n=40, use_ltm=False)
+        print(f"dataprobe {len(demos)} traces, {steps} steps | per step: " + ", ".join(f"{k} {v:.0%}" for k, v in pa.items())
+              + " | end to end: " + ", ".join(f"{k} {v:.0%}" for k, v in ee.items()), flush=True)
+        for h in G.ex.hooks:
+            h.remove()
+        del G, opt
+
+
 def v10_fitdiag(steps=300):
     """11-15 v10g: demo fit stuck at mean loss ~1.9 with 10 skills. Same 48 demos, fresh model per variant: as is /
     one skill / no kept memory / both; mean loss per 100 steps (lower = imitates the demos)"""
@@ -2584,6 +2648,9 @@ if __name__ == "__main__":
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
         v10_selftest()
         v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
+        raise SystemExit
+    if a.task == "dataprobe":
+        v10_dataprobe()
         raise SystemExit
     if a.task == "readdiag":
         v10_readdiag(os.environ.get("V10_LOAD", "/marimo/out/v10o.pt"))
