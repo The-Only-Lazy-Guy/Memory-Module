@@ -171,3 +171,4 @@ round 1: right runs found 69/200 (kept traces 117, kept memory 919 nodes), 134s 
    focus ' Which family is Zekril in?' -> skill s0 writes ' Merlo' (resolves it, done p 1.00; kept nodes fetched 6)
   loss 3.969; with kept memory | add2 0%, add4 0%, add6 0%, chain2 40%, chain4 0%, chain6 5%, lookup1 92%, compose1 8% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x892; chain: s0x1766; lookup: s0x40; compose: s0x224
   kept memory empty | add2 0%, add4 0%, add6 0%, chain2 25%, chain4 5%, chain6 5%, lookup1 92%, compose1 5% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x909; chain: s0x2001; lookup: s0x40; compose: s0x142
+  recall (facts read earlier, none given; kept memory 1517 nodes): chain2 0%, chain4 0%, lookup1 3%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 7%, chain4 25%, lookup1 6%, compose1 4%
