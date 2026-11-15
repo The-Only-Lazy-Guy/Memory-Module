@@ -145,3 +145,10 @@ round 1: right runs found 56/200 (kept traces 104, kept memory 902 nodes), 98s t
    focus ' Which family is Zekril in?' -> skill s0 writes ' Which family is the genus Mugor in?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' Which family is the genus Mugor in?' -> skill s0 writes ' Ordun' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Which family is Zekril in?' -> skill s0 writes ' Ordun' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 0.637; with kept memory | add2 0%, add4 0%, add6 0%, chain2 20%, chain4 15%, chain6 8%, lookup1 78%, compose1 18% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x796; chain: s0x489; lookup: s0x74; compose: s0x366; needed fact fetched: chain 85% compose 85% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 10%, chain4 10%, chain6 5%, lookup1 88%, compose1 22% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x374; chain: s0x576; lookup: s0x40; compose: s0x177; needed fact fetched: chain 80% compose 89% lookup 100%
+  recall (facts read earlier, none given; kept memory 1500 nodes): chain2 3%, chain4 0%, lookup1 50%, compose1 3% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 76%, chain4 57%, lookup1 100%, compose1 28% | ... the fact the step needs: chain2 97%, chain4 95%, lookup1 100%, compose1 62%
+  saved /marimo/out/v10o.pt (kept memory 902 nodes)
+round 2: right runs found 66/200 (kept traces 170, kept memory 1738 nodes), 110s trying
+  fetch-training pairs 1747
+  kept by kind/size (count, mean steps): add1 1 3.0, chain1 6 1.3, chain2 1 5.0, chain3 7 4.7, chain4 2 3.0, chain5 2 4.0, compose1 8 3.8, lookup1 39 1.0
