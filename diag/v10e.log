@@ -9,3 +9,58 @@ selftest 6: fetch gradient on a fact's key with untrained control 1.10e+00: True
 selftest 4: skill nodes 2, gradient on skill keys 1.47e-02: True
 selftest 5: resolves 1, solved nodes in memory 1, kept 1, fetchable later 1: True
 v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('chain', 2), ('chain', 3), ('lookup', 1), ('compose', 1)]); kept memory starts with their 143 solved nodes; test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6), ('lookup', 1), ('compose', 1)] (add / chain longer than any demo)
+round 0 (demos only): loss 0.482, 108s
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 4
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 7 7 + 1 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 7 + 1 + carry 0 = ?' -> skill s0 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 4' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> 1 1 1 1 1 1 1 1 1 1 1 1
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1 1 1 1 1 1 1 1 1 1 1 1' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 0
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 0' (resolves it, done p 0.97; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Who is the Gorlo
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes '?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '?' -> skill s0 writes ' Who is the boss of Zekor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes '?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '?' -> skill s0 writes ' Gorlo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Who is the Gorlo?' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the Gorlo' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> None
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Pelne' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes 'This is a public service announcement.' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus 'This is a public service announcement.' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'By clicking Register, you agree to have our website use cookies. By continuing to' (sub-step, done p 0.18; kept nodes fetched 6)
+   focus 'By clicking Register, you agree to have our website use cookies. By continuing to' -> skill s0 writes ' use our website, you agree to our use of cookies, we may share your' (resolves it, done p 0.98; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes ' information with third parties. We may also share your information with the following companies:' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' information with third parties. We may also share your information with the following companies:' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes "By clicking Register, you agree to Etsy's Privacy Policy and Terms of Use." (sub-step, done p 0.00; kept nodes fetched 6)
+   focus "By clicking Register, you agree to Etsy's Privacy Policy and Terms of Use." -> skill s0 writes "\n\n\nBeginning of this dialog, you agree to Etsy's Terms of Use" (resolves it, done p 1.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes " and Privacy Policy.\n\n\nDid you know you agree to Etsy's Terms" (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' information with third parties. We may also share your information with the following companies:' -> skill s0 writes ' of Use and Privacy Policy?' (sub-step, done p 0.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Pelne
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of the boss of the boss of Dunzek? Who is' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of Dunzek? Who is' -> skill s0 writes ' the boss boss boss of the boss of the boss of Dunzek? Pelne' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Pelne' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the age of Mutor? (truth 60) -> 75
+   focus ' What is the age of Mutor?' -> skill s0 writes ' 75' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Zekril in? (truth Ordun) -> <|endoftext|>
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which genus is Zekril in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Zekril in?' -> skill s0 writes ' Pelgor' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Pelgor' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which genus is Zekril in?' -> skill s0 writes 'The Pelgor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+  with kept memory | add2 0%, add4 0%, add6 0%, chain2 0%, chain4 0%, chain6 0%, lookup1 2%, compose1 0% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x322; chain: s0x1346; lookup: s0x40; compose: s0x156
