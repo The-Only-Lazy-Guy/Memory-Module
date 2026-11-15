@@ -919,16 +919,19 @@ def read(G, mem, art, train=False):
     return cost, rt / len(art["ids"])
 
 
-def train_e1(G, arts, steps, lr=3e-4, nq=4, log=200):
+def train_e1(G, arts, steps, lr=3e-4, nq=4, log=200, together=1):
     opt = torch.optim.AdamW([p for p in G.parameters() if p.requires_grad], lr=lr)
     G.train()
     rng = random.Random(0)
     t0, acc = time.time(), []
     for st in range(steps):
-        art = rng.choice(arts)
-        mem = Memory()
-        cost, rt = read(G, mem, art, train=True)
-        qs = quiz(art, rng, nq)
+        group = [rng.choice(arts) for _ in range(together)]   # several articles in one memory: the blank's sentence must
+        mem = Memory()                                      # be found among others (e1d: 1-article episodes, 20-article
+        cost, rt = 0., 0.                                   # memories fell to the LM alone, .381 vs .375)
+        for art in group:
+            c, r = read(G, mem, art, train=True)
+            cost, rt = cost + c, rt + r / together
+        qs = [q for art in group for q in quiz(art, rng, max(1, nq // together))]
         l1 = sum(G.say_nll(mem, p, t)[0] for p, t in qs) / max(1, len(qs))
         loss = l1 + .3 * rt + cost
         opt.zero_grad()
@@ -1138,6 +1141,7 @@ if __name__ == "__main__":
     ap.add_argument("--load", default="")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
+    ap.add_argument("--together", type=int, default=1)   # articles read into one memory per training episode
     a = ap.parse_args()
     torch.manual_seed(0)
     random.seed(0)
@@ -1167,7 +1171,7 @@ if __name__ == "__main__":
         raise SystemExit
     eval_e1(G, held[:10 if not a.smoke else 2], show=0)
     print("(above: before training)", flush=True)
-    train_e1(G, train, a.steps, log=200 if not a.smoke else 2)
+    train_e1(G, train, a.steps, log=200 if not a.smoke else 2, together=a.together)
     eval_e1(G, held, show=3 if not a.smoke else 1)
     eval_e1(G, held, together=20 if not a.smoke else 2)
     if a.save:
