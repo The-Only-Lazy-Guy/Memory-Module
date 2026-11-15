@@ -702,6 +702,7 @@ class GNM(nn.Module):
         self.cost = float(os.environ.get("WRITE_COST", ".001"))
         self.dup_cost = float(os.environ.get("DUP_COST", ".02"))   # per token stored twice
         self.FI = nn.Parameter(torch.randn(32, 4, d) * .11)   # §8 F1: function nodes (instruction rows), 32 slots
+        self.FK = nn.Parameter(F.normalize(torch.randn(32, dk), dim=-1))   # their labels (learned; spawn sets the want)
         self.register_buffer("n_fn", torch.tensor(4))        # active functions (spawned up to 32)
         self._fk = None
         self.spawn_at = float(os.environ.get("SPAWN_AT", ".3"))
@@ -864,21 +865,20 @@ class GNM(nn.Module):
         return F.normalize(self.qry(self.center(h).mean(0)), dim=-1)
 
     def fn_keys(self):
-        """F2: each active function's key = the query function on its instruction rows (cached for an episode)"""
-        if self._fk is None:
-            self._fk = torch.stack([self.rows_query(self.FI[f] + self.mark) for f in range(int(self.n_fn))])
-        return self._fk
+        """F2: each active function's label (learned; a spawned function is labelled with the want that needed it --
+        11-15 trace: labels made by the LM from random instruction rows were all alike, every function scored .99)"""
+        return F.normalize(self.FK[:int(self.n_fn)], dim=-1)
 
     def route(self, q, train):
         """F1 / F3: the change's signal meets the functions' keys; none good enough -> spawn one (copy of the best)"""
         sc = self.fn_keys() @ q
         n = len(sc)
         if train and float(sc.max()) < self.spawn_at and n < self.FI.shape[0]:
-            with torch.no_grad():
-                b = int(sc.argmax())
-                self.FI[n] = self.FI[b] + torch.randn_like(self.FI[b]) * .02
+            with torch.no_grad():                            # a new function, made for this want: its label is the want
+                b = int(sc.argmax())                         # (11-15: a copy of the best kept the low score and spawned
+                self.FI[n] = self.FI[b] + torch.randn_like(self.FI[b]) * .02   # again, recursively, out of memory)
+                self.FK[n] = q.detach()
                 self.n_fn += 1
-            self._fk = None
             return self.route(q, train)
         p = F.softmax(sc / .1, 0)
         f = int(torch.multinomial(p, 1)) if train else int(p.argmax())
@@ -901,9 +901,10 @@ class GNM(nn.Module):
         att_mem = torch.zeros(max(1, n_rows), device=dev)
         for t in range(self.m_out):
             p = F.softmax(o.logits[0, -1].float() / self.tau_o, -1)
-            e = p @ wte
-            outs.append(e)
-            ids_out.append(int(p.argmax()))
+            top = int(p.argmax())
+            e = wte[top] + (p - p.detach()) @ wte            # the token it produces, forward; gradient through its
+            outs.append(e)                                   # probabilities (11-15 trace: expected vectors drifted to
+            ids_out.append(top)                              # "the the the")
             with ac:
                 o = M(inputs_embeds=e[None, None], past_key_values=o.past_key_values, use_cache=True,
                       output_attentions=True, output_hidden_states=True)
