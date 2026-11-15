@@ -1460,7 +1460,7 @@ class GNM10(nn.Module):
         # spawning off (-2: never): 11-15 fitdiag, 300 demo steps -- 9-10 spawned skills: loss 2.3 -> 2.2 (no learning);
         # one skill: 2.0 -> 0.77. Returns when interference between skills is measured (my 11-15 plan)
         self.spawn_at = float(os.environ.get("SPAWN_AT", "-2"))
-        self.skills, self.ltm, self._ltm_ids = [], [], set()   # skill nodes; kept memory (solved nodes)
+        self.skills, self.ltm, self._ltm_ids, self._kept_by_ids = [], [], set(), {}   # skill nodes; kept memory (solved nodes)
 
     def eparams(self):
         return self.ex.params()
@@ -1518,12 +1518,18 @@ class GNM10(nn.Module):
         self._refresh(n)
         self.ltm.append(n)
         self._ltm_ids.add(t)
+        self._kept_by_ids[t] = n
 
     @torch.no_grad()
     def _refresh(self, n):
         n.C = self.ctl(n.H)
         Hp, Cp = self.pool(n.H, n.C)
         n.key = F.normalize(self.qry(Hp) + self.keyc(Cp), dim=-1)
+
+    def key_of(self, n):
+        """a kept node's key from its cached states, with gradient (fetch training)"""
+        Hp, Cp = self.pool(n.H, self.ctl(n.H))
+        return F.normalize(self.qry(Hp) + self.keyc(Cp), dim=-1)
 
     def refresh_ltm(self):
         """kept nodes' control and keys from their cached states with the current parts (they learn meanwhile)"""
@@ -2038,12 +2044,47 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
                 rec = [f for j in random.sample(range(len(traces)), min(8, len(traces))) if j != i for f in traces[j][0]]
             L = v10_demo_loss(G, facts, q, tr, src=i, recall=rec)
             G.ltm = saved
+            L = L + fetch_loss()
             opt.zero_grad()
             L.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.)
             opt.step()
             run.append(float(L))
         return float(L)
+
+    # fetch training from its own experience (my proposal, v10n): every focus it handled (the question and each
+    # sub-question it wrote, right or wrong) with the facts read in that episode; the focus's query should rank those
+    # kept facts above other kept nodes. 11-15 v10m: from demos alone, own fact in the kept top-6: lookup 67% -> 6%
+    # once kept memory grew to 1517 nodes
+    fetch_pairs = []
+
+    def add_pairs(focus_ids_list, facts):
+        own = frozenset(tuple(tk(" " + f)["input_ids"]) for f in facts)
+        if own:
+            for fi in focus_ids_list:
+                fetch_pairs.append((list(fi), own))
+        del fetch_pairs[:-20000]
+
+    for d in demos:
+        add_pairs([tk(" " + d[1])["input_ids"]] + [tk(" " + t)["input_ids"] for t, dn in d[3] if not dn], d[0])
+
+    def fetch_loss(k=8, n_neg=256):
+        if not fetch_pairs or len(G.ltm) < 10:
+            return 0.
+        neg = random.sample(G.ltm, min(n_neg, len(G.ltm)))
+        Kn = torch.stack([G.key_of(n) for n in neg])
+        L, m = 0., 0
+        for focus_ids, own in random.sample(fetch_pairs, min(k, len(fetch_pairs))):
+            pos = [G._kept_by_ids[t] for t in own if t in G._kept_by_ids]
+            if not pos:
+                continue
+            Kp = torch.stack([G.key_of(n) for n in pos])
+            keep_neg = torch.tensor([tuple(n.ids) not in own for n in neg], device=dev)
+            qv = G.query(focus_ids)
+            sp, sn = (Kp @ qv) / .1, (Kn @ qv) / .1
+            L = L + torch.logsumexp(torch.cat([sp, sn[keep_neg]]), 0) - torch.logsumexp(sp, 0)
+            m += 1
+        return L / max(1, m)
 
     t0 = time.time()
     l = fit(demos, 5 if smoke else 600)
@@ -2069,6 +2110,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
                     G.store(mem, tk(" " + f)["input_ids"], kind="fact")
                 with torch.no_grad():
                     got, steps, _ = solve(G, mem, tk(" " + q)["input_ids"], temp=.7)
+                add_pairs(list({tuple(f.ids): f.ids for f, _, _ in steps}.values()), facts)
                 if got == ans:                           # its own right run, as a trace to imitate (same focus rules)
                     tr = [(tk.decode(node.ids).strip(), int(done)) for focus, node, done in steps]
                     if all(x for x, _ in tr):
@@ -2086,6 +2128,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
             keep_facts(G, facts, len(kept) - 1 if kept[-1][1] == q else "read")   # what it read stays
         print(f"round {r}: right runs found {got_right}/{per_round} (kept traces {len(kept)}, kept memory {len(G.ltm)} nodes), "
               f"{time.time() - t0:.0f}s trying", flush=True)
+        print(f"  fetch-training pairs {len(fetch_pairs)}", flush=True)
         print("  kept by kind/size (count, mean steps): " + ", ".join(
             f"{k}{s} {len(v)} {sum(v) / len(v):.1f}" for (k, s), v in sorted(seen.items())), flush=True)
         # steps scale with the traces (11-15 v10i: 400 steps on ~125-190 traces -> loss .000, chains fell)
