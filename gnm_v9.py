@@ -1520,22 +1520,28 @@ class GNM10(nn.Module):
             self._refresh(n)
 
     def fetch(self, mem, q, exclude=(), src_skip=None, train=False):
-        """top-k nodes by key (sampled while training: Gumbel top-k, so a node not yet on top can show it helps);
-        returns them with their fetch weight as an attention bias (log-probability, 0 for the best) -- 11-15 v10d:
-        the weight used to multiply a control bias that starts at 0, so fetching got no gradient and never learned"""
-        cands = [n for n in list(mem) + self.ltm
-                 if n not in exclude and n.of not in exclude and not (src_skip is not None and n.src == src_skip)]
-        if not cands:
-            return [], []                                # (11-15: None crashed an empty fetch)
-        sc = torch.stack([n.key for n in cands]) @ q
-        g = sc.detach() / .1
-        if train:
-            g = g - torch.log(-torch.log(torch.rand_like(g).clamp(1e-9, 1 - 1e-9)))
-        top = g.topk(min(self.topk, len(cands))).indices.tolist()
-        lp = F.log_softmax(sc, 0)
-        sel = sorted(top)                                # (write order)
-        best = lp[sel].max().detach()
-        return [cands[i] for i in sel], [lp[i] - best for i in sel]
+        """top-k by key from each source: working memory (this question's nodes: its facts, its writes) and kept memory
+        (solved nodes from earlier questions). Returns the nodes with their fetch weight as an attention bias
+        (log-probability within the source, 0 for its best).
+        11-15 v10d: the weight multiplied a control bias that starts at 0 -> no gradient, fetch never learned.
+        11-15 v10e: one pool of ~150 kept nodes vs ~7 facts (sampled while training) -> facts almost never in the
+        context, it learned to answer without reading (lookup 80 -> 0% even with kept memory empty). Proposal (mine):
+        two sources, each its own top-k; kept side sampled while training (Gumbel top-k) so it can learn."""
+        ok = lambda n: n not in exclude and n.of not in exclude and not (src_skip is not None and n.src == src_skip)
+        out, w = [], []
+        for cands, explore in (([n for n in mem if ok(n)], False), ([n for n in self.ltm if ok(n)], train)):
+            if not cands:
+                continue
+            sc = torch.stack([n.key for n in cands]) @ q
+            g = sc.detach() / .1
+            if explore:
+                g = g - torch.log(-torch.log(torch.rand_like(g).clamp(1e-9, 1 - 1e-9)))
+            sel = sorted(g.topk(min(self.topk, len(cands))).indices.tolist())   # (write order)
+            lp = F.log_softmax(sc, 0)
+            best = lp[sel].max().detach()
+            out += [cands[i] for i in sel]
+            w += [lp[i] - best for i in sel]
+        return out, w
 
     # ---------------------------------------------------------------- skill nodes (carry a LoRA expert)
     def skill_keys(self):
