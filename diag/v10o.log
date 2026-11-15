@@ -497,3 +497,4 @@ round 6: right runs found 67/200 (kept traces 430, kept memory 5188 nodes), 109s
      fetched for ' Which family is Zektha in?': 'Zektha is in the genus Mersa.' (-2.2); 'Zektha is in the genus Dunzek.' (-2.2, own); 'Zektha is in the genus Orvin.' (-2.2)
   recall (facts read earlier, none given; kept memory 5781 nodes): chain2 3%, chain4 0%, lookup1 53%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 83%, chain4 69%, lookup1 100%, compose1 73% | ... the fact the step needs: chain2 97%, chain4 100%, lookup1 100%, compose1 90%
   saved /marimo/out/v10o.pt (kept memory 5188 nodes)
+  reuse (n 20): first ask 5% in 5.0 steps; asked again 5% in 5.0 steps, 6% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 10%, without 10%
