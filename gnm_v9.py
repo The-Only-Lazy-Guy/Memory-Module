@@ -1472,7 +1472,7 @@ class GNM10(nn.Module):
     def fetch(self, mem, q, exclude=()):
         cands = [n for n in mem if n not in exclude]
         if not cands:
-            return [], None
+            return [], []                                # (11-15: None crashed an empty fetch)
         sc = torch.stack([n.key for n in cands]) @ q
         top = sc.topk(min(self.topk, len(cands))).indices.tolist()
         p = F.softmax(sc / .1, 0)
@@ -1672,6 +1672,9 @@ def v10_eval(G, kinds_sizes, n=40, seed=11, show=0):
 
 def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     tk = lm()[0]
+    smoke = os.environ.get("V10_SMOKE") == "1"     # the whole path, tiny: demos, a round, the evals
+    if smoke:
+        rounds, per_round = 1, 3
     G = GNM10().to(dev)
     params = [p for nm, p in G.named_parameters() if p.requires_grad] + G.eparams()
     opt = torch.optim.AdamW(params, lr=1e-3)
@@ -1680,7 +1683,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     test_sizes = [("add", 2), ("add", 4), ("add", 6), ("chain", 2), ("chain", 4), ("chain", 6)]
     demos = [v10_task(k, rng, s) for k, s in train_sizes for _ in range(n_demo // len(train_sizes))]
     print(f"v10: {len(demos)} demo traces (sizes {train_sizes}); test sizes {test_sizes} (longer than any demo)", flush=True)
-    print("  before training: " + ", ".join(f"{k} {v:.0%}" for k, v in v10_eval(G, test_sizes, n=10).items()), flush=True)
+    print("  before training: " + ", ".join(f"{k} {v:.0%}" for k, v in v10_eval(G, test_sizes, n=2 if smoke else 10).items()), flush=True)
 
     def fit(traces, steps):
         G.train()
@@ -1693,8 +1696,8 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
             opt.step()
         return float(L)
 
-    l = fit(demos, 600)
-    res = v10_eval(G, test_sizes, show=2)
+    l = fit(demos, 5 if smoke else 600)
+    res = v10_eval(G, test_sizes, n=2 if smoke else 40, show=2)
     print(f"round 0 (demos only): loss {l:.3f}, experts {int(G.n_ex)} | " + ", ".join(f"{k} {v:.0%}" for k, v in res.items()), flush=True)
     kept = list(demos)
     for r in range(1, rounds + 1):                       # try -> check -> train on the right traces (no new demos)
@@ -1724,8 +1727,8 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
                         kept.append((facts, q, ans, tr))
                         got_right += 1
                     break
-        l = fit(kept, 400)
-        res = v10_eval(G, test_sizes, show=1 if r == rounds else 0)
+        l = fit(kept, 5 if smoke else 400)
+        res = v10_eval(G, test_sizes, n=2 if smoke else 40, show=1 if r == rounds else 0)
         print(f"round {r}: right runs found {got_right}/{per_round} (kept {len(kept)}), loss {l:.3f}, experts {int(G.n_ex)} | "
               + ", ".join(f"{k} {v:.0%}" for k, v in res.items()), flush=True)
 
