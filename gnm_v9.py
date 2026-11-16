@@ -2489,6 +2489,103 @@ def v10_ctxdiag(path, n=30, seed=47):
             f"{k[1]} {sum(v) / len(v):.0%} (n {len(v)})" for k, v in sorted(res.items()) if k[0] == anc), flush=True)
 
 
+def _unit_step(kind, rng, shuffle=False, combos=None):
+    """one isolated step: (facts, focus text, target text). kinds: column (one addition column), lookup, hop (one chain
+    hop), genus (first compose step). shuffle: the target is a random wrong-or-right digit pair (negative control)"""
+    if kind == "column":
+        x, y, c = rng.choice(combos)
+        t = x + y + c
+        tgt = f"digit {t % 10}, carry {t // 10}"
+        if shuffle:
+            tgt = f"digit {rng.randrange(10)}, carry {rng.randrange(2)}"
+        return [], f"{x} + {y} + carry {c} = ?", tgt
+    if kind == "lookup":
+        facts, q, ans, _ = v10_task("lookup", rng, 1)
+        return facts, q, ans
+    if kind == "hop":
+        names, facts, qtext, steps = _chain_world(rng, 1)
+        return facts, qtext(1, 0), names[1]
+    facts, q, ans, steps = v10_task("compose", rng, 1)
+    return facts, steps[0][0], steps[1][0]
+
+
+def v10_unit(steps=1500):
+    """11-16 (measurement only; user: results against a design may be my code, isolate the test). No kept memory, no
+    fetch training, facts given; each arm a fresh model, same seed, same steps.
+    U1: can the step path (context -> LM + one LoRA expert -> written node) learn single steps? Controls: shuffled
+        column targets must stay near chance (~5%); held-out digit combos show if columns generalise.
+    U2: skill experts (D3) -- one shared expert / one fixed expert per kind (oracle routing, measurement only) / learned
+        routing with spawning on. Oracle >= shared -> experts work; learned << oracle -> routing code is the problem."""
+    tk = lm()[0]
+    allc = [(x, y, c) for x in range(10) for y in range(10) for c in (0, 1)]
+    random.Random(3).shuffle(allc)
+    train_c, held_c = allc[:160], allc[160:]
+    kinds = ("column", "lookup", "hop", "genus")
+
+    def run(name, kinds_used, route=None, spawn=None, shuffle=False):
+        torch.manual_seed(0)
+        random.seed(0)
+        rng = random.Random(11)
+        G = GNM10().to(dev)
+        if spawn is not None:
+            G.spawn_at = spawn
+        if route is not None:                            # oracle routing: kind -> expert slot (measurement only)
+            cur = {}
+            G.pick_skill = lambda q, focus, train: (cur["e"], None, 1.)
+        params = [p for nm, p in G.named_parameters() if p.requires_grad] + G.eparams()
+        opt = torch.optim.AdamW(params, lr=1e-3)
+        used = {}
+        out = []
+        for st in range(1, steps + 1):
+            kind = kinds_used[st % len(kinds_used)]
+            facts, ftext, tgt = _unit_step(kind, rng, shuffle and kind == "column", train_c)
+            if route is not None:
+                cur["e"] = route[kind]
+            mem = []
+            for f in facts:
+                G.store(mem, tk(" " + f)["input_ids"], kind="fact")
+            focus = G.store(mem, tk(" " + ftext)["input_ids"], kind="question")
+            L, _ = G.step_loss(mem, focus, tk(" " + tgt)["input_ids"], 1)
+            opt.zero_grad()
+            L.backward()
+            torch.nn.utils.clip_grad_norm_(params, 1.)
+            opt.step()
+            if st in (300, 750, steps):
+                G.eval()
+                res, erng = {}, random.Random(99)
+                with torch.no_grad():
+                    for kind2 in kinds_used:
+                        for split, combos in ((("", train_c),) if kind2 != "column" else (("", train_c), (" held-out", held_c))):
+                            hit = 0
+                            for _ in range(40):
+                                facts, ftext, tgt = _unit_step(kind2, erng, shuffle and kind2 == "column", combos)
+                                if route is not None:
+                                    cur["e"] = route[kind2]
+                                mem = []
+                                for f in facts:
+                                    G.store(mem, tk(" " + f)["input_ids"], kind="fact")
+                                focus = G.store(mem, tk(" " + ftext)["input_ids"], kind="question")
+                                node, d, e, pd, nk = G.step(mem, focus)
+                                hit += tk.decode(node.ids).strip() == tgt
+                                used.setdefault(kind2, {}).setdefault(e, 0)
+                                used[kind2][e] += 1
+                            res[kind2 + split] = hit / 40
+                G.train()
+                stab = {k: max(v.values()) / sum(v.values()) for k, v in used.items()}
+                out.append(f"@{st}: " + ", ".join(f"{k} {v:.0%}" for k, v in res.items())
+                           + f" | skills {len(G.skills)}, routing stability " + ", ".join(f"{k} {v:.0%}" for k, v in stab.items()))
+                used = {}
+        print(f"unit {name}: " + " || ".join(out), flush=True)
+        for h in G.ex.hooks:
+            h.remove()
+        del G, opt
+
+    run("U1 shuffled column targets (negative control)", ("column",), shuffle=True)
+    run("U1/U2 one shared expert", kinds)
+    run("U2 oracle routing (one expert per kind)", kinds, route={k: i for i, k in enumerate(kinds)})
+    run("U2 learned routing, spawning on (spawn_at .5)", kinds, spawn=.5)
+
+
 def v10_fitdiag(steps=300):
     """11-15 v10g: demo fit stuck at mean loss ~1.9 with 10 skills. Same 48 demos, fresh model per variant: as is /
     one skill / no kept memory / both; mean loss per 100 steps (lower = imitates the demos)"""
@@ -2830,12 +2927,15 @@ if __name__ == "__main__":
     ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
     ap.add_argument("--together", type=int, default=1)   # articles read into one memory per training episode
     a = ap.parse_args()
-    if a.task in ("v10", "v10test", "holddiag", "ctxdiag"):  # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
+    if a.task in ("v10", "v10test", "holddiag", "ctxdiag", "unit"):  # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
         v10_selftest()
         v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
+        raise SystemExit
+    if a.task == "unit":
+        v10_unit()
         raise SystemExit
     if a.task == "ctxdiag":
         v10_ctxdiag(os.environ.get("V10_LOAD", "/marimo/out/v10s.pt"))
