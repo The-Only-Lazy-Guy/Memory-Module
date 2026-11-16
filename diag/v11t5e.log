@@ -1,0 +1,10 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4246.12it/s]
+v11 T5 data: 228 species from leads (species articles + Wikipedia), 198 train, 30 test
+v11 T5 test (30 never-trained species): exact name string: right after reading 58/120 | asked before reading -> another thing's node 0/36 | nodes 60 for 30 things
+v11 T5 train (30 training species): exact name string: right after reading 66/120 | asked before reading -> another thing's node 0/30 | nodes 60 for 30 things
+v11 T5 test (30 never-trained species): name-only cosine (centred) >= .8: right after reading 41/120 | asked before reading -> another thing's node 13/36 | nodes 39 for 24 things
+v11 T5 train (30 training species): name-only cosine (centred) >= .8: right after reading 36/120 | asked before reading -> another thing's node 16/30 | nodes 29 for 23 things
+/marimo/pv/hd/gnm.py:3784: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  run_l.append(float(L))
