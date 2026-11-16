@@ -3304,85 +3304,221 @@ def v11_t3(path=None, n_demo=50, steps=400):
         print(f"v11 T3 control (relation {c[0]} / name key {c[1]}): species never read -> 'unknown' {unk}/{n_u}"
               + ("; e.g. " + ", ".join(wrong_u) if wrong_u else ""), flush=True)
 
-    # ---- T4 (user 11-16: "if can't point -> create new node"). No 'unknown', no threshold to tune: a lookup either
-    # points (exact keys: a hit is cosine ~1, a miss ~0) or creates a node. Asking about a never-read species creates
-    # its node (+ remembers the name) and an OPEN node for the asked value; reading its facts later points to that
-    # node and fills the open slot (same key written again -> replaced: memory updates, D10); asking again answers.
-    def lookup(mem, op, key):
-        K, V = mem[op]
-        sc = K @ key
-        j = int(sc.argmax())
-        return float(sc[j]), V[j]
+    # ---- T4 (user 11-16: "if can't point -> create new node"; "dont use rigid fixed tokens name, make it all vectors
+    # ... a tool that helps estimate and approximate what it means"; why 2 nodes for one species -> reading must merge).
+    # Lookup = point (match >= tau) or create. Reading the lead: each name points or creates; the lead states the two
+    # names are one thing -> if they point to different nodes, MERGE (one node keeps both names; slots united, a filled
+    # slot beats an open one). Name keys: 'exact' (tokens bound in order) vs 'encoder' (learned name tool).
+    held_names = {x[k] for x in test_read + test_unread for k in ("common", "binomial")}
+    pool = []                                            # names from the other species articles (encoder training)
+    for a in arts:
+        s0 = a["text"][0].split(" . ")[0]
+        bm = _re.search(r"\( ([A-Z][a-z]+ [a-z]+)(?: [a-z]+)? [),;]", s0)
+        cm = _re.match(r"^The ([a-z][a-z @\-@]+?) (?:\(|,|or)", s0)
+        for nm_ in ((bm[1] if bm else None), (cm[1].replace(" @-@ ", "-") if cm and "<unk>" not in cm[1] else None)):
+            if nm_ and nm_ not in held_names:
+                pool.append(nm_)
+    pool = sorted(set(pool))
+    prng = random.Random(29)
+    prng.shuffle(pool)
+    val_names, tr_names = pool[:40], pool[40:]
 
-    def write(mem, op, key, val):                        # same key again -> replace its value (update), else append
-        K, V = mem[op]
-        sc = K @ key
-        j = int(sc.argmax())
-        if float(sc[j]) > .99:
-            V[j] = val
-        else:
-            mem[op] = (torch.cat([K, key[None]]), torch.cat([V, val[None]]))
+    def variant(name, r_):
+        """one way the name may appear in a question: article / capital / a token cut at either end (span errors)"""
+        t = name
+        if t[0].islower() and r_.random() < .5:
+            t = "the " + t
+        if r_.random() < .3:
+            t = t[0].upper() + t[1:]
+        ids = tk(" " + t)["input_ids"]
+        core = tk(" " + name)["input_ids"]
+        if len(core) >= 3 and r_.random() < .3:
+            ids = ids[1:] if r_.random() < .5 else ids[:-1]
+        return ids
 
-    def point_or_create(mem, op, key, made, kind):
-        sc, v = lookup(mem, op, key)
-        if sc >= .5:
-            return v, False
-        name = f"{kind}{len(made)}"
-        m.atom(name)
-        made.append(name)
-        write(mem, op, key, m.atoms[name])
-        return m.atoms[name], True
+    class NameTool(nn.Module):
+        """name -> vector: frozen GPT-2 states of the name, attention-pooled, projected (learned)"""
+        def __init__(s_):
+            super().__init__()
+            s_.att = nn.Linear(M.config.n_embd, 1)
+            s_.out = nn.Linear(M.config.n_embd, m.D)
 
-    def ask(mem, ids, r, st, en, made):
-        """-> (answer node name, species node created?, value node created?)"""
-        if st is None or en is None or en < st:
-            st, en = 0, 0
-        ent, c1 = point_or_create(mem, "alias exact", key_exact(ids[st:en + 1]), made, "new species ")
-        val, c2 = point_or_create(mem, "rel", m.query("rel", [rels[r], m.cleanup(ent, nodes + made)]), made, "open ")
-        return m.cleanup(val, nodes + made), c1, c2
+        def forward(s_, ids_list):
+            vs = []
+            for ids in ids_list:
+                H = states(ids)
+                w = torch.softmax(s_.att(H).squeeze(-1), 0)
+                vs.append(s_.out((w[:, None] * H).sum(0)))
+            return F.normalize(torch.stack(vs), dim=-1)
+    enc = NameTool().to(dev)
+    eopt = torch.optim.AdamW(enc.parameters(), lr=1e-3)
+    by_genus = {}
+    for n_ in tr_names:
+        by_genus.setdefault(n_.split()[0], []).append(n_)
+    genus_groups = [g for g in by_genus.values() if len(g) > 1]
+    for stp in range(500):
+        batch = []
+        while len(batch) < 24:                           # half from shared-first-word groups (hard negatives)
+            if genus_groups and prng.random() < .5:
+                batch += prng.sample(prng.choice(genus_groups), 2)
+            else:
+                batch.append(prng.choice(tr_names))
+        batch = list(dict.fromkeys(batch))[:24]
+        z1 = enc([variant(n_, prng) for n_ in batch])
+        z2 = enc([variant(n_, prng) for n_ in batch])
+        lg = z1 @ z2.T / .05
+        lab = torch.arange(len(batch), device=dev)
+        L = (F.cross_entropy(lg, lab) + F.cross_entropy(lg.T, lab)) / 2
+        eopt.zero_grad()
+        L.backward()
+        eopt.step()
+    enc.eval()
 
-    def read_facts(mem, x, made):
-        """reading one species' lead: each name points to its node or creates one; facts written (replace on same key)"""
-        ents = []
-        for kind in ("common", "binomial"):
-            v, c = point_or_create(mem, "alias exact", key_exact(tk(" " + x[kind])["input_ids"]), made, "new species ")
-            ents.append(m.cleanup(v, nodes + made))
-        for t in (x["family"], x["genus"]):
-            if t not in m.atoms:
-                m.atom(t)
-                nodes.append(t)
-        for e in set(ents):
-            write(mem, "rel", m.query("rel", ["family", e]), m.atoms[x["family"]])
-            write(mem, "rel", m.query("rel", ["genus", e]), m.atoms[x["genus"]])
-        return ents
-    for arm in ("gold parse", "learned parse (relation pointed, exact name keys)"):
-        mem = {k_: (m.mem[k_][0].clone(), m.mem[k_][1].clone()) for k_ in ("alias exact", "rel")}
-        made = []
-        qs = []
+    @torch.no_grad()
+    def sep(names, r_):
+        """cosine of a name's variants to its key vs the most similar other name's key"""
+        base = enc([tk(" " + n_)["input_ids"] for n_ in names])
+        var = enc([variant(n_, r_) for n_ in names])
+        pos = (base * var).sum(-1)
+        S = base @ base.T
+        S.fill_diagonal_(-1)
+        return pos, S.max(1).values
+    with torch.no_grad():
+        pv, nv = sep(val_names, random.Random(31))
+        grid = torch.linspace(0, 1, 101, device=dev)
+        acc = torch.stack([((pv >= g).float().mean() + (nv < g).float().mean()) / 2 for g in grid])
+        tau = float(grid[int(acc.argmax())])
+        pt, nt = sep(sorted(held_names), random.Random(37))
+    print(f"v11 T4 name tool: trained on {len(tr_names)} names from other species articles (500 steps); tau from "
+          f"{len(val_names)} validation names = {tau:.2f}. Test species names (never trained): a variant's cosine to its "
+          f"name mean {float(pt.mean()):.2f} (min {float(pt.min()):.2f}); most similar OTHER name mean {float(nt.mean()):.2f} "
+          f"(max {float(nt.max()):.2f}); variants >= tau {float((pt >= tau).float().mean()):.0%}, other names < tau "
+          f"{float((nt < tau).float().mean()):.0%}", flush=True)
+    with torch.no_grad():
+        keys = {"exact": (key_exact, .5), "encoder": (lambda ids: enc([ids])[0], tau)}
+
+    def run_arm(km, pm):
+        keyfun, thr = keys[km]
+        E = torch.zeros(0, m.D, device=dev)
+        mem = {"alias": (E.clone(), E.clone()), "rel": (E.clone(), E.clone())}
+        made, cands, merged = [], [], {}
+
+        def lookup(op, key):
+            K, V = mem[op]
+            if not len(K):
+                return -1., None, -1
+            sc = K @ key
+            j = int(sc.argmax())
+            return float(sc[j]), V[j], j
+
+        def write(op, key, val, same=.99):
+            K, V = mem[op]
+            sc, _, j = lookup(op, key)
+            if sc > same:
+                V[j] = val
+            else:
+                mem[op] = (torch.cat([K, key[None]]), torch.cat([V, val[None]]))
+
+        def new(kind):
+            name = f"{kind}{len(made)}"
+            m.atom(name)
+            made.append(name)
+            cands.append(name)
+            return name
+
+        def name_of(v):
+            return m.cleanup(v, cands)
+
+        def point_or_create(key):
+            sc, v, _ = lookup("alias", key)
+            if sc >= thr:
+                return name_of(v), False
+            e = new("species ")
+            write("alias", key, m.atoms[e], same=2.)     # a new name key is always appended
+            return e, True
+
+        def merge(keep, drop):
+            """one node: the names of `drop` point to `keep`; its slots move over (a filled slot beats an open one)"""
+            K, V = mem["alias"]
+            hit = (V @ m.atoms[drop]) > .99
+            V[hit] = m.atoms[keep]
+            for r_ in rels:
+                sd, vd, jd = lookup("rel", m.query("rel", [r_, drop]))
+                if sd < .99:
+                    continue
+                sk, vk, jk = lookup("rel", m.query("rel", [r_, keep]))
+                if sk >= .99:
+                    if name_of(vk).startswith("open") and not name_of(vd).startswith("open"):
+                        mem["rel"][1][jk] = vd
+                    mem["rel"][0][jd] = 0.               # drop's slot disabled
+                else:
+                    mem["rel"][0][jd] = m.query("rel", [r_, keep])
+            merged[drop] = keep
+            cands.remove(drop)
+
+        def read_lead(x):
+            ents = [point_or_create(keyfun(tk(" " + x[k])["input_ids"]))[0] for k in ("common", "binomial")]
+            if ents[0] != ents[1]:                       # the lead says both names are one thing
+                merge(ents[0], ents[1])
+            e = ents[0]
+            for r_ in rels:
+                if x[r_] not in m.atoms:
+                    m.atom(x[r_])
+                if x[r_] not in cands:
+                    cands.append(x[r_])
+                write("rel", m.query("rel", [r_, e]), m.atoms[x[r_]])
+
+        def ask(ids, r, st, en):
+            if st is None or en is None or en < st:
+                st, en = 0, 0
+            e, made_e = point_or_create(keyfun(ids[st:en + 1]))
+            sc, v, _ = lookup("rel", m.query("rel", [rels[r], e]))
+            if sc >= .5:
+                return name_of(v)
+            o = new("open ")
+            write("rel", m.query("rel", [rels[r], e]), m.atoms[o])
+            return o
+
+        def questions(xs):
+            out = []
+            for x in xs:
+                for rel in rels:
+                    for kind in ("common", "binomial"):
+                        for t in W[rel][1]:
+                            ids, r, st, en, rw = make_q(x, rel, kind, t)
+                            if st is not None:
+                                out.append((x, rel, ids, (r, st, en) if pm == "gold" else parse_learned(ids, "point")))
+            return out
+        for x in read:
+            read_lead(x)
+        n0 = len(made)
+        qa = questions(test_read)
+        ga = [ask(ids, *pr) for x, rel, ids, pr in qa]
+        a_right = sum(g == x[rel] for g, (x, rel, ids, pr) in zip(ga, qa))
+        a_new = sum(g.startswith("open") for g in ga)
+        qb = questions(test_unread)
+        gb = [ask(ids, *pr) for x, rel, ids, pr in qb]
+        b_wrong = sum(not g.startswith("open") for g in gb)
+        n1 = len(made)
+        nm0 = len(merged)
         for x in test_unread:
-            for rel in rels:
-                for kind in ("common", "binomial"):
-                    for t in W[rel][1]:
-                        ids, r, st, en, rw = make_q(x, rel, kind, t)
-                        if st is None:
-                            continue
-                        pr = (r, st, en) if arm == "gold parse" else parse_learned(ids, "point")
-                        qs.append((x, rel, ids, pr))
-        before = [ask(mem, ids, *pr, made) for x, rel, ids, pr in qs]
-        wrong_existing = sum(not a_[0].startswith(("open", "new")) and a_[0] != x[rel] for a_, (x, rel, ids, pr) in zip(before, qs))
-        n_made_q = len(made)
-        species_made = [n for n in made if n.startswith("new species")]
-        ents_read = {x["binomial"]: read_facts(mem, x, made) for x in test_unread}
-        dup = sum(len(set(v)) > 1 for v in ents_read.values())
-        reused = sum(all(e in species_made for e in v) for v in ents_read.values())
-        after = [ask(mem, ids, *pr, made)[0] for x, rel, ids, pr in qs]
-        right_after = sum(a_ == x[rel] for a_, (x, rel, ids, pr) in zip(after, qs))
-        print(f"v11 T4 {arm}: {len(qs)} questions about 15 never-read species -> answered with an existing node "
-              f"{sum(not a_[0].startswith(('open', 'new')) for a_ in before)} (wrong existing {wrong_existing}), "
-              f"open (created) {sum(a_[0].startswith('open') for a_ in before)}; nodes created while asking {n_made_q} "
-              f"({len(species_made)} species, {n_made_q - len(species_made)} open values) | reading the 15 later: species whose "
-              f"names point to the nodes made while asking {reused}/15, one species split into 2 nodes {dup}, nodes created "
-              f"while reading {len(made) - n_made_q} | asked again: right {right_after}/{len(qs)}", flush=True)
+            read_lead(x)
+        gc = [ask(ids, *pr) for x, rel, ids, pr in qb]
+        c_right = sum(g == x[rel] for g, (x, rel, ids, pr) in zip(gc, qb))
+        species = [c for c in cands if c.startswith("species")]
+        junk = sum(lookup("rel", m.query("rel", ["family", e]))[0] < .99 or name_of(lookup("rel", m.query("rel", ["family", e]))[1]).startswith("open")
+                   for e in species)
+        split = sum(point_or_create(keyfun(tk(" " + x["common"])["input_ids"]))[0]      # (after the counts: a miss here
+                    != point_or_create(keyfun(tk(" " + x["binomial"])["input_ids"]))[0]  #  creates a node)
+                    for x in read + test_unread)
+        print(f"v11 T4 name keys {km}, {pm} parse: reading 60 species made {n0} nodes | held-out wordings on read species: "
+              f"right {a_right}/{len(qa)}, made a new open node {a_new} | 15 never-read species: answered with an existing node "
+              f"{b_wrong}/{len(qb)} | read them: merges {len(merged) - nm0}; asked again right {c_right}/{len(qb)} | species "
+              f"split over 2 nodes {split}/75; species nodes {len(species)} (no family known: {junk})", flush=True)
+    with torch.no_grad():
+        for km in ("exact", "encoder"):
+            for pm in ("gold", "learned"):
+                run_arm(km, pm)
 
 
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
