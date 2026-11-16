@@ -94,3 +94,25 @@ round 0 (demos only): loss 0.010, 260s
      fetched for ' Who is the friend of the friend of Kagor?': 'Lone is in the genus Sapel.' (-6.8); 'The age of Toror is 75.' (-6.8); 'The teacher of Toror is Loril.' (-6.8)
      fetched for '??': 'The boss of Merril is Dunmer.' (-6.8); 'The friend of Mermer is Mermer.' (-6.8); 'The boss of Orpel is Merne.' (-6.8)
      fetched for ' Who is the friend of the friend of Kagor?': 'Lone is in the genus Sapel.' (-6.8); 'The age of Toror is 75.' (-6.8); 'The teacher of Toror is Loril.' (-6.8)
+
+  [recall chain 4] Who is the friend of the friend of the friend of the friend of Gorril? (truth Gorzek) -> when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' who is the friend of the friend of Gorril?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' who is the friend of the friend of Gorril?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.92; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes '?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '?' -> skill s0 writes ' when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when' (resolves it, done p 0.90; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when when' (resolves it, done p 0.76; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'Lone is in the genus Sapel.' (-6.8); 'The friend of Badun is Kane.' (-6.8); 'The neighbour of Torvin is Dunne.' (-6.8)
+     fetched for ' who is the friend of the friend of Gorril?': 'Lone is in the genus Sapel.' (-6.8); 'Ormer is in the genus Orne.' (-6.8); 'Balo is in the genus Lone.' (-6.8)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'Lone is in the genus Sapel.' (-6.8); 'The friend of Badun is Kane.' (-6.8); 'The neighbour of Torvin is Dunne.' (-6.8)
+     fetched for '?': 'The age of Merril is 17.' (-6.8); 'The age of Merpel is 10.' (-6.8); 'The friend of Mermer is Mermer.' (-6.8)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'Lone is in the genus Sapel.' (-6.8); 'The friend of Badun is Kane.' (-6.8); 'The neighbour of Torvin is Dunne.' (-6.8)
+
+  [recall lookup 1] What is the age of Torgor? (truth 31) -> Torgor
+   focus ' What is the age of Torgor?' -> skill s0 writes ' Torgor' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' What is the age of Torgor?': 'Lone is in the genus Sapel.' (-6.8); 'The age of Toror is 75.' (-6.8); 'The teacher of Toror is Loril.' (-6.8)
+
+  [recall compose 1] Which family is Zektha in? (truth Netha) -> <|endoftext|>
+   focus ' Which family is Zektha in?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.98; kept nodes fetched 6)
+     fetched for ' Which family is Zektha in?': 'Ormer is in the genus Orne.' (-6.8); 'Lone is in the genus Sapel.' (-6.8); 'The teacher of Dunmer is Bazek.' (-6.8)
+  recall (facts read earlier, none given; kept memory 881 nodes): chain2 0%, chain4 0%, lookup1 0%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 2%, chain4 0%, lookup1 2%, compose1 2% | ... the fact the step needs: chain2 0%, chain4 0%, lookup1 6%, compose1 0%
+  reuse (n 20): first ask 10% in 6.5 steps; asked again 15% in 6.4 steps, 96% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
