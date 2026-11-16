@@ -139,3 +139,4 @@ round 0 (demos only): loss 0.097, 458s
      fetched for ' Which family is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-1.7); 'Peltha is in the genus Dunba.' (-2.1); 'Dunmer is in the genus Dunzek.' (-2.7)
      fetched for ' Which family is Zektha in?': 'Logor is in the genus Mermu.' (-1.9); 'Logor is in the genus Zekzek.' (-2.1); 'Logor is in the genus Nemu.' (-2.6)
   recall (facts read earlier, none given; kept memory 881 nodes): chain2 23%, chain4 0%, lookup1 80%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 63%, chain4 30%, lookup1 100%, compose1 30% | ... the fact the step needs: chain2 62%, chain4 34%, lookup1 100%, compose1 62%
+  reuse (n 20): first ask 20% in 6.5 steps; asked again 0% in 30.3 steps, 23% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 10%
