@@ -1633,7 +1633,14 @@ class GNM10(nn.Module):
                     ids += c.ids + c.result.ids
                     bias += [self.bias(c.C).squeeze(-1), self.bias(c.result.C).squeeze(-1)]
         e, ew, esc = self.pick_skill(sq, focus, train)
-        return ids, (torch.cat(bias) if bias else None), e, ew, sum(n.kind == "kept" for n in fetched)
+        bias = torch.cat(bias) if bias else None
+        # the executor's window (GPT-2: 1024 positions) minus room for the node it writes: keep the newest tokens, so
+        # fetched nodes drop first, then the oldest ancestors (11-16: with 64-token nodes a deep path went past 1024 ->
+        # position index out of range, CUDA device assert in the v10p smoke)
+        W = lm()[1].config.n_positions - 66
+        if len(ids) > W:
+            ids, bias = ids[-W:], bias[-W:]
+        return ids, bias, e, ew, sum(n.kind == "kept" for n in fetched)
 
     def step_loss(self, mem, focus, target_ids, target_done, src_skip=None):
         """imitation of one step: the LM (+ fetched skill's expert) must write the target node and say whether it
@@ -2506,7 +2513,16 @@ def v10_selftest():
     fetched, _ = G.fetch([], G.query(tk(" Who is the teacher of Mira?")["input_ids"]))
     ok7 = any(n.ids == fid for n in fetched)
     print(f"selftest 7: a fact read once is kept and fetched later with no facts given: {ok7}", flush=True)
-    assert ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7, "v10 selftest failed"
+    # (8) a path longer than the executor's window still writes (context cut to the window, newest tokens kept)
+    mem, f = [], None
+    long_ids = tk(" Who is the boss of the friend of the teacher of the father of Kalo, said Mira to Dolan at noon?" * 3)["input_ids"]
+    for _ in range(20):
+        f = G.store(mem, long_ids, kind="question") if f is None else G.node_from(long_ids, G.lm_run(long_ids)[0], parent=f)
+    ids8, b8, _, _, _ = G.context(mem, f, False)
+    node8, _, _, _, _ = G.step(mem, f, 0., 64)
+    ok8 = len(ids8) + 66 <= lm()[1].config.n_positions and len(ids8) == len(b8)
+    print(f"selftest 8: path of {20 * len(long_ids)} tokens -> context {len(ids8)} tokens, wrote {len(node8.ids)} tokens: {ok8}", flush=True)
+    assert ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8, "v10 selftest failed"
     G.ltm, G._ltm_ids, G.skills = [], set(), []
 
 
