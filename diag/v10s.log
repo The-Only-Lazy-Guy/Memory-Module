@@ -200,3 +200,6 @@ round 1: right runs found 118/400 (kept traces 166, kept memory 2127 nodes), 265
    focus ' Which family is the genus Dunmer in?' -> skill s0 writes ' Vinlo' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Which family is Zekril in?' -> skill s0 writes ' Vinmer' (resolves it, done p 1.00; kept nodes fetched 6)
   loss 0.546; with kept memory | add2 0%, add4 0%, add6 0%, chain2 32%, chain4 10%, chain6 2%, lookup1 62%, compose1 5% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x900; chain: s0x514; lookup: s0x40; compose: s0x230; needed fact fetched: chain 100% compose 100% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 30%, chain4 8%, chain6 0%, lookup1 65%, compose1 12% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x990; chain: s0x538; lookup: s0x40; compose: s0x222; needed fact fetched: chain 100% compose 100% lookup 100%
+  recall (facts read earlier, none given; kept memory 2842 nodes): chain2 0%, chain4 0%, lookup1 60%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 91%, chain4 87%, lookup1 100%, compose1 78% | ... the fact the step needs: chain2 100%, chain4 99%, lookup1 100%, compose1 91%
+  saved /marimo/out/v10s.pt (kept memory 2127 nodes)
