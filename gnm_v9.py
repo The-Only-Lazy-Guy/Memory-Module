@@ -2429,7 +2429,7 @@ def v10_ctxdiag(path, n=30, seed=47):
     tk = lm()[0]
     G = v10_load(path)
     rng = random.Random(seed)
-    res = {}
+    res, shown = {}, {}
     for kind, size in (("chain", 2), ("chain", 3), ("chain", 4), ("compose", 1)):
         for _ in range(n):
             facts, q, ans, steps = v10_task(kind, rng, size)
@@ -2444,7 +2444,12 @@ def v10_ctxdiag(path, n=30, seed=47):
                 typ = ("answer" if done else "sub-q") + (" at root" if focus is root else " below root")
                 for anc in (True, False):
                     node, d, e, pd, nk = G.step(mem, focus, ancestors=anc)
-                    res.setdefault((anc, f"{kind}{size} {typ}"), []).append(tk.decode(node.ids).strip() == want)
+                    got = tk.decode(node.ids).strip()
+                    res.setdefault((anc, f"{kind}{size} {typ}"), []).append(got == want)
+                    if anc and typ == "answer at root" and shown.get(kind + str(size), 0) < 4:
+                        shown[kind + str(size)] = shown.get(kind + str(size), 0) + 1
+                        print(f"  [{kind}{size}] {q} | at the root after its sub-steps: wants {want!r} (done), "
+                              f"writes {got!r} (done p {pd:.2f})", flush=True)
                 H, _, _ = G.lm_run(ids)
                 nd = G.node_from(ids, H, parent=focus)
                 if done:
