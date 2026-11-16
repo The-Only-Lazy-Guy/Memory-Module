@@ -2450,8 +2450,13 @@ def v10_ctxdiag(path, n=30, seed=47):
                         shown[kind + str(size)] = shown.get(kind + str(size), 0) + 1
                         print(f"  [{kind}{size}] {q} | at the root after its sub-steps: wants {want!r} (done), "
                               f"writes {got!r} (done p {pd:.2f})", flush=True)
-                H, _, _ = G.lm_run(ids)
-                nd = G.node_from(ids, H, parent=focus)
+                # the correct node, built as training builds it: its states inside the step that writes it (11-16: from
+                # the text alone its control differs -- the root then wrote nothing after its sub-steps, an artifact)
+                cids, cb, e, _, _ = G.context(mem, focus, False)
+                G.ex.active = e
+                H, _, _ = G.lm_run(cids + ids, torch.cat([cb, torch.zeros(len(ids), device=dev)]) if cb is not None else None)
+                G.ex.active = None
+                nd = G.node_from(ids, H[len(cids):], parent=focus)
                 if done:
                     nxt = _resolve(G, mem, focus, nd)
                     if focus is root:
