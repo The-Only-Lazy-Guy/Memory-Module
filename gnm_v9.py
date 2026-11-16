@@ -2213,12 +2213,16 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
                     tr = [(tk.decode(node.ids).strip(), int(done)) for focus, node, done in steps]
                     if all(x for x, _ in tr):
                         right.append(tr)
-                # keep only when >= 2 right tries wrote the SAME steps (v10b round 1: one lucky guess in 4 tries is
+                # keep only when >= 3 (was 2) right tries wrote the SAME steps (v10b round 1: one lucky guess in 4 tries is
                 # common -- chain2 60 -> 22%; 11-16 v10p round 1: with ">= 2 right answers", 13 of 36 kept compose
                 # runs reached the right family through wrong steps (wrong genus, renamed names) and compose fell
                 # 52 -> 10%. A guess lands on the answer by different wrong steps each time; a method repeats)
-                agree = [x for x in right if right.count(x) >= 2]
-                if agree or len(right) + (tries - t - 1) < 2:
+                # (11-16 v10v: >= 3 of 4 -- a one-step answer's "same steps" is just the same answer; v10u round 2 kept
+                # compose runs that answered in one step, right ~28% by luck -> passes 2 of 4 31% of the time, 3 of 4
+                # 7%; a method right 80% still passes 82%)
+                agree = [x for x in right if right.count(x) >= 3]
+                best = max((right.count(x) for x in right), default=0)
+                if agree or best + (tries - t - 1) < 3:
                     break
             # (v10r tried leaves_hold here -- dropped 11-16: holddiag showed it rejects correct runs, a one-hop
             # sub-question asked alone gets solved as a two-hop question; it stays as a measurement in holddiag)
