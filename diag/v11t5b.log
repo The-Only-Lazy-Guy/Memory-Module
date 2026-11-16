@@ -9,3 +9,11 @@ Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/cs
   run_l.append(float(L))
 v11 T5 [labels] step 1000: mean loss 0.885, punished decisions so far 18033
 v11 T5 [labels] step 2000: mean loss 0.429, punished decisions so far 29175
+v11 T5 [labels] step 3000: mean loss 0.301, punished decisions so far 37920
+v11 T5 test (30 never-trained species): learned relevance, trained on labels: right after reading 31/120 | asked before reading -> another thing's node 12/36 | nodes 113 for 28 things
+v11 T5 train (30 training species): learned relevance, trained on labels: right after reading 115/120 | asked before reading -> another thing's node 2/30 | nodes 30 for 28 things
+v11 T5 [outcome] step 1000: mean loss 0.239, punished decisions so far 1908
+v11 T5 [outcome] step 2000: mean loss 0.064, punished decisions so far 2886
+v11 T5 [outcome] step 3000: mean loss 0.067, punished decisions so far 3898
+v11 T5 test (30 never-trained species): learned relevance, trained on outcome: right after reading 31/120 | asked before reading -> another thing's node 36/36 | nodes 2 for 1 things
+v11 T5 train (30 training species): learned relevance, trained on outcome: right after reading 20/120 | asked before reading -> another thing's node 27/30 | nodes 2 for 2 things
