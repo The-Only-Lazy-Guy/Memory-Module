@@ -1607,25 +1607,30 @@ class GNM10(nn.Module):
         return e, None, 1.
 
     # ---------------------------------------------------------------- one step: focus + fetched -> the next node
-    def context(self, mem, focus, train, src_skip=None, ancestors=True):
-        """the step's input: fetched nodes (meaning ids + their control as attention bias), the focus's chain of
-        ancestors and its results so far, then the focus; the fetched skill. Returns ids, bias, expert, its weight,
-        how many kept nodes were fetched"""
+    def context(self, mem, focus, train, src_skip=None, ancestors=False):
+        """the step's input: fetched nodes (meaning ids + their control as attention bias), the focus and its finished
+        sub-steps; the fetched skill. Returns ids, bias, expert, its weight, how many kept nodes were fetched.
+        v10t (Claude's trial, 11-16): the ancestors are NOT in the input -- each sub-question is its own problem.
+        ctxdiag on v10s: writing the next smaller question below the root was right 17-25% with the ancestors in view,
+        53-60% without (the 3-4 hop chains' kept runs jumped hops). ancestors=True = the v10s input (ctxdiag only).
+        Ancestors stay out of the fetch either way (no way back in through working memory)"""
         Hf, _, _ = self.lm_run(focus.ids)
         q = F.normalize(self.qry(self.pool(Hf, self.ctl(Hf))[0]), dim=-1)
         sq = F.normalize(self.skill_query(Hf, train), dim=-1)
         chain, f = [], focus
         while f is not None:
             chain.append(f)
-            f = f.parent if ancestors else None          # (ancestors=False: measurement only, ctxdiag)
+            f = f.parent
         chain = chain[::-1]
         excl = set(chain) | {c for x in chain for c in x.children}
+        if not ancestors:
+            chain = [focus]
         fetched, w = self.fetch(mem, q, exclude=excl, src_skip=src_skip, train=train)
         ids, bias = [], []
         for n, wi in zip(fetched, w):
             ids += n.ids
             bias.append(self.bias(n.C).squeeze(-1) + wi)
-        for x in chain:                                  # the path to the focus, with each node's finished sub-steps
+        for x in chain:                                  # the focus (+ ancestors in v10s), with finished sub-steps
             ids += x.ids
             bias.append(self.bias(x.C).squeeze(-1))
             for c in x.children:
@@ -1682,7 +1687,7 @@ class GNM10(nn.Module):
             nxt = l[-1]
 
     @torch.no_grad()
-    def step(self, mem, focus, temp=0., maxlen=64, ancestors=True):   # (11-16: was 16 -- cut the smaller questions:
+    def step(self, mem, focus, temp=0., maxlen=64, ancestors=False):   # (11-16: was 16 -- cut the smaller questions:
         #                                                   5-hop 20 tokens, 3+ digit sums 17-21 tokens)
         ids, bias, e, _, nk = self.context(mem, focus, False, ancestors=ancestors)
         self.ex.active = e
@@ -2465,7 +2470,7 @@ def v10_ctxdiag(path, n=30, seed=47):
                 else:
                     focus = nd
     for anc in (True, False):
-        print(f"ctxdiag {'with ancestors (as built)' if anc else 'without ancestors'}: " + ", ".join(
+        print(f"ctxdiag {'with ancestors (v10s input)' if anc else 'without ancestors (v10t, as built)'}: " + ", ".join(
             f"{k[1]} {sum(v) / len(v):.0%} (n {len(v)})" for k, v in sorted(res.items()) if k[0] == anc), flush=True)
 
 
@@ -2646,15 +2651,19 @@ def v10_selftest():
     fetched, _ = G.fetch([], G.query(tk(" Who is the teacher of Mira?")["input_ids"]))
     ok7 = any(n.ids == fid for n in fetched)
     print(f"selftest 7: a fact read once is kept and fetched later with no facts given: {ok7}", flush=True)
-    # (8) a path longer than the executor's window still writes (context cut to the window, newest tokens kept)
-    mem, f = [], None
+    # (8) a context longer than the executor's window still writes (cut to the window, newest tokens kept): one
+    # focus with 20 long finished sub-steps
+    mem = []
     long_ids = tk(" Who is the boss of the friend of the teacher of the father of Kalo, said Mira to Dolan at noon?" * 3)["input_ids"]
+    f = G.store(mem, long_ids, kind="question")
     for _ in range(20):
-        f = G.store(mem, long_ids, kind="question") if f is None else G.node_from(long_ids, G.lm_run(long_ids)[0], parent=f)
+        c = G.node_from(long_ids, G.lm_run(long_ids)[0], parent=f)
+        c.result = G.node_from(long_ids, G.lm_run(long_ids)[0], parent=c)
+        f.children.append(c)
     ids8, b8, _, _, _ = G.context(mem, f, False)
     node8, _, _, _, _ = G.step(mem, f, 0., 64)
     ok8 = len(ids8) + 66 <= lm()[1].config.n_positions and len(ids8) == len(b8)
-    print(f"selftest 8: path of {20 * len(long_ids)} tokens -> context {len(ids8)} tokens, wrote {len(node8.ids)} tokens: {ok8}", flush=True)
+    print(f"selftest 8: focus + sub-steps of {41 * len(long_ids)} tokens -> context {len(ids8)} tokens, wrote {len(node8.ids)} tokens: {ok8}", flush=True)
     assert ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8, "v10 selftest failed"
     G.ltm, G._ltm_ids, G.skills = [], set(), []
 
