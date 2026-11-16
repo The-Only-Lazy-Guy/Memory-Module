@@ -73,3 +73,25 @@ round 0 (demos only): loss 0.350, 511s
    focus ' Who is the neighbour of Bazek?' -> skill s0 writes ' Rilne' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Who is the neighbour of the neighbour of Lovin?' -> skill s0 writes ' Rilne' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Rilne' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Muka
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Who is the boss of the boss of Rildun?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Rildun?' -> skill s0 writes ' Who is the boss of Rildun?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Rildun?' -> skill s0 writes ' Tortor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Rildun?' -> skill s0 writes ' Who is the boss of Tortor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Tortor?' -> skill s0 writes ' Muka' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Rildun?' -> skill s0 writes ' Muka' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s0 writes ' Muka' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the age of Mutor? (truth 60) -> 60
+   focus ' What is the age of Mutor?' -> skill s0 writes ' 60' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Zekril in? (truth Ordun) -> Ordun
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which genus is Zekril in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Zekril in?' -> skill s0 writes ' Mugor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which family is the genus Mugor in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Mugor in?' -> skill s0 writes ' Ordun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Ordun' (resolves it, done p 1.00; kept nodes fetched 6)
+  with kept memory | add2 0%, add4 0%, add6 0%, chain2 40%, chain4 5%, chain6 5%, lookup1 70%, compose1 22% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x690; chain: s0x1318; lookup: s0x40; compose: s0x132; needed fact fetched: chain 78% compose 87% lookup 100%
