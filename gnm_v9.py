@@ -3643,7 +3643,8 @@ def v11_t5(steps=3000, ep_species=8):
         rates most relevant; blame also goes to the decision that created the wrong node; right answers lightly
         reinforced. No identity labels"""
         nodes, decs, pairs = [], [], []
-        stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0}
+        stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "linked": 0, "reads": 0,
+                 "right common": 0, "n common": 0, "right binomial": 0, "n binomial": 0}
 
         def point(men, ent):
             j, lg = decide(men, nodes)
@@ -3668,7 +3669,9 @@ def v11_t5(steps=3000, ep_species=8):
             ent = x["binomial"]
             if ev[0] == "read":
                 j1, d1 = point(mention(x["lead"], x["common"]), ent)
-                point(mention(x["lead"], x["binomial"]), ent)
+                j2, _ = point(mention(x["lead"], x["binomial"]), ent)
+                stats["reads"] += 1
+                stats["linked"] += j1 == j2                      # (diagnosis) both names of the lead on one node
                 for r_ in rels:                          # the lead's facts go to its subject's node
                     nodes[j1]["facts"][r_] = x[r_]
                 nodes[j1]["hist"].append(({r_: x[r_] for r_ in rels}, d1))
@@ -3687,6 +3690,8 @@ def v11_t5(steps=3000, ep_species=8):
                 continue
             stats["asked_after"] += 1
             stats["right"] += got == x[rel]
+            stats["n " + kind] += 1
+            stats["right " + kind] += got == x[rel]
             if mode != "outcome" or d["lg"] is None:
                 continue
             if got == x[rel]:
@@ -3764,8 +3769,10 @@ def v11_t5(steps=3000, ep_species=8):
     def report(name, d):
         for split, stream in (("test (30 never-trained species)", test_stream), ("train (30 training species)", train_stream)):
             st, _ = run_episode(stream, d)
-            print(f"v11 T5 {split}: {name}: right after reading {st['right']}/{st['asked_after']} | asked before reading -> "
-                  f"another thing's node {st['wrong_node']}/{st['asked_before']} | nodes {st['nodes']} for {st['things']} things", flush=True)
+            print(f"v11 T5 {split}: {name}: right after reading {st['right']}/{st['asked_after']} (by common name "
+                  f"{st['right common']}/{st['n common']}, by binomial {st['right binomial']}/{st['n binomial']}) | lead's two names "
+                  f"on one node {st['linked']}/{st['reads']} | asked before reading -> another thing's node {st['wrong_node']}/"
+                  f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things", flush=True)
     with torch.no_grad():
         report("exact name string", exact)
         report("name-only cosine (centred) >= .8", alone_cos(.8))
