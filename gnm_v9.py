@@ -3304,6 +3304,86 @@ def v11_t3(path=None, n_demo=50, steps=400):
         print(f"v11 T3 control (relation {c[0]} / name key {c[1]}): species never read -> 'unknown' {unk}/{n_u}"
               + ("; e.g. " + ", ".join(wrong_u) if wrong_u else ""), flush=True)
 
+    # ---- T4 (user 11-16: "if can't point -> create new node"). No 'unknown', no threshold to tune: a lookup either
+    # points (exact keys: a hit is cosine ~1, a miss ~0) or creates a node. Asking about a never-read species creates
+    # its node (+ remembers the name) and an OPEN node for the asked value; reading its facts later points to that
+    # node and fills the open slot (same key written again -> replaced: memory updates, D10); asking again answers.
+    def lookup(mem, op, key):
+        K, V = mem[op]
+        sc = K @ key
+        j = int(sc.argmax())
+        return float(sc[j]), V[j]
+
+    def write(mem, op, key, val):                        # same key again -> replace its value (update), else append
+        K, V = mem[op]
+        sc = K @ key
+        j = int(sc.argmax())
+        if float(sc[j]) > .99:
+            V[j] = val
+        else:
+            mem[op] = (torch.cat([K, key[None]]), torch.cat([V, val[None]]))
+
+    def point_or_create(mem, op, key, made, kind):
+        sc, v = lookup(mem, op, key)
+        if sc >= .5:
+            return v, False
+        name = f"{kind}{len(made)}"
+        m.atom(name)
+        made.append(name)
+        write(mem, op, key, m.atoms[name])
+        return m.atoms[name], True
+
+    def ask(mem, ids, r, st, en, made):
+        """-> (answer node name, species node created?, value node created?)"""
+        if st is None or en is None or en < st:
+            st, en = 0, 0
+        ent, c1 = point_or_create(mem, "alias exact", key_exact(ids[st:en + 1]), made, "new species ")
+        val, c2 = point_or_create(mem, "rel", m.query("rel", [rels[r], m.cleanup(ent, nodes + made)]), made, "open ")
+        return m.cleanup(val, nodes + made), c1, c2
+
+    def read_facts(mem, x, made):
+        """reading one species' lead: each name points to its node or creates one; facts written (replace on same key)"""
+        ents = []
+        for kind in ("common", "binomial"):
+            v, c = point_or_create(mem, "alias exact", key_exact(tk(" " + x[kind])["input_ids"]), made, "new species ")
+            ents.append(m.cleanup(v, nodes + made))
+        for t in (x["family"], x["genus"]):
+            if t not in m.atoms:
+                m.atom(t)
+                nodes.append(t)
+        for e in set(ents):
+            write(mem, "rel", m.query("rel", ["family", e]), m.atoms[x["family"]])
+            write(mem, "rel", m.query("rel", ["genus", e]), m.atoms[x["genus"]])
+        return ents
+    for arm in ("gold parse", "learned parse (relation pointed, exact name keys)"):
+        mem = {k_: (m.mem[k_][0].clone(), m.mem[k_][1].clone()) for k_ in ("alias exact", "rel")}
+        made = []
+        qs = []
+        for x in test_unread:
+            for rel in rels:
+                for kind in ("common", "binomial"):
+                    for t in W[rel][1]:
+                        ids, r, st, en, rw = make_q(x, rel, kind, t)
+                        if st is None:
+                            continue
+                        pr = (r, st, en) if arm == "gold parse" else parse_learned(ids, "point")
+                        qs.append((x, rel, ids, pr))
+        before = [ask(mem, ids, *pr, made) for x, rel, ids, pr in qs]
+        wrong_existing = sum(not a_[0].startswith(("open", "new")) and a_[0] != x[rel] for a_, (x, rel, ids, pr) in zip(before, qs))
+        n_made_q = len(made)
+        species_made = [n for n in made if n.startswith("new species")]
+        ents_read = {x["binomial"]: read_facts(mem, x, made) for x in test_unread}
+        dup = sum(len(set(v)) > 1 for v in ents_read.values())
+        reused = sum(all(e in species_made for e in v) for v in ents_read.values())
+        after = [ask(mem, ids, *pr, made)[0] for x, rel, ids, pr in qs]
+        right_after = sum(a_ == x[rel] for a_, (x, rel, ids, pr) in zip(after, qs))
+        print(f"v11 T4 {arm}: {len(qs)} questions about 15 never-read species -> answered with an existing node "
+              f"{sum(not a_[0].startswith(('open', 'new')) for a_ in before)} (wrong existing {wrong_existing}), "
+              f"open (created) {sum(a_[0].startswith('open') for a_ in before)}; nodes created while asking {n_made_q} "
+              f"({len(species_made)} species, {n_made_q - len(species_made)} open values) | reading the 15 later: species whose "
+              f"names point to the nodes made while asking {reused}/15, one species split into 2 nodes {dup}, nodes created "
+              f"while reading {len(made) - n_made_q} | asked again: right {right_after}/{len(qs)}", flush=True)
+
 
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
 def inspect(G, arts, tr_arts, n=20):
