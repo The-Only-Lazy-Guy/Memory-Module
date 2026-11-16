@@ -8,3 +8,4 @@ v11 T5 train (30 training species): name-only cosine (centred) >= .8: right afte
 /marimo/pv/hd/gnm.py:3784: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
 Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
   run_l.append(float(L))
+v11 T5 [outcome] step 1000: mean loss 1.033, punished decisions so far 16418
