@@ -17,3 +17,9 @@ v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('
     fit step 200: mean loss 2.743, skills 1
     fit step 300: mean loss 1.415, skills 1
     fit step 400: mean loss 0.676, skills 1
+    fit step 500: mean loss 0.530, skills 1
+    fit step 600: mean loss 0.437, skills 1
+    fit step 700: mean loss 0.433, skills 1
+    fit step 800: mean loss 0.324, skills 1
+    fit step 900: mean loss 0.281, skills 1
+    fit step 1000: mean loss 0.339, skills 1
