@@ -1607,7 +1607,7 @@ class GNM10(nn.Module):
         return e, None, 1.
 
     # ---------------------------------------------------------------- one step: focus + fetched -> the next node
-    def context(self, mem, focus, train, src_skip=None):
+    def context(self, mem, focus, train, src_skip=None, ancestors=True):
         """the step's input: fetched nodes (meaning ids + their control as attention bias), the focus's chain of
         ancestors and its results so far, then the focus; the fetched skill. Returns ids, bias, expert, its weight,
         how many kept nodes were fetched"""
@@ -1617,7 +1617,7 @@ class GNM10(nn.Module):
         chain, f = [], focus
         while f is not None:
             chain.append(f)
-            f = f.parent
+            f = f.parent if ancestors else None          # (ancestors=False: measurement only, ctxdiag)
         chain = chain[::-1]
         excl = set(chain) | {c for x in chain for c in x.children}
         fetched, w = self.fetch(mem, q, exclude=excl, src_skip=src_skip, train=train)
@@ -1682,9 +1682,9 @@ class GNM10(nn.Module):
             nxt = l[-1]
 
     @torch.no_grad()
-    def step(self, mem, focus, temp=0., maxlen=64):     # (11-16: was 16 -- cut the smaller questions it must write:
+    def step(self, mem, focus, temp=0., maxlen=64, ancestors=True):   # (11-16: was 16 -- cut the smaller questions:
         #                                                   5-hop 20 tokens, 3+ digit sums 17-21 tokens)
-        ids, bias, e, _, nk = self.context(mem, focus, False)
+        ids, bias, e, _, nk = self.context(mem, focus, False, ancestors=ancestors)
         self.ex.active = e
         out, rows, hd = self.gen(ids, bias, temp, maxlen)
         self.ex.active = None
@@ -2420,6 +2420,45 @@ def v10_holddiag(path, n=40, tries=4, seed=43):
     print("holddiag " + "; ".join(f"{k}: " + ", ".join(f"{a} {b}" for a, b in v.items()) for k, v in stats.items()), flush=True)
 
 
+@torch.no_grad()
+def v10_ctxdiag(path, n=30, seed=47):
+    """11-16 v10s: kept 3-4 hop chains jump hops ('Who is the boss of Vinba?' -> the second-last name) and chain2 falls
+    after training on own runs. Is the jump read from the ancestors in the step's context? On the CORRECT solution path
+    (facts given, kept memory on, as in the rounds), each step writes its node with the ancestors in context (as built)
+    and without (focus + its finished sub-steps + fetched); exact match vs the correct node, by kind and step type"""
+    tk = lm()[0]
+    G = v10_load(path)
+    rng = random.Random(seed)
+    res = {}
+    for kind, size in (("chain", 2), ("chain", 3), ("chain", 4), ("compose", 1)):
+        for _ in range(n):
+            facts, q, ans, steps = v10_task(kind, rng, size)
+            mem = []
+            for f in facts:
+                G.store(mem, tk(" " + f)["input_ids"], kind="fact")
+            root = G.store(mem, tk(" " + q)["input_ids"], kind="question")
+            focus = root
+            for text, done in steps:
+                ids = tk(" " + text)["input_ids"]
+                want = tk.decode(ids).strip()
+                typ = ("answer" if done else "sub-q") + (" at root" if focus is root else " below root")
+                for anc in (True, False):
+                    node, d, e, pd, nk = G.step(mem, focus, ancestors=anc)
+                    res.setdefault((anc, f"{kind}{size} {typ}"), []).append(tk.decode(node.ids).strip() == want)
+                H, _, _ = G.lm_run(ids)
+                nd = G.node_from(ids, H, parent=focus)
+                if done:
+                    nxt = _resolve(G, mem, focus, nd)
+                    if focus is root:
+                        break
+                    focus = nxt
+                else:
+                    focus = nd
+    for anc in (True, False):
+        print(f"ctxdiag {'with ancestors (as built)' if anc else 'without ancestors'}: " + ", ".join(
+            f"{k[1]} {sum(v) / len(v):.0%} (n {len(v)})" for k, v in sorted(res.items()) if k[0] == anc), flush=True)
+
+
 def v10_fitdiag(steps=300):
     """11-15 v10g: demo fit stuck at mean loss ~1.9 with 10 skills. Same 48 demos, fresh model per variant: as is /
     one skill / no kept memory / both; mean loss per 100 steps (lower = imitates the demos)"""
@@ -2757,12 +2796,15 @@ if __name__ == "__main__":
     ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
     ap.add_argument("--together", type=int, default=1)   # articles read into one memory per training episode
     a = ap.parse_args()
-    if a.task in ("v10", "v10test", "holddiag"):  # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
+    if a.task in ("v10", "v10test", "holddiag", "ctxdiag"):  # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
         v10_selftest()
         v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
+        raise SystemExit
+    if a.task == "ctxdiag":
+        v10_ctxdiag(os.environ.get("V10_LOAD", "/marimo/out/v10s.pt"))
         raise SystemExit
     if a.task == "holddiag":
         v10_holddiag(os.environ.get("V10_LOAD", "/marimo/out/v10r.pt"))
