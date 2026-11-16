@@ -3529,6 +3529,203 @@ def v11_t3(path=None, n_demo=50, steps=400):
                 run_arm(km, pm)
 
 
+def v11_t5(steps=3000, ep_species=8):
+    """T5 (user 11-16): no merge, no new mechanism. Every name mention = the name transformed WITH its context (frozen
+    GPT-2 states of the name's tokens inside its sentence / question + a learned projection); a learned relevance
+    between it and each node's stored mentions decides: point at the most relevant node or create (one more option
+    with its own learned score). Confusion is punished: a decision whose name points to the wrong node or creates a
+    duplicate gets as target the node holding that thing (the node its facts went to = what makes the answers right);
+    right decisions lightly reinforced. Real lead sentences (WikiText-103 species); 45 train / 30 test species.
+    Baselines: exact name string; name-only cosine (frozen GPT-2 of the name alone)"""
+    import re as _re
+    tk, M = lm()
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio", "species_e1.json")
+    arts = json.load(open(path, encoding="utf-8"))
+    sp = []
+    for a in arts:                                       # eval construction (which names belong to one species)
+        p0 = a["text"][0]
+        s0 = p0.split(" . ")[0] + " ."
+        bm = _re.search(r"\( ([A-Z][a-z]+ [a-z]+)(?: [a-z]+)? [),;]", s0)
+        fm = _re.search(r"family ([A-Z][a-z]+(?:idae|aceae|inae))", p0)
+        cm = _re.match(r"^The ([a-z][a-z @\-@]+?) (?:\(|,|or)", s0)
+        if bm and fm and cm and "<unk>" not in cm[1]:
+            sp.append({"common": cm[1], "binomial": bm[1], "family": fm[1], "genus": bm[1].split()[0], "lead": s0})
+    rng = random.Random(41)
+    rng.shuffle(sp)
+    train_sp, test_sp = sp[:45], sp[45:]
+    rels = ("family", "genus")
+    W = {"family": ["Which family is {n} in?", "What family does {n} belong to?", "{N} is placed in which family?", "Name the family of {n}."],
+         "genus": ["Which genus is {n} in?", "What genus does {n} belong to?", "{N} is classified in which genus?", "Name the genus of {n}."]}
+
+    def span(ids, name):
+        for cand in (" " + name, " " + name[0].upper() + name[1:]):
+            nid = tk(cand)["input_ids"]
+            st = next((i for i in range(len(ids)) if ids[i:i + len(nid)] == nid), None)
+            if st is not None:
+                return st, st + len(nid)
+        return None
+
+    @torch.no_grad()
+    def ctx_states(ids):
+        return M(input_ids=torch.tensor([ids], device=dev), output_hidden_states=True).hidden_states[-1][0].float()
+
+    @torch.no_grad()
+    def alone_states(name):
+        return ctx_states(tk(" " + name)["input_ids"])
+    # mentions: (pooled contextual states, name string, name-alone pooled states)
+    cache = {}
+
+    def mention(text, name):
+        key = (text, name)
+        if key not in cache:
+            ids = tk(" " + text)["input_ids"]
+            sp_ = span(ids, name)
+            if sp_ is None:
+                return None
+            H = ctx_states(ids)
+            cache[key] = (H[sp_[0]:sp_[1]].mean(0), name, alone_states(name).mean(0))
+        return cache[key]
+
+    def events(xs, r_, ask_before=.5, n_after=2, wordings=None):
+        """a stream: per species maybe 1-2 questions first, then its lead read, then questions; species interleaved"""
+        per = []
+        for x in xs:
+            ev = []
+            qs = [(rel, kind, t) for rel in rels for kind in ("common", "binomial") for t in (wordings or W[rel])]
+            if r_.random() < ask_before:
+                for rel, kind, t in r_.sample(qs, 2):
+                    ev.append(("ask", x, rel, kind, t))
+            ev.append(("read", x))
+            for rel, kind, t in r_.sample(qs, n_after):
+                ev.append(("ask", x, rel, kind, t))
+            per.append(ev)
+        out = []
+        while any(per):
+            e = r_.choice([e for e in per if e])
+            out.append(e.pop(0))
+        return out
+
+    def qtext(x, rel, kind, t):
+        n = ("the " + x["common"]) if kind == "common" else x["binomial"]
+        return t.replace("{N}", n[0].upper() + n[1:]).replace("{n}", n), x[kind]
+
+    class Rel(nn.Module):
+        def __init__(s_):
+            super().__init__()
+            s_.q = nn.Linear(M.config.n_embd, 256)
+            s_.k = nn.Linear(M.config.n_embd, 256)
+            s_.create = nn.Parameter(torch.tensor(0.))
+            s_.cq = nn.Linear(M.config.n_embd, 1)
+
+        def forward(s_, mvec, nodes):
+            """logits over [nodes..., create]; a node's score = its most relevant stored mention"""
+            qv = F.normalize(s_.q(mvec), dim=-1)
+            sc = [(qv @ F.normalize(s_.k(torch.stack(n_["m"])), dim=-1).T).max() / .1 for n_ in nodes]
+            return torch.stack(sc + [s_.create + s_.cq(mvec).squeeze()])
+
+    def run_episode(stream, decide, learn=None):
+        """decide(mention, nodes) -> index (len(nodes) = create). Returns stats; learn gets (logits, target) pairs"""
+        nodes, stats, pairs = [], {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0}, []
+
+        def point(men, ent):
+            j, lg = decide(men, nodes)
+            own = next((i for i, n_ in enumerate(nodes) if n_["owner"] == ent), None)
+            tgt = own if own is not None else len(nodes)   # the node holding this thing, else create
+            if lg is not None:
+                pairs.append((lg, tgt, j != tgt))
+            if j == len(nodes):
+                nodes.append({"m": [men[0]], "names": [men[1]], "alone": [men[2]], "owner": ent, "facts": {}})
+            else:
+                nodes[j]["m"].append(men[0])
+                nodes[j]["names"].append(men[1])
+                nodes[j]["alone"].append(men[2])
+            return j
+        read_done = set()
+        for ev in stream:
+            x = ev[1]
+            ent = x["binomial"]
+            if ev[0] == "read":
+                j1 = point(mention(x["lead"], x["common"]), ent)
+                j2 = point(mention(x["lead"], x["binomial"]), ent)
+                for r_ in rels:                          # the lead's facts go to its subject's node
+                    nodes[j1]["facts"][r_] = x[r_]
+                read_done.add(ent)
+            else:
+                _, rel, kind, t = ev[1:]
+                q, nm = qtext(x, rel, kind, t)
+                men = mention(q, nm)
+                if men is None:
+                    continue
+                j = point(men, ent)
+                got = nodes[j]["facts"].get(rel)
+                if ent in read_done:
+                    stats["asked_after"] += 1
+                    stats["right"] += got == x[rel]
+                else:
+                    stats["asked_before"] += 1
+                    stats["wrong_node"] += nodes[j]["owner"] != ent
+        own_nodes = {}
+        for n_ in nodes:
+            own_nodes.setdefault(n_["owner"], 0)
+            own_nodes[n_["owner"]] += 1
+        stats["nodes"] = len(nodes)
+        stats["things"] = len(own_nodes)
+        stats["mixed"] = sum(len({a_ for a_ in n_["names"]}) > 2 or False for n_ in nodes)
+        return stats, pairs
+
+    relm = Rel().to(dev)
+    opt = torch.optim.AdamW(relm.parameters(), lr=1e-3)
+
+    def learned(train):
+        def d(men, nodes):
+            lg = relm(men[0], nodes) if nodes else relm.create[None] + relm.cq(men[0])
+            if train and random.random() < .1:
+                j = random.randrange(len(lg))
+            else:
+                j = int(lg.argmax())
+            return j, (lg if train else None)
+        return d
+
+    def exact(men, nodes):
+        j = next((i for i, n_ in enumerate(nodes) if men[1] in n_["names"]), len(nodes))
+        return j, None
+
+    mu_alone = torch.stack([alone_states(x[k]).mean(0) for x in train_sp for k in ("common", "binomial")]).mean(0)
+
+    def alone_cos(thr):                                  # name alone, centred by the training names' mean (U0 lesson)
+        def d(men, nodes):
+            if not nodes:
+                return 0, None
+            sc = torch.stack([F.cosine_similarity((men[2] - mu_alone)[None], torch.stack(n_["alone"]) - mu_alone).max() for n_ in nodes])
+            j = int(sc.argmax())
+            return (j if float(sc[j]) >= thr else len(nodes)), None
+        return d
+    trng = random.Random(43)
+    for stp in range(steps):
+        stream = events(trng.sample(train_sp, ep_species), trng, wordings=None)
+        _, pairs = run_episode(stream, learned(True))
+        if not pairs:
+            continue
+        L = 0.
+        for lg, tgt, wrong in pairs:                     # confusion punished; right choices lightly reinforced
+            L = L + (1. if wrong else .1) * F.cross_entropy(lg[None], torch.tensor([tgt], device=dev))
+        L = L / len(pairs)
+        opt.zero_grad()
+        L.backward()
+        opt.step()
+        if (stp + 1) % 1000 == 0:
+            print(f"v11 T5 training step {stp + 1}: loss {float(L):.3f}", flush=True)
+    erng = random.Random(47)
+    stream = events(test_sp, erng, ask_before=.5, n_after=4)
+    with torch.no_grad():
+        for name, d in (("learned relevance (name + context)", learned(False)), ("exact name string", exact),
+                        ("name-only cosine (centred) >= .6", alone_cos(.6)), ("name-only cosine (centred) >= .8", alone_cos(.8))):
+            st, _ = run_episode(stream, d)
+            print(f"v11 T5 test ({len(test_sp)} never-trained species, one stream): {name}: right after reading "
+                  f"{st['right']}/{st['asked_after']} | asked before reading -> another thing's node {st['wrong_node']}/"
+                  f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things", flush=True)
+
+
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
 def inspect(G, arts, tr_arts, n=20):
     """what the trained parts actually do: node collapse, write attention, retrieval vs a node's source, gradients"""
@@ -3688,6 +3885,9 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "v11test":
         v11_test()
+        raise SystemExit
+    if a.task == "v11t5":
+        v11_t5()
         raise SystemExit
     if a.task == "v11t3":
         v11_t3()
