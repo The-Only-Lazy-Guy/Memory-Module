@@ -3062,7 +3062,28 @@ def v11_test():
         mm = _re.match(r"The genus (\w+) is in the family (\w+)\.$", f)
         return "family", mm[1], mm[2]
 
-    triples = [parse(f) for w in worlds for f in w[1]]
+    # every world gets its own fresh names (11-16 first run: generated names repeat across 600 worlds -> 1230 clashing
+    # keys, almost every question excluded): two syllable-names joined, never reused
+    used, nr = set(), random.Random(17)
+
+    def fresh():
+        while True:
+            n = _nm(nr) + _nm(nr).lower()
+            if n not in used:
+                used.add(n)
+                return n
+    renamed = []
+    for w in worlds:
+        mp = {}
+        f = lambda n: mp.setdefault(n, fresh())
+        tr = [(r_, f(x), f(y)) for r_, x, y in (parse(t) for t in w[1])]
+        if w[0] == "chain":
+            renamed.append(("chain", tr, [f(n) for n in w[2]], w[3]))
+        else:
+            x = _re.match(r"Which family is (\w+) in\?", w[2])[1]
+            renamed.append(("compose", tr, f(x), f(w[3])))
+    worlds = renamed
+    triples = [t for w in worlds for t in w[1]]
     ents = sorted({t[1] for t in triples} | {t[2] for t in triples})
     seen, clash = {}, set()
     for rel, x, y in triples:
@@ -3086,8 +3107,8 @@ def v11_test():
         out, hits = {}, {}
         for w in worlds:
             if w[0] == "chain":
-                _, facts, names, size = w
-                rel = parse(facts[0])[0]
+                _, tr, names, size = w
+                rel = tr[0][0]
                 cur, ok, touched = names[0], True, False
                 for k in range(size):
                     touched |= (rel, cur) in clash
@@ -3095,8 +3116,7 @@ def v11_test():
                 ok = cur == names[size]
                 key = f"chain{size}"
             else:
-                _, facts, q, ans = w
-                x = _re.match(r"Which family is (\w+) in\?", q)[1]
+                _, tr, x, ans = w
                 touched = ("genus", x) in clash
                 g_ = mt.cleanup(mt.point("rel", ["genus", x])[0], ents)
                 touched |= ("family", g_) in clash
