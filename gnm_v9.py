@@ -3322,6 +3322,14 @@ def v11_t3(path=None, n_demo=50, steps=400):
     prng = random.Random(29)
     prng.shuffle(pool)
     val_names, tr_names = pool[:40], pool[40:]
+    # + Wikipedia article titles (11-16: 142 species names were too few -- the tool judged by spelling, other similar
+    # names < tau only 59%): plain names of 2-5 words, letters only
+    wpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio", "wiki_e1.json.gz")
+    if os.path.exists(wpath):
+        wt = [a_["title"] for a_ in json.load(gzip.open(wpath, "rt", encoding="utf-8"))]
+        wt = [t for t in wt if 2 <= len(t.split()) <= 5 and _re.fullmatch(r"[A-Za-z][A-Za-z' \-]*", t) and t not in held_names]
+        tr_names = tr_names + wt
+    name_steps = int(os.environ.get("V11_NAME_STEPS", "2000"))
 
     def variant(name, r_):
         """one way the name may appear in a question: article / capital / a token cut at either end (span errors)"""
@@ -3356,14 +3364,14 @@ def v11_t3(path=None, n_demo=50, steps=400):
     for n_ in tr_names:
         by_genus.setdefault(n_.split()[0], []).append(n_)
     genus_groups = [g for g in by_genus.values() if len(g) > 1]
-    for stp in range(500):
+    for stp in range(name_steps):
         batch = []
-        while len(batch) < 24:                           # half from shared-first-word groups (hard negatives)
+        while len(batch) < 32:                           # half from shared-first-word groups (hard negatives)
             if genus_groups and prng.random() < .5:
                 batch += prng.sample(prng.choice(genus_groups), 2)
             else:
                 batch.append(prng.choice(tr_names))
-        batch = list(dict.fromkeys(batch))[:24]
+        batch = list(dict.fromkeys(batch))[:32]
         z1 = enc([variant(n_, prng) for n_ in batch])
         z2 = enc([variant(n_, prng) for n_ in batch])
         lg = z1 @ z2.T / .05
@@ -3389,7 +3397,7 @@ def v11_t3(path=None, n_demo=50, steps=400):
         acc = torch.stack([((pv >= g).float().mean() + (nv < g).float().mean()) / 2 for g in grid])
         tau = float(grid[int(acc.argmax())])
         pt, nt = sep(sorted(held_names), random.Random(37))
-    print(f"v11 T4 name tool: trained on {len(tr_names)} names from other species articles (500 steps); tau from "
+    print(f"v11 T4 name tool: trained on {len(tr_names)} names (other species articles + Wikipedia titles; {name_steps} steps); tau from "
           f"{len(val_names)} validation names = {tau:.2f}. Test species names (never trained): a variant's cosine to its "
           f"name mean {float(pt.mean()):.2f} (min {float(pt.min()):.2f}); most similar OTHER name mean {float(nt.mean()):.2f} "
           f"(max {float(nt.max()):.2f}); variants >= tau {float((pt >= tau).float().mean()):.0%}, other names < tau "
