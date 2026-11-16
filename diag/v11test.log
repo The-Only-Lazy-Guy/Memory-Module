@@ -1,0 +1,9 @@
+v11 T1a: 160 column facts written once, read back (both slots exact): 160/160; key cosine of written queries min 1.00
+v11 T1b (control): 40 never-written combos: best key cosine max 0.18 (written: >= 1.00) -> answered with confidence (> .5): 0/40; right if forced: 1/40 (chance ~2/40)
+v11 T1d: addition by repeated column lookups (procedure fixed): 2 digits 100%, 4 digits 100%, 8 digits 100%, 12 digits 100%
+v11 T1c capacity: 1000 facts in one op memory, 500 read back: 100%
+v11 T1c capacity: 10000 facts in one op memory, 500 read back: 100%
+v11 T1c capacity: 50000 facts in one op memory, 500 read back: 100%
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4233.78it/s]
+v11 T2 random atoms: 4600 facts read once into one memory, 1230 (rel, name) keys written twice with different answers (excluded): chain1 100% (n 5), chain2 100% (n 1), compose 100% (n 1)
+v11 T2 GPT-2 token vectors (centred): 4600 facts read once into one memory, 1230 (rel, name) keys written twice with different answers (excluded): chain1 100% (n 5), chain2 100% (n 1), compose 100% (n 1)
