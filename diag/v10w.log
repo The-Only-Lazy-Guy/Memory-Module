@@ -26,3 +26,38 @@ v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('
     fit step 1000: mean loss 0.473, skills 4
     fit step 1100: mean loss 0.498, skills 4
     fit step 1200: mean loss 0.528, skills 4
+    fit step 1300: mean loss 0.532, skills 4
+    fit step 1400: mean loss 0.879, skills 4
+round 0 (demos only): loss 0.143, 458s
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 1 0
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s2 writes ' 7 + 1 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 1 + carry 0 = ?' -> skill s1 writes ' digit 0, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s2 writes ' 1 0' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> None
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s2 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s1 writes ' digit 9, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s2 writes ' What is 7 5 1 + 7 plus carry 0, followed by 9?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 + 7 plus carry 0, followed by 9?' -> skill s2 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s1 writes ' digit 9, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 + 7 plus carry 0, followed by 9?' -> skill s2 writes ' What is 7 5 1 + 7 plus carry 0, followed by 9?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 + 7 plus carry 0, followed by 9?' -> skill s2 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s1 writes ' digit 9, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 + 7 plus carry 0, followed by 9?' -> skill s2 writes ' What is 7 5 1 + 7 plus carry 0, followed by 9?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 + 7 plus carry 0, followed by 9?' -> skill s2 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s1 writes ' digit 9, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 + 7 plus carry 0, followed by 9?' -> skill s2 writes ' What is 7 5 1 + 7 plus carry 0, followed by 9?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 + 7 plus carry 0, followed by 9?' -> skill s2 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s1 writes ' digit 9, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> The latest release of the game is now available.
+
+The latest release of the game is now available.
+
+The latest release of the game is now available.
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s2 writes ' 6 + 8 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 6 + 8 + carry 0 = ?' -> skill s2 writes ' digit 0, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s2 writes ' 1 0 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5' (sub-step, done p 0.07; kept nodes fetched 6)
+   focus ' 1 0 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.86; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s2 writes 'The latest release of the game is now available.\n\nThe latest release of the game is now available.\n\nThe latest release of the game is now available.' (resolves it, done p 0.99; kept nodes fetched 6)
