@@ -1794,9 +1794,11 @@ def v10_task(kind, rng, size):
         a = rng.choice(attrs)
         return facts, f"What is the {a} of {t}?", str(vals[a]), [(str(vals[a]), 1)]
     if kind == "compose":                                # two different relations, one after the other
-        x, y, z, w, v, x2 = (_nm(rng) for _ in range(6))
-        facts = [f"{x} is in the genus {y}.", f"The genus {y} is in the family {z}.", f"The genus {w} is in the family {v}.",
-                 f"{x2} is in the genus {w}."]
+        x, y, z = (_nm(rng) for _ in range(3))
+        facts = [f"{x} is in the genus {y}.", f"The genus {y} is in the family {z}."]
+        for _ in range(3):                               # (11-16: was 1 other pair -- 2 families, a guess right half
+            w, v, x2 = (_nm(rng) for _ in range(3))      #  the time, and lucky runs were kept as traces)
+            facts += [f"The genus {w} is in the family {v}.", f"{x2} is in the genus {w}."]
         rng.shuffle(facts)
         return facts, f"Which family is {x} in?", z, [(f"Which genus is {x} in?", 0), (y, 1),
                                                        (f"Which family is the genus {y} in?", 0), (z, 1), (z, 1)]
@@ -2158,16 +2160,19 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
                     tr = [(tk.decode(node.ids).strip(), int(done)) for focus, node, done in steps]
                     if all(x for x, _ in tr):
                         right.append(tr)
-                # keep only when right in >= 2 tries (v10b round 1: a chain's answer is one of ~8 names, so one lucky
-                # guess in 4 tries is common; kept guesses taught it to answer at once -- chain2 60 -> 22%)
-                if len(right) >= 2 or len(right) + (tries - t - 1) < 2:
+                # keep only when >= 2 right tries wrote the SAME steps (v10b round 1: one lucky guess in 4 tries is
+                # common -- chain2 60 -> 22%; 11-16 v10p round 1: with ">= 2 right answers", 13 of 36 kept compose
+                # runs reached the right family through wrong steps (wrong genus, renamed names) and compose fell
+                # 52 -> 10%. A guess lands on the answer by different wrong steps each time; a method repeats)
+                agree = [x for x in right if right.count(x) >= 2]
+                if agree or len(right) + (tries - t - 1) < 2:
                     break
-            if len(right) >= 2:
-                kept.append((facts, q, ans, right[0]))
-                keep_trace(G, q, right[0], len(kept) - 1)
+            if agree:
+                kept.append((facts, q, ans, agree[0]))
+                keep_trace(G, q, agree[0], len(kept) - 1)
                 seen_q.add(q)
                 got_right += 1
-                seen.setdefault((kind, size), []).append(len(right[0]))
+                seen.setdefault((kind, size), []).append(len(agree[0]))
             keep_facts(G, facts, len(kept) - 1 if kept[-1][1] == q else "read")   # what it read stays
         print(f"round {r}: right runs found {got_right}/{per_round} (kept traces {len(kept)}, kept memory {len(G.ltm)} nodes), "
               f"{time.time() - t0:.0f}s trying", flush=True)
