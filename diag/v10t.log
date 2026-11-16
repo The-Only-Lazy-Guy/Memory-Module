@@ -13,3 +13,10 @@ selftest 8: focus + sub-steps of 3198 tokens -> context 958 tokens, wrote 64 tok
 v10 seed 0
 v10 switches: keep demo facts True, recall training True, fetch loss True, demo steps 1500
 v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('chain', 2), ('chain', 3), ('lookup', 1), ('compose', 1)]); kept memory starts with the demos' facts (162); test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6), ('lookup', 1), ('compose', 1)] (add / chain longer than any demo)
+    fit step 100: mean loss 6.073, skills 1
+    fit step 200: mean loss 2.456, skills 1
+    fit step 300: mean loss 1.087, skills 1
+    fit step 400: mean loss 0.572, skills 1
+    fit step 500: mean loss 0.476, skills 1
+    fit step 600: mean loss 0.381, skills 1
+    fit step 700: mean loss 0.419, skills 1
