@@ -3791,7 +3791,17 @@ def v11_t5(steps=3000, ep_species=8):
             return F.normalize(relm.q(torch.stack(ms)), dim=-1) @ F.normalize(relm.q(v), dim=-1)
         trng = random.Random(43)
         n_sig, run_l = 0, []
+        # (11-17 diag, measurement only: train 104/120 vs test 44/120, linked 19/30 vs 6/30 -> does test peak early
+        # and fall (memorizing) or never rise (signal does not carry to new names)?)
+        at = {int(v) for v in os.environ.get("V11_T5_AT", "").split(",") if v}
         for stp in range(steps):
+            if stp in at:
+                with torch.no_grad():
+                    for sn, sm in (("test", test_stream), ("train", train_stream)):
+                        st, _ = run_episode(sm, learned(False))
+                        print(f"v11 T5 at step {stp} {sn}: right {st['right']}/{st['asked_after']} (common {st['right common']}/"
+                              f"{st['n common']}, binomial {st['right binomial']}/{st['n binomial']}) linked {st['linked']}/"
+                              f"{st['reads']} before->other {st['wrong_node']}/{st['asked_before']} nodes {st['nodes']}", flush=True)
             stream = events(trng.sample(train_sp[:n_tr], min(n_tr, trng.randint(ep_species, 30))), trng)   # (8-30: test has 30)
             _, pairs = run_episode(stream, learned(True), mode, match=match_fn)
             if not pairs:
