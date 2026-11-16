@@ -1489,9 +1489,16 @@ class GNM10(nn.Module):
         w = F.softmax(self.bias(C).squeeze(-1), 0)[:, None]
         return (w * H).sum(0), (w * C).sum(0)
 
+    def key_pool(self, H, C):
+        """pooling for keys and queries: the control's weights, detached (11-16 fpA: the fetch loss reached ctl / bias
+        through this pooling -- the same parts that set the executor's attention; with it on, chain2 70 -> 22% in a
+        round, off 68 -> 85%). Fetch learns in qry / keyc; control is learned by reading"""
+        w = F.softmax(self.bias(C).squeeze(-1), 0).detach()[:, None]
+        return (w * H).sum(0), (w * C.detach()).sum(0)
+
     def node_from(self, ids, H, parent=None, kind=""):
         C = self.ctl(H)                                  # control rows from the LM's states over the node's tokens
-        Hp, Cp = self.pool(H, C)
+        Hp, Cp = self.key_pool(H, C)
         key = F.normalize(self.qry(Hp) + self.keyc(Cp), dim=-1)   # asked-for like a query + what its control adds
         return Node10(ids, C, key, parent, kind)
 
@@ -1503,7 +1510,7 @@ class GNM10(nn.Module):
 
     def query(self, ids):
         H, _, _ = self.lm_run(ids)
-        return F.normalize(self.qry(self.pool(H, self.ctl(H))[0]), dim=-1)
+        return F.normalize(self.qry(self.key_pool(H, self.ctl(H))[0]), dim=-1)
 
     # ---------------------------------------------------------------- kept memory (across questions)
     @torch.no_grad()
@@ -1523,12 +1530,12 @@ class GNM10(nn.Module):
     @torch.no_grad()
     def _refresh(self, n):
         n.C = self.ctl(n.H)
-        Hp, Cp = self.pool(n.H, n.C)
+        Hp, Cp = self.key_pool(n.H, n.C)
         n.key = F.normalize(self.qry(Hp) + self.keyc(Cp), dim=-1)
 
     def key_of(self, n):
         """a kept node's key from its cached states, with gradient (fetch training)"""
-        Hp, Cp = self.pool(n.H, self.ctl(n.H))
+        Hp, Cp = self.key_pool(n.H, self.ctl(n.H))
         return F.normalize(self.qry(Hp) + self.keyc(Cp), dim=-1)
 
     def refresh_ltm(self):
@@ -1615,7 +1622,7 @@ class GNM10(nn.Module):
         53-60% without (the 3-4 hop chains' kept runs jumped hops). ancestors=True = the v10s input (ctxdiag only).
         Ancestors stay out of the fetch either way (no way back in through working memory)"""
         Hf, _, _ = self.lm_run(focus.ids)
-        q = F.normalize(self.qry(self.pool(Hf, self.ctl(Hf))[0]), dim=-1)
+        q = F.normalize(self.qry(self.key_pool(Hf, self.ctl(Hf))[0]), dim=-1)
         sq = F.normalize(self.skill_query(Hf, train), dim=-1)
         chain, f = [], focus
         while f is not None:
@@ -2113,6 +2120,10 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
         for j, t in enumerate(traces):
             by_len.setdefault(len(t[3]), []).append(j)
         lens = list(by_len)
+        # a length is picked by sqrt(how many traces it holds) (11-16 v10t: picked uniformly, a length with one odd
+        # own run -- a skipped step -- got as much training as all 27 right 5-step runs; chain2 70 -> 22% in round 1)
+        lw = [len(by_len[k]) ** .5 for k in lens]
+        print("    traces by length: " + ", ".join(f"{k}:{len(by_len[k])}" for k in sorted(lens)), flush=True)
         for st in range(steps):
             if st % 50 == 0:
                 G.refresh_ltm()
@@ -2121,7 +2132,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
                 run = []
             # balanced by trace length (11-15 v10i: 55 of 77 kept runs were one-step answers; trained on them as they
             # came, chains went 40 -> 12 -> 22%): pick a length first, then a trace of that length
-            i = random.choice(by_len[random.choice(lens)])
+            i = random.choice(by_len[random.choices(lens, lw)[0]])
             facts, q, ans, tr = traces[i]
             saved = G.ltm
             if random.random() < .5:                     # half the traces without kept memory: must solve both ways,
