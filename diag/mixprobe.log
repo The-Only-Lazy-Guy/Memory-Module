@@ -41,3 +41,24 @@ round 0 (demos only): loss 0.001, 290s
   recall (facts read earlier, none given; kept memory 736 nodes): chain2 0%, chain4 0%, lookup1 0%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 0%, chain4 1%, lookup1 0%, compose1 9% | ... the fact the step needs: chain2 0%, chain4 0%, lookup1 0%, compose1 0%
   reuse (n 20): first ask 25% in 7.7 steps; asked again 25% in 8.8 steps, 20% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 5%, without 5%
 === KEEP=1 RECALL=1 FETCHL=0
+v10 switches: keep demo facts True, recall training True, fetch loss False, demo steps 1500
+    fit step 100: mean loss 3.646, skills 1
+    fit step 200: mean loss 2.239, skills 1
+    fit step 300: mean loss 1.545, skills 1
+    fit step 400: mean loss 1.279, skills 1
+    fit step 500: mean loss 0.888, skills 1
+    fit step 600: mean loss 0.619, skills 1
+    fit step 700: mean loss 0.684, skills 1
+    fit step 800: mean loss 0.549, skills 1
+    fit step 900: mean loss 0.610, skills 1
+    fit step 1000: mean loss 0.401, skills 1
+    fit step 1100: mean loss 0.346, skills 1
+    fit step 1200: mean loss 0.374, skills 1
+    fit step 1300: mean loss 0.316, skills 1
+    fit step 1400: mean loss 0.325, skills 1
+round 0 (demos only): loss 0.002, 358s
+  with kept memory | add2 2%, add4 0%, add6 0%, chain2 30%, chain4 10%, chain6 10%, lookup1 82%, compose1 20% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1104; chain: s0x999; lookup: s0x40; compose: s0x315; needed fact fetched: chain 75% compose 90% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 20%, chain4 18%, chain6 5%, lookup1 80%, compose1 22% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x941; chain: s0x906; lookup: s0x40; compose: s0x320; needed fact fetched: chain 72% compose 95% lookup 100%
+  recall (facts read earlier, none given; kept memory 736 nodes): chain2 0%, chain4 0%, lookup1 0%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 22%, chain4 20%, lookup1 63%, compose1 32% | ... the fact the step needs: chain2 16%, chain4 8%, lookup1 63%, compose1 40%
+  reuse (n 20): first ask 5% in 7.9 steps; asked again 0% in 6.4 steps, 97% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 5%, without 5%
+=== KEEP=1 RECALL=1 FETCHL=1
