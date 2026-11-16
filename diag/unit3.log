@@ -1,0 +1,6 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4072.11it/s]
+/marimo/pv/hd/gnm.py:1602: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if not train or float(sc[b]) >= self.spawn_at or n >= self.ex.n:
+unit U2 learned routing, spawning on (spawn_at 0.3; fixed-centred frozen skill space): @300: column 15%, column held-out 0%, lookup 95%, hop 98%, genus 30% | skills 4, routing stability column 89%, lookup 72%, hop 62%, genus 100% || @750: column 15%, column held-out 0%, lookup 85%, hop 75%, genus 30% | skills 4, routing stability column 89%, lookup 80%, hop 68%, genus 100% || @1500: column 8%, column held-out 0%, lookup 80%, hop 65%, genus 55% | skills 4, routing stability column 89%, lookup 88%, hop 75%, genus 100%
