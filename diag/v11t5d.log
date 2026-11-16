@@ -8,3 +8,7 @@ v11 T5 train (30 training species): name-only cosine (centred) >= .8: right afte
 Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
   t_ = max(ok, key=lambda i: float(d["lg"][i])) if ok else d["n"]
 v11 T5 [outcome] step 1000: mean loss 0.749, punished decisions so far 9375
+v11 T5 [outcome] step 2000: mean loss 0.436, punished decisions so far 16922
+v11 T5 [outcome] step 3000: mean loss 0.407, punished decisions so far 24446
+v11 T5 test (30 never-trained species): learned relevance, trained on outcome (15 training species): right after reading 19/120 | asked before reading -> another thing's node 35/36 | nodes 5 for 4 things
+v11 T5 train (30 training species): learned relevance, trained on outcome (15 training species): right after reading 54/120 | asked before reading -> another thing's node 17/30 | nodes 14 for 13 things
