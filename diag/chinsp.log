@@ -1,0 +1,68 @@
+7 long-chain sources
+101 |  Who is the neighbour of Sazek? Thadun
+101 |  Who is the neighbour of Thapel? Kane
+101 |  Who is the neighbour of the neighbour of the neighbour of Sazek? Kane
+101 |  The neighbour of Zekor is Thadun.
+101 |  The neighbour of Thapel is Thazek.
+101 |  The neighbour of Sazek is Zekor.
+101 |  The neighbour of Thaka is Zeksa.
+101 |  The neighbour of Orzek is Tordun.
+101 |  The neighbour of Thadun is Kane.
+120 |  Who is the neighbour of Rilzek? Pelne
+120 |  Who is the neighbour of Pelne? Peltor
+120 |  Who is the neighbour of the neighbour of the neighbour of Rilzek? Peltor
+120 |  The neighbour of Goror is Thaor.
+120 |  The neighbour of Sasa is Mupel.
+120 |  The neighbour of Balo is Muril.
+120 |  The neighbour of Pelne is Peltor.
+120 |  The neighbour of Mumu is Pelne.
+120 |  The neighbour of Rilzek is Mumu.
+152 |  Who is the neighbour of Dunor? Dunor
+152 |  Who is the neighbour of Dunor? Bagor
+152 |  Who is the neighbour of the neighbour of the neighbour of the neighbour of Dunsa? Bagor
+152 |  The neighbour of Thalo is Nemu.
+152 |  The neighbour of Nemu is Dunor.
+152 |  The neighbour of Dunsa is Thalo.
+152 |  The neighbour of Dunor is Bagor.
+152 |  The neighbour of Kamer is Dunmer.
+152 |  The neighbour of Riltor is Zeklo.
+152 |  The neighbour of Gormer is Thatha.
+48 |  Who is the boss of Vinba? Merne
+48 |  Who is the boss of Merne? Pelka
+48 |  Who is the boss of the boss of the boss of the boss of Vinba? Pelka
+48 |  The boss of Nezek is Gorgor.
+48 |  The boss of Kaba is Pelgor.
+48 |  The boss of Sapel is Kazek.
+48 |  The boss of Vinba is Nezek.
+48 |  The boss of Gorgor is Merne.
+48 |  The boss of Merne is Pelka.
+48 |  The boss of Peltha is Lotor.
+62 |  Who is the teacher of Vinka? Mergor
+62 |  Who is the teacher of Mergor? Kalo
+62 |  Who is the teacher of the teacher of the teacher of the teacher of Vinka? Kalo
+62 |  The teacher of Toror is Kalo.
+62 |  The teacher of Thazek is Mergor.
+62 |  The teacher of Thaka is Rilgor.
+62 |  The teacher of Musa is Pelmu.
+62 |  The teacher of Gordun is Thazek.
+62 |  The teacher of Vinka is Thazek.
+62 |  The teacher of Mergor is Toror.
+81 |  Who is the neighbour of Rilril? Sadun
+81 |  Who is the neighbour of Sadun? Mugor
+81 |  Who is the neighbour of the neighbour of the neighbour of Rilril? Mugor
+81 |  The neighbour of Sadun is Mugor.
+81 |  The neighbour of Sator is Sadun.
+81 |  The neighbour of Rilsa is Mulo.
+81 |  The neighbour of Rilril is Sator.
+81 |  The neighbour of Kaba is Nepel.
+81 |  The neighbour of Torsa is Orne.
+85 |  Who is the teacher of Dunne? Sapel
+85 |  Who is the teacher of Sapel? Thaka
+85 |  Who is the teacher of the teacher of the teacher of the teacher of Dunne? Thaka
+85 |  The teacher of Saril is Nezek.
+85 |  The teacher of Nezek is Sapel.
+85 |  The teacher of Katha is Dunril.
+85 |  The teacher of Savin is Saor.
+85 |  The teacher of Dunne is Saril.
+85 |  The teacher of Pelsa is Muril.
+85 |  The teacher of Sapel is Thaka.
