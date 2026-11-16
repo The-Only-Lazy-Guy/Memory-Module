@@ -154,3 +154,7 @@ round 0 (demos only): loss 0.204, 544s
      fetched for ' Which family is Zektha in?': 'The genus Tormer is in the family Gorril.' (-1.7); 'The genus Mertha is in the family Tormer.' (-2.2); 'The genus Tormu is in the family Lovin.' (-2.2)
   recall (facts read earlier, none given; kept memory 881 nodes): chain2 10%, chain4 3%, lookup1 60%, compose1 3% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 67%, chain4 53%, lookup1 100%, compose1 29% | ... the fact the step needs: chain2 77%, chain4 63%, lookup1 100%, compose1 30%
   reuse (n 20): first ask 15% in 5.8 steps; asked again 0% in 7.5 steps, 95% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
+round 1: right runs found 133/400 (kept traces 181, kept memory 2134 nodes), 309s trying
+  fetch-training pairs 2091
+  kept by kind/size (count, mean steps): chain1 15 2.3, chain2 12 5.0, chain3 7 5.6, chain4 2 5.0, compose1 15 5.0, lookup1 82 1.0
+    fit step 100: mean loss 1.361, skills 1
