@@ -216,3 +216,15 @@ round 1: right runs found 179/400 (kept traces 227, kept memory 2238 nodes), 344
      fetched for '?': 'The size of Kane is 96.' (-8.0); 'The size of Kazek is 18.' (-8.0); 'The age of Merba is 2.' (-8.0)
      fetched for ' What is the real thing happening?': 'What is the age of Gorka? 3' (-7.9); 'What is the age of Vinril? 63' (-7.9); 'What is the age of Vinor? 26' (-7.9)
      fetched for ' What is the real thing happening?': 'What is the age of Gorka? 3' (-7.9); 'What is the age of Vinril? 63' (-7.9); 'What is the age of Vinor? 26' (-7.9)
+
+  [recall chain 4] Who is the friend of the friend of the friend of the friend of Gorril? (truth Gorzek) -> <|endoftext|>
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' friend of Gorril?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' friend of Gorril?' -> skill s0 writes ' 7, Gor 0, Gor 0 7' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'What is the age of Zekka? 73' (-8.0); 'What is the age of Vinril? 63' (-8.0); 'What is the age of Basa? 91' (-8.0)
+     fetched for ' friend of Gorril?': 'The age of Gorril is 13.' (-8.0); 'The age of Gorba is 2.' (-8.0); 'The age of Goror is 10.' (-8.0)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'What is the age of Zekka? 73' (-8.0); 'What is the age of Vinril? 63' (-8.0); 'What is the age of Basa? 91' (-8.0)
+
+  [recall lookup 1] What is the age of Torgor? (truth 31) -> Torgor
+   focus ' What is the age of Torgor?' -> skill s0 writes ' Torgor' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' What is the age of Torgor?': 'What is the age of Kator? 67' (-8.0); 'What is the age of Zekka? 73' (-8.0); 'What is the age of Vinka? 47' (-8.0)
