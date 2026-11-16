@@ -3673,7 +3673,7 @@ def v11_t5(steps=3000, ep_species=8):
         nodes, decs, pairs = [], [], []
         stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "linked": 0, "reads": 0,
                  "right common": 0, "n common": 0, "right binomial": 0, "n binomial": 0, "j1 top": 0, "create>j1": 0,
-                 "n link": 0, "miss same genus": 0, "miss existing": 0}
+                 "n link": 0, "miss same genus": 0, "miss existing": 0, "miss own": 0}
 
         def point(men, ent):
             j, lg = decide(men, nodes)
@@ -3711,6 +3711,7 @@ def v11_t5(steps=3000, ep_species=8):
                     stats["n link"] += 1
                     if j2 != j1 and j2 < n0:                     # (11-17) failed link went to an existing node:
                         stats["miss existing"] += 1              # (names[-1] is this binomial itself, just added)
+                        stats["miss own"] += nodes[j2]["owner"] == ent   # its own node (made by an earlier question)
                         stats["miss same genus"] += any(nm_.split()[0] == x["genus"] for nm_ in nodes[j2]["names"][:-1])
                 for r_ in rels:                          # the lead's facts go to its subject's node
                     nodes[j1]["facts"][r_] = x[r_]
@@ -3765,6 +3766,14 @@ def v11_t5(steps=3000, ep_species=8):
                 dm = decs[nodes[j]["made_by"]]
                 if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
                     pairs.append((dm["lg"], t_, True))
+            # blame up (4) (11-17 link-drop diag: missed links went to the thing's OWN node made by a question asked
+            # before reading; reading made a second node for the facts; nothing blamed that split). The chosen node
+            # holds NO fact (an empty node, not another thing's facts = confusion) while another node holds the right
+            # facts -> the decision that made the facts node should have pointed to the empty node (it existed then)
+            if ok and got is None and j != t_:
+                dt = decs[nodes[t_]["made_by"]]
+                if dt is not d and dt["lg"] is not None and j < dt["n"]:
+                    pairs.append((dt["lg"], j, True))
         owners = {n_["owner"] for n_ in nodes}
         stats["nodes"], stats["things"] = len(nodes), len(owners)
         return stats, pairs
@@ -3850,7 +3859,8 @@ def v11_t5(steps=3000, ep_species=8):
                               f"{st['n common']}, binomial {st['right binomial']}/{st['n binomial']}) linked {st['linked']}/"
                               f"{st['reads']} before->other {st['wrong_node']}/{st['asked_before']} nodes {st['nodes']} | binomial "
                               f"read: common node top {st['j1 top']}/{st['n link']}, create beats it {st['create>j1']}/{st['n link']}, "
-                              f"missed link -> an existing node {st['miss existing']}, of them holding a same-genus name {st['miss same genus']} | weights name "
+                              f"missed link -> an existing node {st['miss existing']}, of them its own (asked before) {st['miss own']}, "
+                              f"holding a same-genus name {st['miss same genus']} | weights name "
                               f"{float(relm.wn):.2f} context {float(relm.wc):.2f}", flush=True)
             stream = events(trng.sample(train_sp[:n_tr], min(n_tr, trng.randint(ep_species, 30))), trng)   # (8-30: test has 30)
             _, pairs = run_episode(stream, learned(True), mode, match=match_fn)
