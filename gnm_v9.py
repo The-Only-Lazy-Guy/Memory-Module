@@ -2586,6 +2586,86 @@ def v10_unit(steps=1500):
     run("U2 learned routing, spawning on (spawn_at .5)", kinds, spawn=.5)
 
 
+@torch.no_grad()
+def v10_unit_route(n=20):
+    """U0 (measurement only): does a routing space separate step kinds, at start, without drifting? Same-kind vs
+    other-kind cosine and nearest-neighbour kind match, for: the current skill space (skill_query, untrained), the
+    plain frozen LM states (mean over tokens), and those centred by one fixed mean"""
+    tk = lm()[0]
+    G = GNM10().to(dev)
+    rng = random.Random(21)
+    allc = [(x, y, c) for x in range(10) for y in range(10) for c in (0, 1)]
+    kinds = ("column", "lookup", "hop", "genus")
+    rows, lab = {"skill space": [], "frozen mean": []}, []
+    for k in kinds:
+        for _ in range(n):
+            _, ftext, _ = _unit_step(k, rng, combos=allc)
+            H, _, _ = G.lm_run(tk(" " + ftext)["input_ids"])
+            rows["skill space"].append(G.skill_query(H))
+            rows["frozen mean"].append(H.mean(0))
+            lab.append(k)
+    X = torch.stack(rows["frozen mean"])
+    rows["frozen mean, centred (fixed)"] = list(X - X.mean(0))
+    lab_t = torch.tensor([kinds.index(k) for k in lab], device=dev)
+    for name, vs in rows.items():
+        V = F.normalize(torch.stack(vs), dim=-1)
+        S = V @ V.T
+        same = lab_t[:, None] == lab_t[None, :]
+        eye = torch.eye(len(lab), dtype=torch.bool, device=dev)
+        S2 = S.masked_fill(eye, -9)
+        nn_ok = (lab_t[S2.argmax(1)] == lab_t).float().mean()
+        print(f"unit U0 {name}: same-kind cos {float(S[same & ~eye].mean()):.3f} (min {float(S[same & ~eye].min()):.3f}), "
+              f"other-kind cos {float(S[~same].mean()):.3f} (max {float(S[~same].max()):.3f}), nearest neighbour same kind {float(nn_ok):.0%}", flush=True)
+    for h in G.ex.hooks:
+        h.remove()
+
+
+def v10_unit_column(steps=6000):
+    """U1b (measurement only): column steps alone, one shared expert, 160 digit combos ~37 times each: can the step
+    path (LM + one LoRA expert) learn one addition column? Held-out 40 combos = does it generalise"""
+    tk = lm()[0]
+    allc = [(x, y, c) for x in range(10) for y in range(10) for c in (0, 1)]
+    random.Random(3).shuffle(allc)
+    train_c, held_c = allc[:160], allc[160:]
+    torch.manual_seed(0)
+    random.seed(0)
+    rng = random.Random(11)
+    G = GNM10().to(dev)
+    params = [p for nm, p in G.named_parameters() if p.requires_grad] + G.eparams()
+    opt = torch.optim.AdamW(params, lr=1e-3)
+    out = []
+    for st in range(1, steps + 1):
+        facts, ftext, tgt = _unit_step("column", rng, combos=train_c)
+        mem = []
+        focus = G.store(mem, tk(" " + ftext)["input_ids"], kind="question")
+        L, _ = G.step_loss(mem, focus, tk(" " + tgt)["input_ids"], 1)
+        opt.zero_grad()
+        L.backward()
+        torch.nn.utils.clip_grad_norm_(params, 1.)
+        opt.step()
+        if st in (1500, 3000, steps):
+            G.eval()
+            res = {}
+            with torch.no_grad():
+                for split, combos in (("trained combos", train_c), ("held-out combos", held_c)):
+                    hit, wrong = 0, []
+                    for x, y, c in combos:
+                        mem = []
+                        focus = G.store(mem, tk(f" {x} + {y} + carry {c} = ?")["input_ids"], kind="question")
+                        node, d, e, pd, nk = G.step(mem, focus)
+                        got, t = tk.decode(node.ids).strip(), x + y + c
+                        ok = got == f"digit {t % 10}, carry {t // 10}"
+                        hit += ok
+                        if not ok and len(wrong) < 3:
+                            wrong.append(f"{x}+{y}+{c} -> {got!r}")
+                    res[split] = f"{hit / len(combos):.0%} (e.g. {'; '.join(wrong)})"
+            G.train()
+            out.append(f"@{st} loss {float(L):.3f}: " + ", ".join(f"{k} {v}" for k, v in res.items()))
+            print("unit U1b column only " + out[-1], flush=True)
+    for h in G.ex.hooks:
+        h.remove()
+
+
 def v10_fitdiag(steps=300):
     """11-15 v10g: demo fit stuck at mean loss ~1.9 with 10 skills. Same 48 demos, fresh model per variant: as is /
     one skill / no kept memory / both; mean loss per 100 steps (lower = imitates the demos)"""
@@ -2927,7 +3007,7 @@ if __name__ == "__main__":
     ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
     ap.add_argument("--together", type=int, default=1)   # articles read into one memory per training episode
     a = ap.parse_args()
-    if a.task in ("v10", "v10test", "holddiag", "ctxdiag", "unit"):  # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
+    if a.task in ("v10", "v10test", "holddiag", "ctxdiag", "unit", "unit2"):  # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
@@ -2936,6 +3016,10 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "unit":
         v10_unit()
+        raise SystemExit
+    if a.task == "unit2":
+        v10_unit_route()
+        v10_unit_column()
         raise SystemExit
     if a.task == "ctxdiag":
         v10_ctxdiag(os.environ.get("V10_LOAD", "/marimo/out/v10s.pt"))
