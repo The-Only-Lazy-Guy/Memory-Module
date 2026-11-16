@@ -3821,8 +3821,9 @@ def v11_t5(steps=3000, ep_species=8):
     curve = [int(v) for v in os.environ.get("V11_T5_CURVE", "").split(",") if v]
     runs_ = [("outcome", n_) for n_ in curve] if curve else [("labels", len(train_sp)), ("outcome", len(train_sp))]
     for mode, n_tr in runs_:
-        torch.manual_seed(0)
-        random.seed(0)
+        sd_ = int(os.environ.get("V11_T5_SEED", "0"))     # (11-17: replicate v5 on other seeds)
+        torch.manual_seed(sd_)
+        random.seed(sd_)
         relm = Rel().to(dev)
         opt = torch.optim.AdamW(relm.parameters(), lr=1e-3)
         learned = make_learned(relm)
@@ -3830,7 +3831,7 @@ def v11_t5(steps=3000, ep_species=8):
         @torch.no_grad()
         def match_fn(men, n_, k):                        # the model's own relevance (blame up (3)); no labels
             return relm.per_mention(men, n_, k)
-        trng = random.Random(43)
+        trng = random.Random(43 + sd_)
         n_sig, run_l = 0, []
         # (11-17 diag, measurement only: train 104/120 vs test 44/120, linked 19/30 vs 6/30 -> does test peak early
         # and fall (memorizing) or never rise (signal does not carry to new names)?)
