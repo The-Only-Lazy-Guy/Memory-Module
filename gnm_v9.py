@@ -3573,7 +3573,7 @@ def v11_t5(steps=3000, ep_species=8):
     def alone_states(name):
         return ctx_states(tk(" " + name)["input_ids"])
     # mentions: (pooled contextual states, name string, name-alone pooled states)
-    cache = {}
+    cache, scale = {}, {}
 
     def mention(text, name):
         key = (text, name)
@@ -3584,7 +3584,10 @@ def v11_t5(steps=3000, ep_species=8):
                 return None
             H = ctx_states(ids)
             cache[key] = (H[sp_[0]:sp_[1]].mean(0), name, alone_states(name).mean(0))
-        return cache[key]
+        v, n_, a_ = cache[key]
+        if scale:                                        # (11-16 T5 v1 used raw states: a few huge dims)
+            v = (v - scale["mu"]) / scale["sd"]
+        return v, n_, a_
 
     def events(xs, r_, ask_before=.5, n_after=2, wordings=None):
         """a stream: per species maybe 1-2 questions first, then its lead read, then questions; species interleaved"""
@@ -3623,72 +3626,83 @@ def v11_t5(steps=3000, ep_species=8):
             sc = [(qv @ F.normalize(s_.k(torch.stack(n_["m"])), dim=-1).T).max() / .1 for n_ in nodes]
             return torch.stack(sc + [s_.create + s_.cq(mvec).squeeze()])
 
-    def run_episode(stream, decide, learn=None):
-        """decide(mention, nodes) -> index (len(nodes) = create). Returns stats; learn gets (logits, target) pairs"""
-        nodes, stats, pairs = [], {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0}, []
+    def run_episode(stream, decide, mode="labels"):
+        """decide(mention, nodes) -> (index, logits); index len(nodes) = create. mode 'labels': every decision gets the
+        node holding its thing as target (upper bound, uses identity labels). mode 'outcome': only a wrong answer after
+        reading gives a signal -- target = a node (existing at that decision) whose facts answer right, the one the model
+        rates most relevant; blame also goes to the decision that created the wrong node; right answers lightly
+        reinforced. No identity labels"""
+        nodes, decs, pairs = [], [], []
+        stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0}
 
         def point(men, ent):
             j, lg = decide(men, nodes)
-            own = next((i for i, n_ in enumerate(nodes) if n_["owner"] == ent), None)
-            tgt = own if own is not None else len(nodes)   # the node holding this thing, else create
-            if lg is not None:
+            d = {"lg": lg, "n": len(nodes), "j": j}
+            decs.append(d)
+            if mode == "labels" and lg is not None:
+                own = next((i for i, n_ in enumerate(nodes) if n_["owner"] == ent), None)
+                tgt = own if own is not None else len(nodes)
                 pairs.append((lg, tgt, j != tgt))
             if j == len(nodes):
-                nodes.append({"m": [men[0]], "names": [men[1]], "alone": [men[2]], "owner": ent, "facts": {}})
+                nodes.append({"m": [men[0]], "names": [men[1]], "alone": [men[2]], "owner": ent, "facts": {}, "made_by": len(decs) - 1})
             else:
                 nodes[j]["m"].append(men[0])
                 nodes[j]["names"].append(men[1])
                 nodes[j]["alone"].append(men[2])
-            return j
+            return j, d
         read_done = set()
         for ev in stream:
             x = ev[1]
             ent = x["binomial"]
             if ev[0] == "read":
-                j1 = point(mention(x["lead"], x["common"]), ent)
-                j2 = point(mention(x["lead"], x["binomial"]), ent)
+                j1, _ = point(mention(x["lead"], x["common"]), ent)
+                point(mention(x["lead"], x["binomial"]), ent)
                 for r_ in rels:                          # the lead's facts go to its subject's node
                     nodes[j1]["facts"][r_] = x[r_]
                 read_done.add(ent)
-            else:
-                _, rel, kind, t = ev[1:]
-                q, nm = qtext(x, rel, kind, t)
-                men = mention(q, nm)
-                if men is None:
-                    continue
-                j = point(men, ent)
-                got = nodes[j]["facts"].get(rel)
-                if ent in read_done:
-                    stats["asked_after"] += 1
-                    stats["right"] += got == x[rel]
-                else:
-                    stats["asked_before"] += 1
-                    stats["wrong_node"] += nodes[j]["owner"] != ent
-        own_nodes = {}
-        for n_ in nodes:
-            own_nodes.setdefault(n_["owner"], 0)
-            own_nodes[n_["owner"]] += 1
-        stats["nodes"] = len(nodes)
-        stats["things"] = len(own_nodes)
-        stats["mixed"] = sum(len({a_ for a_ in n_["names"]}) > 2 or False for n_ in nodes)
+                continue
+            _, rel, kind, t = ev[1:]
+            q, nm = qtext(x, rel, kind, t)
+            men = mention(q, nm)
+            if men is None:
+                continue
+            j, d = point(men, ent)
+            got = nodes[j]["facts"].get(rel)
+            if ent not in read_done:
+                stats["asked_before"] += 1
+                stats["wrong_node"] += nodes[j]["owner"] != ent
+                continue
+            stats["asked_after"] += 1
+            stats["right"] += got == x[rel]
+            if mode != "outcome" or d["lg"] is None:
+                continue
+            if got == x[rel]:
+                pairs.append((d["lg"], j, False))
+                continue
+            ok = [i for i in range(d["n"]) if all(nodes[i]["facts"].get(r_) == x[r_] for r_ in rels)]
+            if not ok:
+                continue
+            t_ = max(ok, key=lambda i: float(d["lg"][i]))
+            pairs.append((d["lg"], t_, True))
+            if j < len(nodes) and j != t_:               # blame up: the decision that made the wrong node
+                dm = decs[nodes[j]["made_by"]]
+                if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
+                    pairs.append((dm["lg"], t_, True))
+        owners = {n_["owner"] for n_ in nodes}
+        stats["nodes"], stats["things"] = len(nodes), len(owners)
         return stats, pairs
 
-    relm = Rel().to(dev)
-    opt = torch.optim.AdamW(relm.parameters(), lr=1e-3)
-
-    def learned(train):
-        def d(men, nodes):
-            lg = relm(men[0], nodes) if nodes else relm.create[None] + relm.cq(men[0])
-            if train and random.random() < .1:
-                j = random.randrange(len(lg))
-            else:
-                j = int(lg.argmax())
-            return j, (lg if train else None)
-        return d
+    def make_learned(relm):
+        def learned(train):
+            def d(men, nodes):
+                lg = relm(men[0], nodes) if nodes else relm.create[None] + relm.cq(men[0])
+                j = random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax())
+                return j, (lg if train else None)
+            return d
+        return learned
 
     def exact(men, nodes):
-        j = next((i for i, n_ in enumerate(nodes) if men[1] in n_["names"]), len(nodes))
-        return j, None
+        return next((i for i, n_ in enumerate(nodes) if men[1] in n_["names"]), len(nodes)), None
 
     mu_alone = torch.stack([alone_states(x[k]).mean(0) for x in train_sp for k in ("common", "binomial")]).mean(0)
 
@@ -3700,30 +3714,58 @@ def v11_t5(steps=3000, ep_species=8):
             j = int(sc.argmax())
             return (j if float(sc[j]) >= thr else len(nodes)), None
         return d
-    trng = random.Random(43)
-    for stp in range(steps):
-        stream = events(trng.sample(train_sp, ep_species), trng, wordings=None)
-        _, pairs = run_episode(stream, learned(True))
-        if not pairs:
-            continue
-        L = 0.
-        for lg, tgt, wrong in pairs:                     # confusion punished; right choices lightly reinforced
-            L = L + (1. if wrong else .1) * F.cross_entropy(lg[None], torch.tensor([tgt], device=dev))
-        L = L / len(pairs)
-        opt.zero_grad()
-        L.backward()
-        opt.step()
-        if (stp + 1) % 1000 == 0:
-            print(f"v11 T5 training step {stp + 1}: loss {float(L):.3f}", flush=True)
+    # fixed scale of the mention vectors, from training mentions
+    raw = []
+    for x in train_sp:
+        for nm_ in (x["common"], x["binomial"]):
+            mm = mention(x["lead"], nm_)
+            if mm is not None:
+                raw.append(mm[0])
+        for rel in rels:
+            for kind in ("common", "binomial"):
+                for t in W[rel]:
+                    q, nm_ = qtext(x, rel, kind, t)
+                    mm = mention(q, nm_)
+                    if mm is not None:
+                        raw.append(mm[0])
+    R_ = torch.stack(raw)
+    scale["mu"], scale["sd"] = R_.mean(0), R_.std(0) + 1e-3
     erng = random.Random(47)
-    stream = events(test_sp, erng, ask_before=.5, n_after=4)
-    with torch.no_grad():
-        for name, d in (("learned relevance (name + context)", learned(False)), ("exact name string", exact),
-                        ("name-only cosine (centred) >= .6", alone_cos(.6)), ("name-only cosine (centred) >= .8", alone_cos(.8))):
+    test_stream = events(test_sp, erng, ask_before=.5, n_after=4)
+    train_stream = events(random.Random(53).sample(train_sp, 30), random.Random(59), ask_before=.5, n_after=4)
+
+    def report(name, d):
+        for split, stream in (("test (30 never-trained species)", test_stream), ("train (30 training species)", train_stream)):
             st, _ = run_episode(stream, d)
-            print(f"v11 T5 test ({len(test_sp)} never-trained species, one stream): {name}: right after reading "
-                  f"{st['right']}/{st['asked_after']} | asked before reading -> another thing's node {st['wrong_node']}/"
-                  f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things", flush=True)
+            print(f"v11 T5 {split}: {name}: right after reading {st['right']}/{st['asked_after']} | asked before reading -> "
+                  f"another thing's node {st['wrong_node']}/{st['asked_before']} | nodes {st['nodes']} for {st['things']} things", flush=True)
+    with torch.no_grad():
+        report("exact name string", exact)
+        report("name-only cosine (centred) >= .8", alone_cos(.8))
+    for mode in ("labels", "outcome"):
+        torch.manual_seed(0)
+        random.seed(0)
+        relm = Rel().to(dev)
+        opt = torch.optim.AdamW(relm.parameters(), lr=1e-3)
+        learned = make_learned(relm)
+        trng = random.Random(43)
+        n_sig, run_l = 0, []
+        for stp in range(steps):
+            stream = events(trng.sample(train_sp, ep_species), trng)
+            _, pairs = run_episode(stream, learned(True), mode)
+            if not pairs:
+                continue
+            n_sig += sum(w for _, _, w in pairs)
+            L = sum((1. if wrong else .1) * F.cross_entropy(lg[None], torch.tensor([tgt], device=dev)) for lg, tgt, wrong in pairs) / len(pairs)
+            opt.zero_grad()
+            L.backward()
+            opt.step()
+            run_l.append(float(L))
+            if (stp + 1) % 1000 == 0:
+                print(f"v11 T5 [{mode}] step {stp + 1}: mean loss {sum(run_l) / len(run_l):.3f}, punished decisions so far {n_sig}", flush=True)
+                run_l = []
+        with torch.no_grad():
+            report(f"learned relevance, trained on {mode}", learned(False))
 
 
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
