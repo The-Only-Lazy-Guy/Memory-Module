@@ -1,0 +1,10 @@
+v11 T1a: 160 column facts written once, read back (both slots exact): 160/160; key cosine of written queries min 1.00
+v11 T1b (control): 40 never-written combos: best key cosine max 0.18 (written: >= 1.00) -> answered with confidence (> .5): 0/40; right if forced: 1/40 (chance ~2/40)
+v11 T1d: addition by repeated column lookups (procedure fixed): 2 digits 100%, 4 digits 100%, 8 digits 100%, 12 digits 100%
+v11 T1c capacity: 1000 facts in one op memory, 500 read back: 100%
+v11 T1c capacity: 10000 facts in one op memory, 500 read back: 100%
+v11 T1c capacity: 50000 facts in one op memory, 500 read back: 100%
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4186.47it/s]
+v11 T2 random atoms: 4600 facts read once into one memory, 52 (rel, name) keys written twice with different answers (excluded): chain1 100% (n 50), chain2 100% (n 47), chain3 100% (n 48), chain4 100% (n 48), chain5 100% (n 45), chain6 100% (n 45), chain7 100% (n 42), chain8 100% (n 41), compose 100% (n 192)
+v11 T2 GPT-2 token vectors (centred): 4600 facts read once into one memory, 52 (rel, name) keys written twice with different answers (excluded): chain1 100% (n 50), chain2 98% (n 47), chain3 98% (n 48), chain4 98% (n 48), chain5 100% (n 45), chain6 100% (n 45), chain7 98% (n 42), chain8 95% (n 41), compose 97% (n 192)
