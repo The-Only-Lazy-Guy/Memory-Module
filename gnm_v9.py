@@ -3184,7 +3184,7 @@ def v11_t3(path=None, n_demo=50, steps=400):
 
     def name_vec(ids):                                   # a name's key: its tokens' embeddings, centred (U0 lesson)
         return F.normalize(wte[ids].mean(0) @ Pm - mu, dim=0)
-    nodes = []
+    nodes, alias_names = [], []
     for i, x in enumerate(read):
         e = f"species{i}"
         m.atom(e)
@@ -3197,6 +3197,7 @@ def v11_t3(path=None, n_demo=50, steps=400):
             K, V = m.mem.setdefault("alias", ([], []))
             K.append(name_vec(tk(" " + x[kind])["input_ids"]))
             V.append(m.atoms[e])
+            alias_names.append(x[kind])
         m.remember("rel", ["family", e], m.atoms[x["family"]])
         m.remember("rel", ["genus", e], m.atoms[x["genus"]])
     m.atom("family")
@@ -3249,6 +3250,7 @@ def v11_t3(path=None, n_demo=50, steps=400):
     print(f"v11 T3: {len(sp)} species with a parsable lead ({len(train_sp)} train, {len(test_read)} test read, "
           f"{len(test_unread)} never read); {len(demos)} demo questions, {steps} head steps; memory: "
           f"{len(m.mem['alias'][0])} alias keys, {len(m.mem['rel'][0])} relation facts, {len(nodes)} nodes", flush=True)
+    shown_p = [0]
     for split, xs in (("held-out species, read", test_read), ("training species", train_sp)):
         for wset, wi in (("trained wordings", 0), ("held-out wordings", 1)):
             res = {"learned": [0, 0], "gold parse": [0, 0]}
@@ -3267,9 +3269,13 @@ def v11_t3(path=None, n_demo=50, steps=400):
                             got_l, _ = answer(ids, r2, st2, en2)
                             res["learned"][0] += got_l == want
                             res["learned"][1] += 1
+                            if got_l != want and shown_p[0] < 25:
+                                shown_p[0] += 1
+                                print(f"  parse error: {tk.decode(ids).strip()!r} -> relation {rels[r2]} (gold {rel}), span "
+                                      f"{tk.decode(ids[st2:en2 + 1]).strip()!r} (gold {tk.decode(ids[st:en + 1]).strip()!r}) -> {got_l!r} (want {want!r})", flush=True)
             print(f"v11 T3 {split}, {wset}: learned translator {res['learned'][0]}/{res['learned'][1]}, gold parse "
                   f"{res['gold parse'][0]}/{res['gold parse'][1]}", flush=True)
-    unk, n_u, confs = 0, 0, []
+    unk, n_u, confs, wrong_u = 0, 0, [], []
     for x in test_unread:
         for rel in rels:
             for kind in ("common", "binomial"):
@@ -3277,11 +3283,18 @@ def v11_t3(path=None, n_demo=50, steps=400):
                     ids, r, st, en = make_q(x, rel, kind, t)
                     if st is None:
                         continue
-                    got, conf = answer(ids, *parse_learned(ids))
+                    r2, st2, en2 = parse_learned(ids)
+                    got, conf = answer(ids, r2, st2, en2)
                     unk += got == "unknown"
                     n_u += 1
                     confs.append(conf)
+                    if got != "unknown" and len(wrong_u) < 20:
+                        K_, _ = m.mem["alias"]
+                        j = int((K_ @ name_vec(ids[st2:en2 + 1])).argmax())
+                        wrong_u.append(f"{tk.decode(ids[st2:en2 + 1]).strip()!r} matched {alias_names[j]!r} ({conf:.2f})")
     print(f"v11 T3 control: species never read: 'unknown' {unk}/{n_u} (best alias key cosine max {max(confs):.2f})", flush=True)
+    for w_ in wrong_u:
+        print("  never read but answered: " + w_, flush=True)
 
 
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
