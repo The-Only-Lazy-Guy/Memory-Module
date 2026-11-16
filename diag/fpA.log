@@ -171,3 +171,48 @@ round 1: right runs found 179/400 (kept traces 227, kept memory 2238 nodes), 344
    focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Dunor?' -> skill s0 writes ' Who is the neighbour of Vinril?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' Who is the neighbour of Vinril?' -> skill s0 writes ' Basa' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Dunor?' -> skill s0 writes ' Basa' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the teacher of the teacher of the teacher of the teacher of the teacher of the teacher of Merne? (truth Dunlo) -> Orpel
+   focus ' Who is the teacher of the teacher of the teacher of the teacher of the teacher of the teacher of Merne?' -> skill s0 writes ' Who is the teacher of Merne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the teacher of Merne?' -> skill s0 writes ' Pelril' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the teacher of the teacher of the teacher of the teacher of the teacher of the teacher of Merne?' -> skill s0 writes ' Who is the teacher of the teacher of Pelril?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the teacher of the teacher of Pelril?' -> skill s0 writes ' Who is the teacher of Pelril?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the teacher of Pelril?' -> skill s0 writes ' Dunlo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the teacher of the teacher of Pelril?' -> skill s0 writes ' Who is the teacher of Dunlo?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the teacher of Dunlo?' -> skill s0 writes ' Orpel' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the teacher of the teacher of Pelril?' -> skill s0 writes ' Orpel' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the teacher of the teacher of the teacher of the teacher of the teacher of the teacher of Merne?' -> skill s0 writes ' Orpel' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the weight of Tordun? (truth 91) -> 91
+   focus ' What is the weight of Tordun?' -> skill s0 writes ' 91' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Saril in? (truth Dunmu) -> Dunmu
+   focus ' Which family is Saril in?' -> skill s0 writes ' Which genus is Saril in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Saril in?' -> skill s0 writes ' Mugor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Saril in?' -> skill s0 writes ' Which family is the genus Mugor in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Mugor in?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Saril in?' -> skill s0 writes ' Dunmu' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 0.000; with kept memory | add2 2%, add4 0%, add6 0%, chain2 78%, chain4 2%, chain6 18%, lookup1 90%, compose1 30% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1486; chain: s0x1014; lookup: s0x40; compose: s0x243; needed fact fetched: chain 60% compose 80% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 85%, chain4 15%, chain6 18%, lookup1 92%, compose1 25% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x886; chain: s0x935; lookup: s0x40; compose: s0x243; needed fact fetched: chain 59% compose 72% lookup 100%
+
+  [recall chain 2] Who is the friend of the friend of Kagor? (truth Torlo) -> None
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes ' friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor' (sub-step, done p 0.04; kept nodes fetched 6)
+   focus ' friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor' -> skill s0 writes '? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kag' (resolves it, done p 0.99; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes 'or? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus 'or? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of' -> skill s0 writes ' Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend' (resolves it, done p 0.99; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes ' of Kagor? friend of Kagor?' (sub-step, done p 0.02; kept nodes fetched 6)
+   focus ' of Kagor? friend of Kagor?' -> skill s0 writes ' friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor' (resolves it, done p 0.64; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes '?' (sub-step, done p 0.02; kept nodes fetched 6)
+   focus '?' -> skill s0 writes ' What is the real thing happening?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is the real thing happening?' -> skill s0 writes ' What is the real thing happening?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is the real thing happening?' -> skill s0 writes ' What is the real thing happening?' (sub-step, done p 0.00; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of Kagor?': 'What is the age of Zekka? 73' (-8.0); 'The age of Goror is 10.' (-8.0); 'What is the age of Vinril? 63' (-8.0)
+     fetched for ' friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor': 'The age of Gorba is 2.' (-8.0); 'The age of Gorril is 13.' (-8.0); 'The age of Pelne is 40.' (-8.0)
+     fetched for ' Who is the friend of the friend of Kagor?': 'What is the age of Zekka? 73' (-8.0); 'The age of Goror is 10.' (-8.0); 'What is the age of Vinril? 63' (-8.0)
+     fetched for 'or? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of Kagor? friend of': 'The age of Gorba is 2.' (-8.0); 'The age of Pelne is 40.' (-8.0); 'The age of Gorril is 13.' (-8.0)
+     fetched for ' Who is the friend of the friend of Kagor?': 'What is the age of Zekka? 73' (-8.0); 'The age of Goror is 10.' (-8.0); 'What is the age of Vinril? 63' (-8.0)
+     fetched for ' of Kagor? friend of Kagor?': 'The age of Kator is 59.' (-8.0); 'The age of Kator is 67.' (-8.0); 'The age of Zekmu is 7.' (-8.0)
+     fetched for ' Who is the friend of the friend of Kagor?': 'What is the age of Zekka? 73' (-8.0); 'The age of Goror is 10.' (-8.0); 'What is the age of Vinril? 63' (-8.0)
+     fetched for '?': 'The size of Kane is 96.' (-8.0); 'The size of Kazek is 18.' (-8.0); 'The age of Merba is 2.' (-8.0)
+     fetched for ' What is the real thing happening?': 'What is the age of Gorka? 3' (-7.9); 'What is the age of Vinril? 63' (-7.9); 'What is the age of Vinor? 26' (-7.9)
+     fetched for ' What is the real thing happening?': 'What is the age of Gorka? 3' (-7.9); 'What is the age of Vinril? 63' (-7.9); 'What is the age of Vinor? 26' (-7.9)
