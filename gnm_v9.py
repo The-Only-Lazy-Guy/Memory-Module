@@ -1868,6 +1868,33 @@ def _demo_loss(G, facts, q, steps, src):
     return L / max(1, n)
 
 
+@torch.no_grad()
+def leaves_hold(G, facts, q, tr):
+    """(11-16 v10r, Claude's proposal) every sub-question a run answered in ONE step must get the same answer when
+    asked alone (same facts, no parent question). v10q round 1: all 7 kept 3-4 hop chains jumped to the second-last
+    name ('Who is the boss of Vinba?' -> Merne, true Nezek) and still ended right; the jump repeats, so two tries
+    agreed. Only one-step answers are re-asked: a multi-hop sub-question is built from its own one-step answers"""
+    tk = lm()[0]
+    focus, stack, fresh = tk(" " + q)["input_ids"], [], True
+    for text, done in tr:
+        ids = tk(" " + text)["input_ids"]
+        if done:
+            if fresh and stack:                          # a sub-question answered in one step
+                mem = []
+                for f in facts:
+                    G.store(mem, tk(" " + f)["input_ids"], kind="fact")
+                got, _, _ = solve(G, mem, focus)
+                if got != text:
+                    return False
+            if not stack:
+                break
+            focus, fresh = stack.pop(), False
+        else:
+            stack.append(focus)
+            focus, fresh = ids, True
+    return True
+
+
 def keep_trace(G, q, steps, src):
     """a checked-right (or demo) trace's solved nodes go to kept memory"""
     tk = lm()[0]
@@ -2143,7 +2170,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
         t0 = time.time()
         G.eval()
         G.refresh_ltm()
-        got_right, seen = 0, {}
+        got_right, seen, not_held = 0, {}, 0
         for _ in range(per_round):
             kind = rng.choice(V10_KINDS)
             size = rng.randint(1, 3 + r) if kind in ("add", "chain") else 1
@@ -2167,6 +2194,9 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
                 agree = [x for x in right if right.count(x) >= 2]
                 if agree or len(right) + (tries - t - 1) < 2:
                     break
+            if agree and not leaves_hold(G, facts, q, agree[0]):
+                agree = []
+                not_held += 1
             if agree:
                 kept.append((facts, q, ans, agree[0]))
                 keep_trace(G, q, agree[0], len(kept) - 1)
@@ -2175,7 +2205,8 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
                 seen.setdefault((kind, size), []).append(len(agree[0]))
             keep_facts(G, facts, len(kept) - 1 if kept[-1][1] == q else "read")   # what it read stays
         print(f"round {r}: right runs found {got_right}/{per_round} (kept traces {len(kept)}, kept memory {len(G.ltm)} nodes), "
-              f"{time.time() - t0:.0f}s trying", flush=True)
+              f"{time.time() - t0:.0f}s trying; agreeing right runs dropped because a one-step sub-answer did not hold "
+              f"asked alone: {not_held}", flush=True)
         print(f"  fetch-training pairs {len(fetch_pairs)}", flush=True)
         print("  kept by kind/size (count, mean steps): " + ", ".join(
             f"{k}{s} {len(v)} {sum(v) / len(v):.1f}" for (k, s), v in sorted(seen.items())), flush=True)
