@@ -1651,7 +1651,7 @@ class GNM10(nn.Module):
         return L, H[P:]
 
     @torch.no_grad()
-    def gen(self, ids, bias, temp=0., maxlen=16):
+    def gen(self, ids, bias, temp=0., maxlen=64):
         """write a node with cached keys/values (the context runs once, then one token at a time); returns the
         tokens, the LM states over them (the eos state if none), and the state after the closing eos (for 'done')"""
         eos = lm()[0].eos_token_id
@@ -1675,7 +1675,8 @@ class GNM10(nn.Module):
             nxt = l[-1]
 
     @torch.no_grad()
-    def step(self, mem, focus, temp=0., maxlen=16):
+    def step(self, mem, focus, temp=0., maxlen=64):     # (11-16: was 16 -- cut the smaller questions it must write:
+        #                                                   5-hop 20 tokens, 3+ digit sums 17-21 tokens)
         ids, bias, e, _, nk = self.context(mem, focus, False)
         self.ex.active = e
         out, rows, hd = self.gen(ids, bias, temp, maxlen)
@@ -1818,9 +1819,17 @@ def v10_demo_loss(G, facts, q, steps, src=None, recall=None):
         K = torch.stack([n.key for n in cands])
         pos = torch.tensor([tuple(n.ids) in own for n in cands], device=dev)
         asks = [tk(" " + q)["input_ids"]] + [tk(" " + t)["input_ids"] for t, d in steps if not d]
-        for a in asks:
+        found = False
+        for j, a in enumerate(asks):
             sc = (K @ G.query(a)) / .1
             Lr = Lr + (torch.logsumexp(sc, 0) - torch.logsumexp(sc[pos], 0)) / len(asks)
+            if j == 0:
+                found = bool(pos[sc.topk(min(G.topk, len(sc))).indices].any())
+        # imitate only when fetch already brings one of its own facts (11-16 mixprobe: recall imitation without that
+        # taught guessing -- chain2 65-70% -> 20-30% on the same demos); otherwise only the fetch signal trains
+        if not found:
+            G.ltm = saved
+            return Lr
         G.ltm, facts = saved + kt, []
     try:
         return _demo_loss(G, facts, q, steps, src) + Lr
@@ -2011,7 +2020,7 @@ def v10_reuse(G, n=20, seed=23):
             f"first ask wrote; longer question (5 hops) with the first ask kept {res['longer_with'] / n:.0%}, without {res['longer_without'] / n:.0%}")
 
 
-def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
+def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries a round -- more own traces)
     tk = lm()[0]
     smoke = os.environ.get("V10_SMOKE") == "1"     # the whole path, tiny: demos, a round, the evals
     if smoke:
@@ -2031,7 +2040,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=200):
     # probe switches (11-16 mixprobe; defaults = the design as built): V10_KEEP keep the demos' facts, V10_RECALL recall
     # training, V10_FETCHL fetch-training loss, V10_FIT0 demo steps before round 0
     use_keep, use_recall, use_fetchl = (os.environ.get(k, "1") == "1" for k in ("V10_KEEP", "V10_RECALL", "V10_FETCHL"))
-    fit0 = int(os.environ.get("V10_FIT0", "600"))
+    fit0 = int(os.environ.get("V10_FIT0", "1500"))   # (11-16 dataprobe / mixprobe: 1500 demo steps)
     print(f"v10 switches: keep demo facts {use_keep}, recall training {use_recall}, fetch loss {use_fetchl}, demo steps {fit0}", flush=True)
     for i, d in enumerate(demos):
         if use_keep:
