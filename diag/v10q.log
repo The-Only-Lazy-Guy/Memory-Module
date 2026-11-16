@@ -119,3 +119,37 @@ round 0 (demos only): loss 0.047, 540s
      fetched for ' Who is the friend of Gorlo?': 'The friend of Gorril is Dunzek.' (-2.0); 'The friend of Kagor is Vinpel.' (-2.2, own); 'The friend of Dunlo is Dundun.' (-2.3)
      fetched for ' Who is the friend of Gorlo?': 'The friend of Gorril is Dunzek.' (-2.0); 'The friend of Kagor is Vinpel.' (-2.2, own); 'The friend of Dunlo is Dundun.' (-2.3)
      fetched for ' Who is the friend of Dungeon?': 'The friend of Dunpel is Torba.' (-1.7); 'The friend of Dunka is Dunor.' (-1.9); 'The friend of Dunzek is Dunpel.' (-2.3)
+
+  [recall chain 4] Who is the friend of the friend of the friend of the friend of Gorril? (truth Gorzek) -> <|endoftext|>
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' Who is the friend of Gorril?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorril?' -> skill s0 writes ' Dunzek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes ' Who is the friend of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Dunzek?' -> skill s0 writes ' Pelt Pelt' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'The friend of Gorril is Dunzek.' (-1.8, own); 'The friend of Thatha is Dunor.' (-2.6); 'The friend of Torsa is Pelgor.' (-3.2)
+     fetched for ' Who is the friend of Gorril?': 'The friend of Gorril is Dunzek.' (-0.7, own); 'The friend of Kagor is Vinpel.' (-2.4); 'The age of Gorril is 13.' (-2.8)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'The friend of Gorril is Dunzek.' (-1.8, own); 'The friend of Thatha is Dunor.' (-2.6); 'The friend of Torsa is Pelgor.' (-3.2)
+     fetched for ' Who is the friend of Dunzek?': 'The friend of Dunzek is Dunpel.' (-1.4, own); 'The friend of Dunka is Dunor.' (-1.9); 'The friend of Dunpel is Torba.' (-2.4, own)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'The friend of Gorril is Dunzek.' (-1.8, own); 'The friend of Thatha is Dunor.' (-2.6); 'The friend of Torsa is Pelgor.' (-3.2)
+
+  [recall lookup 1] What is the age of Torgor? (truth 31) -> 31
+   focus ' What is the age of Torgor?' -> skill s0 writes ' 31' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' What is the age of Torgor?': 'The age of Torgor is 31.' (-1.4, own); 'The weight of Torgor is 19.' (-1.9, own); 'The size of Torgor is 73.' (-1.9, own)
+
+  [recall compose 1] Which family is Zektha in? (truth Netha) -> 7
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Which genus is Zektha in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Zektha in?' -> skill s0 writes ' Tormu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Which family is the genus Tormu in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Tormu in?' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes ' 7' (resolves it, done p 0.97; kept nodes fetched 6)
+   focus ' Which family is the genus Tormu in?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zektha in?' -> skill s0 writes ' 7' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' Which family is Zektha in?': 'The genus Tormer is in the family Gorril.' (-2.3); 'Logor is in the genus Mermu.' (-2.4); 'Zektor is in the genus Tormer.' (-2.7)
+     fetched for ' Which genus is Zektha in?': 'The genus Tormer is in the family Gorril.' (-2.4); 'Thamer is in the genus Tormu.' (-2.6); 'Zektor is in the genus Tormer.' (-2.6)
+     fetched for ' Which family is Zektha in?': 'The genus Tormer is in the family Gorril.' (-2.3); 'Logor is in the genus Mermu.' (-2.4); 'Zektor is in the genus Tormer.' (-2.7)
+     fetched for ' Which family is the genus Tormu in?': 'The genus Tormer is in the family Gorril.' (-2.1); 'Zektor is in the genus Tormer.' (-2.5); 'Logor is in the genus Mermu.' (-2.5)
+     fetched for '<|endoftext|>': 'The boss of Sator is Tormu.' (-3.0); 'The boss of Sane is Zekor.' (-3.0); 'The boss of Sator is Kazek.' (-3.5)
+     fetched for ' Which family is the genus Tormu in?': 'The genus Tormer is in the family Gorril.' (-2.1); 'Zektor is in the genus Tormer.' (-2.5); 'Logor is in the genus Mermu.' (-2.5)
+     fetched for ' Which family is Zektha in?': 'The genus Tormer is in the family Gorril.' (-2.3); 'Logor is in the genus Mermu.' (-2.4); 'Zektor is in the genus Tormer.' (-2.7)
+  recall (facts read earlier, none given; kept memory 881 nodes): chain2 3%, chain4 3%, lookup1 80%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 76%, chain4 49%, lookup1 100%, compose1 16% | ... the fact the step needs: chain2 91%, chain4 67%, lookup1 100%, compose1 23%
+  reuse (n 20): first ask 10% in 8.1 steps; asked again 10% in 8.3 steps, 99% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
