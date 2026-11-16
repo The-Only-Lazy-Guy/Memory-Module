@@ -12,3 +12,9 @@ selftest 7: a fact read once is kept and fetched later with no facts given: True
 selftest 8: path of 1560 tokens -> context 958 tokens, wrote 64 tokens: True
 v10 switches: keep demo facts True, recall training True, fetch loss True, demo steps 1500
 v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('chain', 2), ('chain', 3), ('lookup', 1), ('compose', 1)]); kept memory starts with the demos' facts (162); test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6), ('lookup', 1), ('compose', 1)] (add / chain longer than any demo)
+    fit step 100: mean loss 5.379, skills 1
+    fit step 200: mean loss 2.232, skills 1
+    fit step 300: mean loss 1.176, skills 1
+    fit step 400: mean loss 0.631, skills 1
+    fit step 500: mean loss 0.529, skills 1
+    fit step 600: mean loss 1.049, skills 1
