@@ -10,3 +10,6 @@ Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/cs
   t_ = max(ok, key=lambda i: float(d["lg"][i])) if ok else d["n"]
 v11 T5 [outcome] step 1000: mean loss 1.929, punished decisions so far 31417
 v11 T5 [outcome] step 2000: mean loss 1.258, punished decisions so far 54647
+v11 T5 [outcome] step 3000: mean loss 0.990, punished decisions so far 74001
+v11 T5 test (30 never-trained species): learned relevance, trained on outcome (198 training species): right after reading 44/120 | asked before reading -> another thing's node 18/36 | nodes 41 for 26 things
+v11 T5 train (30 training species): learned relevance, trained on outcome (198 training species): right after reading 104/120 | asked before reading -> another thing's node 16/30 | nodes 32 for 26 things
