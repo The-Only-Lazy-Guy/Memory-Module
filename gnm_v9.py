@@ -1869,7 +1869,7 @@ def _demo_loss(G, facts, q, steps, src):
 
 
 @torch.no_grad()
-def leaves_hold(G, facts, q, tr):
+def leaves_hold(G, facts, q, tr, log=None):
     """(11-16 v10r, Claude's proposal) every sub-question a run answered in ONE step must get the same answer when
     asked alone (same facts, no parent question). v10q round 1: all 7 kept 3-4 hop chains jumped to the second-last
     name ('Who is the boss of Vinba?' -> Merne, true Nezek) and still ended right; the jump repeats, so two tries
@@ -1883,7 +1883,11 @@ def leaves_hold(G, facts, q, tr):
                 mem = []
                 for f in facts:
                     G.store(mem, tk(" " + f)["input_ids"], kind="fact")
-                got, _, _ = solve(G, mem, focus)
+                alone = [] if log is not None else None
+                got, _, _ = solve(G, mem, focus, trace=alone)
+                if log is not None:
+                    log.append(f"    leaf {tk.decode(focus).strip()!r}: run wrote {text!r}, asked alone {got!r}"
+                               + ("" if got == text else " -- DOES NOT HOLD\n" + "\n".join(alone)))
                 if got != text:
                     return False
             if not stack:
@@ -2061,6 +2065,12 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
     smoke = os.environ.get("V10_SMOKE") == "1"     # the whole path, tiny: demos, a round, the evals
     if smoke:
         rounds, per_round = 1, 3
+    # fixed seed (11-16: v10q and v10r ran the same code up to round 1, yet round 0 chain2 was 52% vs 22% -- init and
+    # sampling were unseeded, so run-to-run noise hid any change smaller than ~30 points)
+    seed = int(os.environ.get("V10_SEED", "0"))
+    torch.manual_seed(seed)
+    random.seed(seed)
+    print(f"v10 seed {seed}", flush=True)
     G = GNM10().to(dev)
     params = [p for nm, p in G.named_parameters() if p.requires_grad] + G.eparams()
     opt = torch.optim.AdamW(params, lr=1e-3)
@@ -2370,6 +2380,46 @@ def v10_dataprobe(sizes=(48, 192, 768), steps=1500):
         for h in G.ex.hooks:
             h.remove()
         del G, opt
+
+
+@torch.no_grad()
+def v10_holddiag(path, n=40, tries=4, seed=43):
+    """11-16 v10r round 1 dropped 45 agreeing right runs and kept no chain2 / compose run. Shortcuts, or does a correct
+    one-step answer fail when its sub-question is asked alone (e.g. 'Which genus is X in?' is never a demo question)?
+    Tries like a round (temp .7, 4 tries, same-steps agreement); for each agreeing right run: the true facts, the run,
+    each leaf's answer asked alone (with that solve's trace when it does not hold)"""
+    tk = lm()[0]
+    G = v10_load(path)
+    rng = random.Random(seed)
+    stats = {}
+    for kind, size in (("chain", 2), ("chain", 3), ("compose", 1)):
+        for _ in range(n):
+            facts, q, ans, demo = v10_task(kind, rng, size)
+            right = []
+            for t in range(tries):
+                mem = []
+                for f in facts:
+                    G.store(mem, tk(" " + f)["input_ids"], kind="fact")
+                got, steps, _ = solve(G, mem, tk(" " + q)["input_ids"], temp=.7)
+                if got == ans:
+                    right.append([(tk.decode(node.ids).strip(), int(done)) for focus, node, done in steps])
+            agree = [x for x in right if right.count(x) >= 2]
+            key = f"{kind}{size}"
+            st = stats.setdefault(key, {"agreeing right": 0, "holds": 0, "same as demo": 0, "holds and not demo": 0})
+            if not agree:
+                continue
+            tr = agree[0]
+            log = []
+            ok = leaves_hold(G, facts, q, tr, log)
+            demo_tr = [(tk.decode(tk(" " + x)["input_ids"]).strip(), d) for x, d in demo]
+            st["agreeing right"] += 1
+            st["holds"] += ok
+            st["same as demo"] += tr == demo_tr
+            st["holds and not demo"] += ok and tr != demo_tr
+            print(f"[{key}] {q} (truth {ans}) | holds {ok} | same steps as the demo {tr == demo_tr}\n  facts: "
+                  + " ".join(facts) + "\n  run: " + " | ".join(f"{x}{'' if d else ' ->'}" for x, d in tr)
+                  + "\n" + "\n".join(log), flush=True)
+    print("holddiag " + "; ".join(f"{k}: " + ", ".join(f"{a} {b}" for a, b in v.items()) for k, v in stats.items()), flush=True)
 
 
 def v10_fitdiag(steps=300):
@@ -2709,12 +2759,15 @@ if __name__ == "__main__":
     ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
     ap.add_argument("--together", type=int, default=1)   # articles read into one memory per training episode
     a = ap.parse_args()
-    if a.task in ("v10", "v10test"):              # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
+    if a.task in ("v10", "v10test", "holddiag"):  # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
         v10_selftest()
         v10_run(rounds=int(os.environ.get("ROUNDS", "6")))
+        raise SystemExit
+    if a.task == "holddiag":
+        v10_holddiag(os.environ.get("V10_LOAD", "/marimo/out/v10r.pt"))
         raise SystemExit
     if a.task == "dataprobe":
         v10_dataprobe()
