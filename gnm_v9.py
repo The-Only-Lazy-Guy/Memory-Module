@@ -3564,6 +3564,8 @@ def v11_t5(steps=3000, ep_species=8):
     rng.shuffle(sp)
     test_sp, train_sp = sp[:30], sp[30:]
     print(f"v11 T5 data: {len(sp)} species from leads (species articles + Wikipedia), {len(train_sp)} train, {len(test_sp)} test", flush=True)
+    _g = [x["genus"] for x in test_sp]
+    print(f"v11 T5 data: test species sharing a genus with another test species: {sum(_g.count(g) > 1 for g in _g)}/30", flush=True)
     rels = ("family", "genus")
     W = {"family": ["Which family is {n} in?", "What family does {n} belong to?", "{N} is placed in which family?", "Name the family of {n}."],
          "genus": ["Which genus is {n} in?", "What genus does {n} belong to?", "{N} is classified in which genus?", "Name the genus of {n}."]}
@@ -3671,7 +3673,7 @@ def v11_t5(steps=3000, ep_species=8):
         nodes, decs, pairs = [], [], []
         stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "linked": 0, "reads": 0,
                  "right common": 0, "n common": 0, "right binomial": 0, "n binomial": 0, "j1 top": 0, "create>j1": 0,
-                 "n link": 0}
+                 "n link": 0, "miss same genus": 0, "miss existing": 0}
 
         def point(men, ent):
             j, lg = decide(men, nodes)
@@ -3707,6 +3709,9 @@ def v11_t5(steps=3000, ep_species=8):
                     stats["j1 top"] += int(lgb[:n0].argmax()) == j1   # the common name's node is the best NODE
                     stats["create>j1"] += bool(lgb[n0] > lgb[j1])     # but create outbids it
                     stats["n link"] += 1
+                    if j2 != j1 and j2 < n0:                     # (11-17) failed link went to an existing node:
+                        stats["miss existing"] += 1              # (names[-1] is this binomial itself, just added)
+                        stats["miss same genus"] += any(nm_.split()[0] == x["genus"] for nm_ in nodes[j2]["names"][:-1])
                 for r_ in rels:                          # the lead's facts go to its subject's node
                     nodes[j1]["facts"][r_] = x[r_]
                 nodes[j1]["hist"].append(({r_: x[r_] for r_ in rels}, d1))
@@ -3844,7 +3849,9 @@ def v11_t5(steps=3000, ep_species=8):
                         print(f"v11 T5 at step {stp} {sn}: right {st['right']}/{st['asked_after']} (common {st['right common']}/"
                               f"{st['n common']}, binomial {st['right binomial']}/{st['n binomial']}) linked {st['linked']}/"
                               f"{st['reads']} before->other {st['wrong_node']}/{st['asked_before']} nodes {st['nodes']} | binomial "
-                              f"read: common node top {st['j1 top']}/{st['n link']}, create beats it {st['create>j1']}/{st['n link']}", flush=True)
+                              f"read: common node top {st['j1 top']}/{st['n link']}, create beats it {st['create>j1']}/{st['n link']}, "
+                              f"missed link -> an existing node {st['miss existing']}, of them holding a same-genus name {st['miss same genus']} | weights name "
+                              f"{float(relm.wn):.2f} context {float(relm.wc):.2f}", flush=True)
             stream = events(trng.sample(train_sp[:n_tr], min(n_tr, trng.randint(ep_species, 30))), trng)   # (8-30: test has 30)
             _, pairs = run_episode(stream, learned(True), mode, match=match_fn)
             if not pairs:
