@@ -3636,7 +3636,7 @@ def v11_t5(steps=3000, ep_species=8):
             sc = [(qv @ F.normalize(s_.q(torch.stack(n_["m"])), dim=-1).T).max() / .1 for n_ in nodes]
             return torch.stack(sc + [s_.create + s_.cq(mvec).squeeze()])
 
-    def run_episode(stream, decide, mode="labels"):
+    def run_episode(stream, decide, mode="labels", match=None):
         """decide(mention, nodes) -> (index, logits); index len(nodes) = create. mode 'labels': every decision gets the
         node holding its thing as target (upper bound, uses identity labels). mode 'outcome': only a wrong answer after
         reading gives a signal -- target = a node (existing at that decision) whose facts answer right, the one the model
@@ -3655,11 +3655,12 @@ def v11_t5(steps=3000, ep_species=8):
                 pairs.append((lg, tgt, j != tgt))
             if j == len(nodes):
                 nodes.append({"m": [men[0]], "names": [men[1]], "alone": [men[2]], "owner": ent, "facts": {}, "made_by": len(decs) - 1,
-                              "hist": []})
+                              "hist": [], "md": [d]})
             else:
                 nodes[j]["m"].append(men[0])
                 nodes[j]["names"].append(men[1])
                 nodes[j]["alone"].append(men[2])
+                nodes[j]["md"].append(d)
             return j, d
         read_done = set()
         for ev in stream:
@@ -3702,6 +3703,14 @@ def v11_t5(steps=3000, ep_species=8):
                 dw = hist[-1][1]
                 if dw["lg"] is not None and dw["j"] != dw["n"]:
                     pairs.append((dw["lg"], dw["n"], True))
+            # blame up (3) (11-16 curve: never-seen names pointed at an existing node 27/36 even with 198 species): the
+            # stored mention this question matched in the wrong node was put there by a POINTING decision -> that
+            # decision should have pointed to the node with the right facts (if it existed then) or created one
+            if ok and j != t_ and match is not None and len(nodes[j]["m"]) > 1:
+                k = int(match(men[0], nodes[j]["m"][:-1]).argmax())   # (the last one is this question's own mention)
+                dk = nodes[j]["md"][k]
+                if dk is not d and dk["lg"] is not None and dk["j"] != dk["n"]:
+                    pairs.append((dk["lg"], t_ if t_ < dk["n"] else dk["n"], True))
             if ok and j < len(nodes) and j != t_:        # blame up: the decision that made the wrong node
                 dm = decs[nodes[j]["made_by"]]
                 if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
@@ -3769,11 +3778,15 @@ def v11_t5(steps=3000, ep_species=8):
         relm = Rel().to(dev)
         opt = torch.optim.AdamW(relm.parameters(), lr=1e-3)
         learned = make_learned(relm)
+
+        @torch.no_grad()
+        def match_fn(v, ms):                             # the model's own relevance (blame up (3)); no labels
+            return F.normalize(relm.q(torch.stack(ms)), dim=-1) @ F.normalize(relm.q(v), dim=-1)
         trng = random.Random(43)
         n_sig, run_l = 0, []
         for stp in range(steps):
             stream = events(trng.sample(train_sp[:n_tr], min(n_tr, trng.randint(ep_species, 30))), trng)   # (8-30: test has 30)
-            _, pairs = run_episode(stream, learned(True), mode)
+            _, pairs = run_episode(stream, learned(True), mode, match=match_fn)
             if not pairs:
                 continue
             n_sig += sum(w for _, _, w in pairs)
