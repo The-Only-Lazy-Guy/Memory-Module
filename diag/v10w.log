@@ -233,3 +233,44 @@ Character 1 1 2
   kept memory empty | add2 0%, add4 0%, add6 0%, chain2 5%, chain4 0%, chain6 0%, lookup1 45%, compose1 8% | steps fetching a kept node 0%; skills 4; skills used per kind add: s0x3 s1x223 s2x500 s3x9; chain: s0x59 s3x293; lookup: s3x40; compose: s0x102 s2x11 s3x3; needed fact fetched: chain 97% compose 99% lookup 100%
   recall (facts read earlier, none given; kept memory 2696 nodes): chain2 0%, chain4 0%, lookup1 60%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 67%, chain4 58%, lookup1 100%, compose1 24% | ... the fact the step needs: chain2 76%, chain4 65%, lookup1 100%, compose1 37%
   saved /marimo/out/v10w.pt (kept memory 1981 nodes)
+round 2: right runs found 60/400 (kept traces 162, kept memory 3798 nodes), 177s trying
+  fetch-training pairs 2809
+  kept by kind/size (count, mean steps): add1 3 3.0, chain1 18 1.0, chain2 1 1.0, compose1 2 1.0, lookup1 36 1.0
+    traces by length: 1:119, 3:12, 5:13, 7:6, 9:6, 11:6
+    fit step 100: mean loss 2.161, skills 4
+    fit step 200: mean loss 2.122, skills 4
+    fit step 300: mean loss 1.721, skills 4
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 8 4
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s2 writes ' 7 + 1 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 1 + carry 0 = ?' -> skill s1 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s2 writes ' What is 6 + 8 1 plus carry 0, followed by 4?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 6 + 8 1 plus carry 0, followed by 4?' -> skill s1 writes ' 6 + 8 1 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 6 + 8 1 + carry 0 = ?' -> skill s1 writes ' digit 8, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 6 + 8 1 plus carry 0, followed by 4?' -> skill s1 writes ' 8 4' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s2 writes ' 8 4' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> carry 0
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s2 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s1 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s2 writes ' What is 7 7 7 plus carry 0, followed by 4?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 7 7 plus carry 0, followed by 4?' -> skill s3 writes ' 7' (resolves it, done p 0.98; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s2 writes ' + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' + 7 + carry 0 = ?' -> skill s1 writes ' digit 9, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s2 writes ' What is 7 plus 7 plus carry 0, followed by 4?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 plus 7 plus carry 0, followed by 4?' -> skill s3 writes ' 7' (resolves it, done p 0.99; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s2 writes ' + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' + 7 + carry 0 = ?' -> skill s1 writes ' digit 9, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s2 writes ' What is 7 plus 7 plus carry 0, followed by 4?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 plus 7 plus carry 0, followed by 4?' -> skill s3 writes ' 7' (resolves it, done p 0.99; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s2 writes ' + 9 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' + 9 = ?' -> skill s1 writes ' digit 8, and' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 8 8
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s2 writes ' 7 + 5 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 5 + carry 0 = ?' -> skill s1 writes ' digit 8, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s2 writes ' What is 8 8 7 + 8 3 plus carry 0, followed by 8?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 8 8 7 + 8 3 plus carry 0, followed by 8?' -> skill s2 writes ' 8 + 3 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 8 + 3 + carry 0 = ?' -> skill s1 writes ' digit 8, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 8 7 + 8 3 plus carry 0, followed by 8?' -> skill s2 writes ' 8' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s2 writes ' 8 8' (resolves it, done p 1.00; kept nodes fetched 6)
