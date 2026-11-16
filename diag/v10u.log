@@ -201,3 +201,10 @@ round 1: right runs found 172/400 (kept traces 220, kept memory 2194 nodes), 146
   kept memory empty | add2 0%, add4 0%, add6 0%, chain2 82%, chain4 10%, chain6 8%, lookup1 100%, compose1 32% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x810; chain: s0x742; lookup: s0x40; compose: s0x265; needed fact fetched: chain 100% compose 82% lookup 100%
   recall (facts read earlier, none given; kept memory 2909 nodes): chain2 13%, chain4 0%, lookup1 73%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 66%, chain4 65%, lookup1 100%, compose1 35% | ... the fact the step needs: chain2 72%, chain4 74%, lookup1 100%, compose1 39%
   saved /marimo/out/v10u.pt (kept memory 2194 nodes)
+round 2: right runs found 164/400 (kept traces 384, kept memory 4162 nodes), 246s trying
+  fetch-training pairs 3626
+  kept by kind/size (count, mean steps): add1 2 3.0, chain1 23 1.0, chain2 13 5.0, chain3 2 9.0, chain4 1 5.0, compose1 12 3.0, lookup1 111 1.0
+    traces by length: 1:277, 3:9, 5:71, 7:6, 9:15, 11:6
+    fit step 100: mean loss 1.740, skills 1
+    fit step 200: mean loss 1.347, skills 1
+    fit step 300: mean loss 1.400, skills 1
