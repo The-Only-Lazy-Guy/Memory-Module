@@ -61,3 +61,60 @@ The latest release of the game is now available.
    focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s2 writes ' 1 0 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5' (sub-step, done p 0.07; kept nodes fetched 6)
    focus ' 1 0 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5 + 5' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.86; kept nodes fetched 6)
    focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s2 writes 'The latest release of the game is now available.\n\nThe latest release of the game is now available.\n\nThe latest release of the game is now available.' (resolves it, done p 0.99; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> None
+   focus ' Who is the boss of the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> None
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s3 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> Rildun
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s3 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s3 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the age of Mutor? (truth 60) -> 61
+   focus ' What is the age of Mutor?' -> skill s3 writes ' 61' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Zekril in? (truth Ordun) -> None
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which genus is Zekril in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Zekril in?' -> skill s2 writes ' Tormer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zekril in?' -> skill s0 writes ' Which family is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
+  with kept memory | add2 0%, add4 0%, add6 0%, chain2 10%, chain4 12%, chain6 2%, lookup1 38%, compose1 2% | steps fetching a kept node 100%; skills 4; skills used per kind add: s0x11 s1x342 s2x719 s3x310; chain: s0x482 s3x591; lookup: s3x40; compose: s0x1237 s2x34 s3x4; needed fact fetched: chain 96% compose 100% lookup 100%
