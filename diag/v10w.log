@@ -274,3 +274,30 @@ round 2: right runs found 60/400 (kept traces 162, kept memory 3798 nodes), 177s
    focus ' 8 + 3 + carry 0 = ?' -> skill s1 writes ' digit 8, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' What is 8 8 7 + 8 3 plus carry 0, followed by 8?' -> skill s2 writes ' 8' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s2 writes ' 8 8' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> <|endoftext|>
+   focus ' Who is the boss of the boss of Zekor?' -> skill s3 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s3 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s3 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s3 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s3 writes '<|endoftext|>' (resolves it, done p 0.96; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> <|endoftext|>
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s3 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Lovin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s3 writes '<|endoftext|>' (resolves it, done p 0.87; kept nodes fetched 6)
+
+  [chain 6] Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek? (truth Salo) -> <|endoftext|>
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s3 writes ' Who is the boss of Dunzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Dunzek?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of the boss of the boss of the boss of the boss of Dunzek?' -> skill s3 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the age of Mutor? (truth 60) -> 60
+   focus ' What is the age of Mutor?' -> skill s3 writes ' 60' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Mertha in? (truth Thamer) -> <|endoftext|>
+   focus ' Which family is Mertha in?' -> skill s3 writes '<|endoftext|>' (resolves it, done p 0.87; kept nodes fetched 6)
+  loss 8.299; with kept memory | add2 2%, add4 0%, add6 0%, chain2 8%, chain4 0%, chain6 0%, lookup1 82%, compose1 2% | steps fetching a kept node 100%; skills 4; skills used per kind add: s0x2 s1x327 s2x698 s3x19; chain: s0x87 s3x365; lookup: s3x40; compose: s0x39 s3x1; needed fact fetched: chain 97% compose 100% lookup 100%
+  kept memory empty | add2 2%, add4 0%, add6 0%, chain2 8%, chain4 2%, chain6 0%, lookup1 85%, compose1 2% | steps fetching a kept node 0%; skills 4; skills used per kind add: s0x85 s1x264 s2x523 s3x16; chain: s0x114 s3x444; lookup: s3x40; compose: s0x39 s3x1; needed fact fetched: chain 98% compose 100% lookup 100%
+  recall (facts read earlier, none given; kept memory 4513 nodes): chain2 0%, chain4 0%, lookup1 37%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 52%, chain4 59%, lookup1 100%, compose1 53% | ... the fact the step needs: chain2 58%, chain4 63%, lookup1 100%, compose1 53%
+  saved /marimo/out/v10w.pt (kept memory 3798 nodes)
