@@ -1,0 +1,130 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3956.92it/s]
+[chain2] Who is the friend of the friend of Thalo? (truth Vinvin) | holds False | same steps as the demo True
+  facts: The friend of Thalo is Torka. The friend of Merlo is Merne. The friend of Kazek is Vingor. The friend of Torka is Vinvin. The friend of Duntha is Zekpel.
+  run: Who is the friend of Thalo? -> | Torka | Who is the friend of Torka? -> | Vinvin | Vinvin
+    leaf 'Who is the friend of Thalo?': run wrote 'Torka', asked alone 'Vinvin' -- DOES NOT HOLD
+   focus ' Who is the friend of Thalo?' -> skill s0 writes ' Who is the friend of Thalo?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Thalo?' -> skill s0 writes ' Torka' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of Thalo?' -> skill s0 writes ' Who is the friend of Torka?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Torka?' -> skill s0 writes ' Vinvin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of Thalo?' -> skill s0 writes ' Vinvin' (resolves it, done p 1.00; kept nodes fetched 6)
+[chain2] Who is the teacher of the teacher of Thasa? (truth Muril) | holds False | same steps as the demo True
+  facts: The teacher of Losa is Bator. The teacher of Thasa is Orba. The teacher of Torne is Torsa. The teacher of Orba is Muril. The teacher of Nedun is Gorpel.
+  run: Who is the teacher of Thasa? -> | Orba | Who is the teacher of Orba? -> | Muril | Muril
+    leaf 'Who is the teacher of Thasa?': run wrote 'Orba', asked alone 'Muril' -- DOES NOT HOLD
+   focus ' Who is the teacher of Thasa?' -> skill s0 writes ' Who is the teacher of Thasa?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the teacher of Thasa?' -> skill s0 writes ' Orba' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the teacher of Thasa?' -> skill s0 writes ' Who is the teacher of Orba?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the teacher of Orba?' -> skill s0 writes ' Muril' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the teacher of Thasa?' -> skill s0 writes ' Muril' (resolves it, done p 1.00; kept nodes fetched 6)
+[chain2] Who is the neighbour of the neighbour of Orzek? (truth Muka) | holds False | same steps as the demo False
+  facts: The neighbour of Baka is Ortha. The neighbour of Orba is Muka. The neighbour of Kamu is Dundun. The neighbour of Orzek is Orba. The neighbour of Merka is Kalo.
+  run: Who is the neighbour of Orzek? -> | Ortha | Who is the neighbour of Orzek? -> | Ortha | Who is the neighbour of Orzek? -> | Muka | Muka
+    leaf 'Who is the neighbour of Orzek?': run wrote 'Ortha', asked alone 'Orba' -- DOES NOT HOLD
+   focus ' Who is the neighbour of Orzek?' -> skill s0 writes ' Orba' (resolves it, done p 1.00; kept nodes fetched 6)
+[chain2] Who is the neighbour of the neighbour of Baor? (truth Peltor) | holds False | same steps as the demo True
+  facts: The neighbour of Rilsa is Zekmer. The neighbour of Thaka is Pelzek. The neighbour of Baor is Dunlo. The neighbour of Dunlo is Peltor. The neighbour of Orzek is Kator.
+  run: Who is the neighbour of Baor? -> | Dunlo | Who is the neighbour of Dunlo? -> | Peltor | Peltor
+    leaf 'Who is the neighbour of Baor?': run wrote 'Dunlo', asked alone 'Peltor' -- DOES NOT HOLD
+   focus ' Who is the neighbour of Baor?' -> skill s0 writes ' Who is the neighbour of Baor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Baor?' -> skill s0 writes ' Dunlo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Baor?' -> skill s0 writes ' Who is the neighbour of Dunlo?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunlo?' -> skill s0 writes ' Peltor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Baor?' -> skill s0 writes ' Peltor' (resolves it, done p 1.00; kept nodes fetched 6)
+[chain2] Who is the neighbour of the neighbour of Pello? (truth Logor) | holds False | same steps as the demo True
+  facts: The neighbour of Vindun is Katha. The neighbour of Vinril is Torlo. The neighbour of Muor is Merril. The neighbour of Zeklo is Logor. The neighbour of Pello is Zeklo.
+  run: Who is the neighbour of Pello? -> | Zeklo | Who is the neighbour of Zeklo? -> | Logor | Logor
+    leaf 'Who is the neighbour of Pello?': run wrote 'Zeklo', asked alone 'Zeklo'
+    leaf 'Who is the neighbour of Zeklo?': run wrote 'Logor', asked alone 'Pello' -- DOES NOT HOLD
+   focus ' Who is the neighbour of Zeklo?' -> skill s0 writes ' Who is the neighbour of Zeklo?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Zeklo?' -> skill s0 writes ' Logor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Zeklo?' -> skill s0 writes ' Who is the neighbour of Logor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Logor?' -> skill s0 writes ' Zeklo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Zeklo?' -> skill s0 writes ' Who is the neighbour of Zeklo?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Zeklo?' -> skill s0 writes ' Pello' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Zeklo?' -> skill s0 writes ' Pello' (resolves it, done p 1.00; kept nodes fetched 6)
+[chain2] Who is the friend of the friend of Dunmer? (truth Rilzek) | holds False | same steps as the demo True
+  facts: The friend of Dunpel is Pelmu. The friend of Dunmer is Gorka. The friend of Gorka is Rilzek. The friend of Muvin is Vinlo. The friend of Loba is Thadun.
+  run: Who is the friend of Dunmer? -> | Gorka | Who is the friend of Gorka? -> | Rilzek | Rilzek
+    leaf 'Who is the friend of Dunmer?': run wrote 'Gorka', asked alone 'Rilzek' -- DOES NOT HOLD
+   focus ' Who is the friend of Dunmer?' -> skill s0 writes ' Who is the friend of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Dunmer?' -> skill s0 writes ' Gorka' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of Dunmer?' -> skill s0 writes ' Who is the friend of Gorka?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorka?' -> skill s0 writes ' Rilzek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of Dunmer?' -> skill s0 writes ' Rilzek' (resolves it, done p 1.00; kept nodes fetched 6)
+[chain2] Who is the friend of the friend of Kasa? (truth Pelsa) | holds False | same steps as the demo True
+  facts: The friend of Vintor is Ormer. The friend of Goror is Pelsa. The friend of Zekka is Loka. The friend of Merdun is Nesa. The friend of Kasa is Goror.
+  run: Who is the friend of Kasa? -> | Goror | Who is the friend of Goror? -> | Pelsa | Pelsa
+    leaf 'Who is the friend of Kasa?': run wrote 'Goror', asked alone 'Pelsa' -- DOES NOT HOLD
+   focus ' Who is the friend of Kasa?' -> skill s0 writes ' Who is the friend of Kasa?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Kasa?' -> skill s0 writes ' Goror' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of Kasa?' -> skill s0 writes ' Who is the friend of Goror?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Goror?' -> skill s0 writes ' Pelsa' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of Kasa?' -> skill s0 writes ' Pelsa' (resolves it, done p 1.00; kept nodes fetched 6)
+[chain2] Who is the neighbour of the neighbour of Neba? (truth Dunmer) | holds False | same steps as the demo True
+  facts: The neighbour of Vintha is Savin. The neighbour of Peltor is Kaka. The neighbour of Neba is Lozek. The neighbour of Lozek is Dunmer. The neighbour of Merlo is Thamer.
+  run: Who is the neighbour of Neba? -> | Lozek | Who is the neighbour of Lozek? -> | Dunmer | Dunmer
+    leaf 'Who is the neighbour of Neba?': run wrote 'Lozek', asked alone None -- DOES NOT HOLD
+   focus ' Who is the neighbour of Neba?' -> skill s0 writes ' Who is the neighbour of Neba?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Neba?' -> skill s0 writes ' Lozek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Neba?' -> skill s0 writes ' Who is the neighbour of the neighbour of Lozek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Lozek?' -> skill s0 writes ' Who is the neighbour of Lozek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lozek?' -> skill s0 writes ' Dunmer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Lozek?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Lozek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Lozek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lozek?' -> skill s0 writes ' Dunmer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Lozek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Lozek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lozek?' -> skill s0 writes ' Dunmer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Lozek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Lozek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lozek?' -> skill s0 writes ' Dunmer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Lozek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Dunmer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Lozek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Lozek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lozek?' -> skill s0 writes ' Dunmer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Lozek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Lozek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lozek?' -> skill s0 writes ' Dunmer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Dunmer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Dunmer' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunmer?' -> skill s0 writes ' Who is the neighbour of Dunmer?' (sub-step, done p 0.00; kept nodes fetched 6)
+[chain3] Who is the friend of the friend of the friend of Sasa? (truth Vinril) | holds True | same steps as the demo False
+  facts: The friend of Thapel is Orgor. The friend of Samer is Rilgor. The friend of Orvin is Nemu. The friend of Sasa is Rillo. The friend of Rillo is Saka. The friend of Saka is Vinril.
+  run: Who is the friend of Sasa? -> | Vinril | Vinril
+    leaf 'Who is the friend of Sasa?': run wrote 'Vinril', asked alone 'Vinril'
+[chain3] Who is the boss of the boss of the boss of Sator? (truth Pelgor) | holds False | same steps as the demo False
+  facts: The boss of Dunmu is Samer. The boss of Sator is Gortha. The boss of Gortha is Pelril. The boss of Gortha is Orvin. The boss of Rilpel is Ormu. The boss of Orvin is Pelgor.
+  run: Who is the boss of Sator? -> | Orvin | Who is the boss of Orvin? -> | Pelgor | Pelgor
+    leaf 'Who is the boss of Sator?': run wrote 'Orvin', asked alone 'Pelgor' -- DOES NOT HOLD
+   focus ' Who is the boss of Sator?' -> skill s0 writes ' Who is Sator in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is Sator in?' -> skill s0 writes ' Orvin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Sator?' -> skill s0 writes ' Who is the boss of Orvin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Orvin?' -> skill s0 writes ' Pelgor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Sator?' -> skill s0 writes ' Pelgor' (resolves it, done p 1.00; kept nodes fetched 6)
+holddiag chain2: agreeing right 8, holds 0, same as demo 7, holds and not demo 0; chain3: agreeing right 2, holds 1, same as demo 0, holds and not demo 1; compose1: agreeing right 0, holds 0, same as demo 0, holds and not demo 0
