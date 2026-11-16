@@ -228,3 +228,27 @@ round 1: right runs found 179/400 (kept traces 227, kept memory 2238 nodes), 344
   [recall lookup 1] What is the age of Torgor? (truth 31) -> Torgor
    focus ' What is the age of Torgor?' -> skill s0 writes ' Torgor' (resolves it, done p 1.00; kept nodes fetched 6)
      fetched for ' What is the age of Torgor?': 'What is the age of Kator? 67' (-8.0); 'What is the age of Zekka? 73' (-8.0); 'What is the age of Vinka? 47' (-8.0)
+
+  [recall compose 1] Which family is Zektha in? (truth Netha) -> None
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Zektha in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Zektha in?' -> skill s0 writes ' 7, followed by 7?' (sub-step, done p 0.04; kept nodes fetched 6)
+   focus ' 7, followed by 7?' -> skill s0 writes ' I am 7, followed by 7?' (sub-step, done p 0.17; kept nodes fetched 6)
+   focus ' I am 7, followed by 7?' -> skill s0 writes ' I am 7, followed by 7?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' I am 7, followed by 7?' -> skill s0 writes ' I am 7, followed by 7?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' I am 7, followed by 7?' -> skill s0 writes ' I am 7, followed by 7?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' I am 7, followed by 7?' -> skill s0 writes ' I am 7, followed by 7?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' I am 7, followed by 7?' -> skill s0 writes ' I am 7, followed by 7?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' I am 7, followed by 7?' -> skill s0 writes ' I am 7, followed by 7?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' I am 7, followed by 7?' -> skill s0 writes ' I am 7, followed by 7?' (sub-step, done p 0.00; kept nodes fetched 6)
+     fetched for ' Which family is Zektha in?': 'The age of Kazek is 95.' (-8.0); 'The age of Zekka is 73.' (-8.0); 'The age of Zekba is 10.' (-8.0)
+     fetched for ' Zektha in?': 'The age of Zekmu is 7.' (-8.0); 'The age of Zekdun is 62.' (-8.0); 'The age of Zektha is 8.' (-8.0)
+     fetched for ' 7, followed by 7?': 'The depth of Zekka is 7.' (-8.0); 'The depth of Zekril is 12.' (-8.0); 'The depth of Zektor is 17.' (-8.0)
+     fetched for ' I am 7, followed by 7?': 'The age of Zekba is 10.' (-8.0); 'The age of Zekmu is 7.' (-8.0); 'The age of Zekzek is 19.' (-8.0)
+     fetched for ' I am 7, followed by 7?': 'The age of Zekba is 10.' (-8.0); 'The age of Zekmu is 7.' (-8.0); 'The age of Zekzek is 19.' (-8.0)
+     fetched for ' I am 7, followed by 7?': 'The age of Zekba is 10.' (-8.0); 'The age of Zekmu is 7.' (-8.0); 'The age of Zekzek is 19.' (-8.0)
+     fetched for ' I am 7, followed by 7?': 'The age of Zekba is 10.' (-8.0); 'The age of Zekmu is 7.' (-8.0); 'The age of Zekzek is 19.' (-8.0)
+     fetched for ' I am 7, followed by 7?': 'The age of Zekba is 10.' (-8.0); 'The age of Zekmu is 7.' (-8.0); 'The age of Zekzek is 19.' (-8.0)
+     fetched for ' I am 7, followed by 7?': 'The age of Zekba is 10.' (-8.0); 'The age of Zekmu is 7.' (-8.0); 'The age of Zekzek is 19.' (-8.0)
+     fetched for ' I am 7, followed by 7?': 'The age of Zekba is 10.' (-8.0); 'The age of Zekmu is 7.' (-8.0); 'The age of Zekzek is 19.' (-8.0)
+  recall (facts read earlier, none given; kept memory 2953 nodes): chain2 0%, chain4 0%, lookup1 0%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 0%, chain4 0%, lookup1 9%, compose1 0% | ... the fact the step needs: chain2 0%, chain4 0%, lookup1 12%, compose1 0%
+  reuse (n 20): first ask 10% in 6.8 steps; asked again 10% in 6.8 steps, 0% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 5%, without 5%
