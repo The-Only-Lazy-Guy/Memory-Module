@@ -140,3 +140,39 @@ round 0 (demos only): loss 0.097, 458s
      fetched for ' Which family is Zektha in?': 'Logor is in the genus Mermu.' (-1.9); 'Logor is in the genus Zekzek.' (-2.1); 'Logor is in the genus Nemu.' (-2.6)
   recall (facts read earlier, none given; kept memory 881 nodes): chain2 23%, chain4 0%, lookup1 80%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 63%, chain4 30%, lookup1 100%, compose1 30% | ... the fact the step needs: chain2 62%, chain4 34%, lookup1 100%, compose1 62%
   reuse (n 20): first ask 20% in 6.5 steps; asked again 0% in 30.3 steps, 23% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 10%
+round 1: right runs found 156/400 (kept traces 204, kept memory 2149 nodes), 784s trying
+  fetch-training pairs 2019
+  kept by kind/size (count, mean steps): add1 1 3.0, chain1 24 1.0, chain2 17 5.0, chain3 2 9.0, chain4 2 5.0, compose1 12 5.0, lookup1 98 1.0
+    traces by length: 1:134, 3:7, 5:43, 7:6, 9:8, 11:6
+    fit step 100: mean loss 2.055, skills 1
+    fit step 200: mean loss 1.388, skills 1
+    fit step 300: mean loss 1.474, skills 1
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 1 0
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 7 + 1 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 1 + carry 0 = ?' -> skill s0 writes ' digit 0, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 1 0' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> 9
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s0 writes ' digit 9, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 9' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 7
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 7 + 5 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 5 + carry 0 = ?' -> skill s0 writes ' digit 7, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 7' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Mermu
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Mermu' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Mermu' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Bazek
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Lovin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Lovin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lovin?' -> skill s0 writes ' Bazek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Bazek' (resolves it, done p 1.00; kept nodes fetched 6)
