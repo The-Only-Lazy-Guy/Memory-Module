@@ -3644,7 +3644,8 @@ def v11_t5(steps=3000, ep_species=8):
         reinforced. No identity labels"""
         nodes, decs, pairs = [], [], []
         stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "linked": 0, "reads": 0,
-                 "right common": 0, "n common": 0, "right binomial": 0, "n binomial": 0}
+                 "right common": 0, "n common": 0, "right binomial": 0, "n binomial": 0, "j1 top": 0, "create>j1": 0,
+                 "n link": 0}
 
         def point(men, ent):
             j, lg = decide(men, nodes)
@@ -3669,9 +3670,15 @@ def v11_t5(steps=3000, ep_species=8):
             ent = x["binomial"]
             if ev[0] == "read":
                 j1, d1 = point(mention(x["lead"], x["common"]), ent)
+                n0 = len(nodes)
                 j2, _ = point(mention(x["lead"], x["binomial"]), ent)
                 stats["reads"] += 1
                 stats["linked"] += j1 == j2                      # (diagnosis) both names of the lead on one node
+                lgb = getattr(decide, "last", None)     # (11-17 diagnosis: representation or create calibration?)
+                if lgb is not None and n0 > 1:
+                    stats["j1 top"] += int(lgb[:n0].argmax()) == j1   # the common name's node is the best NODE
+                    stats["create>j1"] += bool(lgb[n0] > lgb[j1])     # but create outbids it
+                    stats["n link"] += 1
                 for r_ in rels:                          # the lead's facts go to its subject's node
                     nodes[j1]["facts"][r_] = x[r_]
                 nodes[j1]["hist"].append(({r_: x[r_] for r_ in rels}, d1))
@@ -3733,6 +3740,7 @@ def v11_t5(steps=3000, ep_species=8):
         def learned(train):
             def d(men, nodes):
                 lg = relm(men[0], nodes) if nodes else relm.create[None] + relm.cq(men[0])
+                d.last = lg.detach()                     # (diagnosis only: read by run_episode's link stats)
                 j = random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax())
                 return j, (lg if train else None)
             return d
@@ -3806,7 +3814,8 @@ def v11_t5(steps=3000, ep_species=8):
                         st, _ = run_episode(sm, learned(False))
                         print(f"v11 T5 at step {stp} {sn}: right {st['right']}/{st['asked_after']} (common {st['right common']}/"
                               f"{st['n common']}, binomial {st['right binomial']}/{st['n binomial']}) linked {st['linked']}/"
-                              f"{st['reads']} before->other {st['wrong_node']}/{st['asked_before']} nodes {st['nodes']}", flush=True)
+                              f"{st['reads']} before->other {st['wrong_node']}/{st['asked_before']} nodes {st['nodes']} | binomial "
+                              f"read: common node top {st['j1 top']}/{st['n link']}, create beats it {st['create>j1']}/{st['n link']}", flush=True)
             stream = events(trng.sample(train_sp[:n_tr], min(n_tr, trng.randint(ep_species, 30))), trng)   # (8-30: test has 30)
             _, pairs = run_episode(stream, learned(True), mode, match=match_fn)
             if not pairs:
