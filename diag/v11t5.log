@@ -1,0 +1,12 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4422.54it/s]
+/marimo/pv/hd/gnm.py:3717: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  print(f"v11 T5 training step {stp + 1}: loss {float(L):.3f}", flush=True)
+v11 T5 training step 1000: loss 0.211
+v11 T5 training step 2000: loss 0.516
+v11 T5 training step 3000: loss 0.168
+v11 T5 test (30 never-trained species, one stream): learned relevance (name + context): right after reading 51/120 | asked before reading -> another thing's node 12/36 | nodes 78 for 26 things
+v11 T5 test (30 never-trained species, one stream): exact name string: right after reading 58/120 | asked before reading -> another thing's node 0/36 | nodes 60 for 30 things
+v11 T5 test (30 never-trained species, one stream): name-only cosine (centred) >= .6: right after reading 37/120 | asked before reading -> another thing's node 27/36 | nodes 12 for 11 things
+v11 T5 test (30 never-trained species, one stream): name-only cosine (centred) >= .8: right after reading 44/120 | asked before reading -> another thing's node 20/36 | nodes 30 for 22 things
