@@ -2679,6 +2679,46 @@ def v10_unit_column(steps=6000):
         h.remove()
 
 
+def _focus_shape(t):
+    """which kind of focus a text is (diagnosis only, never used by the model)"""
+    import re as _re
+    for name, pat in (("column", r"^\d \+ \d \+ carry \d = \?$"), ("add question", r"^What is [\d ]+\+"),
+                      ("genus question", r"^Which genus is"), ("family-of-genus question", r"^Which family is the genus"),
+                      ("compose question", r"^Which family is"), ("lookup question", r"^What is the \w+ of"),
+                      ("1-hop question", r"^Who is the (\w+) of (?!the )\w+\?$"), ("multi-hop question", r"^Who is the")):
+        if _re.search(pat, t.strip()):
+            return name
+    return "other"
+
+
+@torch.no_grad()
+def v10_routediag(path, n=12, seed=53):
+    """11-16 v10w round 0: with spawning on (fixed-centred frozen skill space) chain2 10%, lookup 38%, compose 2%;
+    compose went to s0 (which also took chains), add spread over 4 skills. Hypothesis: the learned key offsets EK grew
+    (gradient via w = p/p.detach() reinforces whatever was picked) and one skill's key captures other focus kinds.
+    Prints EK norm vs label norm per skill, and per focus kind (demo-shaped tasks): which skill is picked, how often"""
+    tk = lm()[0]
+    G = v10_load(path)
+    for s_ in G.skills:
+        lab = G.skill_query(s_.H)
+        print(f"routediag skill s{s_.expert}: label {tk.decode(s_.ids).strip()[:60]!r} | label norm {float(lab.norm()):.2f}, "
+              f"EK norm {float(G.EK[s_.expert].norm()):.2f}", flush=True)
+    rng = random.Random(seed)
+    pick = {}
+    for kind, sizes in (("add", (1, 2, 3)), ("chain", (1, 2, 3)), ("lookup", (1,)), ("compose", (1,))):
+        for size in sizes:
+            for _ in range(n):
+                facts, q, ans, steps = v10_task(kind, rng, size)
+                for t in [q] + [x for x, d in steps if not d]:
+                    H, _, _ = G.lm_run(tk(" " + t)["input_ids"])
+                    qv = F.normalize(G.skill_query(H), dim=-1)
+                    sc = G.skill_keys() @ qv
+                    b = int(sc.argmax())
+                    pick.setdefault(_focus_shape(t), {}).setdefault(f"s{G.skills[b].expert}", []).append(float(sc[b]))
+    for shape, d in sorted(pick.items()):
+        print(f"routediag {shape}: " + ", ".join(f"{k} x{len(v)} (score {sum(v) / len(v):.2f})" for k, v in sorted(d.items())), flush=True)
+
+
 def v10_fitdiag(steps=300):
     """11-15 v10g: demo fit stuck at mean loss ~1.9 with 10 skills. Same 48 demos, fresh model per variant: as is /
     one skill / no kept memory / both; mean loss per 100 steps (lower = imitates the demos)"""
@@ -3020,7 +3060,7 @@ if __name__ == "__main__":
     ap.add_argument("--m", type=int, default=16)    # rows (tokens) per node
     ap.add_argument("--together", type=int, default=1)   # articles read into one memory per training episode
     a = ap.parse_args()
-    if a.task in ("v10", "v10test", "holddiag", "ctxdiag", "unit", "unit2"):  # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
+    if a.task in ("v10", "v10test", "holddiag", "ctxdiag", "unit", "unit2", "routediag"):  # plain fp32 (11-15: TF32 made cached vs slow differ 4%; fp32 0.000)
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
     if a.task == "v10":                        # v10: meaning + control per token, skill experts, recursion, outcome rounds
@@ -3029,6 +3069,9 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "unit":
         v10_unit()
+        raise SystemExit
+    if a.task == "routediag":
+        v10_routediag(os.environ.get("V10_LOAD", "/marimo/out/v10w.pt"))
         raise SystemExit
     if a.task == "unit2":
         v10_unit_route()
