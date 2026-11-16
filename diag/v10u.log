@@ -96,3 +96,4 @@ round 0 (demos only): loss 0.097, 469s
    focus ' Which family is Mugor in?' -> skill s0 writes ' Which family is Mugor in?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' Which family is Mugor in?' -> skill s0 writes ' Which genus is Mugor in?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' Which genus is Mugor in?' -> skill s0 writes ' Ordun' (resolves it, done p 1.00; kept nodes fetched 6)
+  with kept memory | add2 0%, add4 0%, add6 0%, chain2 72%, chain4 2%, chain6 8%, lookup1 95%, compose1 38% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1322; chain: s0x853; lookup: s0x40; compose: s0x726; needed fact fetched: chain 89% compose 59% lookup 100%
