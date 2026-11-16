@@ -1,0 +1,20 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3796.05it/s]
+  [chain2] Who is the neighbour of the neighbour of Ormer? | at the root after its sub-steps: wants 'Zekdun' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain2] Who is the boss of the boss of Loor? | at the root after its sub-steps: wants 'Neril' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain2] Who is the neighbour of the neighbour of Rildun? | at the root after its sub-steps: wants 'Gorba' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain2] Who is the boss of the boss of Muor? | at the root after its sub-steps: wants 'Gorzek' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain3] Who is the teacher of the teacher of the teacher of Rilba? | at the root after its sub-steps: wants 'Orka' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain3] Who is the friend of the friend of the friend of Katha? | at the root after its sub-steps: wants 'Dunzek' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain3] Who is the boss of the boss of the boss of Zekvin? | at the root after its sub-steps: wants 'Torsa' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain3] Who is the friend of the friend of the friend of Torril? | at the root after its sub-steps: wants 'Kaba' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Baba? | at the root after its sub-steps: wants 'Dunba' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain4] Who is the boss of the boss of the boss of the boss of Lotor? | at the root after its sub-steps: wants 'Nezek' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Samer? | at the root after its sub-steps: wants 'Pelgor' (done), writes '<|endoftext|>' (done p 1.00)
+  [chain4] Who is the friend of the friend of the friend of the friend of Basa? | at the root after its sub-steps: wants 'Mermu' (done), writes '<|endoftext|>' (done p 1.00)
+  [compose1] Which family is Pelor in? | at the root after its sub-steps: wants 'Thatha' (done), writes '<|endoftext|>' (done p 1.00)
+  [compose1] Which family is Toror in? | at the root after its sub-steps: wants 'Gorgor' (done), writes '<|endoftext|>' (done p 1.00)
+  [compose1] Which family is Rilzek in? | at the root after its sub-steps: wants 'Gormu' (done), writes '<|endoftext|>' (done p 1.00)
+  [compose1] Which family is Mugor in? | at the root after its sub-steps: wants 'Vinsa' (done), writes '<|endoftext|>' (done p 1.00)
+ctxdiag with ancestors (as built): chain2 answer at root 0% (n 30), chain2 answer below root 62% (n 60), chain2 sub-q at root 35% (n 60), chain3 answer at root 0% (n 30), chain3 answer below root 52% (n 120), chain3 sub-q at root 32% (n 60), chain3 sub-q below root 7% (n 60), chain4 answer at root 0% (n 30), chain4 answer below root 42% (n 180), chain4 sub-q at root 42% (n 60), chain4 sub-q below root 19% (n 120), compose1 answer at root 0% (n 30), compose1 answer below root 27% (n 60), compose1 sub-q at root 43% (n 60)
+ctxdiag without ancestors: chain2 answer at root 0% (n 30), chain2 answer below root 40% (n 60), chain2 sub-q at root 35% (n 60), chain3 answer at root 0% (n 30), chain3 answer below root 43% (n 120), chain3 sub-q at root 32% (n 60), chain3 sub-q below root 13% (n 60), chain4 answer at root 0% (n 30), chain4 answer below root 23% (n 180), chain4 sub-q at root 42% (n 60), chain4 sub-q below root 29% (n 120), compose1 answer at root 0% (n 30), compose1 answer below root 12% (n 60), compose1 sub-q at root 43% (n 60)
