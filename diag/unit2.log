@@ -1,0 +1,11 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4247.63it/s]
+unit U0 skill space: same-kind cos 0.999 (min 0.997), other-kind cos 0.996 (max 1.000), nearest neighbour same kind 99%
+unit U0 frozen mean: same-kind cos 0.999 (min 0.997), other-kind cos 0.995 (max 1.000), nearest neighbour same kind 99%
+unit U0 frozen mean, centred (fixed): same-kind cos 0.790 (min -0.310), other-kind cos -0.248 (max 0.674), nearest neighbour same kind 100%
+/marimo/pv/hd/gnm.py:1599: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if not train or float(sc[b]) >= self.spawn_at or n >= self.ex.n:
+unit U1b column only @1500 loss 0.623: trained combos 31% (e.g. 3+1+0 -> 'digit 6, carry 0'; 0+7+0 -> 'digit 8, carry 0'; 2+3+1 -> 'digit 7, carry 0'), held-out combos 12% (e.g. 8+5+1 -> 'digit 6, carry 1'; 7+6+0 -> 'digit 5, carry 1'; 8+9+1 -> 'digit 7, carry 1')
+unit U1b column only @3000 loss 0.204: trained combos 50% (e.g. 7+9+0 -> 'digit 7, carry 1'; 2+3+1 -> 'digit 5, carry 0'; 6+8+1 -> 'digit 6, carry 1'), held-out combos 28% (e.g. 8+5+1 -> 'digit 6, carry 1'; 8+9+1 -> 'digit 7, carry 1'; 0+3+1 -> 'digit 0, carry 0, carry 0')
+unit U1b column only @6000 loss 0.069: trained combos 65% (e.g. 3+1+0 -> 'digit 5, carry 0'; 5+5+0 -> 'digit 2, carry 1'; 5+8+0 -> 'digit 4, carry 1'), held-out combos 35% (e.g. 8+5+1 -> 'digit 5, carry 1'; 7+6+0 -> 'digit 4, carry 1'; 8+9+1 -> 'digit 7, carry 1')
