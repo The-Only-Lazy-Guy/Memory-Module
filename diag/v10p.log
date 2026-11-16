@@ -224,3 +224,6 @@ round 1: right runs found 140/400 (kept traces 188, kept memory 1823 nodes), 285
    focus ' Which family is the genus Kane in?' -> skill s0 writes ' Mertha' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' Which family is Mertha in?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 1.00; kept nodes fetched 6)
   loss 0.285; with kept memory | add2 0%, add4 0%, add6 0%, chain2 32%, chain4 10%, chain6 8%, lookup1 72%, compose1 15% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x932; chain: s0x688; lookup: s0x40; compose: s0x198; needed fact fetched: chain 99% compose 100% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 28%, chain4 8%, chain6 10%, lookup1 75%, compose1 10% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x1120; chain: s0x737; lookup: s0x40; compose: s0x210; needed fact fetched: chain 95% compose 100% lookup 100%
+  recall (facts read earlier, none given; kept memory 2420 nodes): chain2 10%, chain4 3%, lookup1 47%, compose1 3% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 87%, chain4 87%, lookup1 100%, compose1 79% | ... the fact the step needs: chain2 98%, chain4 97%, lookup1 100%, compose1 94%
+  saved /marimo/out/v10p.pt (kept memory 1823 nodes)
