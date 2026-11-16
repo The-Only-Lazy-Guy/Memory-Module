@@ -1,0 +1,14 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4257.65it/s]
+routediag skill s0: label 'Which family is Nelo in?' | label norm 12.52, EK norm 2.31
+routediag skill s1: label '3 + 2 + carry 0 = ?' | label norm 16.67, EK norm 2.18
+routediag skill s2: label 'What is 2 3 5 + 1 0 1 plus carry 0?' | label norm 15.73, EK norm 2.10
+routediag skill s3: label 'Who is the boss of the boss of the boss of Orlo?' | label norm 15.46, EK norm 2.33
+routediag 1-hop question: s0 x30 (score 0.60), s3 x42 (score 0.61)
+routediag add question: s1 x25 (score 0.48), s2 x47 (score 0.83)
+routediag column: s1 x47 (score 0.89), s2 x25 (score 0.72)
+routediag compose question: s0 x12 (score 0.82)
+routediag family-of-genus question: s0 x12 (score 0.77)
+routediag genus question: s0 x10 (score 0.68), s2 x2 (score 0.69)
+routediag lookup question: s3 x12 (score 0.86)
+routediag multi-hop question: s0 x4 (score 0.65), s3 x32 (score 0.83)
