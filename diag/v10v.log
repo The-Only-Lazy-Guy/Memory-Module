@@ -204,3 +204,5 @@ round 1: right runs found 156/400 (kept traces 204, kept memory 2149 nodes), 784
    focus ' Which genus is Kator in?' -> skill s0 writes ' Kator' (resolves it, done p 1.00; kept nodes fetched 6)
   loss 1.181; with kept memory | add2 0%, add4 0%, add6 0%, chain2 82%, chain4 2%, chain6 8%, lookup1 98%, compose1 12% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x578; chain: s0x740; lookup: s0x40; compose: s0x1330; needed fact fetched: chain 99% compose 68% lookup 100%
   kept memory empty | add2 0%, add4 0%, add6 0%, chain2 65%, chain4 5%, chain6 8%, lookup1 98%, compose1 8% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x526; chain: s0x717; lookup: s0x40; compose: s0x1377; needed fact fetched: chain 99% compose 62% lookup 100%
+  recall (facts read earlier, none given; kept memory 2864 nodes): chain2 0%, chain4 0%, lookup1 53%, compose1 3% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 68%, chain4 57%, lookup1 100%, compose1 38% | ... the fact the step needs: chain2 71%, chain4 65%, lookup1 100%, compose1 38%
+  saved /marimo/out/v10v.pt (kept memory 2149 nodes)
