@@ -3134,11 +3134,12 @@ def v11_t3(path=None, n_demo=50, steps=400):
     """T3 (docs/GNM_v10.md §1b, measurement): real biology text, questions worded differently from the facts.
     Reading = fixed parse of each species article's lead sentence (translator stand-in, marked): alias(common name) ->
     species node, alias(binomial) -> species node, family(species) -> family node, genus(species) -> genus node.
-    Question side LEARNED: frozen GPT-2 states -> relation (classify over relation nodes) + the name's span (point at
-    its start / end tokens), trained on n_demo questions of training species with 4 wordings. Answer: span text ->
-    alias lookup (no confident key -> 'unknown') -> bind(relation, species) lookup -> classify over ALL nodes.
-    Controls: gold relation + span (upper bound); 15 species never read must come back 'unknown'; trained vs held-out
-    wordings"""
+    Question side LEARNED from n_demo questions (2 wordings per relation) over frozen GPT-2 states: the name's span
+    (point at its start / end tokens) and the relation, two ways: 'pooled' = classify the mean state over relation
+    nodes; 'point' = point at the relation's word, then classify that token against the relation nodes' word vectors.
+    Name keys two ways: 'mean' = centred mean of the tokens' embeddings; 'exact' = the tokens bound in order (only
+    the identical string matches). Answer: name lookup (no confident key -> 'unknown') -> bind(relation, species)
+    lookup -> classify over ALL nodes. Controls: gold relation + span; 15 species never read must give 'unknown'"""
     import re as _re
     tk, M = lm()
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio", "species_e1.json")
@@ -3160,11 +3161,13 @@ def v11_t3(path=None, n_demo=50, steps=400):
                     ["{N} is placed in which family?", "Name the family of {n}."]),
          "genus": (["Which genus is {n} in?", "What genus does {n} belong to?"],
                    ["{N} is classified in which genus?", "Name the genus of {n}."])}
+    rel_tok = {r_: tk(" " + r_)["input_ids"][0] for r_ in rels}
 
     def nm(x, kind):                                     # the name as written in a question
         return ("the " + x["common"]) if kind == "common" else x["binomial"]
 
     def make_q(x, rel, kind, tmpl):
+        """-> ids, relation index, name start, name end, relation-word position"""
         n = nm(x, kind)
         q = tmpl.replace("{N}", n[0].upper() + n[1:]).replace("{n}", n)
         ids = tk(" " + q)["input_ids"]
@@ -3173,17 +3176,29 @@ def v11_t3(path=None, n_demo=50, steps=400):
         if st is None:                                   # sentence-initial capital: match the capitalised form
             name_ids = tk(" " + n[0].upper() + n[1:])["input_ids"] if kind == "binomial" else tk(" " + x["common"].capitalize())["input_ids"]
             st = next((i for i in range(len(ids)) if ids[i:i + len(name_ids)] == name_ids), None)
-        return ids, rels.index(rel), st, (st + len(name_ids) - 1) if st is not None else None
+        rw = next((i for i, t in enumerate(ids) if t == rel_tok[rel]), None)
+        return ids, rels.index(rel), st, (st + len(name_ids) - 1) if st is not None else None, rw
     # ---- memory: read the lead facts of train + test_read species (fixed parse); unread species never written
     m = V11(seed=4)
+    tperm = [torch.randperm(m.D, generator=m.g).to(dev) for _ in range(24)]
     wte = M.transformer.wte.weight.detach().float()
     Pm = torch.randn(wte.shape[1], m.D, generator=torch.Generator().manual_seed(6)).to(dev) / wte.shape[1] ** .5
     read = train_sp + test_read
     names_all = [x["common"] for x in sp] + [x["binomial"] for x in sp]
     mu = torch.stack([wte[tk(" " + t)["input_ids"]].mean(0) @ Pm for t in names_all]).mean(0)
 
-    def name_vec(ids):                                   # a name's key: its tokens' embeddings, centred (U0 lesson)
+    def key_mean(ids):                                   # centred mean of the tokens' embeddings (U0 lesson)
         return F.normalize(wte[ids].mean(0) @ Pm - mu, dim=0)
+
+    def key_exact(ids):                                  # the tokens bound in order: only the identical string matches
+        v = None
+        for i, t in enumerate(ids[:24]):
+            a_ = m.atom(f"tok{t}")[tperm[i]]
+            v = a_ if v is None else m.bind(v, a_)
+        return F.normalize(v, dim=0)
+    keyf = {"mean": key_mean, "exact": key_exact}
+    for r_ in rels:                                      # relation nodes defined by their word's vector (before any fact
+        m.atom(r_, wte[rel_tok[r_]] @ Pm)                # is written with them)
     nodes, alias_names = [], []
     for i, x in enumerate(read):
         e = f"species{i}"
@@ -3194,107 +3209,100 @@ def v11_t3(path=None, n_demo=50, steps=400):
                 m.atom(t)
                 nodes.append(t)
         for kind in ("common", "binomial"):
-            K, V = m.mem.setdefault("alias", ([], []))
-            K.append(name_vec(tk(" " + x[kind])["input_ids"]))
-            V.append(m.atoms[e])
+            for km, f_ in keyf.items():
+                K, V = m.mem.setdefault("alias " + km, ([], []))
+                K.append(f_(tk(" " + x[kind])["input_ids"]))
+                V.append(m.atoms[e])
             alias_names.append(x[kind])
         m.remember("rel", ["family", e], m.atoms[x["family"]])
         m.remember("rel", ["genus", e], m.atoms[x["genus"]])
-    m.atom("family")
-    m.atom("genus")
-    m.freeze("alias")
-    m.freeze("rel")
+    for k_ in list(m.mem):
+        m.freeze(k_)
 
-    def answer(ids, r, st, en):
-        if st is None or en is None or en < st:
-            return "unknown", 0.
-        K, V = m.mem["alias"]
-        sc = K @ name_vec(ids[st:en + 1])
+    def answer(ids, r, st, en, km):
+        if r is None or st is None or en is None or en < st:
+            return "unknown", 0., None
+        K, V = m.mem["alias " + km]
+        sc = K @ keyf[km](ids[st:en + 1])
         conf = float(sc.max())
         if conf < .5:
-            return "unknown", conf
+            return "unknown", conf, int(sc.argmax())
         ent = m.cleanup(V[int(sc.argmax())], nodes)
-        return m.cleanup(m.point("rel", [rels[r], ent])[0], nodes), conf
-    # ---- learned question head: relation + name span over frozen GPT-2 states
-    head = nn.ModuleDict({"rel": nn.Linear(M.config.n_embd, len(rels)), "st": nn.Linear(M.config.n_embd, 1),
-                          "en": nn.Linear(M.config.n_embd, 1)}).to(dev)
+        return m.cleanup(m.point("rel", [rels[r], ent])[0], nodes), conf, int(sc.argmax())
+    # ---- learned question head
+    head = nn.ModuleDict({k_: nn.Linear(M.config.n_embd, len(rels) if k_ == "rel" else 1) for k_ in ("rel", "rw", "st", "en")}).to(dev)
     opt = torch.optim.AdamW(head.parameters(), lr=1e-3)
     demos = []
     for _ in range(n_demo):
         x, rel, kind = rng.choice(train_sp), rng.choice(rels), rng.choice(("common", "binomial"))
         demos.append(make_q(x, rel, kind, rng.choice(W[rel][0])))
-    demos = [d for d in demos if d[2] is not None]
+    demos = [d for d in demos if d[2] is not None and d[4] is not None]
 
     def states(ids):
         with torch.no_grad():
             return M(input_ids=torch.tensor([ids], device=dev), output_hidden_states=True).hidden_states[-1][0].float()
     for stp in range(steps):
-        ids, r, st, en = demos[stp % len(demos)]
+        ids, r, st, en, rw = demos[stp % len(demos)]
         H = states(ids)
-        L = (F.cross_entropy(head["rel"](H.mean(0))[None], torch.tensor([r], device=dev))
-             + F.cross_entropy(head["st"](H).squeeze(-1)[None], torch.tensor([st], device=dev))
-             + F.cross_entropy(head["en"](H).squeeze(-1)[None], torch.tensor([en], device=dev)))
+        tgt = lambda i: torch.tensor([i], device=dev)
+        L = (F.cross_entropy(head["rel"](H.mean(0))[None], tgt(r)) + F.cross_entropy(head["rw"](H).squeeze(-1)[None], tgt(rw))
+             + F.cross_entropy(head["st"](H).squeeze(-1)[None], tgt(st)) + F.cross_entropy(head["en"](H).squeeze(-1)[None], tgt(en)))
         opt.zero_grad()
         L.backward()
         opt.step()
+    R = torch.stack([m.atoms[r_] for r_ in rels])
 
-    def parse_learned(ids):
+    def parse_learned(ids, rm):
         with torch.no_grad():
             H = states(ids)
-            r = int(head["rel"](H.mean(0)).argmax())
-            a_ = head["st"](H).squeeze(-1)
-            b_ = head["en"](H).squeeze(-1)
-            st = int(a_.argmax())
-            en = st + int(b_[st:].argmax())
+            if rm == "pooled":
+                r = int(head["rel"](H.mean(0)).argmax())
+            else:                                        # point at the relation's word, classify it against relation nodes
+                t = int(head["rw"](H).squeeze(-1).argmax())
+                r = int((R @ F.normalize(wte[ids[t]] @ Pm, dim=0)).argmax())
+            st = int(head["st"](H).squeeze(-1).argmax())
+            en = st + int(head["en"](H).squeeze(-1)[st:].argmax())
         return r, st, en
+    combos = [(rm, km) for rm in ("pooled", "point") for km in ("mean", "exact")]
     print(f"v11 T3: {len(sp)} species with a parsable lead ({len(train_sp)} train, {len(test_read)} test read, "
           f"{len(test_unread)} never read); {len(demos)} demo questions, {steps} head steps; memory: "
-          f"{len(m.mem['alias'][0])} alias keys, {len(m.mem['rel'][0])} relation facts, {len(nodes)} nodes", flush=True)
-    shown_p = [0]
+          f"{len(alias_names)} names, {len(m.mem['rel'][0])} relation facts, {len(nodes)} nodes", flush=True)
     for split, xs in (("held-out species, read", test_read), ("training species", train_sp)):
         for wset, wi in (("trained wordings", 0), ("held-out wordings", 1)):
-            res = {"learned": [0, 0], "gold parse": [0, 0]}
+            res = {c: [0, 0, 0] for c in combos + [("gold", "mean"), ("gold", "exact")]}   # right, unknown, total
             for x in xs:
                 for rel in rels:
                     for kind in ("common", "binomial"):
                         for t in W[rel][wi]:
-                            ids, r, st, en = make_q(x, rel, kind, t)
+                            ids, r, st, en, rw = make_q(x, rel, kind, t)
                             if st is None:
                                 continue
                             want = x[rel]
-                            got_g, _ = answer(ids, r, st, en)
-                            res["gold parse"][0] += got_g == want
-                            res["gold parse"][1] += 1
-                            r2, st2, en2 = parse_learned(ids)
-                            got_l, _ = answer(ids, r2, st2, en2)
-                            res["learned"][0] += got_l == want
-                            res["learned"][1] += 1
-                            if got_l != want and shown_p[0] < 25:
-                                shown_p[0] += 1
-                                print(f"  parse error: {tk.decode(ids).strip()!r} -> relation {rels[r2]} (gold {rel}), span "
-                                      f"{tk.decode(ids[st2:en2 + 1]).strip()!r} (gold {tk.decode(ids[st:en + 1]).strip()!r}) -> {got_l!r} (want {want!r})", flush=True)
-            print(f"v11 T3 {split}, {wset}: learned translator {res['learned'][0]}/{res['learned'][1]}, gold parse "
-                  f"{res['gold parse'][0]}/{res['gold parse'][1]}", flush=True)
-    unk, n_u, confs, wrong_u = 0, 0, [], []
-    for x in test_unread:
-        for rel in rels:
-            for kind in ("common", "binomial"):
-                for t in W[rel][1]:
-                    ids, r, st, en = make_q(x, rel, kind, t)
-                    if st is None:
-                        continue
-                    r2, st2, en2 = parse_learned(ids)
-                    got, conf = answer(ids, r2, st2, en2)
-                    unk += got == "unknown"
-                    n_u += 1
-                    confs.append(conf)
-                    if got != "unknown" and len(wrong_u) < 20:
-                        K_, _ = m.mem["alias"]
-                        j = int((K_ @ name_vec(ids[st2:en2 + 1])).argmax())
-                        wrong_u.append(f"{tk.decode(ids[st2:en2 + 1]).strip()!r} matched {alias_names[j]!r} ({conf:.2f})")
-    print(f"v11 T3 control: species never read: 'unknown' {unk}/{n_u} (best alias key cosine max {max(confs):.2f})", flush=True)
-    for w_ in wrong_u:
-        print("  never read but answered: " + w_, flush=True)
+                            for c in res:
+                                pr = (r, st, en) if c[0] == "gold" else parse_learned(ids, c[0])
+                                got = answer(ids, *pr, c[1])[0]
+                                res[c][0] += got == want
+                                res[c][1] += got == "unknown"
+                                res[c][2] += 1
+            print(f"v11 T3 {split}, {wset}: " + "; ".join(f"relation {c[0]} / name key {c[1]}: right {v[0]}/{v[2]} "
+                  f"(unknown {v[1]})" for c, v in res.items()), flush=True)
+    for c in combos:
+        unk, n_u, wrong_u = 0, 0, []
+        for x in test_unread:
+            for rel in rels:
+                for kind in ("common", "binomial"):
+                    for t in W[rel][1]:
+                        ids, r, st, en, rw = make_q(x, rel, kind, t)
+                        if st is None:
+                            continue
+                        r2, st2, en2 = parse_learned(ids, c[0])
+                        got, conf, j = answer(ids, r2, st2, en2, c[1])
+                        unk += got == "unknown"
+                        n_u += 1
+                        if got != "unknown" and len(wrong_u) < 4:
+                            wrong_u.append(f"{tk.decode(ids[st2:en2 + 1]).strip()!r} matched {alias_names[j]!r} ({conf:.2f})")
+        print(f"v11 T3 control (relation {c[0]} / name key {c[1]}): species never read -> 'unknown' {unk}/{n_u}"
+              + ("; e.g. " + ", ".join(wrong_u) if wrong_u else ""), flush=True)
 
 
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
