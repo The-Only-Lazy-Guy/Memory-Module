@@ -3539,20 +3539,31 @@ def v11_t5(steps=3000, ep_species=8):
     Baselines: exact name string; name-only cosine (frozen GPT-2 of the name alone)"""
     import re as _re
     tk, M = lm()
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio", "species_e1.json")
-    arts = json.load(open(path, encoding="utf-8"))
-    sp = []
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio")
+    arts = json.load(open(os.path.join(here, "species_e1.json"), encoding="utf-8"))
+    if os.path.exists(os.path.join(here, "wiki_e1.json.gz")):   # (11-16 curve: 15/30/45 species -> 19/42/52: data-limited)
+        arts = arts + json.load(gzip.open(os.path.join(here, "wiki_e1.json.gz"), "rt", encoding="utf-8"))
+    FAM = r"(?:family ([A-Z][a-z]+(?:idae|aceae))|([A-Z][a-z]+(?:idae|aceae)) family)"
+    sp, seen_b = [], set()
     for a in arts:                                       # eval construction (which names belong to one species)
+        if not a["text"]:
+            continue
         p0 = a["text"][0]
         s0 = p0.split(" . ")[0] + " ."
-        bm = _re.search(r"\( ([A-Z][a-z]+ [a-z]+)(?: [a-z]+)? [),;]", s0)
-        fm = _re.search(r"family ([A-Z][a-z]+(?:idae|aceae|inae))", p0)
-        cm = _re.match(r"^The ([a-z][a-z @\-@]+?) (?:\(|,|or)", s0)
-        if bm and fm and cm and "<unk>" not in cm[1]:
-            sp.append({"common": cm[1], "binomial": bm[1], "family": fm[1], "genus": bm[1].split()[0], "lead": s0})
+        fm = _re.search(FAM, p0)
+        mA = _re.match(r"^The ([a-z][a-z @\-@]+?) (?:or [^(]+ )?\( ([A-Z][a-z]+ [a-z]+)(?: [a-z]+)? [),;]", s0)
+        mB = _re.match(r"^([A-Z][a-z]+ [a-z]+) , (?:commonly known as|common name|also known as|known as) (?:the )?([a-z][a-z @\-@]+?) (?:,|or)", s0)
+        if not fm or not (mA or mB):
+            continue
+        c, b = (mA[1], mA[2]) if mA else (mB[2], mB[1])
+        if "<unk>" in c + b or b in seen_b:
+            continue
+        seen_b.add(b)
+        sp.append({"common": c, "binomial": b, "family": fm[1] or fm[2], "genus": b.split()[0], "lead": s0})
     rng = random.Random(41)
     rng.shuffle(sp)
-    train_sp, test_sp = sp[:45], sp[45:]
+    test_sp, train_sp = sp[:30], sp[30:]
+    print(f"v11 T5 data: {len(sp)} species from leads (species articles + Wikipedia), {len(train_sp)} train, {len(test_sp)} test", flush=True)
     rels = ("family", "genus")
     W = {"family": ["Which family is {n} in?", "What family does {n} belong to?", "{N} is placed in which family?", "Name the family of {n}."],
          "genus": ["Which genus is {n} in?", "What genus does {n} belong to?", "{N} is classified in which genus?", "Name the genus of {n}."]}
