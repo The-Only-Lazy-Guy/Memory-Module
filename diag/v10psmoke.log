@@ -1,0 +1,338 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 3849.30it/s]
+selftest 1-2: zero bias == no bias: True; next token without bias ' V', with the fact's tokens masked ' the' (max logit change 28.71)
+selftest 3: cached == slow: True (largest relative logit difference over 10 steps 0.0000; greedy texts ' the boss of the Kalo. The Kalo' / ' the boss of the Kalo. The Kalo')
+/marimo/pv/v10/gnm.py:1592: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if not train or float(sc[b]) >= self.spawn_at or n >= self.ex.n:
+selftest 6: fetch gradient on a fact's key with untrained control 1.48e+00: True
+selftest 4: skill nodes 2, gradient on skill keys 5.56e-05: True
+selftest 5: resolves 1, solved nodes in memory 1, kept 1, fetchable later 1: True
+selftest 7: a fact read once is kept and fetched later with no facts given: True
+selftest 8: path of 1560 tokens -> context 958 tokens, wrote 64 tokens: True
+v10 switches: keep demo facts True, recall training True, fetch loss True, demo steps 1500
+v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('chain', 2), ('chain', 3), ('lookup', 1), ('compose', 1)]); kept memory starts with the demos' facts (138); test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6), ('lookup', 1), ('compose', 1)] (add / chain longer than any demo)
+round 0 (demos only): loss 6.591, 2s
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> <|endoftext|>
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.63; kept nodes fetched 6)
+
+  [add 4] What is 9 3 2 0 + 4 1 1 1 plus carry 0? (truth 1 3 4 3 1) -> <|endoftext|>
+   focus ' What is 9 3 2 0 + 4 1 1 1 plus carry 0?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.61; kept nodes fetched 6)
+
+  [add 6] What is 5 9 8 8 7 3 + 7 6 0 4 7 9 plus carry 0? (truth 1 3 5 9 3 5 2) -> <|endoftext|>
+   focus ' What is 5 9 8 8 7 3 + 7 6 0 4 7 9 plus carry 0?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.68; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Savin? (truth Tormer) -> The boss of Rilka is Thazek. The boss of Savin is Thaba. The boss of Merlo is Lone. The boss of Thaba is Tormer. The boss of Merlo is Lone. The boss of Thaba is Tormer. The boss of Merlo is
+   focus ' Who is the boss of the boss of Savin?' -> skill s0 writes '\n\nThe boss of Rilka is Thazek. The boss of Savin is Thaba. The boss of Merlo is Lone. The boss of Thaba is Tormer. The boss of Merlo is Lone. The boss of Thaba is Tormer. The boss of Merlo is' (resolves it, done p 0.85; kept nodes fetched 6)
+
+  [chain 4] Who is the teacher of the teacher of the teacher of the teacher of Nene? (truth Nedun) -> The teacher of Nene is Logor. The teacher of Muvin is Torril. The teacher of Merba is Zekka. The teacher of Logor is Pelpel. The teacher of Mumer is Nedun. The teacher of Vinka is Lotha. The teacher of Vinka is
+   focus ' Who is the teacher of the teacher of the teacher of the teacher of Nene?' -> skill s0 writes '\n\nThe teacher of Nene is Logor. The teacher of Muvin is Torril. The teacher of Merba is Zekka. The teacher of Logor is Pelpel. The teacher of Mumer is Nedun. The teacher of Vinka is Lotha. The teacher of Vinka is' (resolves it, done p 0.87; kept nodes fetched 6)
+
+  [chain 6] Who is the friend of the friend of the friend of the friend of the friend of the friend of Kaor? (truth Rilne) -> The friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Kaor?' -> skill s0 writes '\n\nThe friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend' (resolves it, done p 0.83; kept nodes fetched 6)
+
+  [lookup 1] What is the size of Gormer? (truth 71) -> The size of Gormer is 71. The weight of Bazek is 96. The depth of Gormer is 49. The weight of Gormer is 59. The weight of Gormer is 59?
+
+The size of Gormer is 71. The weight of Bazek is 96
+   focus ' What is the size of Gormer?' -> skill s0 writes '\n\nThe size of Gormer is 71. The weight of Bazek is 96. The depth of Gormer is 49. The weight of Gormer is 59. The weight of Gormer is 59?\n\nThe size of Gormer is 71. The weight of Bazek is 96' (resolves it, done p 0.88; kept nodes fetched 6)
+
+  [compose 1] Which family is Mermer in? (truth Dunmu) -> The name of the genus is Zekpel.
+
+The name of the genus is Zekpel. The name of the genus is Zekpel. The name of the genus is Zekpel. The name of the genus is Zekpel. The name of the genus is Zekpel.
+   focus ' Which family is Mermer in?' -> skill s0 writes '\n\nThe name of the genus is Zekpel.\n\nThe name of the genus is Zekpel. The name of the genus is Zekpel. The name of the genus is Zekpel. The name of the genus is Zekpel. The name of the genus is Zekpel.' (resolves it, done p 0.83; kept nodes fetched 6)
+  with kept memory | add2 0%, add4 0%, add6 0%, chain2 0%, chain4 0%, chain6 0%, lookup1 0%, compose1 0% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x6; chain: s0x6; lookup: s0x2; compose: s0x2; needed fact fetched: chain 83% compose 100% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 0%, chain4 0%, chain6 0%, lookup1 0%, compose1 0% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x6; chain: s0x6; lookup: s0x2; compose: s0x2; needed fact fetched: chain 83% compose 100% lookup 100%
+
+  [recall chain 2] Who is the friend of the friend of Kagor? (truth Torlo) -> 
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes '????????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (sub-step, done p 0.37; kept nodes fetched 6)
+   focus '????????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' -> skill s0 writes '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (sub-step, done p 0.32; kept nodes fetched 6)
+   focus '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' -> skill s0 writes '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (resolves it, done p 0.52; kept nodes fetched 6)
+   focus '????????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' -> skill s0 writes '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (resolves it, done p 0.65; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (resolves it, done p 0.85; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of Kagor?': 'The boss of Sator is Kazek.' (-5.0); 'The boss of Sagor is Gorzek.' (-5.0); 'The boss of Gorlo is Gordun.' (-5.0)
+     fetched for '????????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n': 'The boss of Torba is Thator.' (-4.9); 'The boss of Merka is Zekmu.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0)
+     fetched for '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n': 'The size of Nene is 2.' (-5.0); 'The boss of Torba is Thator.' (-5.1); 'The boss of Merril is Dunmer.' (-5.1)
+     fetched for '????????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n': 'The boss of Torba is Thator.' (-4.9); 'The boss of Merka is Zekmu.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0)
+     fetched for ' Who is the friend of the friend of Kagor?': 'The boss of Sator is Kazek.' (-5.0); 'The boss of Sagor is Gorzek.' (-5.0); 'The boss of Gorlo is Gordun.' (-5.0)
+
+  [recall chain 4] Who is the teacher of the teacher of the teacher of the teacher of Nemu? (truth Dunzek) -> ????????????????????????????????????????????????????????????????
+   focus ' Who is the teacher of the teacher of the teacher of the teacher of Nemu?' -> skill s0 writes '????????????????????????????????????????????????????????????????' (sub-step, done p 0.39; kept nodes fetched 6)
+   focus '????????????????????????????????????????????????????????????????' -> skill s0 writes '????????????????????????????????????????????????????????????????' (sub-step, done p 0.30; kept nodes fetched 6)
+   focus '????????????????????????????????????????????????????????????????' -> skill s0 writes '????????????????????????????????????????????????????????????????' (sub-step, done p 0.36; kept nodes fetched 6)
+   focus '????????????????????????????????????????????????????????????????' -> skill s0 writes '????????????????????????????????????????????????????????????????' (sub-step, done p 0.33; kept nodes fetched 6)
+   focus '????????????????????????????????????????????????????????????????' -> skill s0 writes '????????????????????????????????????????????????????????????????' (sub-step, done p 0.43; kept nodes fetched 6)
+   focus '????????????????????????????????????????????????????????????????' -> skill s0 writes '????????????????????????????????????????????????????????????????' (sub-step, done p 0.49; kept nodes fetched 6)
+   focus '????????????????????????????????????????????????????????????????' -> skill s0 writes '????????????????????????????????????????????????????????????????' (sub-step, done p 0.49; kept nodes fetched 6)
+   focus '????????????????????????????????????????????????????????????????' -> skill s0 writes '????????????????????????????????????????????????????????????????' (resolves it, done p 0.55; kept nodes fetched 6)
+   focus '????????????????????????????????????????????????????????????????' -> skill s0 writes '????????????????????????????????????????????????????????????????' (resolves it, done p 0.60; kept nodes fetched 6)
+   focus '????????????????????????????????????????????????????????????????' -> skill s0 writes '????????????????????????????????????????????????????????????????' (resolves it, done p 0.88; kept nodes fetched 6)
+     fetched for ' Who is the teacher of the teacher of the teacher of the teacher of Nemu?': 'The boss of Sagor is Gorzek.' (-5.0); 'The boss of Sator is Kazek.' (-5.0); 'The boss of Bator is Sagor.' (-5.0)
+     fetched for '????????????????????????????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.0)
+     fetched for '????????????????????????????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.0)
+     fetched for '????????????????????????????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.0)
+     fetched for '????????????????????????????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.0)
+     fetched for '????????????????????????????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.0)
+     fetched for '????????????????????????????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.0)
+     fetched for '????????????????????????????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.0)
+     fetched for '????????????????????????????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.0)
+     fetched for '????????????????????????????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.0)
+
+  [recall lookup 1] What is the weight of Vingor? (truth 46) -> 
+   focus ' What is the weight of Vingor?' -> skill s0 writes '?????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (sub-step, done p 0.41; kept nodes fetched 6)
+   focus '?????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' -> skill s0 writes '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (sub-step, done p 0.34; kept nodes fetched 6)
+   focus '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' -> skill s0 writes '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (resolves it, done p 0.56; kept nodes fetched 6)
+   focus '?????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' -> skill s0 writes '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (resolves it, done p 0.70; kept nodes fetched 6)
+   focus ' What is the weight of Vingor?' -> skill s0 writes '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' (resolves it, done p 0.86; kept nodes fetched 6)
+     fetched for ' What is the weight of Vingor?': 'The boss of Bator is Sagor.' (-5.0); 'The boss of Sagor is Gorzek.' (-5.1); 'The boss of Sator is Kazek.' (-5.1)
+     fetched for '?????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n': 'The boss of Torba is Thator.' (-4.9); 'The boss of Merka is Zekmu.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0)
+     fetched for '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n': 'The size of Nene is 2.' (-5.0); 'The boss of Torba is Thator.' (-5.1); 'The boss of Merril is Dunmer.' (-5.1)
+     fetched for '?????\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n': 'The boss of Torba is Thator.' (-4.9); 'The boss of Merka is Zekmu.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0)
+     fetched for ' What is the weight of Vingor?': 'The boss of Bator is Sagor.' (-5.0); 'The boss of Sagor is Gorzek.' (-5.1); 'The boss of Sator is Kazek.' (-5.1)
+
+  [recall compose 1] Which family is Thapel in? (truth Thaba) -> ???????????
+   focus ' Which family is Thapel in?' -> skill s0 writes '???????????' (resolves it, done p 0.61; kept nodes fetched 6)
+     fetched for ' Which family is Thapel in?': 'The boss of Sator is Kazek.' (-5.0); 'The boss of Zeksa is Kagor.' (-5.0); 'The boss of Bator is Sagor.' (-5.0)
+  recall (facts read earlier, none given; kept memory 178 nodes): chain2 0%, chain4 0%, lookup1 0%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 0%, chain4 9%, lookup1 0%, compose1 0% | ... the fact the step needs: chain2 0%, chain4 0%, lookup1 0%, compose1 0%
+  reuse (n 2): first ask 0% in 1.0 steps; asked again 0% in 1.0 steps, 0% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
+round 1: right runs found 0/3 (kept traces 48, kept memory 150 nodes), 4s trying
+  fetch-training pairs 89
+  kept by kind/size (count, mean steps): 
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> , is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the, is the,
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.49; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes "The world's largest computer is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer" (sub-step, done p 0.22; kept nodes fetched 6)
+   focus "The world's largest computer is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer" -> skill s0 writes ' that is a computer' (sub-step, done p 0.26; kept nodes fetched 6)
+   focus ' that is a computer' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.25; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the' (sub-step, done p 0.18; kept nodes fetched 6)
+   focus 'The latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the' -> skill s0 writes ' latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest' (sub-step, done p 0.27; kept nodes fetched 6)
+   focus ' latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest' -> skill s0 writes ' in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in' (sub-step, done p 0.31; kept nodes fetched 6)
+   focus ' in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in' -> skill s0 writes ' the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the' (sub-step, done p 0.35; kept nodes fetched 6)
+   focus ' the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the' -> skill s0 writes ' series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series' (sub-step, done p 0.40; kept nodes fetched 6)
+   focus ' series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series' -> skill s0 writes ', is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series,' (sub-step, done p 0.40; kept nodes fetched 6)
+   focus ', is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series,' -> skill s0 writes ' is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is' (sub-step, done p 0.41; kept nodes fetched 6)
+   focus ' is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is' -> skill s0 writes ' the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the' (sub-step, done p 0.43; kept nodes fetched 6)
+   focus ' the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the' -> skill s0 writes ' latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest' (sub-step, done p 0.45; kept nodes fetched 6)
+   focus ' latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest' -> skill s0 writes ' in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in the series, is the latest in' (sub-step, done p 0.49; kept nodes fetched 6)
+
+  [add 4] What is 9 3 2 0 + 4 1 1 1 plus carry 0? (truth 1 3 4 3 1) -> of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of
+   focus ' What is 9 3 2 0 + 4 1 1 1 plus carry 0?' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.48; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes "The world's largest computer is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer" (sub-step, done p 0.22; kept nodes fetched 6)
+   focus "The world's largest computer is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer that is a computer" -> skill s0 writes ' that is a computer' (sub-step, done p 0.25; kept nodes fetched 6)
+   focus ' that is a computer' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.24; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The latest in the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the' (sub-step, done p 0.23; kept nodes fetched 6)
+   focus 'The latest in the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the' -> skill s0 writes ' series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series' (sub-step, done p 0.37; kept nodes fetched 6)
+   focus ' series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series' -> skill s0 writes ' of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of' (sub-step, done p 0.41; kept nodes fetched 6)
+   focus ' of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of' -> skill s0 writes ' the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the' (sub-step, done p 0.45; kept nodes fetched 6)
+   focus ' the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the' -> skill s0 writes ' series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series' (sub-step, done p 0.49; kept nodes fetched 6)
+   focus ' series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series' -> skill s0 writes ' of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of' (resolves it, done p 0.51; kept nodes fetched 6)
+   focus ' the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the' -> skill s0 writes ' the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the' (resolves it, done p 0.53; kept nodes fetched 6)
+   focus ' of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of' -> skill s0 writes ' series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series' (resolves it, done p 0.75; kept nodes fetched 6)
+   focus ' series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series' -> skill s0 writes ' of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of' (resolves it, done p 0.76; kept nodes fetched 6)
+   focus 'The latest in the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the' -> skill s0 writes ' the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the series of the' (resolves it, done p 0.76; kept nodes fetched 6)
+
+  [add 6] What is 5 9 8 8 7 3 + 7 6 0 4 7 9 plus carry 0? (truth 1 3 5 9 3 5 2) -> <|endoftext|>
+   focus ' What is 5 9 8 8 7 3 + 7 6 0 4 7 9 plus carry 0?' -> skill s0 writes '<|endoftext|>' (resolves it, done p 0.64; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Savin? (truth Tormer) -> The boss of Rilka is Thazek. The boss of Savin is Thaba. The boss of Merlo is Lone. The boss of Thaba is Tormer. The boss of Merlo is Lone. The boss of Thaba is Tormer. The boss of Merlo is
+   focus ' Who is the boss of the boss of Savin?' -> skill s0 writes '\n\nThe boss of Rilka is Thazek. The boss of Savin is Thaba. The boss of Merlo is Lone. The boss of Thaba is Tormer. The boss of Merlo is Lone. The boss of Thaba is Tormer. The boss of Merlo is' (resolves it, done p 0.71; kept nodes fetched 6)
+
+  [chain 4] Who is the teacher of the teacher of the teacher of the teacher of Nene? (truth Nedun) -> The teacher of Nene is Logor. The teacher of Muvin is Torril. The teacher of Merba is Zekka. The teacher of Logor is Pelpel. The teacher of Mumer is Nedun. The teacher of Vinka is Lotha. The teacher of Vinka is
+   focus ' Who is the teacher of the teacher of the teacher of the teacher of Nene?' -> skill s0 writes '\n\nThe teacher of Nene is Logor. The teacher of Muvin is Torril. The teacher of Merba is Zekka. The teacher of Logor is Pelpel. The teacher of Mumer is Nedun. The teacher of Vinka is Lotha. The teacher of Vinka is' (resolves it, done p 0.73; kept nodes fetched 6)
+
+  [chain 6] Who is the friend of the friend of the friend of the friend of the friend of the friend of Kaor? (truth Rilne) -> The friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend
+   focus ' Who is the friend of the friend of the friend of the friend of the friend of the friend of Kaor?' -> skill s0 writes '\n\nThe friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend of the friend' (resolves it, done p 0.67; kept nodes fetched 6)
+
+  [lookup 1] What is the size of Gormer? (truth 71) -> The size of Gormer is 71. The weight of Bazek is 96. The depth of Gormer is 49. The weight of Gormer is 59. The weight of Gormer is 59.
+
+The size of Gormer is 71. The weight of Bazek is 96
+   focus ' What is the size of Gormer?' -> skill s0 writes '\n\nThe size of Gormer is 71. The weight of Bazek is 96. The depth of Gormer is 49. The weight of Gormer is 59. The weight of Gormer is 59.\n\nThe size of Gormer is 71. The weight of Bazek is 96' (resolves it, done p 0.74; kept nodes fetched 6)
+
+  [compose 1] Which family is Mermer in? (truth Dunmu) -> The name of the genus Mervin is in the family Dunmu. The genus Mervin is in the family Dunmu. The genus Mervin is in the family Dunmu. The genus Mervin is in the family Dunmu. The genus Mervin is in the family Dunmu
+   focus ' Which family is Mermer in?' -> skill s0 writes '\n\nThe name of the genus Mervin is in the family Dunmu. The genus Mervin is in the family Dunmu. The genus Mervin is in the family Dunmu. The genus Mervin is in the family Dunmu. The genus Mervin is in the family Dunmu' (resolves it, done p 0.69; kept nodes fetched 6)
+  loss 11.031; with kept memory | add2 0%, add4 0%, add6 0%, chain2 0%, chain4 0%, chain6 0%, lookup1 0%, compose1 0% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x82; chain: s0x6; lookup: s0x2; compose: s0x2; needed fact fetched: chain 83% compose 100% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 0%, chain4 0%, chain6 0%, lookup1 0%, compose1 0% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x6; chain: s0x6; lookup: s0x2; compose: s0x2; needed fact fetched: chain 83% compose 100% lookup 100%
+
+  [recall chain 2] Who is the friend of the friend of Kagor? (truth Torlo) -> The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+   focus ' Who is the friend of the friend of Kagor?' -> skill s0 writes '????????????' (sub-step, done p 0.34; kept nodes fetched 6)
+   focus '????????????' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.36; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.' (sub-step, done p 0.34; kept nodes fetched 6)
+   focus 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.36; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\n\nThe first of the two.\n' (sub-step, done p 0.25; kept nodes fetched 6)
+   focus 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\n\nThe first of the two.\n' -> skill s0 writes '\nThe first of the two.' (sub-step, done p 0.26; kept nodes fetched 6)
+   focus '\nThe first of the two.' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.25; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the' (sub-step, done p 0.34; kept nodes fetched 6)
+   focus 'The first of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the' -> skill s0 writes ' two of the two of the\nThe\nThe\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n' (sub-step, done p 0.09; kept nodes fetched 6)
+   focus ' two of the two of the\nThe\nThe\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n' -> skill s0 writes '\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\n' (sub-step, done p 0.15; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of Kagor?': 'The teacher of Kagor is Dunril.' (-5.1); 'The boss of Sator is Kazek.' (-5.1); 'The boss of Sagor is Gorzek.' (-5.1)
+     fetched for '????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Torba is Torba.' (-5.1); 'The boss of Merril is Dunmer.' (-5.1)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.': 'The teacher of Sadun is Bagor.' (-5.1); 'The teacher of Torba is Bagor.' (-5.1); 'The teacher of Dunmer is Bazek.' (-5.1)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\n\nThe first of the two.\n': 'The teacher of Kagor is Dunril.' (-5.0); 'The teacher of Sadun is Bagor.' (-5.0); 'The teacher of Sagor is Gorsa.' (-5.0)
+     fetched for '\nThe first of the two.': 'The teacher of Kagor is Dunril.' (-5.1); 'The teacher of Sadun is Bagor.' (-5.1); 'The teacher of Sagor is Gorsa.' (-5.1)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the': 'The teacher of Kagor is Dunril.' (-5.0); 'The teacher of Sadun is Bagor.' (-5.0); 'The teacher of Sagor is Gorsa.' (-5.0)
+     fetched for ' two of the two of the\nThe\nThe\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n': 'The boss of Sator is Kazek.' (-5.0); 'The teacher of Kagor is Dunril.' (-5.0); 'The boss of Gorlo is Gordun.' (-5.0)
+
+  [recall chain 4] Who is the teacher of the teacher of the teacher of the teacher of Nemu? (truth Dunzek) -> The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+
+The
+   focus ' Who is the teacher of the teacher of the teacher of the teacher of Nemu?' -> skill s0 writes '???????????' (sub-step, done p 0.39; kept nodes fetched 6)
+   focus '???????????' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.43; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.' (sub-step, done p 0.33; kept nodes fetched 6)
+   focus 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.36; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\n\nThe first of the two.\n' (sub-step, done p 0.25; kept nodes fetched 6)
+   focus 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\n\nThe first of the two.\n' -> skill s0 writes '\nThe first of the two.' (sub-step, done p 0.25; kept nodes fetched 6)
+   focus '\nThe first of the two.' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.25; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the' (sub-step, done p 0.35; kept nodes fetched 6)
+   focus 'The first of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the' -> skill s0 writes ' two of the two of the\nThe\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe' (sub-step, done p 0.07; kept nodes fetched 6)
+   focus ' two of the two of the\nThe\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe' -> skill s0 writes '\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n' (sub-step, done p 0.14; kept nodes fetched 6)
+     fetched for ' Who is the teacher of the teacher of the teacher of the teacher of Nemu?': 'The teacher of Kagor is Dunril.' (-5.1); 'The teacher of Sadun is Bagor.' (-5.1); 'The teacher of Gorlo is Rilgor.' (-5.1)
+     fetched for '???????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Torba is Torba.' (-5.1); 'The boss of Merril is Dunmer.' (-5.1)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.': 'The teacher of Sadun is Bagor.' (-5.1); 'The teacher of Torba is Bagor.' (-5.1); 'The teacher of Dunmer is Bazek.' (-5.1)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\n\nThe first of the two.\n': 'The teacher of Kagor is Dunril.' (-5.0); 'The teacher of Sadun is Bagor.' (-5.0); 'The teacher of Sagor is Gorsa.' (-5.0)
+     fetched for '\nThe first of the two.': 'The teacher of Kagor is Dunril.' (-5.1); 'The teacher of Sadun is Bagor.' (-5.1); 'The teacher of Sagor is Gorsa.' (-5.1)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the two of the': 'The teacher of Kagor is Dunril.' (-5.0); 'The teacher of Sadun is Bagor.' (-5.0); 'The teacher of Sagor is Gorsa.' (-5.0)
+     fetched for ' two of the two of the\nThe\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe\n\nThe': 'The teacher of Kagor is Dunril.' (-5.0); 'The boss of Sator is Kazek.' (-5.0); 'The boss of Gorlo is Gordun.' (-5.0)
+
+  [recall lookup 1] What is the weight of Vingor? (truth 46) -> long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-
+   focus ' What is the weight of Vingor?' -> skill s0 writes '??????????????????????????????????????????' (sub-step, done p 0.41; kept nodes fetched 6)
+   focus '??????????????????????????????????????????' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.44; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two-day-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' (sub-step, done p 0.21; kept nodes fetched 6)
+   focus 'The first of the two-day-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' -> skill s0 writes 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' (sub-step, done p 0.31; kept nodes fetched 6)
+   focus 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' -> skill s0 writes 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' (sub-step, done p 0.39; kept nodes fetched 6)
+   focus 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' -> skill s0 writes 'long-long-long-long-long-long-long-long-long-long-long-long-long-' (sub-step, done p 0.37; kept nodes fetched 6)
+   focus 'long-long-long-long-long-long-long-long-long-long-long-long-long-' -> skill s0 writes 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' (sub-step, done p 0.35; kept nodes fetched 6)
+   focus 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' -> skill s0 writes 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' (sub-step, done p 0.35; kept nodes fetched 6)
+   focus 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' -> skill s0 writes 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' (sub-step, done p 0.35; kept nodes fetched 6)
+   focus 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' -> skill s0 writes 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-' (sub-step, done p 0.37; kept nodes fetched 6)
+     fetched for ' What is the weight of Vingor?': 'The boss of Sagor is Gorzek.' (-5.1); 'The teacher of Gorlo is Rilgor.' (-5.1); 'The boss of Sator is Kazek.' (-5.1)
+     fetched for '??????????????????????????????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0); 'The boss of Torba is Torba.' (-5.1)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two-day-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-': 'The genus Peltor is in the family Zekmer.' (-5.1); 'The boss of Merril is Dunmer.' (-5.1); 'The genus Mermu is in the family Zekpel.' (-5.1)
+     fetched for 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-': 'The boss of Gorlo is Gordun.' (-5.0); 'The boss of Sator is Kazek.' (-5.0); 'The friend of Kagor is Vinpel.' (-5.0)
+     fetched for 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-': 'The boss of Gorlo is Gordun.' (-5.0); 'The boss of Sator is Kazek.' (-5.0); 'The friend of Kagor is Vinpel.' (-5.0)
+     fetched for 'long-long-long-long-long-long-long-long-long-long-long-long-long-': 'The genus Peltor is in the family Zekmer.' (-5.0); 'The genus Mermu is in the family Zekpel.' (-5.0); 'The size of Nene is 2.' (-5.0)
+     fetched for 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-': 'The boss of Gorlo is Gordun.' (-5.0); 'The boss of Sator is Kazek.' (-5.0); 'The friend of Kagor is Vinpel.' (-5.0)
+     fetched for 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-': 'The boss of Gorlo is Gordun.' (-5.0); 'The boss of Sator is Kazek.' (-5.0); 'The friend of Kagor is Vinpel.' (-5.0)
+     fetched for 'long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-long-': 'The boss of Gorlo is Gordun.' (-5.0); 'The boss of Sator is Kazek.' (-5.0); 'The friend of Kagor is Vinpel.' (-5.0)
+
+  [recall compose 1] Which family is Thapel in? (truth Thaba) -> The first of the two.
+
+The first of the two.
+
+The first of the two.
+
+The first of the two.
+
+The first of the two.
+
+The first of the two.
+
+The first of the two.
+
+The first of the two.
+   focus ' Which family is Thapel in?' -> skill s0 writes '?????????????????' (sub-step, done p 0.33; kept nodes fetched 6)
+   focus '?????????????????' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.35; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.' (sub-step, done p 0.29; kept nodes fetched 6)
+   focus 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.31; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.' (sub-step, done p 0.23; kept nodes fetched 6)
+   focus 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.23; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\n' (sub-step, done p 0.21; kept nodes fetched 6)
+   focus 'The first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\n' -> skill s0 writes 'The first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.' (sub-step, done p 0.27; kept nodes fetched 6)
+   focus 'The first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.' -> skill s0 writes '<|endoftext|>' (sub-step, done p 0.27; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s0 writes 'The first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\n' (sub-step, done p 0.45; kept nodes fetched 6)
+     fetched for ' Which family is Thapel in?': 'The boss of Sator is Kazek.' (-5.1); 'The boss of Sagor is Gorzek.' (-5.1); 'The boss of Sasa is Musa.' (-5.1)
+     fetched for '?????????????????': 'The boss of Torba is Thator.' (-5.0); 'The boss of Torba is Torba.' (-5.0); 'The boss of Merril is Dunmer.' (-5.0)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.': 'The teacher of Sadun is Bagor.' (-5.1); 'The teacher of Torba is Bagor.' (-5.1); 'The teacher of Dunmer is Bazek.' (-5.1)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.\nThe first of the two.': 'The teacher of Kagor is Dunril.' (-5.0); 'The teacher of Sadun is Bagor.' (-5.0); 'The teacher of Sagor is Gorsa.' (-5.0)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+     fetched for 'The first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\n': 'The teacher of Kagor is Dunril.' (-4.9); 'The teacher of Sagor is Gorsa.' (-4.9); 'The teacher of Sadun is Bagor.' (-4.9)
+     fetched for 'The first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.\n\nThe first of the two.': 'The teacher of Kagor is Dunril.' (-4.9); 'The teacher of Sagor is Gorsa.' (-4.9); 'The teacher of Sadun is Bagor.' (-4.9)
+     fetched for '<|endoftext|>': 'The boss of Rilor is Thapel.' (-5.0); 'The boss of Gorpel is Neba.' (-5.0); 'The boss of Zektha is Pello.' (-5.0)
+  recall (facts read earlier, none given; kept memory 190 nodes): chain2 0%, chain4 0%, lookup1 0%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 40%, chain4 20%, lookup1 0%, compose1 0% | ... the fact the step needs: chain2 0%, chain4 0%, lookup1 0%, compose1 0%
+  reuse (n 2): first ask 0% in 1.0 steps; asked again 0% in 1.0 steps, 0% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
