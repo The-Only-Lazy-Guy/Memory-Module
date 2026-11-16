@@ -24,3 +24,52 @@ v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('
     fit step 900: mean loss 0.282, skills 1
     fit step 1000: mean loss 0.239, skills 1
     fit step 1100: mean loss 0.253, skills 1
+    fit step 1200: mean loss 0.247, skills 1
+    fit step 1300: mean loss 0.217, skills 1
+    fit step 1400: mean loss 0.204, skills 1
+round 0 (demos only): loss 0.350, 511s
+
+  [add 2] What is 6 7 + 8 1 plus carry 0? (truth 1 4 8) -> 1 0
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 7 + 1 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 1 + carry 0 = ?' -> skill s0 writes ' digit 0, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 1 0' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> 1 2
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1 + 1 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 1 + carry 0 = ?' -> skill s0 writes ' digit 2, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' What is 7 5 + carry 0, followed by 2?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 5 + carry 0, followed by 2?' -> skill s0 writes ' 5 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 5 + carry 0 = ?' -> skill s0 writes ' digit 2, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 + carry 0, followed by 2?' -> skill s0 writes ' 1 2' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1 2' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 1 0 8 4
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 7 + 2 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 2 + carry 0 = ?' -> skill s0 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' What is 8 7 + 8 3 plus carry 0, followed by 4?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 8 7 + 8 3 plus carry 0, followed by 4?' -> skill s0 writes ' 7 + 3 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 + 3 + carry 0 = ?' -> skill s0 writes ' digit 8, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 + 8 3 plus carry 0, followed by 4?' -> skill s0 writes ' What is 8 + 8 plus carry 0, followed by 8 4?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 8 + 8 plus carry 0, followed by 8 4?' -> skill s0 writes ' 8 + 8 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 8 + 8 + carry 0 = ?' -> skill s0 writes ' digit 0, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 + 8 plus carry 0, followed by 8 4?' -> skill s0 writes ' 1 0 8 4' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 + 8 3 plus carry 0, followed by 4?' -> skill s0 writes ' 1 0 8 4' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 1 0 8 4' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Dunor
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Dunor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Dunor' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne? (truth Torzek) -> Rilne
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of Rilne?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Rilne?' -> skill s0 writes ' Lovin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Who is the neighbour of the neighbour of Lovin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Lovin?' -> skill s0 writes ' Who is the neighbour of Lovin?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Lovin?' -> skill s0 writes ' Bazek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Lovin?' -> skill s0 writes ' Who is the neighbour of Bazek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Bazek?' -> skill s0 writes ' Rilne' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Lovin?' -> skill s0 writes ' Rilne' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Rilne?' -> skill s0 writes ' Rilne' (resolves it, done p 1.00; kept nodes fetched 6)
