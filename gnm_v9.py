@@ -3749,7 +3749,10 @@ def v11_t5(steps=3000, ep_species=8):
     with torch.no_grad():
         report("exact name string", exact)
         report("name-only cosine (centred) >= .8", alone_cos(.8))
-    for mode in ("labels", "outcome"):
+    # V11_T5_CURVE (11-16, measurement): outcome-only trained on the first N training species (data limit or not?)
+    curve = [int(v) for v in os.environ.get("V11_T5_CURVE", "").split(",") if v]
+    runs_ = [("outcome", n_) for n_ in curve] if curve else [("labels", len(train_sp)), ("outcome", len(train_sp))]
+    for mode, n_tr in runs_:
         torch.manual_seed(0)
         random.seed(0)
         relm = Rel().to(dev)
@@ -3758,7 +3761,7 @@ def v11_t5(steps=3000, ep_species=8):
         trng = random.Random(43)
         n_sig, run_l = 0, []
         for stp in range(steps):
-            stream = events(trng.sample(train_sp, trng.randint(ep_species, 30)), trng)   # (8-30: test has 30)
+            stream = events(trng.sample(train_sp[:n_tr], min(n_tr, trng.randint(ep_species, 30))), trng)   # (8-30: test has 30)
             _, pairs = run_episode(stream, learned(True), mode)
             if not pairs:
                 continue
@@ -3772,7 +3775,7 @@ def v11_t5(steps=3000, ep_species=8):
                 print(f"v11 T5 [{mode}] step {stp + 1}: mean loss {sum(run_l) / len(run_l):.3f}, punished decisions so far {n_sig}", flush=True)
                 run_l = []
         with torch.no_grad():
-            report(f"learned relevance, trained on {mode}", learned(False))
+            report(f"learned relevance, trained on {mode} ({n_tr} training species)", learned(False))
 
 
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
