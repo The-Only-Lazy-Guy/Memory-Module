@@ -17,3 +17,4 @@ v11 T5 [outcome] step 2000: mean loss 0.556, punished decisions so far 25974
 v11 T5 [outcome] step 3000: mean loss 0.467, punished decisions so far 36795
 v11 T5 test (30 never-trained species): learned relevance, trained on outcome (30 training species): right after reading 42/120 | asked before reading -> another thing's node 31/36 | nodes 28 for 14 things
 v11 T5 train (30 training species): learned relevance, trained on outcome (30 training species): right after reading 71/120 | asked before reading -> another thing's node 10/30 | nodes 34 for 22 things
+v11 T5 [outcome] step 1000: mean loss 0.987, punished decisions so far 15263
