@@ -3687,11 +3687,16 @@ def v11_t5(steps=3000, ep_species=8):
             if ent not in read_done:
                 stats["asked_before"] += 1
                 stats["wrong_node"] += nodes[j]["owner"] != ent
-                continue
-            stats["asked_after"] += 1
-            stats["right"] += got == x[rel]
-            stats["n " + kind] += 1
-            stats["right " + kind] += got == x[rel]
+                # (11-17: outcome got no signal before reading, so a new name answered with ANOTHER thing's fact was
+                # never punished -> before->other ~30/36 at every step. User: confusion -> punish; can't point -> create.
+                # Same rule as after reading; 'nothing known' before reading is not confusion -> no signal)
+                if got is None or got == x[rel]:
+                    continue
+            else:
+                stats["asked_after"] += 1
+                stats["right"] += got == x[rel]
+                stats["n " + kind] += 1
+                stats["right " + kind] += got == x[rel]
             if mode != "outcome" or d["lg"] is None:
                 continue
             if got == x[rel]:
