@@ -8,3 +8,4 @@ v11 T5 train (30 training species): name-only cosine (centred) >= .8: right afte
 Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
   run_l.append(float(L))
 v11 T5 [labels] step 1000: mean loss 1.736, punished decisions so far 48628
+v11 T5 [labels] step 2000: mean loss 0.971, punished decisions so far 86907
