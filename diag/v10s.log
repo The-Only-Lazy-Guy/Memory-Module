@@ -222,3 +222,84 @@ round 2: right runs found 105/400 (kept traces 271, kept memory 4019 nodes), 249
    focus ' What is 6 + 8 plus carry 0, followed by 9 6?' -> skill s0 writes ' 1 7 9 6' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' What is 6 + 8 plus carry 0, followed by 6?' -> skill s0 writes ' 1 7 9 6' (resolves it, done p 1.00; kept nodes fetched 6)
    focus ' What is 6 7 + 8 1 plus carry 0?' -> skill s0 writes ' 1 7 9 6' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 4] What is 7 5 1 1 + 7 8 7 7 plus carry 0? (truth 1 5 3 8 8) -> None
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 1 + 7 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 1 + 7 + carry 0 = ?' -> skill s0 writes ' digit 5, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' What is 7 5 plus carry 0, followed by 5?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 7 5 plus carry 0, followed by 5?' -> skill s0 writes ' 7 5 + 5 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 7 5 + 5 + carry 0 = ?' -> skill s0 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 plus carry 0, followed by 5?' -> skill s0 writes ' 4 5' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 4 + 5 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 4 + 5 = ?' -> skill s0 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 4 4 + 5 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 4 4 + 5 = ?' -> skill s0 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 4 4 + 5 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 4 4 + 5 = ?' -> skill s0 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 7 5 1 1 + 7 8 7 7 plus carry 0?' -> skill s0 writes ' 4 + 5 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 4 + 5 = ?' -> skill s0 writes ' digit 4, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [add 6] What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0? (truth 1 7 1 4 5 7 1) -> 1 7 9 6
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 5 + 0 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 5 + 0 + carry 0 = ?' -> skill s0 writes ' digit 6, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' What is 8 + 8 plus carry 0, followed by 6?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 8 + 8 plus carry 0, followed by 6?' -> skill s0 writes ' 8 + 0 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 8 + 0 + carry 0 = ?' -> skill s0 writes ' digit 9, carry 0' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 + 8 plus carry 0, followed by 6?' -> skill s0 writes ' What is 8 + 8 plus carry 0, followed by 9 6?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' What is 8 + 8 plus carry 0, followed by 9 6?' -> skill s0 writes ' 8 + 8 + carry 0 = ?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' 8 + 8 + carry 0 = ?' -> skill s0 writes ' digit 7, carry 1' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 + 8 plus carry 0, followed by 9 6?' -> skill s0 writes ' 1 7 9 6' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 + 8 plus carry 0, followed by 6?' -> skill s0 writes ' 1 7 9 6' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' What is 8 7 5 7 6 6 + 8 3 8 8 0 5 plus carry 0?' -> skill s0 writes ' 1 7 9 6' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 2] Who is the boss of the boss of Zekor? (truth Mermu) -> Dunor
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Zekor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Zekor?' -> skill s0 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of the boss of Zekor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Gora' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Gora?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Gora?' -> skill s0 writes ' Pelpel' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Mergor?' -> skill s0 writes ' Who is the boss of Pelpel?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Pelpel?' -> skill s0 writes ' Who is the boss of Pelpel?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Pelpel?' -> skill s0 writes ' Pelpel' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Pelpel?' -> skill s0 writes ' Who is the boss of Pelpel?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Pelpel?' -> skill s0 writes ' Who is the boss of Pelpel?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the boss of Pelpel?' -> skill s0 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the boss of Pelpel?' -> skill s0 writes ' Who is the boss of Pelpel?' (sub-step, done p 0.00; kept nodes fetched 6)
+
+  [chain 4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Dunor? (truth Tormer) -> Rildun
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Dunor?' -> skill s0 writes ' Who is the neighbour of Dunor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Dunor?' -> skill s0 writes ' Vinril' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Dunor?' -> skill s0 writes ' Who is the neighbour of Vinril?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Vinril?' -> skill s0 writes ' Who is the neighbour of Vinril?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Vinril?' -> skill s0 writes ' Basa' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Vinril?' -> skill s0 writes ' Who is the neighbour of Basa?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Basa?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Vinril?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of Dunor?' -> skill s0 writes ' Rildun' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [chain 6] Who is the neighbour of the neighbour of the neighbour of the neighbour of the neighbour of the neighbour of Muril? (truth Pelmer) -> Kalo
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of the neighbour of the neighbour of Muril?' -> skill s0 writes ' Who is the neighbour of Murilzek?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Murilzek?' -> skill s0 writes ' Pelba' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of the neighbour of the neighbour of Muril?' -> skill s0 writes ' Who is the neighbour of the neighbour of Pelba?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Pelba?' -> skill s0 writes ' Who is the neighbour of Pelba?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Pelba?' -> skill s0 writes ' Mergor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Pelba?' -> skill s0 writes ' Who is the neighbour of Mergor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of Mergor?' -> skill s0 writes ' Kalo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of Pelba?' -> skill s0 writes ' Kalo' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the neighbour of the neighbour of the neighbour of the neighbour of the neighbour of the neighbour of Muril?' -> skill s0 writes ' Kalo' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [lookup 1] What is the length of Lotha? (truth 80) -> 80
+   focus ' What is the length of Lotha?' -> skill s0 writes ' 80' (resolves it, done p 1.00; kept nodes fetched 6)
+
+  [compose 1] Which family is Muril in? (truth Tormer) -> Pelzek
+   focus ' Which family is Muril in?' -> skill s0 writes ' Which genus is Muril in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Muril in?' -> skill s0 writes ' Dunvin' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Muril in?' -> skill s0 writes ' Which family is the genus Dunvin in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Dunvin in?' -> skill s0 writes ' Pelzek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Muril in?' -> skill s0 writes ' Pelzek' (resolves it, done p 1.00; kept nodes fetched 6)
+  loss 0.742; with kept memory | add2 0%, add4 0%, add6 0%, chain2 22%, chain4 15%, chain6 5%, lookup1 98%, compose1 8% | steps fetching a kept node 100%; skills 1; skills used per kind add: s0x1046; chain: s0x722; lookup: s0x40; compose: s0x188; needed fact fetched: chain 94% compose 99% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 22%, chain4 10%, chain6 5%, lookup1 98%, compose1 18% | steps fetching a kept node 0%; skills 1; skills used per kind add: s0x938; chain: s0x644; lookup: s0x40; compose: s0x186; needed fact fetched: chain 99% compose 99% lookup 100%
+  recall (facts read earlier, none given; kept memory 4734 nodes): chain2 3%, chain4 3%, lookup1 53%, compose1 3% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 95%, chain4 65%, lookup1 100%, compose1 82% | ... the fact the step needs: chain2 100%, chain4 99%, lookup1 100%, compose1 96%
+  saved /marimo/out/v10s.pt (kept memory 4019 nodes)
