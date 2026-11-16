@@ -165,3 +165,5 @@ The latest release of the game is now available.
      fetched for ' Which genus is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-3.0); 'Zektha is in the genus Dunzek.' (-3.2, own); 'Zeklo is in the genus Dunor.' (-3.2)
      fetched for ' Which genus is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-3.0); 'Zektha is in the genus Dunzek.' (-3.2, own); 'Zeklo is in the genus Dunor.' (-3.2)
      fetched for ' Which genus is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-3.0); 'Zektha is in the genus Dunzek.' (-3.2, own); 'Zeklo is in the genus Dunor.' (-3.2)
+  recall (facts read earlier, none given; kept memory 881 nodes): chain2 0%, chain4 0%, lookup1 23%, compose1 0% | steps fetching a kept node 100% | steps whose top-6 kept holds one of its own facts: chain2 53%, chain4 33%, lookup1 100%, compose1 45% | ... the fact the step needs: chain2 39%, chain4 28%, lookup1 100%, compose1 35%
+  reuse (n 20): first ask 5% in 7.3 steps; asked again 0% in 6.5 steps, 45% of its steps fetch a node the first ask wrote; longer question (5 hops) with the first ask kept 0%, without 0%
