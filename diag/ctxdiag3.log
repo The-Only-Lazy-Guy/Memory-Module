@@ -1,0 +1,20 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4507.71it/s]
+  [chain2] Who is the neighbour of the neighbour of Ormer? | at the root after its sub-steps: wants 'Zekdun' (done), writes 'Zekdun' (done p 1.00)
+  [chain2] Who is the boss of the boss of Loor? | at the root after its sub-steps: wants 'Neril' (done), writes 'Neril' (done p 1.00)
+  [chain2] Who is the neighbour of the neighbour of Rildun? | at the root after its sub-steps: wants 'Gorba' (done), writes 'Who is the neighbour of Gorba?' (done p 0.00)
+  [chain2] Who is the boss of the boss of Muor? | at the root after its sub-steps: wants 'Gorzek' (done), writes 'Who is the boss of Gorzek?' (done p 0.00)
+  [chain3] Who is the teacher of the teacher of the teacher of Rilba? | at the root after its sub-steps: wants 'Orka' (done), writes 'Orka' (done p 1.00)
+  [chain3] Who is the friend of the friend of the friend of Katha? | at the root after its sub-steps: wants 'Dunzek' (done), writes 'Dunzek' (done p 1.00)
+  [chain3] Who is the boss of the boss of the boss of Zekvin? | at the root after its sub-steps: wants 'Torsa' (done), writes 'Torsa' (done p 1.00)
+  [chain3] Who is the friend of the friend of the friend of Torril? | at the root after its sub-steps: wants 'Kaba' (done), writes 'Kaba' (done p 1.00)
+  [chain4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Baba? | at the root after its sub-steps: wants 'Dunba' (done), writes 'Dunba' (done p 1.00)
+  [chain4] Who is the boss of the boss of the boss of the boss of Lotor? | at the root after its sub-steps: wants 'Nezek' (done), writes 'Nezek' (done p 1.00)
+  [chain4] Who is the neighbour of the neighbour of the neighbour of the neighbour of Samer? | at the root after its sub-steps: wants 'Pelgor' (done), writes 'Pelgor' (done p 1.00)
+  [chain4] Who is the friend of the friend of the friend of the friend of Basa? | at the root after its sub-steps: wants 'Mermu' (done), writes 'Mermu' (done p 1.00)
+  [compose1] Which family is Pelor in? | at the root after its sub-steps: wants 'Thatha' (done), writes 'Which family is the genus Thaor in?' (done p 0.00)
+  [compose1] Which family is Toror in? | at the root after its sub-steps: wants 'Gorgor' (done), writes 'Gorgor' (done p 1.00)
+  [compose1] Which family is Rilzek in? | at the root after its sub-steps: wants 'Gormu' (done), writes 'Gormu' (done p 1.00)
+  [compose1] Which family is Mugor in? | at the root after its sub-steps: wants 'Vinsa' (done), writes 'Vinsa' (done p 1.00)
+ctxdiag with ancestors (as built): chain2 answer at root 73% (n 30), chain2 answer below root 73% (n 60), chain2 sub-q at root 72% (n 60), chain3 answer at root 90% (n 30), chain3 answer below root 72% (n 120), chain3 sub-q at root 33% (n 60), chain3 sub-q below root 17% (n 60), chain4 answer at root 87% (n 30), chain4 answer below root 60% (n 180), chain4 sub-q at root 42% (n 60), chain4 sub-q below root 25% (n 120), compose1 answer at root 77% (n 30), compose1 answer below root 23% (n 60), compose1 sub-q at root 80% (n 60)
+ctxdiag without ancestors: chain2 answer at root 73% (n 30), chain2 answer below root 47% (n 60), chain2 sub-q at root 72% (n 60), chain3 answer at root 90% (n 30), chain3 answer below root 58% (n 120), chain3 sub-q at root 33% (n 60), chain3 sub-q below root 53% (n 60), chain4 answer at root 87% (n 30), chain4 answer below root 48% (n 180), chain4 sub-q at root 42% (n 60), chain4 sub-q below root 60% (n 120), compose1 answer at root 77% (n 30), compose1 answer below root 8% (n 60), compose1 sub-q at root 80% (n 60)
