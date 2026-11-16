@@ -1444,9 +1444,11 @@ class GNM10(nn.Module):
         nn.init.zeros_(self.bias.weight)
         nn.init.zeros_(self.bias.bias)
         self.qry = nn.Linear(d, dk)                      # focus / question -> query
-        self.sqry = nn.Linear(d, dk)                     # skill space: focus -> skill query, skill label -> skill key
-        #  (11-15 v10f: skills keyed in the fetch space spawned 29 skills -- fetch training moved the space, cosines fell
-        #   under the spawn line; own space, trained only by the skill choice, centred by the running mean of focus states)
+        # skill space (11-16 fix, D3): the frozen LM's mean state of the focus, centred by ONE fixed mean (set once by
+        # fix_skill_mean), + each skill's learned offset EK. U0: in the old space (control-pooled, running-mean centred,
+        # trained projection) every focus had cosine ~.999 with every other -> routing rode on parts that move every
+        # step: U2 learned routing 13 skills, a kind kept its expert 20-48%, lookup 8% (oracle routing 100%).
+        # Fixed-centred frozen states: same kind .79, other kind -.25, nearest neighbour same kind 100%
         # kept memory's "nothing relevant" option in its fetch softmax (scores are cosine / .1; 5 = cosine .5).
         # 11-15 v10j round 1: kept memory empty chain2 55%, with it 18% -- the best kept node always got full attention
         # (weight relative to the best), even Q/A pairs about other worlds
@@ -1456,7 +1458,7 @@ class GNM10(nn.Module):
         self.keyc = nn.Linear(dc, dk)                    # a node's control rows -> its key
         self.done = nn.Linear(d, 1)                      # does the new node resolve the focus?
         self.ex = Experts(n=n_exp)
-        self.EK = nn.Parameter(torch.zeros(n_exp, dk))   # each skill node's own learned key offset
+        self.EK = nn.Parameter(torch.zeros(n_exp, d))    # each skill node's own learned key offset
         # spawning off (-2: never): 11-15 fitdiag, 300 demo steps -- 9-10 spawned skills: loss 2.3 -> 2.2 (no learning);
         # one skill: 2.0 -> 0.77. Returns when interference between skills is measured (my 11-15 plan)
         self.spawn_at = float(os.environ.get("SPAWN_AT", "-2"))
@@ -1573,13 +1575,14 @@ class GNM10(nn.Module):
 
     # ---------------------------------------------------------------- skill nodes (carry a LoRA expert)
     def skill_query(self, H, train=False):
-        """a focus's (or skill label's) point in skill space: its control-pooled states, centred, projected"""
-        Hp = self.pool(H, self.ctl(H))[0]
-        if train:
-            with torch.no_grad():
-                self.smu_n += 1
-                self.smu += (Hp.detach() - self.smu) / float(self.smu_n)
-        return self.sqry(Hp - self.smu)
+        """a focus's (or skill label's) point in skill space: the frozen LM's mean state, centred by the fixed mean"""
+        return H.detach().mean(0) - self.smu
+
+    @torch.no_grad()
+    def fix_skill_mean(self, texts_ids):
+        """the skill space's centre, set once (from the focus texts at hand, e.g. the demos'); never moves after"""
+        self.smu.copy_(torch.stack([self.lm_run(t)[0].mean(0) for t in texts_ids]).mean(0))
+        self.smu_n.fill_(len(texts_ids))
 
     def skill_keys(self):
         """skill nodes' keys: their label's point in skill space plus their own learned offset"""
@@ -2092,6 +2095,8 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
     train_sizes = [(k, s) for k in ("add", "chain") for s in (1, 2, 3)] + [("lookup", 1), ("compose", 1)]
     test_sizes = [("add", 2), ("add", 4), ("add", 6), ("chain", 2), ("chain", 4), ("chain", 6), ("lookup", 1), ("compose", 1)]
     demos = [v10_task(k, rng, s) for k, s in train_sizes for _ in range(n_demo // len(train_sizes))]
+    # skill space centre, set once from the demos' focus texts (questions + the sub-questions they write)
+    G.fix_skill_mean([tk(" " + t)["input_ids"] for f_, q_, a_, st_ in demos for t in [q_] + [x for x, d in st_ if not d]])
     seen_q = {d[1] for d in demos}
     # kept memory: the facts it read (all of them, v10l) + solved nodes of its own checked right runs -- not the demos'
     # solved nodes (11-15 v10h: with those in every context each demo was unique, it memorised them)
@@ -2527,6 +2532,8 @@ def v10_unit(steps=1500):
         random.seed(0)
         rng = random.Random(11)
         G = GNM10().to(dev)
+        frng = random.Random(5)
+        G.fix_skill_mean([tk(" " + _unit_step(k, frng, combos=train_c)[1])["input_ids"] for k in kinds for _ in range(20)])
         if spawn is not None:
             G.spawn_at = spawn
         if route is not None:                            # oracle routing: kind -> expert slot (measurement only)
@@ -2580,10 +2587,16 @@ def v10_unit(steps=1500):
             h.remove()
         del G, opt
 
-    run("U1 shuffled column targets (negative control)", ("column",), shuffle=True)
-    run("U1/U2 one shared expert", kinds)
-    run("U2 oracle routing (one expert per kind)", kinds, route={k: i for i, k in enumerate(kinds)})
-    run("U2 learned routing, spawning on (spawn_at .5)", kinds, spawn=.5)
+    arms = os.environ.get("UNIT_ARMS", "neg,shared,oracle,learned").split(",")
+    if "neg" in arms:
+        run("U1 shuffled column targets (negative control)", ("column",), shuffle=True)
+    if "shared" in arms:
+        run("U1/U2 one shared expert", kinds)
+    if "oracle" in arms:
+        run("U2 oracle routing (one expert per kind)", kinds, route={k: i for i, k in enumerate(kinds)})
+    if "learned" in arms:
+        sp = float(os.environ.get("UNIT_SPAWN", ".3"))
+        run(f"U2 learned routing, spawning on (spawn_at {sp}; fixed-centred frozen skill space)", kinds, spawn=sp)
 
 
 @torch.no_grad()
