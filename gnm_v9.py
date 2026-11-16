@@ -2913,6 +2913,203 @@ def v10_selftest():
     G.ltm, G._ltm_ids, G.skills = [], set(), []
 
 
+# ====================================================================== v11 trial: bind -> point -> remember (11-16)
+class V11:
+    """docs/GNM_v10.md §1b. Vector-symbolic binding (circular convolution; argument position = a fixed permutation)
+    + associative memories (one per op node: a list of bound queries and the node each points to). Fixed math: nothing
+    here is trained; memory is written once per confirmed fact"""
+
+    def __init__(self, D=2048, beta=50., seed=0):
+        self.g = torch.Generator().manual_seed(seed)
+        self.D, self.beta = D, beta
+        self.perm = [torch.randperm(D, generator=self.g).to(dev) for _ in range(4)]
+        self.atoms = {}
+        self.mem = {}                                    # op name -> [keys], [values]
+
+    def atom(self, name, vec=None):
+        if vec is not None:
+            self.atoms[name] = F.normalize(vec.float().to(dev), dim=0)
+        elif name not in self.atoms:
+            self.atoms[name] = F.normalize(torch.randn(self.D, generator=self.g).to(dev), dim=0)
+        return self.atoms[name]
+
+    @staticmethod
+    def bind(a, b):
+        return torch.fft.irfft(torch.fft.rfft(a) * torch.fft.rfft(b), n=a.shape[-1])
+
+    @staticmethod
+    def unbind(c, a):                                    # circular correlation: approximate inverse of bind
+        return torch.fft.irfft(torch.fft.rfft(c) * torch.conj(torch.fft.rfft(a)), n=c.shape[-1])
+
+    def query(self, op, args):
+        """bind: the op node with each argument at its position"""
+        q = self.atom(op)
+        for i, a in enumerate(args):
+            q = self.bind(q, self.atom(a)[self.perm[i]])
+        return F.normalize(q, dim=0)
+
+    def remember(self, op, args, value):
+        K, V = self.mem.setdefault(op, ([], []))
+        K.append(self.query(op, args))
+        V.append(value)
+
+    def point(self, op, args):
+        """-> (read value, best key cosine). Softmax(beta * cos) over the op node's keys"""
+        K, V = self.mem[op]
+        Kt = torch.stack(K) if not isinstance(K, torch.Tensor) else K
+        sc = Kt @ self.query(op, args)
+        w = torch.softmax(self.beta * sc, 0)
+        return w @ (torch.stack(V) if not isinstance(V, torch.Tensor) else V), float(sc.max())
+
+    def freeze(self, op):                                # stack a memory once it is written (fast reads)
+        K, V = self.mem[op]
+        self.mem[op] = (torch.stack(K), torch.stack(V))
+
+    def cleanup(self, v, names):
+        """classify a vector to the nearest of the candidate nodes"""
+        A = torch.stack([self.atoms[n] for n in names])
+        return names[int((A @ F.normalize(v, dim=0)).argmax())]
+
+
+@torch.no_grad()
+def v11_test():
+    """measurement (docs/GNM_v10.md §1b, tests T1a-d, T2). Nothing is learned; every number is fixed math + one-shot
+    memory. Controls: T1b (never-written combos must not be answered), random atoms vs GPT-2 node vectors in T2"""
+    torch.manual_seed(0)
+    random.seed(0)
+    # ---- T1: digit-column table, value = bundle of two slots (digit, carry)
+    m = V11()
+    digits, carries = [str(i) for i in range(10)], ["c0", "c1"]
+    for n in digits + carries + ["add", "slot digit", "slot carry"]:
+        m.atom(n)
+    allc = [(x, y, c) for x in range(10) for y in range(10) for c in (0, 1)]
+    random.Random(3).shuffle(allc)
+
+    def col_value(x, y, c):
+        t = x + y + c
+        return m.bind(m.atom("slot digit"), m.atom(str(t % 10))) + m.bind(m.atom("slot carry"), m.atom(f"c{t // 10}"))
+
+    def col_read(x, y, c):
+        v, conf = m.point("add", [str(x), str(y), f"c{c}"])
+        return m.cleanup(m.unbind(v, m.atom("slot digit")), digits), m.cleanup(m.unbind(v, m.atom("slot carry")), carries), conf
+
+    for x, y, c in allc[:160]:
+        m.remember("add", [str(x), str(y), f"c{c}"], col_value(x, y, c))
+    m.freeze("add")
+    ok = sum(col_read(x, y, c)[:2] == (str((x + y + c) % 10), f"c{(x + y + c) // 10}") for x, y, c in allc[:160])
+    held = [col_read(x, y, c) for x, y, c in allc[160:]]
+    held_ok = sum((d, k) == (str((x + y + c) % 10), f"c{(x + y + c) // 10}") for (d, k, _), (x, y, c) in zip(held, allc[160:]))
+    conf_w = sorted(col_read(x, y, c)[2] for x, y, c in allc[:160])
+    conf_h = sorted(h[2] for h in held)
+    print(f"v11 T1a: 160 column facts written once, read back (both slots exact): {ok}/160; key cosine of written "
+          f"queries min {conf_w[0]:.2f}", flush=True)
+    print(f"v11 T1b (control): 40 never-written combos: best key cosine max {conf_h[-1]:.2f} (written: >= {conf_w[0]:.2f}) "
+          f"-> answered with confidence (> .5): {sum(h[2] > .5 for h in held)}/40; right if forced: {held_ok}/40 "
+          f"(chance ~2/40)", flush=True)
+    # T1d: the full 200-entry table, then multi-digit addition = the column lookup repeated (procedure FIXED here)
+    m.mem.pop("add")
+    for x, y, c in allc:
+        m.remember("add", [str(x), str(y), f"c{c}"], col_value(x, y, c))
+    m.freeze("add")
+    rng = random.Random(7)
+    res = []
+    for L in (2, 4, 8, 12):
+        hit = 0
+        for _ in range(200):
+            a, b = rng.randint(10 ** (L - 1), 10 ** L - 1), rng.randint(10 ** (L - 1), 10 ** L - 1)
+            da, db, c, out = str(a), str(b), 0, ""
+            for i in range(L - 1, -1, -1):
+                d, k, _ = col_read(int(da[i]), int(db[i]), c)
+                out, c = d + out, int(k[1])
+            hit += int(("1" if c else "") + out) == a + b
+        res.append(f"{L} digits {hit / 200:.0%}")
+    print("v11 T1d: addition by repeated column lookups (procedure fixed): " + ", ".join(res), flush=True)
+    # ---- T1c: capacity, N random facts (op r, x, y) -> z over 1000 atoms
+    for N in (1000, 10000, 50000):
+        mc = V11(seed=1)
+        names = [f"a{i}" for i in range(1000)]
+        for n in names + ["r"]:
+            mc.atom(n)
+        r2 = random.Random(N)
+        pairs = r2.sample(range(1000 * 1000), N)
+        facts = [(names[p // 1000], names[p % 1000], names[r2.randrange(1000)]) for p in pairs]
+        for x, y, z in facts:
+            mc.remember("r", [x, y], mc.atoms[z])
+        mc.freeze("r")
+        test = r2.sample(facts, 500)
+        hit = sum(mc.cleanup(mc.point("r", [x, y])[0], names) == z for x, y, z in test)
+        print(f"v11 T1c capacity: {N} facts in one op memory, 500 read back: {hit / 500:.0%}", flush=True)
+        del mc
+    # ---- T2: facts read once from many worlds; one-hop / chains / compose by lookups
+    import re as _re
+    wr = random.Random(13)
+    worlds = []
+    for i in range(400):
+        size = 1 + i % 8
+        names, facts, qtext, steps = _chain_world(wr, size)
+        worlds.append(("chain", facts, names, size))
+    for i in range(200):
+        facts, q, ans, steps = v10_task("compose", wr, 1)
+        worlds.append(("compose", facts, q, ans))
+
+    def parse(f):                                        # fixed parse = stand-in for the translator (V7, not built)
+        mm = _re.match(r"The (\w+) of (\w+) is (\w+)\.$", f)
+        if mm:
+            return mm[1], mm[2], mm[3]
+        mm = _re.match(r"(\w+) is in the genus (\w+)\.$", f)
+        if mm:
+            return "genus", mm[1], mm[2]
+        mm = _re.match(r"The genus (\w+) is in the family (\w+)\.$", f)
+        return "family", mm[1], mm[2]
+
+    triples = [parse(f) for w in worlds for f in w[1]]
+    ents = sorted({t[1] for t in triples} | {t[2] for t in triples})
+    seen, clash = {}, set()
+    for rel, x, y in triples:
+        if (rel, x) in seen and seen[(rel, x)] != y:
+            clash.add((rel, x))
+        seen[(rel, x)] = y
+    tk, M = lm()
+    wte = M.transformer.wte.weight.detach().float()
+    Pm = torch.randn(wte.shape[1], 2048, generator=torch.Generator().manual_seed(5)).to(dev) / wte.shape[1] ** .5
+    lmv = torch.stack([wte[tk(" " + e)["input_ids"]].mean(0) @ Pm for e in ents])
+    lmv = lmv - lmv.mean(0)                              # centred by one fixed mean (U0 lesson)
+    for mode in ("random atoms", "GPT-2 token vectors (centred)"):
+        mt = V11(seed=2)
+        for j, e in enumerate(ents):
+            mt.atom(e, None if mode == "random atoms" else lmv[j])
+        for rel in ("boss", "friend", "teacher", "neighbour", "genus", "family"):
+            mt.atom(rel)
+        for rel, x, y in triples:                        # read once: newest write per (rel, x) kept last
+            mt.remember("rel", [rel, x], mt.atoms[y])
+        mt.freeze("rel")
+        out, hits = {}, {}
+        for w in worlds:
+            if w[0] == "chain":
+                _, facts, names, size = w
+                rel = parse(facts[0])[0]
+                cur, ok, touched = names[0], True, False
+                for k in range(size):
+                    touched |= (rel, cur) in clash
+                    cur = mt.cleanup(mt.point("rel", [rel, cur])[0], ents)
+                ok = cur == names[size]
+                key = f"chain{size}"
+            else:
+                _, facts, q, ans = w
+                x = _re.match(r"Which family is (\w+) in\?", q)[1]
+                touched = ("genus", x) in clash
+                g_ = mt.cleanup(mt.point("rel", ["genus", x])[0], ents)
+                touched |= ("family", g_) in clash
+                ok = mt.cleanup(mt.point("rel", ["family", g_])[0], ents) == ans
+                key = "compose"
+            if not touched:
+                hits.setdefault(key, []).append(ok)
+        print(f"v11 T2 {mode}: {len(triples)} facts read once into one memory, {len(clash)} (rel, name) keys written "
+              f"twice with different answers (excluded): " + ", ".join(f"{k} {sum(v) / len(v):.0%} (n {len(v)})"
+              for k, v in sorted(hits.items())), flush=True)
+        del mt
+
+
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
 def inspect(G, arts, tr_arts, n=20):
     """what the trained parts actually do: node collapse, write attention, retrieval vs a node's source, gradients"""
@@ -3069,6 +3266,9 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "unit":
         v10_unit()
+        raise SystemExit
+    if a.task == "v11test":
+        v11_test()
         raise SystemExit
     if a.task == "routediag":
         v10_routediag(os.environ.get("V10_LOAD", "/marimo/out/v10w.pt"))
