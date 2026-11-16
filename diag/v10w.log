@@ -118,3 +118,50 @@ The latest release of the game is now available.
    focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
    focus ' Which genus is the genus Tormer in?' -> skill s0 writes ' Which genus is the genus Tormer in?' (sub-step, done p 0.00; kept nodes fetched 6)
   with kept memory | add2 0%, add4 0%, add6 0%, chain2 10%, chain4 12%, chain6 2%, lookup1 38%, compose1 2% | steps fetching a kept node 100%; skills 4; skills used per kind add: s0x11 s1x342 s2x719 s3x310; chain: s0x482 s3x591; lookup: s3x40; compose: s0x1237 s2x34 s3x4; needed fact fetched: chain 96% compose 100% lookup 100%
+  kept memory empty | add2 0%, add4 0%, add6 0%, chain2 15%, chain4 5%, chain6 2%, lookup1 40%, compose1 0% | steps fetching a kept node 0%; skills 4; skills used per kind add: s0x47 s1x373 s2x744 s3x134; chain: s0x295 s3x515; lookup: s3x40; compose: s0x846 s2x36 s3x4; needed fact fetched: chain 93% compose 100% lookup 100%
+
+  [recall chain 2] Who is the friend of the friend of Kagor? (truth Torlo) -> <|endoftext|>
+   focus ' Who is the friend of the friend of Kagor?' -> skill s3 writes ' Who is the friend of Kagor?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Kagor?' -> skill s0 writes ' Dunril' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of Kagor?' -> skill s3 writes '<|endoftext|>' (resolves it, done p 0.99; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of Kagor?': 'The friend of Dunka is Dunor.' (-2.5); 'The friend of Gorril is Dunzek.' (-2.8); 'The friend of Kagor is Vinpel.' (-3.3, own)
+     fetched for ' Who is the friend of Kagor?': 'The teacher of Kagor is Dunril.' (-2.1); 'The friend of Gorril is Dunzek.' (-2.7); 'The friend of Kagor is Vinpel.' (-3.0, own)
+     fetched for ' Who is the friend of the friend of Kagor?': 'The friend of Dunka is Dunor.' (-2.5); 'The friend of Gorril is Dunzek.' (-2.8); 'The friend of Kagor is Vinpel.' (-3.3, own)
+
+  [recall chain 4] Who is the friend of the friend of the friend of the friend of Gorril? (truth Gorzek) -> the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s3 writes ' Who is the friend of Gorril?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Who is the friend of Gorril?' -> skill s3 writes ' Tortor' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s3 writes '<|endoftext|>' (sub-step, done p 0.46; kept nodes fetched 6)
+   focus '<|endoftext|>' -> skill s3 writes ' will be the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the' (resolves it, done p 0.74; kept nodes fetched 6)
+   focus ' Who is the friend of the friend of the friend of the friend of Gorril?' -> skill s3 writes ' the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the' (resolves it, done p 0.82; kept nodes fetched 6)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'The friend of Kane is Satha.' (-2.8); 'The friend of Neka is Kaba.' (-3.1); 'The friend of Vinril is Tortor.' (-3.4)
+     fetched for ' Who is the friend of Gorril?': 'The friend of Gorril is Dunzek.' (-2.0, own); 'The friend of Vinril is Tortor.' (-2.3); 'The friend of Kagor is Vinpel.' (-2.7)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'The friend of Kane is Satha.' (-2.8); 'The friend of Neka is Kaba.' (-3.1); 'The friend of Vinril is Tortor.' (-3.4)
+     fetched for '<|endoftext|>': 'The boss of Negor is Dunmu.' (-3.3); 'The boss of Loor is Rilril.' (-3.5); 'The boss of Duntor is Loor.' (-3.5)
+     fetched for ' Who is the friend of the friend of the friend of the friend of Gorril?': 'The friend of Kane is Satha.' (-2.8); 'The friend of Neka is Kaba.' (-3.1); 'The friend of Vinril is Tortor.' (-3.4)
+
+  [recall lookup 1] What is the age of Torgor? (truth 31) -> 61
+   focus ' What is the age of Torgor?' -> skill s3 writes ' 61' (resolves it, done p 1.00; kept nodes fetched 6)
+     fetched for ' What is the age of Torgor?': 'The age of Torgor is 31.' (-1.2, own); 'The size of Torgor is 73.' (-2.8, own); 'The age of Toror is 75.' (-2.9)
+
+  [recall compose 1] Which family is Zektha in? (truth Netha) -> None
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Which genus is Zektha in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is Zektha in?' -> skill s2 writes ' Dunzek' (resolves it, done p 1.00; kept nodes fetched 6)
+   focus ' Which family is Zektha in?' -> skill s0 writes ' Which family is the genus Dunzek in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which family is the genus Dunzek in?' -> skill s0 writes ' Which genus is the genus Dunzek in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Dunzek in?' -> skill s0 writes ' Which genus is the genus Dunzek in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Dunzek in?' -> skill s0 writes ' Which genus is the genus Dunzek in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Dunzek in?' -> skill s0 writes ' Which genus is the genus Dunzek in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Dunzek in?' -> skill s0 writes ' Which genus is the genus Dunzek in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Dunzek in?' -> skill s0 writes ' Which genus is the genus Dunzek in?' (sub-step, done p 0.00; kept nodes fetched 6)
+   focus ' Which genus is the genus Dunzek in?' -> skill s0 writes ' Which genus is the genus Dunzek in?' (sub-step, done p 0.00; kept nodes fetched 6)
+     fetched for ' Which family is Zektha in?': 'Logor is in the genus Zekzek.' (-2.4); 'Zekgor is in the genus Tortha.' (-2.5); 'Zekor is in the genus Bazek.' (-2.9)
+     fetched for ' Which genus is Zektha in?': 'Zekgor is in the genus Tortha.' (-2.4); 'Logor is in the genus Zekzek.' (-2.5); 'Zektha is in the genus Dunzek.' (-3.1, own)
+     fetched for ' Which family is Zektha in?': 'Logor is in the genus Zekzek.' (-2.4); 'Zekgor is in the genus Tortha.' (-2.5); 'Zekor is in the genus Bazek.' (-2.9)
+     fetched for ' Which family is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-2.8); 'Batha is in the genus Dunzek.' (-3.2); 'Zektha is in the genus Dunzek.' (-3.3, own)
+     fetched for ' Which genus is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-3.0); 'Zektha is in the genus Dunzek.' (-3.2, own); 'Zeklo is in the genus Dunor.' (-3.2)
+     fetched for ' Which genus is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-3.0); 'Zektha is in the genus Dunzek.' (-3.2, own); 'Zeklo is in the genus Dunor.' (-3.2)
+     fetched for ' Which genus is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-3.0); 'Zektha is in the genus Dunzek.' (-3.2, own); 'Zeklo is in the genus Dunor.' (-3.2)
+     fetched for ' Which genus is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-3.0); 'Zektha is in the genus Dunzek.' (-3.2, own); 'Zeklo is in the genus Dunor.' (-3.2)
+     fetched for ' Which genus is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-3.0); 'Zektha is in the genus Dunzek.' (-3.2, own); 'Zeklo is in the genus Dunor.' (-3.2)
+     fetched for ' Which genus is the genus Dunzek in?': 'Lomu is in the genus Dunvin.' (-3.0); 'Zektha is in the genus Dunzek.' (-3.2, own); 'Zeklo is in the genus Dunor.' (-3.2)
