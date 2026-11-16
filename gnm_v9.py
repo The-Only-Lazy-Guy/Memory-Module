@@ -3130,6 +3130,160 @@ def v11_test():
         del mt
 
 
+def v11_t3(path=None, n_demo=50, steps=400):
+    """T3 (docs/GNM_v10.md §1b, measurement): real biology text, questions worded differently from the facts.
+    Reading = fixed parse of each species article's lead sentence (translator stand-in, marked): alias(common name) ->
+    species node, alias(binomial) -> species node, family(species) -> family node, genus(species) -> genus node.
+    Question side LEARNED: frozen GPT-2 states -> relation (classify over relation nodes) + the name's span (point at
+    its start / end tokens), trained on n_demo questions of training species with 4 wordings. Answer: span text ->
+    alias lookup (no confident key -> 'unknown') -> bind(relation, species) lookup -> classify over ALL nodes.
+    Controls: gold relation + span (upper bound); 15 species never read must come back 'unknown'; trained vs held-out
+    wordings"""
+    import re as _re
+    tk, M = lm()
+    path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio", "species_e1.json")
+    arts = json.load(open(path, encoding="utf-8"))
+    sp = []
+    for a in arts:                                       # eval construction from the lead (not seen by the model)
+        p0 = a["text"][0]
+        s0 = p0.split(" . ")[0]
+        bm = _re.search(r"\( ([A-Z][a-z]+ [a-z]+)(?: [a-z]+)? [),;]", s0)
+        fm = _re.search(r"family ([A-Z][a-z]+(?:idae|aceae|inae))", p0)
+        cm = _re.match(r"^The ([a-z][a-z @\-@]+?) (?:\(|,|or)", s0)
+        if bm and fm and cm and "<unk>" not in cm[1]:
+            sp.append({"common": cm[1].replace(" @-@ ", "-"), "binomial": bm[1], "family": fm[1], "genus": bm[1].split()[0]})
+    rng = random.Random(23)
+    rng.shuffle(sp)
+    train_sp, test_read, test_unread = sp[:30], sp[30:-15], sp[-15:]
+    rels = ("family", "genus")
+    W = {"family": (["Which family is {n} in?", "What family does {n} belong to?"],
+                    ["{N} is placed in which family?", "Name the family of {n}."]),
+         "genus": (["Which genus is {n} in?", "What genus does {n} belong to?"],
+                   ["{N} is classified in which genus?", "Name the genus of {n}."])}
+
+    def nm(x, kind):                                     # the name as written in a question
+        return ("the " + x["common"]) if kind == "common" else x["binomial"]
+
+    def make_q(x, rel, kind, tmpl):
+        n = nm(x, kind)
+        q = tmpl.replace("{N}", n[0].upper() + n[1:]).replace("{n}", n)
+        ids = tk(" " + q)["input_ids"]
+        name_ids = tk(" " + (x["common"] if kind == "common" else x["binomial"]))["input_ids"]
+        st = next((i for i in range(len(ids)) if ids[i:i + len(name_ids)] == name_ids), None)
+        if st is None:                                   # sentence-initial capital: match the capitalised form
+            name_ids = tk(" " + n[0].upper() + n[1:])["input_ids"] if kind == "binomial" else tk(" " + x["common"].capitalize())["input_ids"]
+            st = next((i for i in range(len(ids)) if ids[i:i + len(name_ids)] == name_ids), None)
+        return ids, rels.index(rel), st, (st + len(name_ids) - 1) if st is not None else None
+    # ---- memory: read the lead facts of train + test_read species (fixed parse); unread species never written
+    m = V11(seed=4)
+    wte = M.transformer.wte.weight.detach().float()
+    Pm = torch.randn(wte.shape[1], m.D, generator=torch.Generator().manual_seed(6)).to(dev) / wte.shape[1] ** .5
+    read = train_sp + test_read
+    names_all = [x["common"] for x in sp] + [x["binomial"] for x in sp]
+    mu = torch.stack([wte[tk(" " + t)["input_ids"]].mean(0) @ Pm for t in names_all]).mean(0)
+
+    def name_vec(ids):                                   # a name's key: its tokens' embeddings, centred (U0 lesson)
+        return F.normalize(wte[ids].mean(0) @ Pm - mu, dim=0)
+    nodes = []
+    for i, x in enumerate(read):
+        e = f"species{i}"
+        m.atom(e)
+        nodes.append(e)
+        for t in (x["family"], x["genus"]):
+            if t not in m.atoms:
+                m.atom(t)
+                nodes.append(t)
+        for kind in ("common", "binomial"):
+            K, V = m.mem.setdefault("alias", ([], []))
+            K.append(name_vec(tk(" " + x[kind])["input_ids"]))
+            V.append(m.atoms[e])
+        m.remember("rel", ["family", e], m.atoms[x["family"]])
+        m.remember("rel", ["genus", e], m.atoms[x["genus"]])
+    m.atom("family")
+    m.atom("genus")
+    m.freeze("alias")
+    m.freeze("rel")
+
+    def answer(ids, r, st, en):
+        if st is None or en is None or en < st:
+            return "unknown", 0.
+        K, V = m.mem["alias"]
+        sc = K @ name_vec(ids[st:en + 1])
+        conf = float(sc.max())
+        if conf < .5:
+            return "unknown", conf
+        ent = m.cleanup(V[int(sc.argmax())], nodes)
+        return m.cleanup(m.point("rel", [rels[r], ent])[0], nodes), conf
+    # ---- learned question head: relation + name span over frozen GPT-2 states
+    head = nn.ModuleDict({"rel": nn.Linear(M.config.n_embd, len(rels)), "st": nn.Linear(M.config.n_embd, 1),
+                          "en": nn.Linear(M.config.n_embd, 1)}).to(dev)
+    opt = torch.optim.AdamW(head.parameters(), lr=1e-3)
+    demos = []
+    for _ in range(n_demo):
+        x, rel, kind = rng.choice(train_sp), rng.choice(rels), rng.choice(("common", "binomial"))
+        demos.append(make_q(x, rel, kind, rng.choice(W[rel][0])))
+    demos = [d for d in demos if d[2] is not None]
+
+    def states(ids):
+        with torch.no_grad():
+            return M(input_ids=torch.tensor([ids], device=dev), output_hidden_states=True).hidden_states[-1][0].float()
+    for stp in range(steps):
+        ids, r, st, en = demos[stp % len(demos)]
+        H = states(ids)
+        L = (F.cross_entropy(head["rel"](H.mean(0))[None], torch.tensor([r], device=dev))
+             + F.cross_entropy(head["st"](H).squeeze(-1)[None], torch.tensor([st], device=dev))
+             + F.cross_entropy(head["en"](H).squeeze(-1)[None], torch.tensor([en], device=dev)))
+        opt.zero_grad()
+        L.backward()
+        opt.step()
+
+    def parse_learned(ids):
+        with torch.no_grad():
+            H = states(ids)
+            r = int(head["rel"](H.mean(0)).argmax())
+            a_ = head["st"](H).squeeze(-1)
+            b_ = head["en"](H).squeeze(-1)
+            st = int(a_.argmax())
+            en = st + int(b_[st:].argmax())
+        return r, st, en
+    print(f"v11 T3: {len(sp)} species with a parsable lead ({len(train_sp)} train, {len(test_read)} test read, "
+          f"{len(test_unread)} never read); {len(demos)} demo questions, {steps} head steps; memory: "
+          f"{len(m.mem['alias'][0])} alias keys, {len(m.mem['rel'][0])} relation facts, {len(nodes)} nodes", flush=True)
+    for split, xs in (("held-out species, read", test_read), ("training species", train_sp)):
+        for wset, wi in (("trained wordings", 0), ("held-out wordings", 1)):
+            res = {"learned": [0, 0], "gold parse": [0, 0]}
+            for x in xs:
+                for rel in rels:
+                    for kind in ("common", "binomial"):
+                        for t in W[rel][wi]:
+                            ids, r, st, en = make_q(x, rel, kind, t)
+                            if st is None:
+                                continue
+                            want = x[rel]
+                            got_g, _ = answer(ids, r, st, en)
+                            res["gold parse"][0] += got_g == want
+                            res["gold parse"][1] += 1
+                            r2, st2, en2 = parse_learned(ids)
+                            got_l, _ = answer(ids, r2, st2, en2)
+                            res["learned"][0] += got_l == want
+                            res["learned"][1] += 1
+            print(f"v11 T3 {split}, {wset}: learned translator {res['learned'][0]}/{res['learned'][1]}, gold parse "
+                  f"{res['gold parse'][0]}/{res['gold parse'][1]}", flush=True)
+    unk, n_u, confs = 0, 0, []
+    for x in test_unread:
+        for rel in rels:
+            for kind in ("common", "binomial"):
+                for t in W[rel][1]:
+                    ids, r, st, en = make_q(x, rel, kind, t)
+                    if st is None:
+                        continue
+                    got, conf = answer(ids, *parse_learned(ids))
+                    unk += got == "unknown"
+                    n_u += 1
+                    confs.append(conf)
+    print(f"v11 T3 control: species never read: 'unknown' {unk}/{n_u} (best alias key cosine max {max(confs):.2f})", flush=True)
+
+
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
 def inspect(G, arts, tr_arts, n=20):
     """what the trained parts actually do: node collapse, write attention, retrieval vs a node's source, gradients"""
@@ -3289,6 +3443,9 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "v11test":
         v11_test()
+        raise SystemExit
+    if a.task == "v11t3":
+        v11_t3()
         raise SystemExit
     if a.task == "routediag":
         v10_routediag(os.environ.get("V10_LOAD", "/marimo/out/v10w.pt"))
