@@ -3615,15 +3615,14 @@ def v11_t5(steps=3000, ep_species=8):
     class Rel(nn.Module):
         def __init__(s_):
             super().__init__()
-            s_.q = nn.Linear(M.config.n_embd, 256)
-            s_.k = nn.Linear(M.config.n_embd, 256)
-            s_.create = nn.Parameter(torch.tensor(0.))
+            s_.q = nn.Linear(M.config.n_embd, 256)       # ONE projection for both sides (11-16 T5 v2: separate q / k
+            s_.create = nn.Parameter(torch.tensor(0.))   #  -> same name not similar at start; train 115 vs test 31/120)
             s_.cq = nn.Linear(M.config.n_embd, 1)
 
         def forward(s_, mvec, nodes):
             """logits over [nodes..., create]; a node's score = its most relevant stored mention"""
             qv = F.normalize(s_.q(mvec), dim=-1)
-            sc = [(qv @ F.normalize(s_.k(torch.stack(n_["m"])), dim=-1).T).max() / .1 for n_ in nodes]
+            sc = [(qv @ F.normalize(s_.q(torch.stack(n_["m"])), dim=-1).T).max() / .1 for n_ in nodes]
             return torch.stack(sc + [s_.create + s_.cq(mvec).squeeze()])
 
     def run_episode(stream, decide, mode="labels"):
@@ -3644,7 +3643,8 @@ def v11_t5(steps=3000, ep_species=8):
                 tgt = own if own is not None else len(nodes)
                 pairs.append((lg, tgt, j != tgt))
             if j == len(nodes):
-                nodes.append({"m": [men[0]], "names": [men[1]], "alone": [men[2]], "owner": ent, "facts": {}, "made_by": len(decs) - 1})
+                nodes.append({"m": [men[0]], "names": [men[1]], "alone": [men[2]], "owner": ent, "facts": {}, "made_by": len(decs) - 1,
+                              "hist": []})
             else:
                 nodes[j]["m"].append(men[0])
                 nodes[j]["names"].append(men[1])
@@ -3655,10 +3655,11 @@ def v11_t5(steps=3000, ep_species=8):
             x = ev[1]
             ent = x["binomial"]
             if ev[0] == "read":
-                j1, _ = point(mention(x["lead"], x["common"]), ent)
+                j1, d1 = point(mention(x["lead"], x["common"]), ent)
                 point(mention(x["lead"], x["binomial"]), ent)
                 for r_ in rels:                          # the lead's facts go to its subject's node
                     nodes[j1]["facts"][r_] = x[r_]
+                nodes[j1]["hist"].append(({r_: x[r_] for r_ in rels}, d1))
                 read_done.add(ent)
                 continue
             _, rel, kind, t = ev[1:]
@@ -3680,11 +3681,17 @@ def v11_t5(steps=3000, ep_species=8):
                 pairs.append((d["lg"], j, False))
                 continue
             ok = [i for i in range(d["n"]) if all(nodes[i]["facts"].get(r_) == x[r_] for r_ in rels)]
-            if not ok:
-                continue
-            t_ = max(ok, key=lambda i: float(d["lg"][i]))
+            # (11-16 T5 v2: with no node able to answer, no signal -> 'create' never a target, 2 nodes for everything)
+            t_ = max(ok, key=lambda i: float(d["lg"][i])) if ok else d["n"]
             pairs.append((d["lg"], t_, True))
-            if j < len(nodes) and j != t_:               # blame up: the decision that made the wrong node
+            # blame up (2): the node's EARLIER facts would have answered right -> the reading decision that overwrote
+            # them should have created a node (outcome only: seen through this wrong answer)
+            hist = nodes[j]["hist"] if j < len(nodes) else []
+            if len(hist) > 1 and any(all(h[0].get(r_) == x[r_] for r_ in rels) for h in hist[:-1]):
+                dw = hist[-1][1]
+                if dw["lg"] is not None and dw["j"] != dw["n"]:
+                    pairs.append((dw["lg"], dw["n"], True))
+            if ok and j < len(nodes) and j != t_:        # blame up: the decision that made the wrong node
                 dm = decs[nodes[j]["made_by"]]
                 if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
                     pairs.append((dm["lg"], t_, True))
@@ -3751,7 +3758,7 @@ def v11_t5(steps=3000, ep_species=8):
         trng = random.Random(43)
         n_sig, run_l = 0, []
         for stp in range(steps):
-            stream = events(trng.sample(train_sp, ep_species), trng)
+            stream = events(trng.sample(train_sp, trng.randint(ep_species, 30)), trng)   # (8-30: test has 30)
             _, pairs = run_episode(stream, learned(True), mode)
             if not pairs:
                 continue
