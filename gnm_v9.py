@@ -2180,7 +2180,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
         t0 = time.time()
         G.eval()
         G.refresh_ltm()
-        got_right, seen, not_held = 0, {}, 0
+        got_right, seen = 0, {}
         for _ in range(per_round):
             kind = rng.choice(V10_KINDS)
             size = rng.randint(1, 3 + r) if kind in ("add", "chain") else 1
@@ -2204,9 +2204,8 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
                 agree = [x for x in right if right.count(x) >= 2]
                 if agree or len(right) + (tries - t - 1) < 2:
                     break
-            if agree and not leaves_hold(G, facts, q, agree[0]):
-                agree = []
-                not_held += 1
+            # (v10r tried leaves_hold here -- dropped 11-16: holddiag showed it rejects correct runs, a one-hop
+            # sub-question asked alone gets solved as a two-hop question; it stays as a measurement in holddiag)
             if agree:
                 kept.append((facts, q, ans, agree[0]))
                 keep_trace(G, q, agree[0], len(kept) - 1)
@@ -2215,8 +2214,7 @@ def v10_run(rounds=6, n_demo=50, tries=4, per_round=400):   # (11-16: 400 tries 
                 seen.setdefault((kind, size), []).append(len(agree[0]))
             keep_facts(G, facts, len(kept) - 1 if kept[-1][1] == q else "read")   # what it read stays
         print(f"round {r}: right runs found {got_right}/{per_round} (kept traces {len(kept)}, kept memory {len(G.ltm)} nodes), "
-              f"{time.time() - t0:.0f}s trying; agreeing right runs dropped because a one-step sub-answer did not hold "
-              f"asked alone: {not_held}", flush=True)
+              f"{time.time() - t0:.0f}s trying", flush=True)
         print(f"  fetch-training pairs {len(fetch_pairs)}", flush=True)
         print("  kept by kind/size (count, mean steps): " + ", ".join(
             f"{k}{s} {len(v)} {sum(v) / len(v):.1f}" for (k, s), v in sorted(seen.items())), flush=True)
