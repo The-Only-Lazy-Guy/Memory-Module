@@ -3583,7 +3583,8 @@ def v11_t5(steps=3000, ep_species=8):
     @torch.no_grad()
     def alone_states(name):
         return ctx_states(tk(" " + name)["input_ids"])
-    # mentions: (pooled contextual states, name string, name-alone pooled states)
+    # mentions: (pooled contextual states, name string, name-alone pooled states, the name's token states, the token
+    # states of its whole sentence / question)
     cache, scale = {}, {}
 
     def mention(text, name):
@@ -3594,11 +3595,11 @@ def v11_t5(steps=3000, ep_species=8):
             if sp_ is None:
                 return None
             H = ctx_states(ids)
-            cache[key] = (H[sp_[0]:sp_[1]].mean(0), name, alone_states(name).mean(0))
-        v, n_, a_ = cache[key]
+            cache[key] = (H[sp_[0]:sp_[1]].mean(0), name, alone_states(name).mean(0), H[sp_[0]:sp_[1]], H)
+        v, n_, a_, s_, c_ = cache[key]
         if scale:                                        # (11-16 T5 v1 used raw states: a few huge dims)
-            v = (v - scale["mu"]) / scale["sd"]
-        return v, n_, a_
+            v, s_, c_ = [(t_ - scale["mu"]) / scale["sd"] for t_ in (v, s_, c_)]
+        return v, n_, a_, s_, c_
 
     def events(xs, r_, ask_before=.5, n_after=2, wordings=None):
         """a stream: per species maybe 1-2 questions first, then its lead read, then questions; species interleaved"""
@@ -3629,12 +3630,37 @@ def v11_t5(steps=3000, ep_species=8):
             s_.q = nn.Linear(M.config.n_embd, 256)       # ONE projection for both sides (11-16 T5 v2: separate q / k
             s_.create = nn.Parameter(torch.tensor(0.))   #  -> same name not similar at start; train 115 vs test 31/120)
             s_.cq = nn.Linear(M.config.n_embd, 1)
+            # (11-17 link diag: on new species the binomial's pooled name never resembled its common name's (best node
+            # 3-7/29) -- the pairing is stated in the CONTEXT ("The X ( Y )"), which pooled names drop. User: "transform
+            # both and find relevance", "cosine or attention". So relevance also attends each side's name tokens over
+            # the other side's context tokens; the model weighs the two terms)
+            s_.wn = nn.Parameter(torch.tensor(1.))
+            s_.wc = nn.Parameter(torch.tensor(1.))
 
-        def forward(s_, mvec, nodes):
+        def per_mention(s_, men, n_, upto=None):
+            """relevance of a mention to each stored mention of node n_ (the first `upto`)"""
+            P = lambda t: F.normalize(s_.q(t), dim=-1)
+            k = len(n_["m"]) if upto is None else upto
+            name = P(torch.stack(n_["m"][:k])) @ P(men[0])                     # pooled names, (k,)
+            pad = torch.nn.utils.rnn.pad_sequence
+            cx, sp = n_["cx"][:k], n_["sp"][:k]
+            CX, SP = P(pad(cx, batch_first=True)), P(pad(sp, batch_first=True))  # (k, L, d)
+            mcx = torch.arange(CX.shape[1], device=dev)[None] < torch.tensor([len(c) for c in cx], device=dev)[:, None]
+            msp = torch.arange(SP.shape[1], device=dev)[None] < torch.tensor([len(s) for s in sp], device=dev)[:, None]
+            a_sp, a_cx = P(men[3]), P(men[4])
+            # my name tokens, each at its best token of their context; mean over my name
+            s1 = torch.einsum("ad,kld->akl", a_sp, CX).masked_fill(~mcx[None], -2.).amax(2).mean(0)
+            # their name tokens, each at its best token of my context; mean over their name
+            s2 = (torch.einsum("ksd,cd->ksc", SP, a_cx).amax(2) * msp).sum(1) / msp.sum(1)
+            return s_.wn * name + s_.wc * torch.maximum(s1, s2)
+
+        def forward(s_, men, nodes):
             """logits over [nodes..., create]; a node's score = its most relevant stored mention"""
-            qv = F.normalize(s_.q(mvec), dim=-1)
-            sc = [(qv @ F.normalize(s_.q(torch.stack(n_["m"])), dim=-1).T).max() / .1 for n_ in nodes]
-            return torch.stack(sc + [s_.create + s_.cq(mvec).squeeze()])
+            flat = {f: [v for n_ in nodes for v in n_[f]] for f in ("m", "cx", "sp")}     # all stored mentions at once
+            own = torch.tensor([i for i, n_ in enumerate(nodes) for _ in n_["m"]], device=dev)
+            sc = s_.per_mention(men, flat) / .1
+            node_sc = torch.full((len(nodes),), -1e4, device=dev).scatter_reduce(0, own, sc, "amax")
+            return torch.cat([node_sc, (s_.create + s_.cq(men[0]).squeeze())[None]])
 
     def run_episode(stream, decide, mode="labels", match=None):
         """decide(mention, nodes) -> (index, logits); index len(nodes) = create. mode 'labels': every decision gets the
@@ -3657,12 +3683,14 @@ def v11_t5(steps=3000, ep_species=8):
                 pairs.append((lg, tgt, j != tgt))
             if j == len(nodes):
                 nodes.append({"m": [men[0]], "names": [men[1]], "alone": [men[2]], "owner": ent, "facts": {}, "made_by": len(decs) - 1,
-                              "hist": [], "md": [d]})
+                              "hist": [], "md": [d], "sp": [men[3]], "cx": [men[4]]})
             else:
                 nodes[j]["m"].append(men[0])
                 nodes[j]["names"].append(men[1])
                 nodes[j]["alone"].append(men[2])
                 nodes[j]["md"].append(d)
+                nodes[j]["sp"].append(men[3])
+                nodes[j]["cx"].append(men[4])
             return j, d
         read_done = set()
         for ev in stream:
@@ -3724,7 +3752,7 @@ def v11_t5(steps=3000, ep_species=8):
             # stored mention this question matched in the wrong node was put there by a POINTING decision -> that
             # decision should have pointed to the node with the right facts (if it existed then) or created one
             if ok and j != t_ and match is not None and len(nodes[j]["m"]) > 1:
-                k = int(match(men[0], nodes[j]["m"][:-1]).argmax())   # (the last one is this question's own mention)
+                k = int(match(men, nodes[j], len(nodes[j]["m"]) - 1).argmax())   # (the last one is this question's own mention)
                 dk = nodes[j]["md"][k]
                 if dk is not d and dk["lg"] is not None and dk["j"] != dk["n"]:
                     pairs.append((dk["lg"], t_ if t_ < dk["n"] else dk["n"], True))
@@ -3739,7 +3767,7 @@ def v11_t5(steps=3000, ep_species=8):
     def make_learned(relm):
         def learned(train):
             def d(men, nodes):
-                lg = relm(men[0], nodes) if nodes else relm.create[None] + relm.cq(men[0])
+                lg = relm(men, nodes) if nodes else relm.create[None] + relm.cq(men[0])
                 d.last = lg.detach()                     # (diagnosis only: read by run_episode's link stats)
                 j = random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax())
                 return j, (lg if train else None)
@@ -3800,8 +3828,8 @@ def v11_t5(steps=3000, ep_species=8):
         learned = make_learned(relm)
 
         @torch.no_grad()
-        def match_fn(v, ms):                             # the model's own relevance (blame up (3)); no labels
-            return F.normalize(relm.q(torch.stack(ms)), dim=-1) @ F.normalize(relm.q(v), dim=-1)
+        def match_fn(men, n_, k):                        # the model's own relevance (blame up (3)); no labels
+            return relm.per_mention(men, n_, k)
         trng = random.Random(43)
         n_sig, run_l = 0, []
         # (11-17 diag, measurement only: train 104/120 vs test 44/120, linked 19/30 vs 6/30 -> does test peak early
@@ -3994,7 +4022,7 @@ if __name__ == "__main__":
         v11_test()
         raise SystemExit
     if a.task == "v11t5":
-        v11_t5()
+        v11_t5(steps=int(os.environ.get("V11_T5_STEPS", "3000")))
         raise SystemExit
     if a.task == "v11t3":
         v11_t3()
