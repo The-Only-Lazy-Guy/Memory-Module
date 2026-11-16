@@ -1,0 +1,16 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]Loading weights: 100%|██████████| 148/148 [00:00<00:00, 4653.98it/s]
+selftest 1-2: zero bias == no bias: True; next token without bias ' V', with the fact's tokens masked ' the' (max logit change 28.71)
+selftest 3: cached == slow: True (largest relative logit difference over 10 steps 0.0000; greedy texts ' is is is is is is is is is is' / ' is is is is is is is is is is')
+/marimo/pv/v10/gnm.py:1599: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  if not train or float(sc[b]) >= self.spawn_at or n >= self.ex.n:
+selftest 6: fetch gradient on a fact's key with untrained control 1.17e+00: True
+selftest 4: skill nodes 2, gradient on skill keys 1.22e-04: True
+selftest 5: resolves 1, solved nodes in memory 1, kept 1, fetchable later 1: True
+selftest 7: a fact read once is kept and fetched later with no facts given: True
+selftest 8: focus + sub-steps of 3198 tokens -> context 958 tokens, wrote 64 tokens: True
+v10 seed 0
+v10 switches: keep demo facts True, recall training True, fetch loss True, demo steps 1500
+v10: 48 demo traces (sizes [('add', 1), ('add', 2), ('add', 3), ('chain', 1), ('chain', 2), ('chain', 3), ('lookup', 1), ('compose', 1)]); kept memory starts with the demos' facts (162); test sizes [('add', 2), ('add', 4), ('add', 6), ('chain', 2), ('chain', 4), ('chain', 6), ('lookup', 1), ('compose', 1)] (add / chain longer than any demo)
+    traces by length: 1:12, 3:6, 5:12, 7:6, 9:6, 11:6
