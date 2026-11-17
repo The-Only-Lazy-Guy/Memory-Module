@@ -4512,8 +4512,257 @@ def v11_t5(steps=3000, ep_species=8):
 # Fixed (said in every result): GPT-2 frozen; text split into units; typed number encode / decode (digits of a
 # number node = its name string); column order right to left with a final carry column; answer = a node's first name.
 
-V13_FIXED = ("GPT-2 frozen (features); text split into units; numbers = typed exact values (digits = name string); "
-             "column order right->left + final carry; answer = node's first name; reader called on every unit")
+V13_FIXED = ("GPT-2 frozen (features); text split into units; numbers = typed exact values; "
+             "answer = node's first name; reader called on every unit")
+
+# ---------------------------------------------------------------------- v14: arithmetic done right (GNM_v10 §1f spec)
+# User 11-17: "the old problem was LLM was the executor ... let GNM do some computation too. So GNM is just a helper +
+# memory"; "mind that the arithmetic task is easy, if you supervise it down to deepest step"; "PLEASE make it finally
+# work". v13 fixed the column ORDER in Python and cut a target digit per column from every stated result. Here:
+#   a number read -> typed number node + its digits as nodes, chained by edges whose relations are learned vectors
+#   the op (a function node the model made) FIRES on (node x, node y, carry): it writes a digit (or none) into the result
+#   object, sets the carry, and chooses the relation along which the signal goes on (or stop); that relation is followed
+#   from both current nodes by a V11 lookup -- no Python loop picks the order;
+#   ~50 worked sums as step demos (imitation), then OUTCOME ONLY: the stated result is sealed (equality is all training
+#   may ask), tries differ at firings no right trace has shown, the network learns from its own right traces;
+#   proof: every firing case (finite) checked exhaustively -> right at every length by induction (+ mechanics check).
+REL14 = ("first", "last", "after", "before")            # the typed number encoder's edge relations (learned vectors)
+STOP14 = len(REL14)                                     # follow-choice index meaning: nothing follows
+N_TRY14 = int(os.environ.get("V14_TRIES", "32"))        # tries per stated sum the network got wrong (training only)
+V14_FIXED = ("typed number encoder (a number's digits = nodes chained first/last/after/before); following a relation = "
+             "V11 lookup; result = typed number object (a new digit goes before / after the previous one as chosen; "
+             "first / last there = invalid); exact decode; outcome = equality with the sealed stated result; tries take "
+             "each output in turn at firings not yet in a right try, reuse kept won steps elsewhere (training only); "
+             "shortest right try kept; safety cap 2*(digits of a + b)+6 firings (D6: cap = drift F)")
+AUD14 = collections.Counter()                           # every claim below is printed from these counters
+EVAL14 = [False]
+
+
+class Sealed14:
+    """the stated result as training sees it: it can only be asked 'is this it?' -- no per-step target can be cut from it
+    (v13 cut one digit per column from it = deep supervision on every sum, user 11-17)"""
+    __slots__ = ("_s",)
+
+    def __init__(self, s):
+        self._s = s
+
+    def eq(self, x):
+        AUD14["outcome checks"] += 1
+        return x is not None and x == self._s
+
+
+class Fire14(nn.Module):
+    """one firing of a function node (user 11-14 "one firing = one step"; 11-04 "a function can edit a node's inner
+    values", "a change signals related nodes and the firing function decides from the VALUES whether anything follows"):
+    (x, y, carry) -> digit or none (11), carry (2), relation to follow or stop (|R|+1), relation the new digit is written
+    with (|R|). Relations are scored by the want vectors against the memory's relation vectors."""
+
+    def __init__(self, D):
+        super().__init__()
+        self.body = nn.Sequential(nn.Linear(96, 128), nn.ReLU(), nn.Linear(128, 128), nn.ReLU())
+        self.val = nn.Linear(128, 13)
+        self.qf, self.qw, self.stop = nn.Linear(128, D), nn.Linear(128, D), nn.Linear(128, 1)
+
+    def forward(self, inp, R):
+        h = self.body(inp)
+        v = self.val(h)
+        return v[:, :11], v[:, 11:], torch.cat([self.qf(h) @ R.T, self.stop(h)], 1), self.qw(h) @ R.T
+
+
+class Store14:
+    """the episode's typed numbers as V11 entries: key = bind(relation, source atom) -> destination node"""
+
+    def __init__(self, mem):
+        self.mem, self.K, self.dst, self.Kt = mem, [], [], None
+        with torch.no_grad():
+            self.R = mem.rels14().detach()
+
+    def put(self, src, k, dst):
+        with torch.no_grad():
+            self.K.append(self.mem.key(self.R[k], [src["atom"]]))
+        self.dst.append(dst)
+        self.Kt = None
+
+    def follow(self, src, k):
+        """T(relation k, [src]) -> the node it points at, or nothing there"""
+        if src is None or not self.K:
+            return None
+        with torch.no_grad():
+            if self.Kt is None:
+                self.Kt = torch.stack(self.K)
+            qk = src.setdefault("q14", {})               # (speed: a node's query key per relation, computed once)
+            if k not in qk:
+                qk[k] = self.mem.key(self.R[k], [src["atom"]])
+            sc = self.Kt @ qk[k]
+            i = int(sc.argmax())
+            return self.dst[i] if float(sc[i]) > .5 else None
+
+    def number(self, node):
+        """typed exact encoder (user 11-04): the number node's digits become nodes, chained both ways"""
+        ds = [{"v": int(ch), "atom": F.normalize(torch.randn(self.mem.D, device=dev), dim=0)} for ch in node["names"][0]]
+        node["digits"] = ds
+        self.put(node, 0, ds[0])
+        self.put(node, 1, ds[-1])
+        for u, v in zip(ds, ds[1:]):
+            self.put(u, 2, v)
+            self.put(v, 3, u)
+        return node
+
+
+def _typ14(n):
+    return None if n is None else ("num" if "digits" in n else n["v"])
+
+
+def _exec14(mem, net, store, A, B, how=None, oracle=None):
+    """GNM computes A + B: each firing reads the two current nodes and the carry, writes a digit into the result object,
+    and chooses the relation the signal goes on along (or stop); the same relation is followed from both current nodes.
+    how = None: the network alone (eval). how = (k, won, half): try k in training -- a firing whose case is in the kept
+    won steps reuses that step; any other firing takes its digit/carry outputs in turn (k), and from try 22 on its
+    control choices are drawn at random half the time. oracle(case) -> outputs: the mechanics check only.
+    Returns (result string or None, firing records (x, y, carry, digit, carry out, follow, write, had a previous digit))."""
+    x, y, c, seq, pos, recs, nun = A, B, 0, [], None, [], 0
+    if how is not None and EVAL14[0]:
+        AUD14["eval tries"] += 1
+    with torch.no_grad():
+        for _ in range(2 * (len(A["digits"]) + len(B["digits"])) + 6):
+            case = (_typ14(x), _typ14(y), c)
+            if oracle is not None:
+                dg, cr, fo, wr = oracle(case)
+            else:
+                v, cl, f, w = net(mem.inp14(*case)[None], store.R)
+                dg, cr, fo, wr = int(v[0].argmax()), int(cl[0].argmax()), int(f[0].argmax()), int(w[0].argmax())
+                if how is not None:
+                    k, won, half = how
+                    if case in won:                      # a kept won step (outputs that never mattered: the network's)
+                        w_ = won[case]
+                        dg, fo = w_[0], w_[2]
+                        cr = cr if w_[1] is None else w_[1]
+                        wr = wr if w_[3] is None else w_[3]
+                    else:
+                        m = (k // 22 ** nun) % 22
+                        dg, cr, nun = m // 2, m % 2, nun + 1
+                        if k >= 22 and random.random() < .5:
+                            fo = random.randrange(STOP14 + 1)
+                        if k >= 22 and random.random() < .5:
+                            wr = random.randrange(STOP14)
+            recs.append((case[0], case[1], c, dg, cr, fo, wr, pos is not None))
+            if dg < 10:
+                if pos is None:
+                    seq, pos = [dg], 0
+                elif wr == 3:                            # 'before': the new digit goes in front of the previous one
+                    seq.insert(pos, dg)
+                elif wr == 2:                            # 'after'
+                    pos += 1
+                    seq.insert(pos, dg)
+                else:                                    # first / last are not places in a row of digits
+                    return None, recs
+            if fo == STOP14:
+                return ("".join(map(str, seq)) if seq else None), recs
+            x, y, c = store.follow(x, fo), store.follow(y, fo), cr
+    return None, recs
+
+
+def _trace_loss14(mem, net, recs):
+    """imitate a right trace (a demo, or the model's own right try): every firing's outputs; the write choice only where a
+    digit was written after another, the carry only where the signal went on"""
+    R = mem.rels14()
+    inp = torch.stack([mem.inp14(r[0], r[1], r[2]) for r in recs])
+    v, cl, f, w = net(inp, R)
+    t = lambda i: torch.tensor([r[i] for r in recs], device=dev)
+    go = t(5) != STOP14
+    L = F.cross_entropy(v, t(3)) + F.cross_entropy(f, t(5))
+    if go.any():
+        L = L + F.cross_entropy(cl[go], t(4)[go])
+    wm = torch.tensor([bool(r[7]) and r[3] < 10 for r in recs], device=dev)
+    if wm.any():
+        L = L + F.cross_entropy(w[wm], t(6)[wm])
+    return L
+
+
+def _oracle14(a, b):
+    """the worked steps of a + b as firing records (writes the ~50 demos; the mechanics check). Order: start at the number
+    nodes -> follow 'last' (units) -> each column: digit, carry, follow 'before', write 'before' -> stop after the last carry"""
+    da, db = [int(ch) for ch in a[::-1]], [int(ch) for ch in b[::-1]]
+    recs, c, prev = [("num", "num", 0, 10, 0, 1, 3, False)], 0, False
+    for i in range(max(len(da), len(db)) + 2):
+        x = da[i] if i < len(da) else None
+        y = db[i] if i < len(db) else None
+        if x is None and y is None and c == 0:
+            recs.append((None, None, 0, 10, 0, STOP14, 3, prev))
+            return recs
+        s = (x or 0) + (y or 0) + c
+        recs.append((x, y, c, s % 10, s // 10, 3, 3, prev))
+        prev, c = True, s // 10
+    return recs
+
+
+def _cases14():
+    """every firing case a + b can reach at ANY length: the start + (digit or nothing, digit or nothing, carry)"""
+    vals = [None] + list(range(10))
+    return [("num", "num", 0)] + [(x, y, c) for x in vals for y in vals for c in (0, 1)]
+
+
+def _want14(case):
+    """the right outputs for one case (digit, carry, follow, write); None = not used at that case"""
+    x, y, c = case
+    if x == "num":
+        return 10, 0, 1, None
+    if x is None and y is None and c == 0:
+        return 10, None, STOP14, None
+    s = (x or 0) + (y or 0) + c
+    return s % 10, s // 10, 3, 3
+
+
+def _oracle_fire14(case):
+    """exact firing for the mechanics check (unused outputs filled with harmless values)"""
+    dg, cr, fo, wr = _want14(case)
+    return dg, (cr or 0), fo, (3 if wr is None else wr)
+
+
+def _proof14(mem, oi, tag):
+    """P2 for a + b, printed: (1) the network on every reachable firing case (exhaustive, finite); (2) mechanics: the
+    encoder + lookups + result object + decode with exact firings at lengths 1-60; (3) a fresh untrained network (bodies
+    off) on the same sums. (1) all right and (2) all right => right at every length (induction on columns)."""
+    net = mem.ops[oi]
+    cs = _cases14()
+    with torch.no_grad():
+        v, cl, f, w = net(torch.stack([mem.inp14(*c) for c in cs]), mem.rels14())
+    bad = {"digit": 0, "carry": 0, "follow": 0, "write": 0}
+    wrong = []
+    for i, c in enumerate(cs):
+        want = _want14(c)
+        got = (int(v[i].argmax()), int(cl[i].argmax()), int(f[i].argmax()), int(w[i].argmax()))
+        miss = [h for h, a_, b_ in zip(bad, want, got) if a_ is not None and a_ != b_]
+        for h in miss:
+            bad[h] += 1
+        if miss:
+            wrong.append(c)
+    r_ = random.Random(5)
+    mech, n_m, off, n_o = 0, 0, 0, 0
+    fresh = Fire14(mem.D).to(dev)
+    for L_ in (1, 2, 5, 10, 20, 40, 60):
+        for _ in range(10):
+            a, b = (str(r_.randint(10 ** (L_ - 1) if L_ > 1 else 0, 10 ** L_ - 1)),
+                    str(r_.randint(0, 10 ** r_.randint(1, L_) - 1)))
+            st = Store14(mem)
+            A = st.number({"names": [a], "atom": F.normalize(torch.randn(mem.D, device=dev), dim=0)})
+            B = st.number({"names": [b], "atom": F.normalize(torch.randn(mem.D, device=dev), dim=0)})
+            res, _ = _exec14(mem, None, st, A, B, oracle=_oracle_fire14)
+            mech += res == str(int(a) + int(b))
+            n_m += 1
+            res, _ = _exec14(mem, fresh, st, A, B)
+            off += res == str(int(a) + int(b))
+            n_o += 1
+    won = mem.won14.get(oi, {})
+    print(f"v14 {tag} PROOF: network right on {len(cs) - len(wrong)}/{len(cs)} firing cases (wrong per head {bad}"
+          f"{'; e.g. ' + str(wrong[:6]) if wrong else ''}); mechanics with exact firings {mech}/{n_m} (lengths 1-60); "
+          f"untrained network (bodies off) {off}/{n_o}; won steps kept {len(won)}/{len(cs)}"
+          + (" => a + b right at EVERY length (induction on columns)" if not wrong and mech == n_m else ""), flush=True)
+    print(f"v14 {tag} AUDIT: demo sums {AUD14['demo sums']} (limit 50), demo terms {AUD14['demo terms']} (all before step 0), "
+          f"after the demos: own right-trace terms {AUD14['own terms']} (+ replayed {AUD14['replay terms']}), other "
+          f"arithmetic terms 0 (no per-column target exists in the code), outcome checks {AUD14['outcome checks']}, tries "
+          f"{AUD14['tries']}, right traces {AUD14['right traces']}, tries during eval {AUD14['eval tries']} (must be 0) | "
+          f"FIXED: {V14_FIXED}", flush=True)
 
 
 def _v13_species():
@@ -4749,10 +4998,25 @@ class Mem13(nn.Module):
         self.dig = nn.Embedding(10, 32)                  # typed digits (the exact number encoder)
         self.car = nn.Embedding(2, 32)                   # a column's state
         self.ocreate = nn.Parameter(torch.tensor(0.))    # a relation meets no op label -> make a new op
-        self.ops = nn.ModuleList()                       # function nodes: each its OWN small column network
+        self.ops = nn.ModuleList()                       # function nodes: each its OWN small firing network (Fire14)
         self.op_rs = []                                  # each op's label = the relation words it was made for
+        self.tnone = nn.Parameter(torch.randn(32) * .1)  # v14: nothing there (past a number's end)
+        self.tnum = nn.Parameter(torch.randn(32) * .1)   # v14: a number node (before its digits are reached)
+        self.nrel = nn.Parameter(torch.randn(len(REL14), D))   # v14: the typed number encoder's relation vectors
+        self.won14 = {}                                  # v14: per op, firing steps of its own right tries (D8; training)
+        self.wins14 = {}                                 # v14: per op, its own right traces (replayed, D7)
         g = torch.Generator().manual_seed(7)
         self.register_buffer("P", torch.stack([torch.randperm(D, generator=g) for _ in range(3)]))
+
+    def emb14(self, t):
+        """a firing's input as the function sees it: a digit's typed value, a number node, or nothing there"""
+        return self.tnum if t == "num" else (self.tnone if t is None else self.dig.weight[t])
+
+    def inp14(self, tx, ty, c):
+        return torch.cat([self.emb14(tx), self.emb14(ty), self.car.weight[c]])
+
+    def rels14(self):
+        return F.normalize(self.nrel, dim=-1)
 
     def r(self, rstate):
         return F.normalize(self.rv(rstate), dim=-1)
@@ -4774,32 +5038,21 @@ class Mem13(nn.Module):
         return (i if i < len(self.op_rs) else None), lg
 
     def new_op(self, rstate):
-        self.ops.append(nn.Sequential(nn.Linear(96, 128), nn.ReLU(), nn.Linear(128, 12)).to(dev))
+        self.ops.append(Fire14(self.D).to(dev))
         self.op_rs.append(rstate.detach())
         return len(self.ops) - 1
-
-    def compute(self, i, a, b):
-        """one firing per digit column, right to left; the carry is a soft state (learned from the digits it causes)"""
-        net = self.ops[i]
-        da, db = [int(c) for c in a[::-1]], [int(c) for c in b[::-1]]
-        carry, out, lgs = self.car.weight[0], [], []
-        for k in range(max(len(da), len(db)) + 1):
-            x, y = (da[k] if k < len(da) else 0), (db[k] if k < len(db) else 0)
-            o = net(torch.cat([self.dig.weight[x], self.dig.weight[y], carry]))
-            lgs.append(o)
-            out.append(int(o[:10].argmax()))
-            carry = torch.softmax(o[10:], 0) @ self.car.weight
-        return "".join(map(str, out[::-1])).lstrip("0") or "0", lgs
 
 
 def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
     """one episode. stream: dicts {t: read | ask, text, gold (claims), ent, truth (ask), kind, var, rel, n_reads}"""
     nodes, decs, pairs, edges, outs, ent2 = [], [], [], [], {}, []
+    store = Store14(mem)                                 # v14: typed numbers' digit chains (V11 entries)
     num = {}                                             # typed numbers: exact value -> node
     st_ = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "right common": 0, "n common": 0,
            "right binomial": 0, "n binomial": 0, "n variant": 0, "right variant": 0, "dont know": 0,
            "claims gold": 0, "claims read right": 0, "q gold": 0, "q read right": 0, "ar n": 0, "ar right": 0,
-           "ar long n": 0, "ar long right": 0, "ar computed": 0, "ar recalled": 0, "check n": 0, "check right": 0,
+           "ar long n": 0, "ar long right": 0, "ar vlong n": 0, "ar vlong right": 0, "ar computed": 0, "ar recalled": 0,
+           "check n": 0, "check right": 0,
            "check new": 0, "check contra": 0, "n cloze": 0, "right cloze": 0, "n var": 0}
     traces, read_n, read_done, n_stmt, stm_hist = [], {}, set(), [0], []
     q_n, q_r = {}, {}
@@ -4816,6 +5069,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             decs.append(d)
             if men[1] not in num:
                 num[men[1]] = new_node(men, "num", men[1], d)
+                store.number(nodes[num[men[1]]])
             d["j"] = num[men[1]]
             return num[men[1]], d
         lg = rel(men, nodes)
@@ -4921,8 +5175,9 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
         if oi is None and train:                         # the model creates a function for a want no label meets
             oi = mem.new_op(rstate)
             check_pairs.append(("newop", oi))
-        na_, nb_ = nodes[ia]["names"][0], nodes[ib]["names"][0]
-        res, cl = (mem.compute(oi, na_, nb_) if oi is not None and na_.isdigit() and nb_.isdigit() else (None, None))
+        A_, B_ = nodes[ia], nodes[ib]
+        res, recs = (_exec14(mem, mem.ops[oi], store, A_, B_) if oi is not None and "digits" in A_ and "digits" in B_
+                     else (None, None))
         lg = torch.stack([mem.anone, mem.pa * best + mem.pb if KV is not None else torch.tensor(-10., device=dev),
                           mem.cp(rq).squeeze() if oi is not None else torch.tensor(-10., device=dev)])
         k = (random.randrange(3) if train and random.random() < .1 else int(lg.argmax()))
@@ -4931,10 +5186,23 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             ok_c, ok_r = res == truth, rec == truth
             tgt = 2 if (oi is not None and (ok_c or not ok_r)) else (1 if ok_r else 0)
             check_pairs.append((lg, tgt, got != truth))
-            if cl is not None and truth.isdigit():       # CHECK 1 on a worked result: the columns learn its digits
-                dg = [int(c) for c in truth[::-1]] + [0] * len(cl)
-                for kk, o in enumerate(cl):
-                    check_pairs.append((o[:10], dg[kk], not ok_c))
+            if recs is not None:                         # v14: OUTCOME ONLY -- the stated result is sealed
+                sealed, won = Sealed14(truth), mem.won14.setdefault(oi, {})
+                right = recs if sealed.eq(res) else None
+                if right is None:                        # tries (D7): differ only at firings no right try has shown
+                    for kt in range(1, N_TRY14):
+                        AUD14["tries"] += 1
+                        r_k, recs_k = _exec14(mem, mem.ops[oi], store, A_, B_, how=(kt, won, N_TRY14 // 2))
+                        if sealed.eq(r_k) and (right is None or len(recs_k) < len(right)):
+                            right = recs_k               # D6: of the right tries, the shortest
+                if right is not None:                    # its steps are kept (D8) and the network learns them (D7)
+                    AUD14["right traces"] += 1
+                    for r_ in right:                     # an output that did not matter in this try is not kept
+                        old = won.get((r_[0], r_[1], r_[2]), (None,) * 4)
+                        cr_ = r_[4] if r_[5] != STOP14 else old[1]
+                        wr_ = r_[6] if (r_[7] and r_[3] < 10) else old[3]
+                        won[(r_[0], r_[1], r_[2])] = (r_[3], cr_, r_[5], wr_)
+                    check_pairs.append(("trace", oi, right))
         return got, k
 
     for ev in stream:
@@ -5064,9 +5332,15 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
         if ev["kind"] == "arith":
             st_["ar n"] += 1
             st_["ar right"] += got == truth
-            if ev.get("long"):
+            if ev.get("long") == "v":
+                st_["ar vlong n"] += 1
+                st_["ar vlong right"] += got == truth
+            elif ev.get("long"):
                 st_["ar long n"] += 1
                 st_["ar long right"] += got == truth
+            if not train and got != truth and len(st_.setdefault("ar traces", [])) < 4:   # (diagnosis, log only)
+                st_["ar traces"].append(f"'{ev['text']}' read as {[(T.say(ids, s_) if s_ else None) for s_ in (claims[0][0] if claims else ())]}"
+                                        f" -> got {got!r}, truth {truth!r}")
             continue
         if ent not in read_done:
             st_["asked_before"] += 1
@@ -5355,6 +5629,12 @@ def v13(steps=3000):
     test_ar = arith_events(random.Random(48), 60, (1, 2, 3), keep=True)
     test_ar = [e for e in test_ar if e["t"] == "ask"]
     long_ar = [e for e in arith_events(random.Random(49), 80, (4, 5, 6), keep=True, long=True) if e["t"] == "ask"]
+    # v14: training reads sums of TRAIN_LENS digits; 7-20 digits are never read (P2 check beside the exhaustive proof)
+    TRAIN_LENS = tuple(int(v) for v in os.environ.get("V14_TRAIN_LENS", "1,2,3,4,5,6").split(","))
+    DEMO_LENS = tuple(int(v) for v in os.environ.get("V14_DEMO_LENS", "2,3,4,5,6").split(","))
+    ARITH_ONLY = os.environ.get("V13_TASK", "") == "arith"
+    vlong_ar = [e for e in arith_events(random.Random(50), 60, tuple(range(7, 21)), keep=True, long="v")
+                if e["t"] == "ask"]
     rel, mem, rdr, dec = Rel13(E).to(dev), Mem13(E).to(dev), Reader13(E).to(dev), Dec13(E).to(dev)
     wte = T.M.get_input_embeddings().weight.detach()
     if ck is not None:                                   # perception pretrained in phase 1
@@ -5376,36 +5656,27 @@ def v13(steps=3000):
         ropt.zero_grad()
         L.backward()
         ropt.step()
-    demo_ar = [e for e in arith_events(drng, 40, (1, 2)) if e["t"] == "read" and e["gold"]][:16]
-    cols = 0
-    for e in demo_ar:                                    # the op is made for the demos' relation words; column steps
+    # v14: ~50 worked sums as step demos (user 10-29) -- the ONLY place a per-step target exists; imitation, then gone
+    demo_ar = [e for e in arith_events(drng, 400, DEMO_LENS) if e["t"] == "read" and e["gold"]][:50]
+    demo_tr = []
+    for e in demo_ar:                                    # the op is made for the demos' relation words
         ids, Hs = T(e["text"])
         (sa, sb), rsp, vs = e["gold"][0]
-        rstate = Hs[rsp[0]:rsp[1] + 1].mean(0)
         if not mem.ops:
-            mem.new_op(rstate)
-        cols += len(str(max(int(T.say(ids, sa)), int(T.say(ids, sb))))) + 1
-    copt = torch.optim.AdamW(list(mem.ops.parameters()) + list(mem.dig.parameters()) + list(mem.car.parameters()), lr=2e-3)
-    for it in range(300):                                # demo column steps with their carries (teacher demos, ~50)
-        e = demo_ar[it % len(demo_ar)]
-        ids, Hs = T(e["text"])
-        (sa, sb), rsp, vs = e["gold"][0]
-        a, b = T.say(ids, sa), T.say(ids, sb)
-        da, db = [int(c) for c in a[::-1]], [int(c) for c in b[::-1]]
-        carry, L, cin = mem.car.weight[0], 0., 0
-        for k in range(max(len(da), len(db)) + 1):
-            x, y = (da[k] if k < len(da) else 0), (db[k] if k < len(db) else 0)
-            o = mem.ops[0](torch.cat([mem.dig.weight[x], mem.dig.weight[y], carry]))
-            s_ = x + y + cin
-            L = L + F.cross_entropy(o[:10][None], torch.tensor([s_ % 10], device=dev)) + \
-                F.cross_entropy(o[10:][None], torch.tensor([s_ // 10], device=dev))
-            cin = s_ // 10
-            carry = torch.softmax(o[10:], 0) @ mem.car.weight
+            mem.new_op(Hs[rsp[0]:rsp[1] + 1].mean(0))
+        demo_tr.append(_oracle14(T.say(ids, sa), T.say(ids, sb)))
+    AUD14["demo sums"] = len(demo_tr)
+    copt = torch.optim.AdamW(list(mem.ops.parameters()) + [mem.dig.weight, mem.car.weight, mem.tnone, mem.tnum, mem.nrel],
+                             lr=2e-3)
+    for it in range(int(os.environ.get("V14_DEMO_IT", "1500"))):
+        L = _trace_loss14(mem, mem.ops[0], demo_tr[it % len(demo_tr)])
+        AUD14["demo terms"] += 1
         copt.zero_grad()
         L.backward()
         copt.step()
     print(f"v13: reader taught on {len(demo)} demo units; op made for the relation words of the demo sums, "
-          f"{len(demo_ar)} demo sums = {cols} column steps; FIXED: {V13_FIXED}", flush=True)
+          f"{len(demo_tr)} demo sums ({sum(len(t_) for t_ in demo_tr)} firings, lengths {DEMO_LENS}); training reads "
+          f"sums of {TRAIN_LENS} digits{' (arithmetic only)' if ARITH_ONLY else ''}; FIXED: {V13_FIXED}", flush=True)
     opt = torch.optim.AdamW(list(rel.parameters()) + list(mem.parameters()) + list(rdr.parameters()) + list(dec.parameters()),
                             lr=1e-3)
     W_RT, W_COST = float(os.environ.get("V13_RT", ".1")), float(os.environ.get("V13_COST", ".02"))
@@ -5433,36 +5704,56 @@ def v13(steps=3000):
                     L = L + W_COST * F.cross_entropy(p_[1][None], torch.tensor([p_[2]], device=dev))
                 elif p_[0] == "tag":                     # a recurring span that no node held: mark it as a thing
                     L = L + rdr.tag_loss(p_[1], p_[2], full=False)
+                elif p_[0] == "trace":                   # v14: the op's own right try (D7), kept for replay (D8)
+                    L = L + _trace_loss14(mem, mem.ops[p_[1]], p_[2])
+                    AUD14["own terms"] += 1
+                    wins = mem.wins14.setdefault(p_[1], [])
+                    wins.append(p_[2])
+                    del wins[:-4000]
                 else:
                     continue
             else:
                 lg, tgt, wrong = p_
                 L = L + (1. if wrong else .1) * F.cross_entropy(lg[None], torch.tensor([tgt], device=dev))
             n_ += 1
+        for oi_, wins in mem.wins14.items():             # v14: replay of the op's own right traces (no new data)
+            for tr_ in random.sample(wins, min(8, len(wins))):
+                L = L + _trace_loss14(mem, mem.ops[oi_], tr_)
+                AUD14["replay terms"] += 1
+                n_ += 1
         if n_:
             opt.zero_grad()
             (L / n_).backward()
             opt.step()
 
     def report(tag):
+        EVAL14[0] = True
         with torch.no_grad():
             for gr in (False, True):
                 lab = "gold claims (reference)" if gr else "READER claims"
-                sb, _ = _v13_run(test_bio, T, rel, mem, rdr, gold=gr)
-                sa, _ = _v13_run(test_ar + long_ar, T, rel, mem, rdr, gold=gr)
+                sa, _ = _v13_run(test_ar + long_ar + vlong_ar, T, rel, mem, rdr, gold=gr)
+                sb = (collections.Counter({k_: sa[k_] for k_ in ("nodes", "edges", "ops")}) if ARITH_ONLY
+                      else _v13_run(test_bio, T, rel, mem, rdr, gold=gr)[0])
                 pc = lambda s, a_, b_: f"{s[a_]}/{s[b_]}"
                 print(f"v13 {tag} {lab}: BIO right after reading {pc(sb, 'right', 'asked_after')} (common "
                       f"{pc(sb, 'right common', 'n common')}, binomial {pc(sb, 'right binomial', 'n binomial')}, variant "
                       f"{pc(sb, 'right variant', 'n variant')}), don't know {sb['dont know']}, before reading -> another "
                       f"thing's node {pc(sb, 'wrong_node', 'asked_before')} | ARITH 1-3 digits "
-                      f"{sa['ar right'] - sa['ar long right']}/{sa['ar n'] - sa['ar long n']}, 4-6 digits "
-                      f"{pc(sa, 'ar long right', 'ar long n')} (computed {sa['ar computed']}, recalled {sa['ar recalled']}) "
+                      f"{sa['ar right'] - sa['ar long right'] - sa['ar vlong right']}/"
+                      f"{sa['ar n'] - sa['ar long n'] - sa['ar vlong n']}, 4-6 digits "
+                      f"{pc(sa, 'ar long right', 'ar long n')}, 7-20 digits never read {pc(sa, 'ar vlong right', 'ar vlong n')} "
+                      f"(computed {sa['ar computed']}, recalled {sa['ar recalled']}) "
                       f"| READER exact: claims {pc(sb, 'claims read right', 'claims gold')}, questions "
                       f"{sb['q read right'] + sa['q read right']}/{sb['q gold'] + sa['q gold']} | CHECK 1 on statements: "
                       f"right {sb['check right']}, new {sb['check new']}, contradiction {sb['check contra']} of "
                       f"{sb['check n']} | nodes {sb['nodes']}, edges {sb['edges']}, ops {sb['ops']}", flush=True)
                 for tr in sb.get("traces", []):
                     print(f"   TRACE {lab[:6]}: {tr}", flush=True)
+                for tr in sa.get("ar traces", []):
+                    print(f"   ARITH {lab[:6]}: {tr}", flush=True)
+            if mem.ops:
+                _proof14(mem, 0, tag)
+        EVAL14[0] = False
     if PHASE == "1":
         _v13_phase1(T, rel, mem, rdr, dec, train_on, tr_docs, ho_docs, report, sd_)
         return
@@ -5472,8 +5763,8 @@ def v13(steps=3000):
     for stp in range(steps):
         if stp in at and stp:
             report(f"step {stp}")
-        bio = bio_events(trng.sample(train_sp, trng.randint(8, 20)), trng)
-        stream = mix(bio, arith_events(trng, 20, (1, 2, 3)), trng)
+        bio = [] if ARITH_ONLY else bio_events(trng.sample(train_sp, trng.randint(8, 20)), trng)
+        stream = mix(bio, arith_events(trng, 20, TRAIN_LENS), trng)
         _, pairs = _v13_run(stream, T, rel, mem, rdr, train=True)
         train_on(pairs, stp)
     report("final")
