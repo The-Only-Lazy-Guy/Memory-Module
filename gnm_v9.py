@@ -4803,7 +4803,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             opts.append(mem.af1(torch.cat([qr, edges[ei]["rs"], torch.tensor([float(edges[ei]["dir"])], device=dev)])).squeeze())
         return torch.stack(opts), eis
 
-    def ask1(qr, j, truth, check_pairs):
+    def ask1(qr, j, truth, check_pairs, stmt=False):
         """walk from node j; -> (answer string, right path or None); adds targets (teacher-forced shortest path, then
         answer = that node; or don't know when nothing reachable)"""
         cur, got, taken = j, None, []
@@ -4836,7 +4836,10 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
                         dl = max(e_w, e_r, key=lambda e: e["stmt"])["da"]
                         if dl["lg"] is not None and dl["j"] != dl["n"]:
                             check_pairs.append((dl["lg"], dl["n"], True))
-            else:
+            elif not (stmt and got is None):
+                # (11-17 v13a0: a don't-know target for every brand-new statement fact drove 'don't know' to 120/120 even
+                # with gold claims -- §1d says no prediction = new -> store, NO signal. Only a confident wrong
+                # prediction of something memory cannot reach is taught 'don't know' (do not make things up))
                 check_pairs.append((taken[0][0], 0, taken[0][1] != 0))
         return got, pth
 
@@ -4905,7 +4908,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
                 vname = nodes[js[-1][0]]["names"][0]
                 cp = []                                  # CHECK 1: predict the value before it is stored
                 if len(args) == 1:
-                    got, _ = ask1(rs, js[0][0], vname, cp if train else None)
+                    got, _ = ask1(rs, js[0][0], vname, cp if train else None, stmt=True)
                 else:
                     got, _ = ask2(rs, js[0][0], js[1][0], vname, cp if train else [])
                 st_["check n"] += 1
@@ -5192,6 +5195,11 @@ def v13(steps=3000):
                 opt.add_param_group({"params": list(op.parameters())})
             n_ops = len(mem.ops)
         L, n_ = 0., 0
+        rw = .3 * max(0., 1. - stp / 1000.)              # (11-17 v13a0: the reader forgot biology, claims 23 -> 0/90: the SAME
+        if rw > 0:                                       # 50 demos stay in the mix early, fading to 0 by step 1000)
+            for Hs_, cl_ in random.sample(demo, 4):
+                L = L + rw * rdr.loss(Hs_, cl_)
+                n_ += 1
         for p_ in pairs:
             if isinstance(p_[0], str) and p_[0] == "newop":
                 continue
