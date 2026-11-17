@@ -4192,7 +4192,11 @@ def v11_t5(steps=3000, ep_species=8):
                 return G10.step_loss(m10, focus, list(target), 1)[0]
             SAY["written"] += 1
             node = G10.step(m10, focus, maxlen=12)[0]
-            return tk.decode(node.ids).strip(), list(node.ids)
+            # v12d: exact check -- only the leading space comes off (11-18 v12c final: the LM wrote only whitespace on
+            # every answer, 0/83 right after 36/42 at step 2000; .strip() counted answers with extra whitespace as
+            # right and its own right answers train it, so extra tokens cost nothing -- one possible cause, measured now)
+            s_ = tk.decode(node.ids)
+            return (s_[1:] if s_.startswith(" ") else s_), list(node.ids)
 
         def run12(stream, decide, mem, reader, mode="outcome", match=None, train=False, gold_read=False, H=3):
             nodes, decs, pairs, edges, outs = [], [], [], [], {}
@@ -4201,7 +4205,7 @@ def v11_t5(steps=3000, ep_species=8):
                      "right binomial": 0, "n binomial": 0, "n variant": 0, "right variant": 0, "dont know": 0,
                      "hops0": 0, "hops1+": 0, "n 2hop": 0, "right 2hop": 0, "claims gold": 0, "claims read right": 0,
                      "q gold": 0, "q read right": 0, "nodes": 0, "edges": 0, "reads": 0, "linked": 0,
-                     "lm answered": 0, "stmt right": 0, "lm right | stmt right": 0, "stmt has answer": 0}
+                     "lm answered": 0, "stmt right": 0, "lm right | stmt right": 0, "stmt has answer": 0, "lm junk": 0}
             q_right_by_ent, q_n_by_ent = {}, {}
 
             def point(men, ent):
@@ -4346,6 +4350,7 @@ def v11_t5(steps=3000, ep_species=8):
                     stats["stmt right"] += sr
                     stats["stmt has answer"] += ans_e is not None and truth in tk.decode(edges[ans_e]["ids"])
                     stats["lm right | stmt right"] += sr and ok_
+                    stats["lm junk"] += got is not None and (got == "" or got != got.strip())
                     if not train and not ok_ and taken and len(stats.setdefault("walk traces", [])) < 6:
                         pt_ = path12(j, truth)                   # (diagnosis, log only: why the walk does not follow)
                         if pt_ is not None:
@@ -4358,7 +4363,7 @@ def v11_t5(steps=3000, ep_species=8):
                                 + f" | took {taken[0][1]}")
                     if not train and ans_e is not None and not ok_ and len(stats.setdefault("say traces", [])) < 4:
                         stats["say traces"].append(f"'{q}' -> GNM picked '{tk.decode(edges[ans_e]['ids']).strip()}' -> "
-                                                   f"LM wrote '{got}', truth '{truth}'")
+                                                   f"LM wrote {got!r}, truth '{truth}'")
                     if train and ok_ and ans_e is not None:   # the LM: its own right answer (D7)
                         pairs.append(("say", edges[ans_e]["ids"], ids_, said))
                     if ok_:
@@ -4451,7 +4456,8 @@ def v11_t5(steps=3000, ep_species=8):
                     f"{pc('right 2hop', 'n 2hop')} | right from the asked node's edges {st['hops0']}, after 1+ followed edges "
                     f"{st['hops1+']}, don't know {st['dont know']} | LLM wrote {st['lm answered']} answers; GNM picked the edge "
                     f"INTO the answer node {st['stmt right']} (the LM right on those {st['lm right | stmt right']}), a "
-                    f"statement whose text has the answer {st['stmt has answer']} "
+                    f"statement whose text has the answer {st['stmt has answer']}, LM answers with stray whitespace "
+                    f"{st['lm junk']} "
                     f"| READER: statement claims exact {pc('claims read right', 'claims gold')}, "
                     f"questions exact {pc('q read right', 'q gold')} | before reading -> another thing's node "
                     f"{pc('wrong_node', 'asked_before')} | nodes {st['nodes']}, edges {st['edges']}")
@@ -4536,6 +4542,20 @@ def v11_t5(steps=3000, ep_species=8):
                   f"{SAY['demos']}, its own right answers trained {SAY['own']}. GNM picks the statement (identity + walk): "
                   f"walk demos {WALK12['demos']}, tries {WALK12['tries']} (right {WALK12['right tries']}), "
                   f"'don't know' taught {WALK12['dk taught']}", flush=True)
+            # v12d measurement (v12c final collapse, no weights kept): the LM step's own parts, and a checkpoint
+            with torch.no_grad():
+                bmax = max(float(G10.bias(G10.ctl(G10.lm_run(list(t_))[0])).abs().max()) for s_, q_, _ in demo_a[:20]
+                           for t_ in (s_, q_))
+                bn = float(sum(float(B[0].norm()) ** 2 for B in G10.ex.B) ** .5)
+            print(f"v12 {tag} LM HEALTH: largest attention bias on 20 demo statements + questions {bmax:.2f}, expert 0 "
+                  f"LoRA B norm {bn:.3f}, skills {len(G10.skills)}", flush=True)
+            ck = os.environ.get("V12_CKPT", "")
+            if ck:
+                os.makedirs(ck, exist_ok=True)
+                torch.save({"G10": G10.state_dict(), "experts": [p.detach()[:max(1, len(G10.skills))].cpu()
+                                                                 for p in G10.eparams()],
+                            "mem": mem.state_dict(), "reader": reader.state_dict(), "relm": relm.state_dict()},
+                           os.path.join(ck, f"v12d_{tag.replace(' ', '')}.pt"))
         rep12("step 0")
         trng, wrng = random.Random(43 + sd_), random.Random(83 + sd_)
         at = {int(v) for v in os.environ.get("V11_T5_AT", "").split(",") if v}
