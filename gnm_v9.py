@@ -3553,8 +3553,8 @@ def v11_t5(steps=3000, ep_species=8):
         fm = _re.search(FAM, p0)
         mA = _re.match(r"^The ([a-z][a-z @\-@]+?) (?:or [^(]+ )?\( ([A-Z][a-z]+ [a-z]+)(?: [a-z]+)? [),;]", s0)
         mB = _re.match(r"^([A-Z][a-z]+ [a-z]+) , (?:commonly known as|common name|also known as|known as) (?:the )?([a-z][a-z @\-@]+?) (?:,|or)", s0)
-        if not fm or not (mA or mB):
-            continue
+        if not fm or not (mA or mB) or not _re.search(FAM, s0):   # (v8: facts read from the lead sentence itself;
+            continue                                             #  23 leads state the family only in sentence 2 "It is ...")
         c, b = (mA[1], mA[2]) if mA else (mB[2], mB[1])
         if "<unk>" in c + b or b in seen_b:
             continue
@@ -3664,22 +3664,22 @@ def v11_t5(steps=3000, ep_species=8):
             # to follow an edge: score(question, edge vector) vs the node's own value vs nothing)
             E = M.config.n_embd
             s_.er = nn.Linear(3 * E, 256)                  # edge vector from (name a, name b, statement)
-            s_.af = nn.Sequential(nn.Linear(E + 256, 128), nn.ReLU(), nn.Linear(128, 1))
-            s_.aself = nn.Parameter(torch.tensor(1.))
-            s_.anone = nn.Parameter(torch.tensor(0.))
+            s_.af = nn.Sequential(nn.Linear(E + 256, 128), nn.ReLU(), nn.Linear(128, 1))   # follow an edge
+            s_.ast = nn.Sequential(nn.Linear(2 * E, 128), nn.ReLU(), nn.Linear(128, 1))    # answer with this node
+            s_.anone = nn.Parameter(torch.tensor(0.))                                       # don't know
 
         def edge_vec(s_, ma, mb):
             return s_.er(torch.cat([ma[0], mb[0], ma[4].mean(0)]))
 
-        def answer(s_, qmen, cands):
-            """logits over cands: ("self",) | ("edge", ma, mb) | ("none",); question = its whole text's states"""
+        def step(s_, qmen, cands):
+            """(v8) one walk step: logits over cands ("none",) | ("stop", node mention) | ("edge", ma, mb)"""
             qv = qmen[4].mean(0)
             out = []
             for c in cands:
-                if c[0] == "self":
-                    out.append(s_.aself)
-                elif c[0] == "none":
+                if c[0] == "none":
                     out.append(s_.anone)
+                elif c[0] == "stop":
+                    out.append(s_.ast(torch.cat([qv, c[1]])).squeeze())
                 else:
                     out.append(s_.af(torch.cat([qv, s_.edge_vec(c[1], c[2])])).squeeze())
             return torch.stack(out)
@@ -3709,63 +3709,86 @@ def v11_t5(steps=3000, ep_species=8):
             node_sc = torch.full((len(nodes),), -1e4, device=dev).scatter_reduce(0, own, sc, "amax")
             return torch.cat([node_sc, (s_.create + s_.cq(men[0]).squeeze())[None]])
 
-    def run_episode(stream, decide, mode="labels", match=None, ans=None):
-        """decide(mention, nodes) -> (index, logits); index len(nodes) = create. mode 'labels': every decision gets the
-        node holding its thing as target (upper bound, uses identity labels). mode 'outcome': only a wrong answer after
-        reading gives a signal -- target = a node (existing at that decision) whose facts answer right, the one the model
-        rates most relevant; blame also goes to the decision that created the wrong node; right answers lightly
-        reinforced. No identity labels"""
-        nodes, decs, pairs, edges = [], [], [], []
+    def run_episode(stream, decide, mode="labels", match=None, walk=None, H=3):
+        """v8 (user design: an edge has its own vector showing the relation). decide(mention, nodes) -> (index, logits);
+        index len(nodes) = create. Reading a lead: every name it states (common, binomial, family, genus) points or
+        creates; every ordered pair of the named nodes gets an edge whose vector is learned from (name a, name b,
+        sentence). No fact table. A question points its name, then WALKS: each step = answer with this node / follow
+        one of its edges / don't know (walk(...) -> (index, logits)); the answer is the node's own (first) name, checked
+        against the truth (outcome). Signal: the shortest path (<= H edges) from the question's node to a node named
+        with the truth -> step targets (teacher-forced); none reachable -> 'don't know' + the pointing is blamed
+        (target = an existing node from which the truth is reachable, the one the model rates most relevant, else
+        create; blame up to the decision that made the wrong node / put the matched mention there). No labels"""
+        nodes, decs, pairs, edges, outs = [], [], [], [], {}
         stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "linked": 0, "reads": 0,
-                 "right common": 0, "n common": 0, "right binomial": 0, "n binomial": 0, "j1 top": 0, "create>j1": 0,
-                 "n link": 0, "miss same genus": 0, "miss existing": 0, "miss own": 0, "edges": 0, "via edge": 0, "n variant": 0, "right variant": 0,
-                 "via edge right": 0}
+                 "right common": 0, "n common": 0, "right binomial": 0, "n binomial": 0, "edges": 0,
+                 "n variant": 0, "right variant": 0, "dont know": 0, "hops1": 0, "hops2+": 0}
 
         def point(men, ent):
             j, lg = decide(men, nodes)
-            d = {"lg": lg, "n": len(nodes), "j": j}
+            d = {"lg": lg, "n": len(nodes), "j": j, "name": men[1]}
             decs.append(d)
             if mode == "labels" and lg is not None:
                 own = next((i for i, n_ in enumerate(nodes) if n_["owner"] == ent), None)
                 tgt = own if own is not None else len(nodes)
                 pairs.append((lg, tgt, j != tgt))
             if j == len(nodes):
-                nodes.append({"m": [men[0]], "names": [men[1]], "alone": [men[2]], "owner": ent, "facts": {}, "made_by": len(decs) - 1,
-                              "hist": [], "md": [d], "sp": [men[3]], "cx": [men[4]]})
+                nodes.append({"m": [men[0]], "names": [men[1]], "alone": [men[2]], "owner": ent, "made_by": len(decs) - 1,
+                              "md": [d], "sp": [men[3]], "cx": [men[4]]})
             else:
-                nodes[j]["m"].append(men[0])
-                nodes[j]["names"].append(men[1])
-                nodes[j]["alone"].append(men[2])
-                nodes[j]["md"].append(d)
-                nodes[j]["sp"].append(men[3])
-                nodes[j]["cx"].append(men[4])
+                for f, v in (("m", men[0]), ("names", men[1]), ("alone", men[2]), ("md", d), ("sp", men[3]), ("cx", men[4])):
+                    nodes[j][f].append(v)
             return j, d
+
+        def path_to(start, truth):
+            """shortest edge path (list of edge indices, <= H) from start to a node whose own name is the truth"""
+            if nodes[start]["names"][0] == truth:
+                return []
+            front, seen = [(start, [])], {start}
+            for _ in range(H):
+                nxt = []
+                for u, pth in front:
+                    for ei in outs.get(u, []):
+                        v = edges[ei]["b"]
+                        if v in seen:
+                            continue
+                        if nodes[v]["names"][0] == truth:
+                            return pth + [ei]
+                        seen.add(v)
+                        nxt.append((v, pth + [ei]))
+                front = nxt
+            return None
+
+        def cands_at(u, h):
+            c = [("none",), ("stop", nodes[u]["m"][0])]
+            meta, labs = [None, "stop"], [None, None]
+            if h < H:
+                for ei in outs.get(u, []):
+                    c.append(("edge", edges[ei]["ma"], edges[ei]["mb"]))
+                    meta.append(ei)
+                    labs.append(edges[ei]["lab"])            # (gold pair labels: used ONLY by the fixed reference walk)
+            return c, meta, labs
         read_done = set()
         for ev in stream:
             x = ev[1]
             ent = x["binomial"]
             if ev[0] == "read":
-                m1, m2 = mention(x["lead"], x["common"]), mention(x["lead"], x["binomial"])
-                j1, d1 = point(m1, ent)
-                n0 = len(nodes)
-                j2, _ = point(m2, ent)
-                if j1 != j2:                             # (v7) one statement names both nodes -> an edge, its vector
-                    edges.append({"a": j1, "b": j2, "ma": m1, "mb": m2})   # learned from the statement
-                    stats["edges"] += 1
+                named = []
+                for kind in ("common", "binomial", "family", "genus"):
+                    m_ = mention(x["lead"], x[kind])
+                    if m_ is None:
+                        continue
+                    j_, _ = point(m_, ent if kind in ("common", "binomial") else x[kind])
+                    named.append((kind, j_, m_))
+                for k1, a_, ma in named:                 # one statement names these nodes -> an edge per ordered pair
+                    for k2, b_, mb in named:
+                        if a_ != b_:
+                            outs.setdefault(a_, []).append(len(edges))
+                            edges.append({"a": a_, "b": b_, "ma": ma, "mb": mb, "lab": (k1, k2)})
+                            stats["edges"] += 1
+                jj = {k: j_ for k, j_, _ in named}
                 stats["reads"] += 1
-                stats["linked"] += j1 == j2                      # (diagnosis) both names of the lead on one node
-                lgb = getattr(decide, "last", None)     # (11-17 diagnosis: representation or create calibration?)
-                if lgb is not None and n0 > 1:
-                    stats["j1 top"] += int(lgb[:n0].argmax()) == j1   # the common name's node is the best NODE
-                    stats["create>j1"] += bool(lgb[n0] > lgb[j1])     # but create outbids it
-                    stats["n link"] += 1
-                    if j2 != j1 and j2 < n0:                     # (11-17) failed link went to an existing node:
-                        stats["miss existing"] += 1              # (names[-1] is this binomial itself, just added)
-                        stats["miss own"] += nodes[j2]["owner"] == ent   # its own node (made by an earlier question)
-                        stats["miss same genus"] += any(nm_.split()[0] == x["genus"] for nm_ in nodes[j2]["names"][:-1])
-                for r_ in rels:                          # the lead's facts go to its subject's node
-                    nodes[j1]["facts"][r_] = x[r_]
-                nodes[j1]["hist"].append(({r_: x[r_] for r_ in rels}, d1))
+                stats["linked"] += jj.get("common", -1) == jj.get("binomial", -2)
                 read_done.add(ent)
                 continue
             _, rel, kind, t, var = ev[1:]
@@ -3774,79 +3797,77 @@ def v11_t5(steps=3000, ep_species=8):
             if men is None:
                 continue
             j, d = point(men, ent)
-            # (v7) answer: the node's own value, a value reached over one of its edges, or nothing -- chosen by `ans`
-            cands, srcs = [], []
-            if rel in nodes[j]["facts"]:
-                cands.append(("self",))
-                srcs.append(j)
-            for e in edges:
-                if j in (e["a"], e["b"]):
-                    o = e["b"] if e["a"] == j else e["a"]
-                    if o != j and rel in nodes[o]["facts"]:
-                        cands.append(("edge", e["ma"], e["mb"]))
-                        srcs.append(o)
-            cands.append(("none",))
-            srcs.append(None)
-            if ans is None:                              # (baselines without edges: the node's own value)
-                ka, alg = (0 if cands[0][0] == "self" else len(cands) - 1), None
-            elif len(cands) == 1:
-                ka, alg = 0, None
-            else:
-                ka, alg = ans(men, cands)
-            got = nodes[srcs[ka]]["facts"].get(rel) if srcs[ka] is not None else None
-            if cands[ka][0] == "edge":
-                stats["via edge"] += 1
-                stats["via edge right"] += got == x[rel]
-            if alg is not None and (ent in read_done or got is not None):   # answer-choice signal (outcome)
-                ta = next((i for i, o in enumerate(srcs) if o is not None and nodes[o]["facts"].get(rel) == x[rel]),
-                          len(cands) - 1)
-                pairs.append((alg, ta, ta != ka))
-            # a right value was reachable from the chosen node -> the ANSWER choice erred, not the pointing
-            reach = any(o is not None and nodes[o]["facts"].get(rel) == x[rel] for o in srcs)
+            truth = x[rel]
+            # the walk
+            cur, ans_node, taken = j, None, []
+            for h in range(H + 1):
+                c, meta, labs = cands_at(cur, h)
+                k, lg = walk(men, c, labs, rel) if walk is not None else (0, None)
+                taken.append((lg, k))
+                if meta[k] is None:
+                    break
+                if meta[k] == "stop":
+                    ans_node = cur
+                    break
+                cur = edges[meta[k]]["b"]
+            got = nodes[ans_node]["names"][0] if ans_node is not None else None
+            hops = sum(1 for _, k in taken if k >= 2)
             if ent not in read_done:
                 stats["asked_before"] += 1
                 stats["wrong_node"] += nodes[j]["owner"] != ent
-                # (11-17: outcome got no signal before reading, so a new name answered with ANOTHER thing's fact was
-                # never punished -> before->other ~30/36 at every step. User: confusion -> punish; can't point -> create.
-                # Same rule as after reading; 'nothing known' before reading is not confusion -> no signal)
-                if got is None or got == x[rel]:
+                if got is None or got == truth:          # 'nothing known' before reading is not confusion
                     continue
             else:
                 stats["asked_after"] += 1
-                stats["right"] += got == x[rel]
+                stats["right"] += got == truth
                 stats["n " + kind] += 1
-                stats["right " + kind] += got == x[rel]
+                stats["right " + kind] += got == truth
                 stats["n variant"] += var is not None
-                stats["right variant"] += var is not None and got == x[rel]
+                stats["right variant"] += var is not None and got == truth
+                stats["dont know"] += got is None
+                if got == truth:
+                    stats["hops1" if hops == 1 else "hops2+"] += hops >= 1
+            if walk is None or taken[0][0] is None:
+                continue
+            pth = path_to(j, truth)
+            if got == truth:                             # right: lightly reinforce the steps taken
+                pairs.extend((lg, k, False) for lg, k in taken)
+            elif pth is not None:                        # reachable: teacher-force the shortest path (the WALK erred)
+                u = j
+                for h, ei in enumerate(pth + [None]):
+                    c, meta, labs = cands_at(u, h)
+                    lg_, _ = walk(men, c, labs, rel, force=True)
+                    pairs.append((lg_, meta.index(ei) if ei is not None else 1, True))
+                    if ei is not None:
+                        u = edges[ei]["b"]
+            else:                                        # nothing reachable: 'don't know' at the start
+                pairs.append((taken[0][0], 0, taken[0][1] != 0))
             if mode != "outcome" or d["lg"] is None:
                 continue
-            if got == x[rel] or reach:
+            if got == truth or pth is not None:          # the pointing reached the answer: lightly reinforce it
                 pairs.append((d["lg"], j, False))
                 continue
-            ok = [i for i in range(d["n"]) if all(nodes[i]["facts"].get(r_) == x[r_] for r_ in rels)]
-            # (11-16 T5 v2: with no node able to answer, no signal -> 'create' never a target, 2 nodes for everything)
+            # blame up (5): no node is named with the answer at all -> the answer's word WAS read but a pointing
+            # decision put it into another node; that decision should have created one (answer text vs read text)
+            if not any(n_["names"][0] == truth for n_ in nodes):
+                for dd in decs:
+                    if dd["name"] == truth and dd["lg"] is not None and dd["j"] != dd["n"]:
+                        pairs.append((dd["lg"], dd["n"], True))
+                continue
+            # pointing blamed: target = a node (existing then) from which ALL the thing's values are reachable (one
+            # value alone = any same-family thing), else create
+            ok = [i for i in range(d["n"]) if all(path_to(i, x[r_]) is not None for r_ in rels)]
             t_ = max(ok, key=lambda i: float(d["lg"][i])) if ok else d["n"]
             pairs.append((d["lg"], t_, True))
-            # blame up (2): the node's EARLIER facts would have answered right -> the reading decision that overwrote
-            # them should have created a node (outcome only: seen through this wrong answer)
-            hist = nodes[j]["hist"] if j < len(nodes) else []
-            if len(hist) > 1 and any(all(h[0].get(r_) == x[r_] for r_ in rels) for h in hist[:-1]):
-                dw = hist[-1][1]
-                if dw["lg"] is not None and dw["j"] != dw["n"]:
-                    pairs.append((dw["lg"], dw["n"], True))
-            # blame up (3) (11-16 curve: never-seen names pointed at an existing node 27/36 even with 198 species): the
-            # stored mention this question matched in the wrong node was put there by a POINTING decision -> that
-            # decision should have pointed to the node with the right facts (if it existed then) or created one
-            if ok and j != t_ and match is not None and len(nodes[j]["m"]) > 1:
-                k = int(match(men, nodes[j], len(nodes[j]["m"]) - 1).argmax())   # (the last one is this question's own mention)
-                dk = nodes[j]["md"][k]
+            if ok and j != t_ and match is not None and len(nodes[j]["m"]) > 1:      # blame up (3)
+                k3 = int(match(men, nodes[j], len(nodes[j]["m"]) - 1).argmax())
+                dk = nodes[j]["md"][k3]
                 if dk is not d and dk["lg"] is not None and dk["j"] != dk["n"]:
                     pairs.append((dk["lg"], t_ if t_ < dk["n"] else dk["n"], True))
-            if ok and j < len(nodes) and j != t_:        # blame up: the decision that made the wrong node
+            if ok and j != t_:                           # blame up (1): the decision that made the wrong node
                 dm = decs[nodes[j]["made_by"]]
                 if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
                     pairs.append((dm["lg"], t_, True))
-            # (blame up (4), 11-17, removed in v7: a split between two named nodes is now an edge, not a pointing error)
         owners = {n_["owner"] for n_ in nodes}
         stats["nodes"], stats["things"] = len(nodes), len(owners)
         return stats, pairs
@@ -3861,16 +3882,27 @@ def v11_t5(steps=3000, ep_species=8):
             return d
         return learned
 
-    def make_ans(relm, train):
-        def a_(men, cands):
-            lg = relm.answer(men, cands)
+    def make_walk(relm, train):
+        def w_(men, c, labs, rel, force=False):
+            lg = relm.step(men, c)
+            if force:
+                return lg, None
             k = random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax())
             return k, (lg if train else None)
-        return a_
+        return w_
 
-    def follow_all(men, cands):                          # fixed baseline: own value, else the first edge's, no learning
-        return next((i for i, c in enumerate(cands) if c[0] == "self"),
-                    next((i for i, c in enumerate(cands) if c[0] == "edge"), len(cands) - 1)), None
+    def gold_walk(men, c, labs, rel, force=False):
+        """fixed reference, NOT learned: reads the edges' gold pair labels. Edge to the asked relation's node -> take
+        it; standing on that node -> answer; else cross to the thing's other name; else don't know"""
+        for i, l_ in enumerate(labs):
+            if l_ is not None and l_[1] == rel:
+                return i, None
+        if any(l_ is not None and l_[0] == rel for l_ in labs):
+            return 1, None
+        for i, l_ in enumerate(labs):
+            if l_ is not None and l_[1] in ("common", "binomial"):
+                return i, None
+        return 0, None
 
     def exact(men, nodes):
         return next((i for i, n_ in enumerate(nodes) if men[1] in n_["names"]), len(nodes)), None
@@ -3905,19 +3937,20 @@ def v11_t5(steps=3000, ep_species=8):
     test_stream = events(test_sp, erng, ask_before=.5, n_after=4)
     train_stream = events(random.Random(53).sample(train_sp, 30), random.Random(59), ask_before=.5, n_after=4)
 
-    def report(name, d, a=None):
+    def fmt(st):
+        return (f"right after reading {st['right']}/{st['asked_after']} (by common name {st['right common']}/{st['n common']}, "
+                f"by binomial {st['right binomial']}/{st['n binomial']}, by a name variant {st['right variant']}/{st['n variant']}) "
+                f"| right in 1 hop {st['hops1']}, 2+ hops {st['hops2+']}, don't know {st['dont know']} | lead's two names on "
+                f"one node {st['linked']}/{st['reads']} | asked before reading -> another thing's node {st['wrong_node']}/"
+                f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things, edges {st['edges']}")
+
+    def report(name, d, w):
         for split, stream in (("test (30 never-trained species)", test_stream), ("train (30 training species)", train_stream)):
-            st, _ = run_episode(stream, d, ans=a)
-            print(f"v11 T5 {split}: {name}: right after reading {st['right']}/{st['asked_after']} (by common name "
-                  f"{st['right common']}/{st['n common']}, by binomial {st['right binomial']}/{st['n binomial']}) | lead's two names "
-                  f"on one node {st['linked']}/{st['reads']} | asked before reading -> another thing's node {st['wrong_node']}/"
-                  f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things | edges {st['edges']}, answered via "
-                  f"an edge {st['via edge']} (right {st['via edge right']}) | asked by a name variant: right {st['right variant']}/"
-                  f"{st['n variant']}", flush=True)
+            st, _ = run_episode(stream, d, walk=w)
+            print(f"v11 T8 {split}: {name}: {fmt(st)}", flush=True)
     with torch.no_grad():
-        report("exact name string", exact)
-        report("exact name string + always follow edges (fixed)", exact, follow_all)
-        report("name-only cosine (centred) >= .8", alone_cos(.8))
+        report("exact name + gold-labelled walk (fixed reference)", exact, gold_walk)
+        report("name-only cosine (centred) >= .8 + gold-labelled walk (fixed)", alone_cos(.8), gold_walk)
     # V11_T5_CURVE (11-16, measurement): outcome-only trained on the first N training species (data limit or not?)
     curve = [int(v) for v in os.environ.get("V11_T5_CURVE", "").split(",") if v]
     runs_ = [("outcome", n_) for n_ in curve] if curve else [("labels", len(train_sp)), ("outcome", len(train_sp))]
@@ -3941,17 +3974,10 @@ def v11_t5(steps=3000, ep_species=8):
             if stp in at:
                 with torch.no_grad():
                     for sn, sm in (("test", test_stream), ("train", train_stream)):
-                        st, _ = run_episode(sm, learned(False), ans=make_ans(relm, False))
-                        print(f"v11 T5 at step {stp} {sn}: right {st['right']}/{st['asked_after']} (common {st['right common']}/"
-                              f"{st['n common']}, binomial {st['right binomial']}/{st['n binomial']}) linked {st['linked']}/"
-                              f"{st['reads']} before->other {st['wrong_node']}/{st['asked_before']} nodes {st['nodes']} | binomial "
-                              f"read: common node top {st['j1 top']}/{st['n link']}, create beats it {st['create>j1']}/{st['n link']}, "
-                              f"missed link -> an existing node {st['miss existing']}, of them its own (asked before) {st['miss own']}, "
-                              f"holding a same-genus name {st['miss same genus']} | weights name "
-                              f"{float(relm.wn):.2f} context {float(relm.wc):.2f} | edges {st['edges']} via edge "
-                              f"{st['via edge']} right {st['via edge right']} | variant {st['right variant']}/{st['n variant']}", flush=True)
+                        st, _ = run_episode(sm, learned(False), walk=make_walk(relm, False))
+                        print(f"v11 T8 at step {stp} {sn}: {fmt(st)}", flush=True)
             stream = events(trng.sample(train_sp[:n_tr], min(n_tr, trng.randint(ep_species, 30))), trng)   # (8-30: test has 30)
-            _, pairs = run_episode(stream, learned(True), mode, match=match_fn, ans=make_ans(relm, True))
+            _, pairs = run_episode(stream, learned(True), mode, match=match_fn, walk=make_walk(relm, True))
             if not pairs:
                 continue
             n_sig += sum(w for _, _, w in pairs)
@@ -3964,7 +3990,10 @@ def v11_t5(steps=3000, ep_species=8):
                 print(f"v11 T5 [{mode}] step {stp + 1}: mean loss {sum(run_l) / len(run_l):.3f}, punished decisions so far {n_sig}", flush=True)
                 run_l = []
         with torch.no_grad():
-            report(f"learned relevance + edges, trained on {mode} ({n_tr} training species)", learned(False), make_ans(relm, False))
+            report(f"learned pointing + learned walk, trained on {mode} ({n_tr} training species)", learned(False),
+                   make_walk(relm, False))
+            # (diagnosis: which half errs -- the same learned pointing with the fixed gold-labelled walk)
+            report("learned pointing + gold-labelled walk (diagnosis)", learned(False), gold_walk)
 
 
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
