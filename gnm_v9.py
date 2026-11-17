@@ -4971,6 +4971,15 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             continue
         st_["asked_after"] += 1
         ok_ = got == truth
+        if os.environ.get("V13_TRACE") == "1" and not train and len(st_.setdefault("traces", [])) < 8 and j is not None:
+            with torch.no_grad():                        # (diagnosis, log only)
+                lg0, eis0 = step1(rs, j, 0)
+                pt = path1(j, truth)
+            st_["traces"].append(f"Q '{ev['text']}' -> node {j} '{nodes[j]['names'][0]}' (names {nodes[j]['names'][:3]}) | "
+                                 f"truth '{truth}' reachable {None if pt is None else len(pt)} hop(s) | step-1 scores: "
+                                 f"dk {float(lg0[0]):.2f}, answer here {float(lg0[1]):.2f}, edges "
+                                 + ", ".join(f"{float(lg0[2 + i]):.2f}->'{nodes[edges[e]['b']]['names'][0]}'" for i, e in enumerate(eis0[:5]))
+                                 + f" | got {got!r}")
         st_["right"] += ok_
         st_["n " + ev["kind"]] += 1
         st_["right " + ev["kind"]] += ok_
@@ -5180,6 +5189,8 @@ def v13(steps=3000):
                       f"{sb['q read right'] + sa['q read right']}/{sb['q gold'] + sa['q gold']} | CHECK 1 on statements: "
                       f"right {sb['check right']}, new {sb['check new']}, contradiction {sb['check contra']} of "
                       f"{sb['check n']} | nodes {sb['nodes']}, edges {sb['edges']}, ops {sb['ops']}", flush=True)
+                for tr in sb.get("traces", []):
+                    print(f"   TRACE {lab[:6]}: {tr}", flush=True)
     report("step 0")
     trng = random.Random(43 + sd_)
     at = {int(v) for v in os.environ.get("V13_AT", "").split(",") if v}
