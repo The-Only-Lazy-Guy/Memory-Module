@@ -4046,6 +4046,8 @@ def v11_t5(steps=3000, ep_species=8):
 
         def sent(text):
             if text not in Hc:
+                if len(Hc) > 30000:                      # (v12d: worlds make new texts; bound the GPU cache)
+                    Hc.clear()
                 ids_ = tk(" " + text)["input_ids"]
                 Hc[text] = (ids_, ctx_states(ids_))
             ids_, H_ = Hc[text]
@@ -4061,6 +4063,30 @@ def v11_t5(steps=3000, ep_species=8):
 
         def text_of(x, which):
             return {"lead": x["lead"], "nf": x["lead_nf"], "b": x["bstmt"], "g": x["gstmt"]}[which]
+
+        # v12d (11-18): held-out VALUES, not names (user 10-18: "dont use held out names, we are training a memorizer/a
+        # memory module ... use some held out values/variables that can be easily predicted from memory"). A world = the
+        # training species' names with a new genus per species and a new family per genus, drawn from the training
+        # species' own genera / families (known vocabulary); every training episode reads a fresh world, the test reads
+        # a world from a held-out seed. Also closes a leak: in real data the genus = the binomial's first word, so "which
+        # genus is <binomial> in?" was answerable by copying from the question (v12c step 2000: the LM wrote
+        # 'Neotrygonata' from 'Neotrygon annotata ... genus Neotrygon')
+        VG12 = sorted({x["genus"] for x in train_sp})
+        VF12 = sorted({x["family"] for x in train_sp})
+
+        def world(xs, r_):
+            fam, out = {}, []
+            gsub = lambda s, G, g: _re.sub(r"\bgenus " + _re.escape(G) + r"\b", "genus " + g, s)   # 12 leads name it
+            for x in xs:
+                g = r_.choice(VG12)
+                f = fam.setdefault(g, r_.choice(VF12))
+                y = dict(x, genus=g, family=f)
+                y["lead"] = gsub(x["lead"], x["genus"], g).replace(x["family"], f)
+                y["lead_nf"] = gsub(x["lead_nf"], x["genus"], g)
+                y["bstmt"] = f"{x['binomial']} belongs to the genus {g} ."
+                y["gstmt"] = f"{g} is a genus in the family {f} ."
+                out.append(y)
+            return out
 
         def gold_claims(x, which):
             """demos / grading only: (thing A, relation words = last <=4 tokens between the names, thing B), inclusive"""
@@ -4155,6 +4181,8 @@ def v11_t5(steps=3000, ep_species=8):
         # statement GNM's walk chose + the question -> the LM (+ its LoRA expert and control bias) WRITES the answer
         G10 = GNM10().to(dev)
         SAY = collections.Counter()                      # printed: answers written by the LM, demos, own right answers
+        WALK12 = collections.Counter()                   # printed: walk demos, tries, right tries, 'don't know' taught
+        NTRY12 = int(os.environ.get("V12_TRIES", "2"))
 
         def say12(stmt_ids, q_ids, target=None):
             m10 = []
@@ -4173,7 +4201,7 @@ def v11_t5(steps=3000, ep_species=8):
                      "right binomial": 0, "n binomial": 0, "n variant": 0, "right variant": 0, "dont know": 0,
                      "hops0": 0, "hops1+": 0, "n 2hop": 0, "right 2hop": 0, "claims gold": 0, "claims read right": 0,
                      "q gold": 0, "q read right": 0, "nodes": 0, "edges": 0, "reads": 0, "linked": 0,
-                     "lm answered": 0, "stmt right": 0, "lm right | stmt right": 0}
+                     "lm answered": 0, "stmt right": 0, "lm right | stmt right": 0, "stmt has answer": 0}
             q_right_by_ent, q_n_by_ent = {}, {}
 
             def point(men, ent):
@@ -4265,24 +4293,39 @@ def v11_t5(steps=3000, ep_species=8):
                 if gq is not None:
                     stats["q gold"] += 1
                     stats["q read right"] += bool(qc) and qc[0][:2] == gq[0][:2]
-                got, j, d, taken, ans_e, said = None, None, None, [], None, None
+                got, j, d, taken, ans_e, said, hops = None, None, None, [], None, None, 0
+                said_c = {}                              # the LM's answer per statement (one question, same weights)
+
+                def walk(try_):
+                    """the walk from the question's node: greedy (10% random in training), or (try_) a sampled try among
+                    the answer / follow options (v12d: D7 outcome -- tries, a right one is the target)"""
+                    tk_, cur, hp, ae, g_, s_ = [], j, 0, None, None, None
+                    for h in range(H + 1):
+                        lg, eis = step_logits(rq, cur, h, R_)
+                        if try_:
+                            if len(lg) == 1:
+                                break
+                            k = 1 + int(torch.multinomial(F.softmax(lg[1:].detach(), 0), 1))
+                        else:
+                            k = (random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax()))
+                        tk_.append((lg, k, eis))
+                        if k == 0:
+                            break
+                        if k <= len(eis):                # the answer is in this edge's statement: the LM writes it
+                            ae = eis[k - 1]
+                            key_ = tuple(edges[ae]["ids"])
+                            if key_ not in said_c:
+                                said_c[key_] = say12(edges[ae]["ids"], ids_)
+                            g_, s_ = said_c[key_]
+                            break
+                        cur, hp = edges[eis[k - 1 - len(eis)]]["b"], hp + 1
+                    return tk_, ae, g_, s_, hp
                 if qc:
                     men = men_at(q, qc[0][0])
                     j, d = point(men, ent)
                     rq = mem.r(Hq[qc[0][1][0]:qc[0][1][1] + 1].mean(0))
                     R_ = rels_now()
-                    cur, hops = j, 0
-                    for h in range(H + 1):
-                        lg, eis = step_logits(rq, cur, h, R_)
-                        k = (random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax()))
-                        taken.append((lg, k, eis))
-                        if k == 0:
-                            break
-                        if k <= len(eis):                # the answer is in this edge's statement: the LM writes it
-                            ans_e = eis[k - 1]
-                            got, said = say12(edges[ans_e]["ids"], ids_)
-                            break
-                        cur, hops = edges[eis[k - 1 - len(eis)]]["b"], hops + 1
+                    taken, ans_e, got, said, hops = walk(False)
                 truth = x[rel]
                 if ent not in read_done:
                     stats["asked_before"] += 1
@@ -4301,7 +4344,18 @@ def v11_t5(steps=3000, ep_species=8):
                     sr = ans_e is not None and nodes[edges[ans_e]["b"]]["names"][0] == truth
                     stats["lm answered"] += ans_e is not None
                     stats["stmt right"] += sr
+                    stats["stmt has answer"] += ans_e is not None and truth in tk.decode(edges[ans_e]["ids"])
                     stats["lm right | stmt right"] += sr and ok_
+                    if not train and not ok_ and taken and len(stats.setdefault("walk traces", [])) < 6:
+                        pt_ = path12(j, truth)                   # (diagnosis, log only: why the walk does not follow)
+                        if pt_ is not None:
+                            lg0, eis0 = taken[0][0], taken[0][2]
+                            nm_ = lambda ei: nodes[edges[ei]["b"]]["names"][0]
+                            stats["walk traces"].append(
+                                f"'{q}' -> node '{nodes[j]['names'][0]}' | right path {[nm_(e) for e in pt_]} | step 1: dk "
+                                f"{float(lg0[0]):.2f}; answer-from " + ", ".join(f"{nm_(e)} {float(lg0[1 + i]):.2f}" for i, e in enumerate(eis0[:4]))
+                                + "; follow " + ", ".join(f"{nm_(e)} {float(lg0[1 + len(eis0) + i]):.2f}" for i, e in enumerate(eis0[:4]))
+                                + f" | took {taken[0][1]}")
                     if not train and ans_e is not None and not ok_ and len(stats.setdefault("say traces", [])) < 4:
                         stats["say traces"].append(f"'{q}' -> GNM picked '{tk.decode(edges[ans_e]['ids']).strip()}' -> "
                                                    f"LM wrote '{got}', truth '{truth}'")
@@ -4318,28 +4372,47 @@ def v11_t5(steps=3000, ep_species=8):
                         pairs.append(("reader", (Hq, qc), .1))
                 if not train or j is None:
                     continue
-                pth = path12(j, truth)
+                pth = path12(j, truth)                   # (the identity's blame below still uses this search -- flagged)
+                # v12d (11-18): the walk learns from outcome (D7; user 10-29: "slight (in natural language) step by step
+                # supervision in the beginning ... 50 ish samples"), no longer from my shortest path on every question.
+                # Not right -> a few sampled tries (the LM writes each one's answer); a right try = the target. The first
+                # ~50 reachable questions get the old search's path = the demonstrations. A wrong answer with no right
+                # try -> 'don't know'; 'don't know' with no right try -> nothing (no oracle says the answer was there)
+                e_r = None                               # the first edge of a right walk (blame 2')
                 if got == truth:
                     pairs.extend((lg, k, False) for lg, k, _ in taken)
-                elif pth is not None:                    # reachable: teacher-force follow ... then answer from the
-                    u = j                                #  last edge's statement (flagged 11-18: dense, my search)
-                    for h, ei in enumerate(pth):
-                        lg_, eis = step_logits(rq, u, h, R_)
-                        if h == len(pth) - 1:
-                            pairs.append((lg_, 1 + eis.index(ei), True))
-                        else:
-                            pairs.append((lg_, 1 + len(eis) + eis.index(ei), True))
-                            u = edges[ei]["b"]
-                    # blame up (2'): the walk's first edge and the right path's first edge from different statements
-                    if len(taken) and taken[0][1] > len(taken[0][2]):
-                        e_w = edges[taken[0][2][taken[0][1] - 1 - len(taken[0][2])]]
+                else:
+                    for _ in range(NTRY12):
+                        tk_, ae, g_, s_, _h = walk(True)
+                        WALK12["tries"] += 1
+                        if g_ == truth:
+                            WALK12["right tries"] += 1
+                            pairs.extend((lg, k, True) for lg, k, _ in tk_)
+                            pairs.append(("say", edges[ae]["ids"], ids_, s_))   # the LM's own right answer (D7)
+                            k0, eis0 = tk_[0][1], tk_[0][2]
+                            e_r = edges[eis0[k0 - 1] if k0 <= len(eis0) else eis0[k0 - 1 - len(eis0)]]
+                            break
+                    if e_r is None and WALK12["demos"] < 50 and pth is not None:   # a demonstration walk
+                        WALK12["demos"] += 1
+                        u = j
+                        for h, ei in enumerate(pth):
+                            lg_, eis = step_logits(rq, u, h, R_)
+                            if h == len(pth) - 1:
+                                pairs.append((lg_, 1 + eis.index(ei), True))
+                            else:
+                                pairs.append((lg_, 1 + len(eis) + eis.index(ei), True))
+                                u = edges[ei]["b"]
                         e_r = edges[pth[0]]
+                    if e_r is None and got is not None:  # answered wrong, no right try: 'don't know'
+                        WALK12["dk taught"] += 1
+                        pairs.append((taken[0][0], 0, True))
+                    # blame up (2'): the walk's first edge and the right walk's first edge from different statements
+                    if e_r is not None and len(taken) and taken[0][1] > len(taken[0][2]):
+                        e_w = edges[taken[0][2][taken[0][1] - 1 - len(taken[0][2])]]
                         if e_w["stmt"] != e_r["stmt"]:
                             dl = max(e_w, e_r, key=lambda e: e["stmt"])["da"]
                             if dl["lg"] is not None and dl["j"] != dl["n"]:
                                 pairs.append((dl["lg"], dl["n"], True))
-                else:                                    # nothing reachable: don't know
-                    pairs.append((taken[0][0], 0, taken[0][1] != 0))
                 if mode != "outcome" or d["lg"] is None:
                     continue
                 if got == truth or pth is not None:
@@ -4376,8 +4449,9 @@ def v11_t5(steps=3000, ep_species=8):
             return (f"right after reading {pc('right', 'asked_after')} (common {pc('right common', 'n common')}, binomial "
                     f"{pc('right binomial', 'n binomial')}, variant {pc('right variant', 'n variant')}) | family via genus "
                     f"{pc('right 2hop', 'n 2hop')} | right from the asked node's edges {st['hops0']}, after 1+ followed edges "
-                    f"{st['hops1+']}, don't know {st['dont know']} | LLM wrote {st['lm answered']} answers; GNM picked a "
-                    f"statement holding the answer {st['stmt right']}, the LM right on those {st['lm right | stmt right']} "
+                    f"{st['hops1+']}, don't know {st['dont know']} | LLM wrote {st['lm answered']} answers; GNM picked the edge "
+                    f"INTO the answer node {st['stmt right']} (the LM right on those {st['lm right | stmt right']}), a "
+                    f"statement whose text has the answer {st['stmt has answer']} "
                     f"| READER: statement claims exact {pc('claims read right', 'claims gold')}, "
                     f"questions exact {pc('q read right', 'q gold')} | before reading -> another thing's node "
                     f"{pc('wrong_node', 'asked_before')} | nodes {st['nodes']}, edges {st['edges']}")
@@ -4388,15 +4462,16 @@ def v11_t5(steps=3000, ep_species=8):
         relm, mem, reader = Rel().to(dev), Mem12().to(dev), Reader().to(dev)
         # C6: ~50 demo statements + ~50 demo questions from training species (claims by the old parse = demonstration)
         drng = random.Random(71 + sd_)
+        dw = world(train_sp, random.Random(89 + sd_))   # v12d: the demos read a world too (no real-fact copy)
         demo_s, demo_q = [], []
-        for x in drng.sample(train_sp, len(train_sp)):
+        for x in drng.sample(dw, len(dw)):
             if len(demo_s) >= 50:
                 break
             w_ = drng.choice(["nf", "b", "g"] if x.get("split") else ["lead", "b"])
             gc = gold_claims(x, w_)
             if gc:
                 demo_s.append((sent(text_of(x, w_))[1], gc))
-        for x in drng.sample(train_sp, len(train_sp)):
+        for x in drng.sample(dw, len(dw)):
             if len(demo_q) >= 50:
                 break
             rel, kind = drng.choice(rels), drng.choice(["common", "binomial"])
@@ -4416,7 +4491,7 @@ def v11_t5(steps=3000, ep_species=8):
         # v12b: ~50 demos for the LM's step (statement + question -> answer), training species only; then only its own
         # right answers (D7). The statement = the one holding the asked value (where a right walk ends)
         demo_a = []
-        for x in drng.sample(train_sp, len(train_sp)):
+        for x in drng.sample(dw, len(dw)):
             if len(demo_a) >= 50:
                 break
             rel, kind = drng.choice(rels), drng.choice(["common", "binomial"])
@@ -4439,26 +4514,35 @@ def v11_t5(steps=3000, ep_species=8):
         def match_fn(men, n_, k):
             return relm.per_mention(men, n_, k)
 
+        # v12d eval (user 10-18 rule): the 30 training species of the old train arm, read in a world from a held-out
+        # seed (new values, known names) = the test; the same species with their REAL facts = reference (GPT-2 may know
+        # them; v12c also trained on them). Same questions, same order in both. The 30 unseen-name species are not used
+        new12 = events(world(random.Random(53).sample(train_sp, 30), random.Random(1009)), random.Random(59), ask_before=.5,
+                       n_after=4)
+
         def rep12(tag, at_step=None):
             with torch.no_grad():
-                for sn, sm in (("test", test_stream), ("train", train_stream)):
+                for sn, sm in (("new world", new12), ("real facts", train_stream)):
                     for gr in (False, True):
                         st, _ = run12(sm, learned(False), mem, reader, gold_read=gr)
                         lab = "gold claims (reference)" if gr else "READER claims"
                         print(f"v12 {tag} {sn}: {lab}: {fmt12(st)}", flush=True)
-                        for tr_ in (st.get("say traces", []) if sn == "test" else []):
+                        for tr_ in (st.get("say traces", []) if sn == "new world" else []):
                             print(f"   SAY {lab[:6]}: {tr_}", flush=True)
+                        for tr_ in (st.get("walk traces", []) if sn == "new world" else []):
+                            print(f"   WALK {lab[:6]}: {tr_}", flush=True)
             print(f"v12 {tag} LLM IN THE LOOP: reads every text (its states feed the reader); writes every answer -- "
                   f"{SAY['written']} written by the LM so far, none from a stored name (no such path in the code); its demos "
-                  f"{SAY['demos']}, its own right answers trained {SAY['own']}. GNM picks the statement (identity + walk)",
-                  flush=True)
+                  f"{SAY['demos']}, its own right answers trained {SAY['own']}. GNM picks the statement (identity + walk): "
+                  f"walk demos {WALK12['demos']}, tries {WALK12['tries']} (right {WALK12['right tries']}), "
+                  f"'don't know' taught {WALK12['dk taught']}", flush=True)
         rep12("step 0")
-        trng = random.Random(43 + sd_)
+        trng, wrng = random.Random(43 + sd_), random.Random(83 + sd_)
         at = {int(v) for v in os.environ.get("V11_T5_AT", "").split(",") if v}
         for stp in range(steps):
             if stp in at and stp:
                 rep12(f"step {stp}")
-            stream = events(trng.sample(train_sp, min(len(train_sp), trng.randint(ep_species, 30))), trng)
+            stream = events(world(trng.sample(train_sp, min(len(train_sp), trng.randint(ep_species, 30))), wrng), trng)
             _, pairs = run12(stream, learned(True), mem, reader, match=match_fn, train=True)
             L, n_ = 0., 0
             # (11-18 v12b step 500: the reader's statement claims fell 38 -> 2/90 -- its only later teacher was its own
