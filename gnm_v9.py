@@ -4500,6 +4500,725 @@ def v11_t5(steps=3000, ep_species=8):
                    make_walk(relm, False))
 
 
+# ====================================================================== v13 (docs/GNM_v10.md §1d, 11-17): GNM checks itself
+# User 11-17: "combine the 2 ideas together and fix the perception problem"; "since now GNM can do some computation of
+# its own, it can reuse itself (as well as train itself)"; "sure then" (build §1d). One path:
+#   text unit -> frozen GPT-2 states -> READER (a learned function: marks claims = args + relation words + value)
+#   -> identity (names: learned point / create; numbers: typed exact value) -> memory (V11 entries T(r, args) -> V,
+#   r = learned relation vector) -> answering = walk / recall / compute (an op = a function node with its OWN small
+#   column network, made by the model when a relation meets no op label; one firing = one digit column)
+#   -> CHECK 1 everywhere: a statement is predicted before it is stored; a question is the same check.
+# Fixed (said in every result): GPT-2 frozen; text split into units; typed number encode / decode (digits of a
+# number node = its name string); column order right to left with a final carry column; answer = a node's first name.
+
+V13_FIXED = ("GPT-2 frozen (features); text split into units; numbers = typed exact values (digits = name string); "
+             "column order right->left + final carry; answer = node's first name; reader called on every unit")
+
+
+def _v13_species():
+    """species from real lead sentences whose FIRST sentence names the family (eval construction + demo writing only)"""
+    import re as _re
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio")
+    arts = json.load(open(os.path.join(here, "species_e1.json"), encoding="utf-8"))
+    if os.path.exists(os.path.join(here, "wiki_e1.json.gz")):
+        arts = arts + json.load(gzip.open(os.path.join(here, "wiki_e1.json.gz"), "rt", encoding="utf-8"))
+    FAM = r"(?:family ([A-Z][a-z]+(?:idae|aceae))|([A-Z][a-z]+(?:idae|aceae)) family)"
+    sp, seen = [], set()
+    for a in arts:
+        if not a["text"]:
+            continue
+        s0 = a["text"][0].split(" . ")[0] + " ."
+        fm = _re.search(FAM, s0)
+        mA = _re.match(r"^The ([a-z][a-z @\-@]+?) (?:or [^(]+ )?\( ([A-Z][a-z]+ [a-z]+)(?: [a-z]+)? [),;]", s0)
+        mB = _re.match(r"^([A-Z][a-z]+ [a-z]+) , (?:commonly known as|common name|also known as|known as) (?:the )?([a-z][a-z @\-@]+?) (?:,|or)", s0)
+        if not fm or not (mA or mB):
+            continue
+        c, b = (mA[1], mA[2]) if mA else (mB[2], mB[1])
+        if "<unk>" in c + b or b in seen:
+            continue
+        seen.add(b)
+        g = b.split()[0]
+        sp.append({"common": c, "binomial": b, "family": fm[1] or fm[2], "genus": g, "lead": s0,
+                   "bstmt": f"{b} belongs to the genus {g} ."})
+    rng = random.Random(41)
+    rng.shuffle(sp)
+    return sp[30:], sp[:30]
+
+
+class Text13:
+    """frozen GPT-2 last-layer states of a text unit, scaled by one fixed mean / std; cached only when kept"""
+
+    def __init__(self):
+        self.tk, self.M = lm()
+        self.c, self.mu, self.sd = {}, None, None
+
+    def __call__(self, text, keep=True):
+        if text in self.c:
+            ids, H = self.c[text]
+        else:
+            ids = self.tk(" " + text)["input_ids"]
+            with torch.no_grad():
+                H = self.M(input_ids=torch.tensor([ids], device=dev), output_hidden_states=True).hidden_states[-1][0].float()
+            if keep:
+                self.c[text] = (ids, H)
+        return ids, ((H - self.mu) / self.sd if self.mu is not None else H)
+
+    def fit_scale(self, texts):
+        R = torch.cat([self(t)[1] for t in texts])
+        self.mu, self.sd = R.mean(0), R.std(0) + 1e-3
+
+    def span(self, ids, name, last=False):
+        """demo writing / grading only: the token span of a name (inclusive)"""
+        for cand in (" " + name, " " + name[0].upper() + name[1:]):
+            nid = self.tk(cand)["input_ids"]
+            hits = [i for i in range(len(ids)) if ids[i:i + len(nid)] == nid]
+            if hits:
+                st = hits[-1] if last else hits[0]
+                return st, st + len(nid) - 1
+        return None
+
+    def say(self, ids, sp):
+        return self.tk.decode(ids[sp[0]:sp[1] + 1]).strip()
+
+
+class Rel13(nn.Module):
+    """identity (T5): relevance of a name mention to each node's stored mentions = learned pooled-name term + name
+    tokens attended over the other side's context tokens; a create score; logits over [nodes..., create]"""
+
+    def __init__(self, E):
+        super().__init__()
+        self.q = nn.Linear(E, 256)
+        self.create = nn.Parameter(torch.tensor(0.))
+        self.cq = nn.Linear(E, 1)
+        self.wn = nn.Parameter(torch.tensor(1.))
+        self.wc = nn.Parameter(torch.tensor(1.))
+
+    def per_mention(self, men, n_, upto=None):
+        P = lambda t: F.normalize(self.q(t), dim=-1)
+        k = len(n_["m"]) if upto is None else upto
+        name = P(torch.stack(n_["m"][:k])) @ P(men[0])
+        pad = torch.nn.utils.rnn.pad_sequence
+        cx, sp = n_["cx"][:k], n_["sp"][:k]
+        CX, SP = P(pad(cx, batch_first=True)), P(pad(sp, batch_first=True))
+        mcx = torch.arange(CX.shape[1], device=dev)[None] < torch.tensor([len(c) for c in cx], device=dev)[:, None]
+        msp = torch.arange(SP.shape[1], device=dev)[None] < torch.tensor([len(s) for s in sp], device=dev)[:, None]
+        a_sp, a_cx = P(men[3]), P(men[4])
+        s1 = torch.einsum("ad,kld->akl", a_sp, CX).masked_fill(~mcx[None], -2.).amax(2).mean(0)
+        s2 = (torch.einsum("ksd,cd->ksc", SP, a_cx).amax(2) * msp).sum(1) / msp.sum(1)
+        return self.wn * name + self.wc * torch.maximum(s1, s2)
+
+    def forward(self, men, nodes):
+        """name nodes only compete (a number node is a typed value, never a name's target)"""
+        crt = (self.create + self.cq(men[0]).squeeze())[None]
+        if not nodes:
+            return crt
+        flat = {f: [v for n_ in nodes for v in n_[f]] for f in ("m", "cx", "sp")}
+        own = torch.tensor([i for i, n_ in enumerate(nodes) for _ in n_["m"]], device=dev)
+        sc = self.per_mention(men, flat) / .1
+        node_sc = torch.full((len(nodes),), -1e4, device=dev).scatter_reduce(0, own, sc, "amax")
+        node_sc = node_sc.masked_fill(torch.tensor([n_["typ"] == "num" for n_ in nodes], device=dev), -1e4)
+        return torch.cat([node_sc, crt])
+
+
+class Reader13(nn.Module):
+    """the reading function: a loop over a unit's token states; each step points at a claim -- argument 1 (start, end),
+    argument 2 (start, end) or none, relation words (start, end), value (start, end) or none -- or stops"""
+
+    def __init__(self, E):
+        super().__init__()
+        self.E = E
+        self.cell = nn.GRUCell(4 * E, 256)
+        self.ptr = nn.Sequential(nn.Linear(E + 256, 256), nn.Tanh(), nn.Linear(256, 8))
+        self.ctl = nn.Linear(E + 256, 3)                 # [stop, no 2nd argument, no value]
+
+    def logits(self, H, h):
+        return self.ptr(torch.cat([H, h[None].expand(len(H), -1)], 1)), self.ctl(torch.cat([H.mean(0), h]))
+
+    def advance(self, H, h, c):
+        f = lambda sp: H[sp[0]:sp[1] + 1].mean(0) if sp is not None else torch.zeros(self.E, device=dev)
+        args, r, v = c
+        return self.cell(torch.cat([f(args[0]), f(args[1] if len(args) > 1 else None), f(r), f(v)])[None], h[None])[0]
+
+    def loss(self, H, claims):
+        h, L = torch.zeros(256, device=dev), 0.
+        T_ = lambda v: torch.tensor([v], device=dev)
+        B_ = lambda x, y: F.binary_cross_entropy_with_logits(x, torch.tensor(float(y), device=dev))
+        for c in list(claims) + [None]:
+            P, C = self.logits(H, h)
+            L = L + B_(C[0], c is None)
+            if c is None:
+                break
+            args, r, v = c
+            L = L + F.cross_entropy(P[:, 0][None], T_(args[0][0])) + F.cross_entropy(P[:, 1][None], T_(args[0][1]))
+            L = L + B_(C[1], len(args) < 2)
+            if len(args) > 1:
+                L = L + F.cross_entropy(P[:, 2][None], T_(args[1][0])) + F.cross_entropy(P[:, 3][None], T_(args[1][1]))
+            L = L + F.cross_entropy(P[:, 4][None], T_(r[0])) + F.cross_entropy(P[:, 5][None], T_(r[1]))
+            L = L + B_(C[2], v is None)
+            if v is not None:
+                L = L + F.cross_entropy(P[:, 6][None], T_(v[0])) + F.cross_entropy(P[:, 7][None], T_(v[1]))
+            h = self.advance(H, h, c)
+        return L
+
+    @torch.no_grad()
+    def read(self, H, kmax=4):
+        h, out = torch.zeros(256, device=dev), []
+        for _ in range(kmax):
+            P, C = self.logits(H, h)
+            if C[0] > 0:
+                break
+
+            def sp(c0, c1):
+                st = int(P[:, c0].argmax())
+                return st, st + int(P[st:st + 8, c1].argmax())
+            args = (sp(0, 1),) if C[1] > 0 else (sp(0, 1), sp(2, 3))
+            c = (args, sp(4, 5), None if C[2] > 0 else sp(6, 7))
+            out.append(c)
+            h = self.advance(H, h, c)
+        return out
+
+
+class Mem13(nn.Module):
+    """memory heads + the function nodes (ops). V11 entries: key = bind(r, arg atoms at their positions)"""
+
+    def __init__(self, E, D=1024):
+        super().__init__()
+        self.D = D
+        self.rv = nn.Linear(E, D)                        # relation words -> relation vector (the op of an entry)
+        self.af = nn.Sequential(nn.Linear(2 * D + 1, 128), nn.ReLU(), nn.Linear(128, 1))   # follow an edge
+        self.pa, self.pb = nn.Parameter(torch.tensor(5.)), nn.Parameter(torch.tensor(-2.))  # answer by recall (point)
+        self.anone = nn.Parameter(torch.tensor(0.))      # don't know
+        self.cp = nn.Linear(D, 1)                        # answer by computing (an op function)
+        self.dig = nn.Embedding(10, 32)                  # typed digits (the exact number encoder)
+        self.car = nn.Embedding(2, 32)                   # a column's state
+        self.ocreate = nn.Parameter(torch.tensor(0.))    # a relation meets no op label -> make a new op
+        self.ops = nn.ModuleList()                       # function nodes: each its OWN small column network
+        self.op_rs = []                                  # each op's label = the relation words it was made for
+        g = torch.Generator().manual_seed(7)
+        self.register_buffer("P", torch.stack([torch.randperm(D, generator=g) for _ in range(3)]))
+
+    def r(self, rstate):
+        return F.normalize(self.rv(rstate), dim=-1)
+
+    def key(self, r, atoms):
+        k = r
+        for i, a in enumerate(atoms):
+            k = V11.bind(k, a[self.P[i]])
+        return F.normalize(k, dim=-1)
+
+    def route(self, r, make):
+        """point the relation at an op label, or make a new op (the model creates functions)"""
+        if self.op_rs:
+            labs = self.r(torch.stack(self.op_rs))
+            lg = torch.cat([(labs @ r) / .1, self.ocreate[None]])
+        else:
+            lg = self.ocreate[None]
+        i = int(lg.argmax())
+        return (i if i < len(self.op_rs) else None), lg
+
+    def new_op(self, rstate):
+        self.ops.append(nn.Sequential(nn.Linear(96, 128), nn.ReLU(), nn.Linear(128, 12)).to(dev))
+        self.op_rs.append(rstate.detach())
+        return len(self.ops) - 1
+
+    def compute(self, i, a, b):
+        """one firing per digit column, right to left; the carry is a soft state (learned from the digits it causes)"""
+        net = self.ops[i]
+        da, db = [int(c) for c in a[::-1]], [int(c) for c in b[::-1]]
+        carry, out, lgs = self.car.weight[0], [], []
+        for k in range(max(len(da), len(db)) + 1):
+            x, y = (da[k] if k < len(da) else 0), (db[k] if k < len(db) else 0)
+            o = net(torch.cat([self.dig.weight[x], self.dig.weight[y], carry]))
+            lgs.append(o)
+            out.append(int(o[:10].argmax()))
+            carry = torch.softmax(o[10:], 0) @ self.car.weight
+        return "".join(map(str, out[::-1])).lstrip("0") or "0", lgs
+
+
+def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
+    """one episode. stream: dicts {t: read | ask, text, gold (claims), ent, truth (ask), kind, var, rel, n_reads}"""
+    nodes, decs, pairs, edges, outs, ent2 = [], [], [], [], {}, []
+    num = {}                                             # typed numbers: exact value -> node
+    st_ = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "right common": 0, "n common": 0,
+           "right binomial": 0, "n binomial": 0, "n variant": 0, "right variant": 0, "dont know": 0,
+           "claims gold": 0, "claims read right": 0, "q gold": 0, "q read right": 0, "ar n": 0, "ar right": 0,
+           "ar long n": 0, "ar long right": 0, "ar computed": 0, "ar recalled": 0, "check n": 0, "check right": 0,
+           "check new": 0, "check contra": 0}
+    traces, read_n, read_done, n_stmt = [], {}, set(), [0]
+    q_n, q_r = {}, {}
+
+    def new_node(men, typ, ent, d):
+        nodes.append({"m": [men[0]], "names": [men[1]], "sp": [men[3]], "cx": [men[4]], "typ": typ, "owner": ent,
+                      "made_by": len(decs) - 1, "md": [d],
+                      "atom": F.normalize(torch.randn(mem.D, device=dev), dim=0)})
+        return len(nodes) - 1
+
+    def point(men, ent, numeric):
+        if numeric:                                      # typed value: exact encode (fixed, said)
+            d = {"lg": None, "n": len(nodes), "j": None, "name": men[1]}
+            decs.append(d)
+            if men[1] not in num:
+                num[men[1]] = new_node(men, "num", men[1], d)
+            d["j"] = num[men[1]]
+            return num[men[1]], d
+        lg = rel(men, nodes)
+        j = (random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax()))
+        if j < len(nodes) and nodes[j]["typ"] == "num":
+            j = len(nodes)
+        d = {"lg": lg if train else None, "n": len(nodes), "j": j, "name": men[1]}
+        decs.append(d)
+        if j == len(nodes):
+            return new_node(men, "name", ent, d), d
+        for f, v in (("m", men[0]), ("names", men[1]), ("sp", men[3]), ("cx", men[4]), ("md", d)):
+            nodes[j][f].append(v)
+        return j, d
+
+    def mention(ids, Hs, sp):
+        v = Hs[sp[0]:sp[1] + 1]
+        return (v.mean(0), T.say(ids, sp), None, v, Hs)
+
+    def path1(start, truth):                             # edges ending with a forward edge into a node named truth
+        front, seen = [(start, [])], {start}
+        for _ in range(H):
+            nxt = []
+            for u, pth in front:
+                for ei in outs.get(u, []):
+                    e = edges[ei]
+                    if e["dir"] == 0 and nodes[e["b"]]["names"][0] == truth:
+                        return pth + [ei]
+                    if e["b"] not in seen:
+                        seen.add(e["b"])
+                        nxt.append((e["b"], pth + [ei]))
+            front = nxt
+        return None
+
+    def keys1():
+        if not edges:
+            return None, None
+        R_ = mem.r(torch.stack([e["rs"] for e in edges]))
+        K = torch.stack([mem.key(R_[i], [nodes[e["a"]]["atom"]]) if e["dir"] == 0 else
+                         F.normalize(V11.bind(R_[i], nodes[e["a"]]["atom"][mem.P[2]]), dim=-1) for i, e in enumerate(edges)])
+        return R_, (K, torch.stack([nodes[e["b"]]["atom"] for e in edges]))
+
+    def step1(rq, u, h, R_, KV):                         # 0 don't know, 1 recall here, 2.. follow an edge of u
+        A = torch.stack([n_["atom"] for n_ in nodes])
+        q = mem.key(rq, [nodes[u]["atom"]])
+        sc = KV[0] @ q if KV is not None else torch.zeros(1, device=dev)
+        rd = torch.softmax(BETA * sc, 0) @ KV[1] if KV is not None else torch.zeros(mem.D, device=dev)
+        clean = BETA * (A @ F.normalize(rd, dim=0))
+        opts = [mem.anone, mem.pa * sc.max() + mem.pb]
+        eis = outs.get(u, []) if h < H else []
+        for ei in eis:
+            opts.append(mem.af(torch.cat([rq, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])).squeeze())
+        return torch.stack(opts), eis, clean
+
+    def ask1(rq, j, truth, check_pairs):
+        """walk from node j; -> answer string; adds targets (teacher-forced shortest path / don't know)"""
+        R_, KV = keys1()
+        cur, got, taken = j, None, []
+        for h in range(H + 1):
+            lg, eis, clean = step1(rq, cur, h, R_, KV)
+            k = (random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax()))
+            taken.append((lg, k, eis))
+            if k == 0:
+                break
+            if k == 1:
+                got = nodes[int(clean.argmax())]["names"][0] if KV is not None else None
+                break
+            cur = edges[eis[k - 2]]["b"]
+        if train and check_pairs is not None:
+            pth = path1(j, truth) if truth is not None else None
+            if got is not None and got == truth:
+                check_pairs.extend((lg, k, False) for lg, k, _ in taken)
+            elif pth is not None:
+                u = j
+                for h, ei in enumerate(pth):
+                    lg_, eis, clean = step1(rq, u, h, R_, KV)
+                    if h == len(pth) - 1:
+                        check_pairs.append((lg_, 1, True))
+                        check_pairs.append((clean, edges[ei]["b"], True))
+                    else:
+                        check_pairs.append((lg_, 2 + eis.index(ei), True))
+                        u = edges[ei]["b"]
+                if taken[0][1] >= 2:                     # blame up (2'): two statements filed on one node
+                    e_w, e_r = edges[taken[0][2][taken[0][1] - 2]], edges[pth[0]]
+                    if e_w["stmt"] != e_r["stmt"]:
+                        dl = max(e_w, e_r, key=lambda e: e["stmt"])["da"]
+                        if dl["lg"] is not None and dl["j"] != dl["n"]:
+                            check_pairs.append((dl["lg"], dl["n"], True))
+            else:
+                check_pairs.append((taken[0][0], 0, taken[0][1] != 0))
+        return got, pth if (train and truth is not None) else None
+
+    def keys2():
+        if not ent2:
+            return None
+        R_ = mem.r(torch.stack([e["rs"] for e in ent2]))
+        K = torch.stack([mem.key(R_[i], [nodes[e["a"]]["atom"], nodes[e["b"]]["atom"]]) for i, e in enumerate(ent2)])
+        return K, torch.stack([nodes[e["v"]]["atom"] for e in ent2])
+
+    def ask2(rstate, ia, ib, truth, check_pairs):
+        """2 arguments: don't know / recall from memory / compute with the op the relation routes to"""
+        rq = mem.r(rstate)
+        KV = keys2()
+        rec, best = None, torch.tensor(-1., device=dev)
+        if KV is not None:
+            sc = KV[0] @ mem.key(rq, [nodes[ia]["atom"], nodes[ib]["atom"]])
+            best = sc.max()
+            A = torch.stack([n_["atom"] for n_ in nodes])
+            rec = nodes[int((A @ F.normalize(torch.softmax(BETA * sc, 0) @ KV[1], dim=0)).argmax())]["names"][0]
+        oi, olg = mem.route(rq, make=train)
+        if oi is None and train:                         # the model creates a function for a want no label meets
+            oi = mem.new_op(rstate)
+            check_pairs.append(("newop", oi))
+        na_, nb_ = nodes[ia]["names"][0], nodes[ib]["names"][0]
+        res, cl = (mem.compute(oi, na_, nb_) if oi is not None and na_.isdigit() and nb_.isdigit() else (None, None))
+        lg = torch.stack([mem.anone, mem.pa * best + mem.pb if KV is not None else torch.tensor(-10., device=dev),
+                          mem.cp(rq).squeeze() if oi is not None else torch.tensor(-10., device=dev)])
+        k = (random.randrange(3) if train and random.random() < .1 else int(lg.argmax()))
+        got = [None, rec, res][k]
+        if train and truth is not None:
+            ok_c, ok_r = res == truth, rec == truth
+            tgt = 2 if (oi is not None and (ok_c or not ok_r)) else (1 if ok_r else 0)
+            check_pairs.append((lg, tgt, got != truth))
+            if cl is not None and truth.isdigit():       # CHECK 1 on a worked result: the columns learn its digits
+                dg = [int(c) for c in truth[::-1]] + [0] * len(cl)
+                for kk, o in enumerate(cl):
+                    check_pairs.append((o[:10], dg[kk], not ok_c))
+        return got, k
+
+    for ev in stream:
+        ids, Hs = T(ev["text"], keep=ev.get("keep", True))
+        claims = (ev["gold"] or []) if gold else rdr.read(Hs, kmax=4 if ev["t"] == "read" else 1)
+        if ev["t"] == "read" and ev["gold"] is not None:
+            st_["claims gold"] += len(ev["gold"])
+            st_["claims read right"] += sum(c in claims for c in ev["gold"])
+        if ev["t"] == "ask" and ev["gold"] is not None:
+            st_["q gold"] += 1
+            st_["q read right"] += bool(claims) and claims[0][:2] == ev["gold"][0][:2]
+        if train and not gold:
+            traces.append({"H": Hs, "claims": claims, "ev": ev, "ok": None})
+        ent = ev["ent"]
+        if ev["t"] == "read":
+            at, c_ok = {}, []
+            for c in claims:
+                args, rsp, vsp = c
+                if vsp is None:
+                    continue
+                js = []
+                for sp in args + (vsp,):
+                    if sp not in at:
+                        men = mention(ids, Hs, sp)
+                        at[sp] = point(men, ent if men[1] in ev.get("names", ()) else men[1], men[1].isdigit())
+                    js.append(at[sp])
+                rs = Hs[rsp[0]:rsp[1] + 1].mean(0)
+                vname = nodes[js[-1][0]]["names"][0]
+                cp = []                                  # CHECK 1: predict the value before it is stored
+                if len(args) == 1:
+                    got, _ = ask1(mem.r(rs), js[0][0], vname, cp if train else None)
+                else:
+                    got, _ = ask2(rs, js[0][0], js[1][0], vname, cp if train else [])
+                st_["check n"] += 1
+                st_["check right"] += got == vname
+                st_["check new"] += got is None
+                st_["check contra"] += got is not None and got != vname
+                if ev.get("kind") == "arith":
+                    c_ok.append(got == vname)
+                if train:
+                    pairs.extend(cp)
+                if len(args) == 1:                       # store (an edge both ways; the newest stays readable)
+                    (a_, da), (b_, _) = js
+                    if a_ != b_:
+                        for dr, (u, v) in ((0, (a_, b_)), (1, (b_, a_))):
+                            outs.setdefault(u, []).append(len(edges))
+                            edges.append({"a": u, "b": v, "rs": rs, "dir": dr, "stmt": n_stmt[0], "da": da})
+                else:
+                    ent2.append({"a": js[0][0], "b": js[1][0], "v": js[2][0], "rs": rs})
+            n_stmt[0] += 1
+            if train and not gold:
+                traces[-1]["ok"] = all(c_ok) if c_ok else None
+            read_n[ent] = read_n.get(ent, 0) + 1
+            if read_n[ent] >= ev.get("n_reads", 1):
+                read_done.add(ent)
+            continue
+        # a question: the same check against the truth that follows it
+        truth = ev["truth"]
+        got, j, d = None, None, None
+        if claims and claims[0][2] is None:
+            args, rsp, _ = claims[0]
+            js = []
+            for sp in args:
+                men = mention(ids, Hs, sp)
+                js.append(point(men, ent if ev["kind"] != "arith" else men[1], men[1].isdigit()))
+            rs = Hs[rsp[0]:rsp[1] + 1].mean(0)
+            cp = []
+            if len(args) == 1:
+                j, d = js[0]
+                got, pth = ask1(mem.r(rs), j, truth, cp if train else None)
+            else:
+                got, k2 = ask2(rs, js[0][0], js[1][0], truth, cp if train else [])
+                st_["ar computed"] += k2 == 2
+                st_["ar recalled"] += k2 == 1
+            if train:
+                pairs.extend(cp)
+        if train and not gold:
+            traces[-1]["ok"] = got == truth
+        q_n[ent] = q_n.get(ent, 0) + 1
+        q_r[ent] = q_r.get(ent, 0) + (got == truth)
+        if ev["kind"] == "arith":
+            st_["ar n"] += 1
+            st_["ar right"] += got == truth
+            if ev.get("long"):
+                st_["ar long n"] += 1
+                st_["ar long right"] += got == truth
+            continue
+        if ent not in read_done:
+            st_["asked_before"] += 1
+            st_["wrong_node"] += j is not None and nodes[j]["owner"] != ent
+            continue
+        st_["asked_after"] += 1
+        ok_ = got == truth
+        st_["right"] += ok_
+        st_["n " + ev["kind"]] += 1
+        st_["right " + ev["kind"]] += ok_
+        st_["n variant"] += bool(ev.get("var"))
+        st_["right variant"] += bool(ev.get("var")) and ok_
+        st_["dont know"] += got is None
+        if not train or d is None or d["lg"] is None:
+            continue
+        if ok_ or pth is not None:
+            pairs.append((d["lg"], j, False))
+            continue
+        if not any(n_["names"][0] == truth for n_ in nodes):           # blame up (5)
+            for dd in decs:
+                if dd["name"] == truth and dd["lg"] is not None and dd["j"] != dd["n"]:
+                    pairs.append((dd["lg"], dd["n"], True))
+            continue
+        vals = ev.get("values", {})
+        ok = [i for i in range(d["n"]) if nodes[i]["typ"] == "name" and all(path1(i, v) is not None for v in vals.values())]
+        t_ = max(ok, key=lambda i: float(d["lg"][i])) if ok else d["n"]
+        pairs.append((d["lg"], t_, True))
+        if ok and j != t_:                               # blame up (1)
+            dm = decs[nodes[j]["made_by"]]
+            if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
+                pairs.append((dm["lg"], t_, True))
+    if train:                                            # the reader learns from its own readings that checked out (D7)
+        for tr in traces:
+            ok_ = tr["ok"]
+            if ok_ is None and tr["ev"]["t"] == "read" and tr["ev"].get("kind") != "arith":   # a statement: its thing's
+                e_ = tr["ev"]["ent"]                                                          # questions all right
+                ok_ = q_n.get(e_, 0) > 0 and q_r.get(e_, 0) == q_n[e_]
+            if ok_ and tr["claims"]:
+                pairs.append(("reader", (tr["H"], tr["claims"]), .1))
+    st_["nodes"], st_["edges"], st_["ops"] = len(nodes), len(edges), len(mem.ops)
+    return st_, pairs
+
+
+def v13(steps=3000):
+    """§1d build: see the section comment. Eval: biology questions (30 never-trained species, half by name variants),
+    arithmetic questions (unseen pairs of 1-3 digits; and 4-6 digits = longer than any training number), reader
+    exactness, the check-1 tally; READER claims vs gold claims (reference)"""
+    sd_ = int(os.environ.get("V13_SEED", "0"))
+    torch.manual_seed(sd_)
+    random.seed(sd_)
+    T = Text13()
+    E = T.M.config.n_embd
+    train_sp, test_sp = _v13_species()
+    rels = ("family", "genus")
+    W = {"family": ["Which family is {n} in?", "What family does {n} belong to?", "{N} is placed in which family?", "Name the family of {n}."],
+         "genus": ["Which genus is {n} in?", "What genus does {n} belong to?", "{N} is classified in which genus?", "Name the genus of {n}."]}
+    VAR = float(os.environ.get("V13_VAR", ".5"))
+
+    def variant(x, kind, r_):
+        if r_.random() >= VAR:
+            return None
+        if kind == "binomial":
+            g, e = x["binomial"].split()[:2]
+            return g[0] + ". " + e
+        c = x["common"]
+        opts = [c + ("es" if c.endswith(("s", "sh", "ch", "x")) else "s"),
+                " ".join(w if w == "@-@" else w[0].upper() + w[1:] for w in c.split())]
+        if " @-@ " in c:
+            opts.append(c.replace(" @-@ ", " "))
+        return opts[r_.randrange(len(opts))]
+
+    def gold_stmt(text, pairs_):
+        """demo writing / grading: (args, relation words = last <= 4 tokens before the value, value), inclusive"""
+        ids, _ = T(text)
+        out = []
+        for names_, v in pairs_:
+            ar = [T.span(ids, n_) for n_ in names_]
+            vs = T.span(ids, v, last=True)
+            if None in ar or vs is None:
+                return None
+            lo = max(a[1] for a in ar) + 1 if len(ar) == 1 else ar[0][1] + 1
+            hi = vs[0] if len(ar) == 1 else ar[1][0]
+            if hi - lo < 1:
+                lo, hi = vs[1] + 1, ar[0][0]             # value written before the argument ("X , known as Y")
+                if hi - lo < 1:
+                    return None
+            out.append((tuple(ar), (max(lo, hi - 4), hi - 1), vs))
+        return out
+
+    def bio_events(xs, r_, ask_before=.5, n_after=2):
+        per = []
+        for x in xs:
+            names = (x["common"], x["binomial"])
+            vals = {r__: x[r__] for r__ in rels}
+            ev = []
+            qs = [(rel, kind, t) for rel in rels for kind in ("common", "binomial") for t in W[rel]]
+
+            def ask(rel, kind, t):
+                var = variant(x, kind, r_)
+                nm = var or x[kind]
+                n = ("the " + nm) if kind == "common" else nm
+                q = t.replace("{N}", n[0].upper() + n[1:]).replace("{n}", n)
+                ids, _ = T(q)
+                sp = T.span(ids, nm)
+                rw = next((i for i, t_ in enumerate(ids) if t_ == T.tk(" " + rel)["input_ids"][0]), None)
+                g = [((sp,), (rw, rw), None)] if sp is not None and rw is not None else None
+                return {"t": "ask", "text": q, "gold": g, "ent": x["binomial"], "truth": x[rel], "kind": kind,
+                        "var": var is not None, "names": names, "values": vals}
+            if r_.random() < ask_before:
+                ev += [ask(*a) for a in r_.sample(qs, 2)]
+            lead = {"t": "read", "text": x["lead"], "ent": x["binomial"], "names": names, "n_reads": 2,
+                    "gold": gold_stmt(x["lead"], [((x["common"],), x["binomial"]), ((x["common"],), x["family"])])}
+            bst = {"t": "read", "text": x["bstmt"], "ent": x["binomial"], "names": names, "n_reads": 2,
+                   "gold": gold_stmt(x["bstmt"], [((x["binomial"],), x["genus"])])}
+            ev += r_.sample([lead, bst], 2)
+            ev += [ask(*a) for a in r_.sample(qs, n_after)]
+            per.append(ev)
+        return per
+
+    def arith_events(r_, n, digits, keep=False, long=False):
+        out = []
+        def num_(dd):
+            return r_.randint(10 ** (dd - 1) if dd > 1 else 0, 10 ** dd - 1)
+        for _ in range(n):
+            a, b = num_(r_.choice(digits)), num_(r_.choice(digits))
+            c = str(a + b)
+            if r_.random() < .5:
+                text = f"{a} plus {b} is {c} ."
+                out.append({"t": "read", "text": text, "ent": c, "keep": keep, "kind": "arith",
+                            "gold": gold_stmt(text, [((str(a), str(b)), c)])})
+            else:
+                text = f"What is {a} plus {b} ?"
+                ids, _ = T(text, keep=keep)
+                sa, sb = T.span(ids, str(a)), T.span(ids, str(b))
+                pl = T.span(ids, "plus")
+                g = [((sa, sb), pl, None)] if None not in (sa, sb, pl) else None
+                out.append({"t": "ask", "text": text, "gold": g, "ent": c, "truth": c, "kind": "arith", "keep": keep,
+                            "long": long})
+        return out
+
+    def mix(per, extra, r_):
+        per = [list(e) for e in per] + [[e] for e in extra]
+        out = []
+        while any(per):
+            e = r_.choice([e for e in per if e])
+            out.append(e.pop(0))
+        return out
+    T.fit_scale([x["lead"] for x in train_sp[:60]] + [f"{i} plus {i + 7} is {2 * i + 7} ." for i in range(10, 400, 13)])
+    erng = random.Random(47)
+    test_bio = mix(bio_events(test_sp, erng, n_after=4), [], erng)
+    test_ar = arith_events(random.Random(48), 60, (1, 2, 3), keep=True)
+    test_ar = [e for e in test_ar if e["t"] == "ask"]
+    long_ar = [e for e in arith_events(random.Random(49), 80, (4, 5, 6), keep=True, long=True) if e["t"] == "ask"]
+    rel, mem, rdr = Rel13(E).to(dev), Mem13(E).to(dev), Reader13(E).to(dev)
+    # ~50 demos for the reader (statements + questions, biology + arithmetic) and ~50 column steps (worked sums)
+    drng = random.Random(71 + sd_)
+    demo = []
+    for e in mix(bio_events(drng.sample(train_sp, 12), drng), arith_events(drng, 14, (1, 2, 3)), drng):
+        if e["gold"] and len(demo) < 50:
+            demo.append((T(e["text"])[1], e["gold"]))
+    ropt = torch.optim.AdamW(rdr.parameters(), lr=1e-3)
+    for it in range(int(os.environ.get("V13_DEMO_STEPS", "1500"))):
+        Hs, cl = demo[it % len(demo)]
+        L = rdr.loss(Hs, cl)
+        ropt.zero_grad()
+        L.backward()
+        ropt.step()
+    demo_ar = [e for e in arith_events(drng, 40, (1, 2)) if e["t"] == "read" and e["gold"]][:16]
+    cols = 0
+    for e in demo_ar:                                    # the op is made for the demos' relation words; column steps
+        ids, Hs = T(e["text"])
+        (sa, sb), rsp, vs = e["gold"][0]
+        rstate = Hs[rsp[0]:rsp[1] + 1].mean(0)
+        if not mem.ops:
+            mem.new_op(rstate)
+        cols += len(str(max(int(T.say(ids, sa)), int(T.say(ids, sb))))) + 1
+    copt = torch.optim.AdamW(list(mem.ops.parameters()) + list(mem.dig.parameters()) + list(mem.car.parameters()), lr=2e-3)
+    for it in range(300):                                # demo column steps with their carries (teacher demos, ~50)
+        e = demo_ar[it % len(demo_ar)]
+        ids, Hs = T(e["text"])
+        (sa, sb), rsp, vs = e["gold"][0]
+        a, b = T.say(ids, sa), T.say(ids, sb)
+        da, db = [int(c) for c in a[::-1]], [int(c) for c in b[::-1]]
+        carry, L, cin = mem.car.weight[0], 0., 0
+        for k in range(max(len(da), len(db)) + 1):
+            x, y = (da[k] if k < len(da) else 0), (db[k] if k < len(db) else 0)
+            o = mem.ops[0](torch.cat([mem.dig.weight[x], mem.dig.weight[y], carry]))
+            s_ = x + y + cin
+            L = L + F.cross_entropy(o[:10][None], torch.tensor([s_ % 10], device=dev)) + \
+                F.cross_entropy(o[10:][None], torch.tensor([s_ // 10], device=dev))
+            cin = s_ // 10
+            carry = torch.softmax(o[10:], 0) @ mem.car.weight
+        copt.zero_grad()
+        L.backward()
+        copt.step()
+    print(f"v13: reader taught on {len(demo)} demo units; op made for the relation words of the demo sums, "
+          f"{len(demo_ar)} demo sums = {cols} column steps; FIXED: {V13_FIXED}", flush=True)
+    opt = torch.optim.AdamW(list(rel.parameters()) + list(mem.parameters()) + list(rdr.parameters()), lr=1e-3)
+
+    def report(tag):
+        with torch.no_grad():
+            for gr in (False, True):
+                lab = "gold claims (reference)" if gr else "READER claims"
+                sb, _ = _v13_run(test_bio, T, rel, mem, rdr, gold=gr)
+                sa, _ = _v13_run(test_ar + long_ar, T, rel, mem, rdr, gold=gr)
+                pc = lambda s, a_, b_: f"{s[a_]}/{s[b_]}"
+                print(f"v13 {tag} {lab}: BIO right after reading {pc(sb, 'right', 'asked_after')} (common "
+                      f"{pc(sb, 'right common', 'n common')}, binomial {pc(sb, 'right binomial', 'n binomial')}, variant "
+                      f"{pc(sb, 'right variant', 'n variant')}), don't know {sb['dont know']}, before reading -> another "
+                      f"thing's node {pc(sb, 'wrong_node', 'asked_before')} | ARITH 1-3 digits "
+                      f"{sa['ar right'] - sa['ar long right']}/{sa['ar n'] - sa['ar long n']}, 4-6 digits "
+                      f"{pc(sa, 'ar long right', 'ar long n')} (computed {sa['ar computed']}, recalled {sa['ar recalled']}) "
+                      f"| READER exact: claims {pc(sb, 'claims read right', 'claims gold')}, questions "
+                      f"{sb['q read right'] + sa['q read right']}/{sb['q gold'] + sa['q gold']} | CHECK 1 on statements: "
+                      f"right {sb['check right']}, new {sb['check new']}, contradiction {sb['check contra']} of "
+                      f"{sb['check n']} | nodes {sb['nodes']}, edges {sb['edges']}, ops {sb['ops']}", flush=True)
+    report("step 0")
+    trng = random.Random(43 + sd_)
+    at = {int(v) for v in os.environ.get("V13_AT", "").split(",") if v}
+    n_ops = len(mem.ops)
+    for stp in range(steps):
+        if stp in at and stp:
+            report(f"step {stp}")
+        bio = bio_events(trng.sample(train_sp, trng.randint(8, 20)), trng)
+        stream = mix(bio, arith_events(trng, 20, (1, 2, 3)), trng)
+        _, pairs = _v13_run(stream, T, rel, mem, rdr, train=True)
+        if len(mem.ops) > n_ops:                         # a function the model made: its network joins the learning
+            for op in mem.ops[n_ops:]:
+                opt.add_param_group({"params": list(op.parameters())})
+            n_ops = len(mem.ops)
+        L, n_ = 0., 0
+        for p_ in pairs:
+            if isinstance(p_[0], str) and p_[0] == "newop":
+                continue
+            if isinstance(p_[0], str) and p_[0] == "reader":
+                L = L + p_[2] * rdr.loss(*p_[1])
+            else:
+                lg, tgt, wrong = p_
+                L = L + (1. if wrong else .1) * F.cross_entropy(lg[None], torch.tensor([tgt], device=dev))
+            n_ += 1
+        if not n_:
+            continue
+        opt.zero_grad()
+        (L / n_).backward()
+        opt.step()
+    report("final")
+
+
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
 def inspect(G, arts, tr_arts, n=20):
     """what the trained parts actually do: node collapse, write attention, retrieval vs a node's source, gradients"""
@@ -4662,6 +5381,9 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "v11t5":
         v11_t5(steps=int(os.environ.get("V11_T5_STEPS", "3000")))
+        raise SystemExit
+    if a.task == "v13":                        # §1d: GNM checks itself (perception, memory, ops, checks in one path)
+        v13(steps=int(os.environ.get("V13_STEPS", "3000")))
         raise SystemExit
     if a.task == "v11t3":
         v11_t3()
