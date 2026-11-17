@@ -5011,13 +5011,25 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             else:
                 lg = mem.cnone[None]
             k = int(lg.argmax())
-            ok_ = k < len(nodes) and truth in nodes[k]["names"]
+            # (11-17 v13q1s: 'right if ANY of the node's names' scored 372/1180 at step 0 -- untrained identity put every
+            # mention on one node, so any string was 'in it', and the target rewarded that collapse. The node SAYS one
+            # name: its stored mention most relevant to the query)
+            said, ok_ = None, False
+            if k < len(nodes):
+                mk = [ii for ii, o in enumerate(own.tolist()) if o == k]
+                said = nodes[k]["names"][int(sc[mk].argmax())]
+                ok_ = said == truth
             st_["right cloze"] += ok_
             st_["dont know"] += k == len(nodes)
             if train:
                 has_t = [i for i in range(len(nodes)) if truth in nodes[i]["names"]]
                 tgt = max(has_t, key=lambda i: float(lg[i])) if has_t else len(nodes)
                 pairs.append((lg, tgt, not ok_))
+                if has_t:                                # ... and within that node, the mention that says it
+                    mt = [ii for ii, o in enumerate(own.tolist()) if o == tgt]
+                    good = [jj for jj, ii in enumerate(mt) if nodes[tgt]["names"][jj] == truth]
+                    if len(mt) > 1 and good:
+                        pairs.append((sc[mt], max(good, key=lambda jj: float(sc[mt][jj])), True))
                 if not has_t:                            # no node holds it: its earlier mentions were not marked as
                     tid = ev["tgt_ids"]                  # a thing -> the tagger learns to mark them
                     for ids_k, Hs_k in stm_hist:
@@ -5112,6 +5124,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             if ok_ and tr["claims"]:
                 pairs.append(("reader", (tr["H"], tr["claims"]), .1))
     st_["nodes"], st_["edges"], st_["ops"] = len(nodes), len(edges), len(mem.ops)
+    st_["mentions"] = sum(len(n_["m"]) for n_ in nodes)
     return st_, pairs
 
 
@@ -5201,13 +5214,14 @@ def _v13_phase1(T, rel, mem, rdr, dec, train_on, tr_docs, ho_docs, report, sd_):
           f"context {b_doc}/{len(qs)}", flush=True)
 
     def cloze(tag):
-        n_ = r_ = dk = 0
+        n_ = r_ = dk = nd = mm = 0
         with torch.no_grad():
             for evs in ho:
                 st, _ = _v13_run(evs, T, rel, mem, rdr)
                 n_, r_, dk = n_ + st["n cloze"], r_ + st["right cloze"], dk + st["dont know"]
+                nd, mm = nd + st["nodes"], mm + st["mentions"]
         print(f"v13 PHASE 1 {tag}: held-out cloze from GNM's memory (it sees one sentence at a time) {r_}/{n_}, "
-              f"don't know {dk}", flush=True)
+              f"don't know {dk} | nodes per document {nd / len(ho):.1f}, mentions per node {mm / max(nd, 1):.1f}", flush=True)
     cloze("step 0")
     rng = random.Random(97 + sd_)
     at = {int(v) for v in os.environ.get("V13_AT", "").split(",") if v}
