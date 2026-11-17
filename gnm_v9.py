@@ -4685,7 +4685,11 @@ class Mem13(nn.Module):
         super().__init__()
         self.D = D
         self.rv = nn.Linear(E, D)                        # relation words -> relation vector (the op of an entry)
-        self.af = nn.Sequential(nn.Linear(2 * D + 1, 128), nn.ReLU(), nn.Linear(128, 1))   # follow an edge
+        # (11-17 v12 measured: the last hop as cos(bind(question r), bind(edge r)) answered 21/120 even with gold claims,
+        # 0 answers via a followed edge; v8b's learned relevance answered 87-91. Relations are matched like names:
+        # learned relevance between the question's relation words and an edge's / a node's)
+        self.af1 = nn.Sequential(nn.Linear(2 * E + 1, 128), nn.ReLU(), nn.Linear(128, 1))   # follow an edge
+        self.ast = nn.Sequential(nn.Linear(2 * E, 128), nn.ReLU(), nn.Linear(128, 1))       # answer = this node
         self.pa, self.pb = nn.Parameter(torch.tensor(5.)), nn.Parameter(torch.tensor(-2.))  # answer by recall (point)
         self.anone = nn.Parameter(torch.tensor(0.))      # don't know
         self.cp = nn.Linear(D, 1)                        # answer by computing (an op function)
@@ -4792,40 +4796,28 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             front = nxt
         return None
 
-    def keys1():
-        if not edges:
-            return None, None
-        R_ = mem.r(torch.stack([e["rs"] for e in edges]))
-        K = torch.stack([mem.key(R_[i], [nodes[e["a"]]["atom"]]) if e["dir"] == 0 else
-                         F.normalize(V11.bind(R_[i], nodes[e["a"]]["atom"][mem.P[2]]), dim=-1) for i, e in enumerate(edges)])
-        return R_, (K, torch.stack([nodes[e["b"]]["atom"] for e in edges]))
-
-    def step1(rq, u, h, R_, KV):                         # 0 don't know, 1 recall here, 2.. follow an edge of u
-        A = torch.stack([n_["atom"] for n_ in nodes])
-        q = mem.key(rq, [nodes[u]["atom"]])
-        sc = KV[0] @ q if KV is not None else torch.zeros(1, device=dev)
-        rd = torch.softmax(BETA * sc, 0) @ KV[1] if KV is not None else torch.zeros(mem.D, device=dev)
-        clean = BETA * (A @ F.normalize(rd, dim=0))
-        opts = [mem.anone, mem.pa * sc.max() + mem.pb]
+    def step1(qr, u, h):                                 # 0 don't know, 1 answer = this node, 2.. follow an edge of u
+        opts = [mem.anone, mem.ast(torch.cat([qr, nodes[u]["m"][0]])).squeeze()]
         eis = outs.get(u, []) if h < H else []
         for ei in eis:
-            opts.append(mem.af(torch.cat([rq, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])).squeeze())
-        return torch.stack(opts), eis, clean
+            opts.append(mem.af1(torch.cat([qr, edges[ei]["rs"], torch.tensor([float(edges[ei]["dir"])], device=dev)])).squeeze())
+        return torch.stack(opts), eis
 
-    def ask1(rq, j, truth, check_pairs):
-        """walk from node j; -> answer string; adds targets (teacher-forced shortest path / don't know)"""
-        R_, KV = keys1()
+    def ask1(qr, j, truth, check_pairs):
+        """walk from node j; -> (answer string, right path or None); adds targets (teacher-forced shortest path, then
+        answer = that node; or don't know when nothing reachable)"""
         cur, got, taken = j, None, []
         for h in range(H + 1):
-            lg, eis, clean = step1(rq, cur, h, R_, KV)
+            lg, eis = step1(qr, cur, h)
             k = (random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax()))
             taken.append((lg, k, eis))
             if k == 0:
                 break
             if k == 1:
-                got = nodes[int(clean.argmax())]["names"][0] if KV is not None else None
+                got = nodes[cur]["names"][0]
                 break
             cur = edges[eis[k - 2]]["b"]
+        pth = None
         if train and check_pairs is not None:
             pth = path1(j, truth) if truth is not None else None
             if got is not None and got == truth:
@@ -4833,13 +4825,11 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             elif pth is not None:
                 u = j
                 for h, ei in enumerate(pth):
-                    lg_, eis, clean = step1(rq, u, h, R_, KV)
-                    if h == len(pth) - 1:
-                        check_pairs.append((lg_, 1, True))
-                        check_pairs.append((clean, edges[ei]["b"], True))
-                    else:
-                        check_pairs.append((lg_, 2 + eis.index(ei), True))
-                        u = edges[ei]["b"]
+                    lg_, eis = step1(qr, u, h)
+                    check_pairs.append((lg_, 2 + eis.index(ei), True))
+                    u = edges[ei]["b"]
+                lg_, _ = step1(qr, u, len(pth))
+                check_pairs.append((lg_, 1, True))
                 if taken[0][1] >= 2:                     # blame up (2'): two statements filed on one node
                     e_w, e_r = edges[taken[0][2][taken[0][1] - 2]], edges[pth[0]]
                     if e_w["stmt"] != e_r["stmt"]:
@@ -4848,7 +4838,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
                             check_pairs.append((dl["lg"], dl["n"], True))
             else:
                 check_pairs.append((taken[0][0], 0, taken[0][1] != 0))
-        return got, pth if (train and truth is not None) else None
+        return got, pth
 
     def keys2():
         if not ent2:
@@ -4915,7 +4905,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
                 vname = nodes[js[-1][0]]["names"][0]
                 cp = []                                  # CHECK 1: predict the value before it is stored
                 if len(args) == 1:
-                    got, _ = ask1(mem.r(rs), js[0][0], vname, cp if train else None)
+                    got, _ = ask1(rs, js[0][0], vname, cp if train else None)
                 else:
                     got, _ = ask2(rs, js[0][0], js[1][0], vname, cp if train else [])
                 st_["check n"] += 1
@@ -4954,7 +4944,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             cp = []
             if len(args) == 1:
                 j, d = js[0]
-                got, pth = ask1(mem.r(rs), j, truth, cp if train else None)
+                got, pth = ask1(rs, j, truth, cp if train else None)
             else:
                 got, k2 = ask2(rs, js[0][0], js[1][0], truth, cp if train else [])
                 st_["ar computed"] += k2 == 2
