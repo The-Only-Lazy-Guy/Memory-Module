@@ -4631,6 +4631,38 @@ class Reader13(nn.Module):
         self.cell = nn.GRUCell(4 * E, 256)
         self.ptr = nn.Sequential(nn.Linear(E + 256, 256), nn.Tanh(), nn.Linear(256, 8))
         self.ctl = nn.Linear(E + 256, 3)                 # [stop, no 2nd argument, no value]
+        # (11-17 phase 1: cloze 0/1180 -- a recurring name only became a node if it was part of a claim. Things are
+        # marked by their own tagger: 0 outside, 1 begins a thing, 2 inside)
+        self.tag = nn.Sequential(nn.Linear(E, 256), nn.Tanh(), nn.Linear(256, 3))
+
+    def tag_loss(self, H, spans, full=True):
+        """spans = things in this unit; full: every other token is outside; else only the spans + the token after"""
+        lg = self.tag(H)
+        y = torch.full((len(H),), -100, dtype=torch.long, device=dev)
+        if full:
+            y[:] = 0
+        for a, b in spans:
+            y[a] = 1
+            y[a + 1:b + 1] = 2
+        if not full:                                     # the token right after a span is not inside it
+            for a, b in spans:
+                if b + 1 < len(H) and int(y[b + 1]) == -100:
+                    y[b + 1] = 0
+        return F.cross_entropy(lg, y, ignore_index=-100) if (y >= 0).any() else lg.sum() * 0
+
+    @torch.no_grad()
+    def things(self, H):
+        t, out, i = self.tag(H).argmax(-1).tolist(), [], 0
+        while i < len(t):
+            if t[i] == 1:
+                j = i
+                while j + 1 < len(t) and t[j + 1] == 2 and j - i < 7:
+                    j += 1
+                out.append((i, j))
+                i = j + 1
+            else:
+                i += 1
+        return out
 
     def logits(self, H, h):
         return self.ptr(torch.cat([H, h[None].expand(len(H), -1)], 1)), self.ctl(torch.cat([H.mean(0), h]))
@@ -4641,7 +4673,8 @@ class Reader13(nn.Module):
         return self.cell(torch.cat([f(args[0]), f(args[1] if len(args) > 1 else None), f(r), f(v)])[None], h[None])[0]
 
     def loss(self, H, claims):
-        h, L = torch.zeros(256, device=dev), 0.
+        sp_ = sorted({sp for c in claims for sp in list(c[0]) + ([c[2]] if c[2] is not None else [])})
+        h, L = torch.zeros(256, device=dev), (self.tag_loss(H, sp_) if sp_ else 0.)
         T_ = lambda v: torch.tensor([v], device=dev)
         B_ = lambda x, y: F.binary_cross_entropy_with_logits(x, torch.tensor(float(y), device=dev))
         for c in list(claims) + [None]:
@@ -4710,6 +4743,8 @@ class Mem13(nn.Module):
         self.ast = nn.Sequential(nn.Linear(2 * E, 128), nn.ReLU(), nn.Linear(128, 1))       # answer = this node
         self.pa, self.pb = nn.Parameter(torch.tensor(5.)), nn.Parameter(torch.tensor(-2.))  # answer by recall (point)
         self.anone = nn.Parameter(torch.tensor(0.))      # don't know
+        self.cqn = nn.Linear(2 * E, E)                   # phase 1: which known thing is mentioned next (from the prefix)
+        self.cnone = nn.Parameter(torch.tensor(0.))
         self.cp = nn.Linear(D, 1)                        # answer by computing (an op function)
         self.dig = nn.Embedding(10, 32)                  # typed digits (the exact number encoder)
         self.car = nn.Embedding(2, 32)                   # a column's state
@@ -4766,7 +4801,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
            "claims gold": 0, "claims read right": 0, "q gold": 0, "q read right": 0, "ar n": 0, "ar right": 0,
            "ar long n": 0, "ar long right": 0, "ar computed": 0, "ar recalled": 0, "check n": 0, "check right": 0,
            "check new": 0, "check contra": 0, "n cloze": 0, "right cloze": 0, "n var": 0}
-    traces, read_n, read_done, n_stmt = [], {}, set(), [0]
+    traces, read_n, read_done, n_stmt, stm_hist = [], {}, set(), [0], []
     q_n, q_r = {}, {}
 
     def new_node(men, typ, ent, d):
@@ -4916,6 +4951,11 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
         ent = ev["ent"]
         if ev["t"] == "read":
             at, c_ok = {}, []
+            if not gold:                                 # things the tagger marks become nodes (point / create)
+                for sp in rdr.things(Hs):
+                    men = mention(ids, Hs, sp)
+                    at[sp] = point(men, ent if men[1] in ev.get("names", ()) else men[1], men[1].isdigit())
+            stm_hist.append((ids, Hs))
             for c in claims:
                 args, rsp, vsp = c
                 if vsp is None:
@@ -4955,6 +4995,35 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
             read_n[ent] = read_n.get(ent, 0) + 1
             if read_n[ent] >= ev.get("n_reads", 1):
                 read_done.add(ent)
+            continue
+        if ev["kind"] == "cloze":                        # phase 1: which known thing comes next? (point, or don't know)
+            truth = ev["truth"]
+            st_["n cloze"] += 1
+            q = mem.cqn(torch.cat([Hs[-1], Hs.mean(0)]))
+            name_n = list(range(len(nodes)))
+            if name_n:
+                flat = [m_ for n_ in nodes for m_ in n_["m"]]
+                own = torch.tensor([i for i, n_ in enumerate(nodes) for _ in n_["m"]], device=dev)
+                P = lambda t: F.normalize(rel.q(t), dim=-1)
+                sc = (P(torch.stack(flat)) @ P(q)) / .1
+                ns = torch.full((len(nodes),), -1e4, device=dev).scatter_reduce(0, own, sc, "amax")
+                lg = torch.cat([ns, mem.cnone[None]])
+            else:
+                lg = mem.cnone[None]
+            k = int(lg.argmax())
+            ok_ = k < len(nodes) and truth in nodes[k]["names"]
+            st_["right cloze"] += ok_
+            st_["dont know"] += k == len(nodes)
+            if train:
+                has_t = [i for i in range(len(nodes)) if truth in nodes[i]["names"]]
+                tgt = max(has_t, key=lambda i: float(lg[i])) if has_t else len(nodes)
+                pairs.append((lg, tgt, not ok_))
+                if not has_t:                            # no node holds it: its earlier mentions were not marked as
+                    tid = ev["tgt_ids"]                  # a thing -> the tagger learns to mark them
+                    for ids_k, Hs_k in stm_hist:
+                        occ = [(i, i + len(tid) - 1) for i in range(len(ids_k) - len(tid) + 1) if ids_k[i:i + len(tid)] == tid]
+                        if occ:
+                            pairs.append(("tag", Hs_k, occ))
             continue
         # a question: the same check against the truth that follows it
         truth = ev["truth"]
@@ -5108,7 +5177,7 @@ def _v13_phase1(T, rel, mem, rdr, dec, train_on, tr_docs, ho_docs, report, sd_):
                             truth, prefix = tk.decode(ids[i:i + best]).strip(), tk.decode(ids[:i]).strip()
                             if truth and prefix:
                                 out.append({"t": "ask", "text": prefix, "gold": None, "ent": ent, "truth": truth, "kind": "cloze",
-                                            "keep": keep, "ctx": " ".join(d["sents"][:k]), "n_tok": best})
+                                            "keep": keep, "ctx": " ".join(d["sents"][:k]), "n_tok": best, "tgt_ids": ids[i:i + best]})
                                 n_t += 1
                             i += best
                         else:
@@ -5348,6 +5417,8 @@ def v13(steps=3000):
                     L = L + W_RT * dec.loss(rel.q(p_[1]), list(p_[2]), wte)
                 elif p_[0] == "cost":
                     L = L + W_COST * F.cross_entropy(p_[1][None], torch.tensor([p_[2]], device=dev))
+                elif p_[0] == "tag":                     # a recurring span that no node held: mark it as a thing
+                    L = L + rdr.tag_loss(p_[1], p_[2], full=False)
                 else:
                     continue
             else:
