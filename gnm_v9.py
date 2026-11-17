@@ -7,6 +7,7 @@ The world below is kept only as a source of checkable questions (later tests). O
   python gnm.py e1 --steps 3000 --save /marimo/ckpt/e1.pt     # reading: species articles in, blanked spans out
 """
 import argparse
+import collections
 import gzip
 import json
 import math
@@ -4678,6 +4679,23 @@ class Reader13(nn.Module):
         return out
 
 
+class Dec13(nn.Module):
+    """phase 1 round trip (user 11-03: node <-> text): a node's identity vector (Rel13.q of its mention) decodes its
+    name token by token; output tied to GPT-2's (frozen) token embeddings"""
+
+    def __init__(self, E, Q=256, Hd=256):
+        super().__init__()
+        self.inp = nn.Linear(Q, Hd)
+        self.gru = nn.GRU(E, Hd, batch_first=True)
+        self.out = nn.Linear(Hd, E)
+
+    def loss(self, qvec, ids, wte):
+        x = wte[torch.tensor([ids[:-1]], device=dev)] if len(ids) > 1 else torch.zeros(1, 0, wte.shape[1], device=dev)
+        x = torch.cat([torch.zeros(1, 1, wte.shape[1], device=dev), x], 1)
+        h, _ = self.gru(x, self.inp(qvec)[None, None].contiguous())
+        return F.cross_entropy(self.out(h[0]) @ wte.T, torch.tensor(ids, device=dev))
+
+
 class Mem13(nn.Module):
     """memory heads + the function nodes (ops). V11 entries: key = bind(r, arg atoms at their positions)"""
 
@@ -4747,7 +4765,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
            "right binomial": 0, "n binomial": 0, "n variant": 0, "right variant": 0, "dont know": 0,
            "claims gold": 0, "claims read right": 0, "q gold": 0, "q read right": 0, "ar n": 0, "ar right": 0,
            "ar long n": 0, "ar long right": 0, "ar computed": 0, "ar recalled": 0, "check n": 0, "check right": 0,
-           "check new": 0, "check contra": 0}
+           "check new": 0, "check contra": 0, "n cloze": 0, "right cloze": 0, "n var": 0}
     traces, read_n, read_done, n_stmt = [], {}, set(), [0]
     q_n, q_r = {}, {}
 
@@ -4772,6 +4790,10 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
         d = {"lg": lg if train else None, "n": len(nodes), "j": j, "name": men[1]}
         decs.append(d)
         if j == len(nodes):
+            if train:
+                pairs.append(("rt", men[0], men[2]))    # phase 1 round trip: the new node must say its name
+                if any(n_["typ"] == "name" for n_ in nodes):   # a node costs (user D6): lean to the most relevant one
+                    pairs.append(("cost", lg, int(lg[:len(nodes)].argmax())))
             return new_node(men, "name", ent, d), d
         for f, v in (("m", men[0]), ("names", men[1]), ("sp", men[3]), ("cx", men[4]), ("md", d)):
             nodes[j][f].append(v)
@@ -4779,7 +4801,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
 
     def mention(ids, Hs, sp):
         v = Hs[sp[0]:sp[1] + 1]
-        return (v.mean(0), T.say(ids, sp), None, v, Hs)
+        return (v.mean(0), T.say(ids, sp), ids[sp[0]:sp[1] + 1], v, Hs)
 
     def path1(start, truth):                             # edges ending with a forward edge into a node named truth
         front, seen = [(start, [])], {start}
@@ -5024,6 +5046,115 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
     return st_, pairs
 
 
+def _wiki_docs(n_hold=300, max_sent=12, min_sent=4):
+    """phase 1 data: raw Wikipedia articles as documents of up to 12 sentences (no labels)"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio", "wiki_e1.json.gz")
+    docs = []
+    for a in json.load(gzip.open(path, "rt", encoding="utf-8")):
+        sents = []
+        for para in a.get("text", []):
+            for s_ in para.split(" . "):
+                s_ = s_.strip()
+                if 4 <= len(s_.split()) <= 40 and "<unk>" not in s_:
+                    sents.append(s_ + " .")
+                if len(sents) >= max_sent:
+                    break
+            if len(sents) >= max_sent:
+                break
+        if len(sents) >= min_sent:
+            docs.append({"title": a.get("title", ""), "sents": sents})
+    random.Random(83).shuffle(docs)
+    return docs[n_hold:], docs[:n_hold]
+
+
+def _v13_phase1(T, rel, mem, rdr, dec, train_on, tr_docs, ho_docs, report, sd_):
+    """PHASE 1 (user 11-17: "can we pretrain the perception as a separate phase?" -> "sure then"): raw Wikipedia, no
+    labels. Each document is read sentence by sentence into a fresh memory; BEFORE a sentence is stored, every span in
+    it that already appeared earlier in the document is a cloze -- the sentence's prefix is asked as a question and GNM
+    must reach the span from memory (check 1 = prediction met, user 11-03), through the same reader / identity / walk /
+    blames as the skills. + round trip (a new node's identity vector says its name; user 11-03 node <-> text) + a small
+    cost per node (D6). Which spans are cloze targets (recurring in the document, with a token outside the 300 most
+    common) is a data statistic picking training targets only, never an input. Eval: held-out documents, cloze exact;
+    baselines: GPT-2 seeing only the current sentence (no memory) and GPT-2 seeing the whole document so far"""
+    tk, M = T.tk, T.M
+    cnt = collections.Counter(t for d in tr_docs[:3000] for s_ in d["sents"] for t in tk(" " + s_)["input_ids"])
+    common = {t for t, _ in cnt.most_common(300)}
+
+    def has(seq, g):
+        return any(seq[i:i + len(g)] == g for i in range(len(seq) - len(g) + 1))
+
+    def events(docs, keep=False, max_tgt=2):
+        out = []
+        for d in docs:
+            ent, prev = "doc:" + d["title"], []
+            for k, s_ in enumerate(d["sents"]):
+                ids = tk(" " + s_)["input_ids"]
+                if k:
+                    i, n_t = 1, 0
+                    ts = tk.convert_ids_to_tokens(ids)
+                    punct = [not any(ch.isalnum() for ch in t_.replace("Ġ", "")) for t_ in ts]
+
+                    def ok_span(i0, n):                  # (11-17 CPU check: fragments 'cephal', 'ney', ', the great hammer',
+                        j0 = i0 + n                       #  'called' -> whole words, no punctuation inside, a capitalised
+                        if j0 > len(ids) or not ts[i0].startswith("Ġ") or any(punct[i0:j0]):   # word / digit / 2+ words)
+                            return False
+                        if j0 < len(ids) and not (ts[j0].startswith("Ġ") or punct[j0]):
+                            return False
+                        txt = tk.decode(ids[i0:j0]).strip()
+                        return (any(w[:1].isupper() or w[:1].isdigit() for w in txt.split()) or (len(txt.split()) >= 2 and ids[j0 - 1] not in common)) and                             any(t not in common for t in ids[i0:j0]) and any(has(pv, ids[i0:j0]) for pv in prev)
+                    while i < len(ids) and n_t < max_tgt:
+                        best = next((n for n in (4, 3, 2, 1) if ok_span(i, n)), 0)
+                        if best:
+                            truth, prefix = tk.decode(ids[i:i + best]).strip(), tk.decode(ids[:i]).strip()
+                            if truth and prefix:
+                                out.append({"t": "ask", "text": prefix, "gold": None, "ent": ent, "truth": truth, "kind": "cloze",
+                                            "keep": keep, "ctx": " ".join(d["sents"][:k]), "n_tok": best})
+                                n_t += 1
+                            i += best
+                        else:
+                            i += 1
+                out.append({"t": "read", "text": s_, "gold": None, "ent": ent, "n_reads": 1, "keep": keep})
+                prev.append(ids)
+        return out
+    ho = [events([d], keep=True) for d in ho_docs[:150]]
+
+    @torch.no_grad()
+    def greedy(text, n):
+        ids = tk(" " + text)["input_ids"][-900:]
+        for _ in range(n):
+            ids.append(int(M(input_ids=torch.tensor([ids], device=dev)).logits[0, -1].argmax()))
+        return tk.decode(ids[-n:]).strip()
+    qs = [e for evs in ho for e in evs if e["t"] == "ask"]
+    b_sent = sum(greedy(e["text"], e["n_tok"]) == e["truth"] for e in qs)
+    b_doc = sum(greedy(e["ctx"] + " " + e["text"], e["n_tok"]) == e["truth"] for e in qs)
+    print(f"v13 PHASE 1: {len(tr_docs)} training documents, {len(ho_docs[:150])} held-out; held-out cloze targets {len(qs)}; "
+          f"GPT-2 with this sentence only (no memory) {b_sent}/{len(qs)}, GPT-2 with the whole document so far in its "
+          f"context {b_doc}/{len(qs)}", flush=True)
+
+    def cloze(tag):
+        n_ = r_ = dk = 0
+        with torch.no_grad():
+            for evs in ho:
+                st, _ = _v13_run(evs, T, rel, mem, rdr)
+                n_, r_, dk = n_ + st["n cloze"], r_ + st["right cloze"], dk + st["dont know"]
+        print(f"v13 PHASE 1 {tag}: held-out cloze from GNM's memory (it sees one sentence at a time) {r_}/{n_}, "
+              f"don't know {dk}", flush=True)
+    cloze("step 0")
+    rng = random.Random(97 + sd_)
+    at = {int(v) for v in os.environ.get("V13_AT", "").split(",") if v}
+    for stp in range(int(os.environ.get("V13_P1_STEPS", "3000"))):
+        if stp in at and stp:
+            cloze(f"step {stp}")
+        _, pairs = _v13_run(events(rng.sample(tr_docs, 2)), T, rel, mem, rdr, train=True)
+        train_on(pairs, stp)
+    cloze("final")
+    path = os.environ.get("V13_SAVE", "/marimo/out/v13p1.pt")
+    torch.save({"rel": rel.state_dict(), "mem": {k: v for k, v in mem.state_dict().items() if not k.startswith("ops.")},
+                "rdr": rdr.state_dict(), "dec": dec.state_dict(), "mu": T.mu, "sd": T.sd}, path)
+    print(f"v13 PHASE 1: perception saved to {path}", flush=True)
+    report("after phase 1 only (no skill training)")
+
+
 def v13(steps=3000):
     """§1d build: see the section comment. Eval: biology questions (30 never-trained species, half by name variants),
     arithmetic questions (unseen pairs of 1-3 digits; and 4-6 digits = longer than any training number), reader
@@ -5128,13 +5259,27 @@ def v13(steps=3000):
             e = r_.choice([e for e in per if e])
             out.append(e.pop(0))
         return out
-    T.fit_scale([x["lead"] for x in train_sp[:60]] + [f"{i} plus {i + 7} is {2 * i + 7} ." for i in range(10, 400, 13)])
+    PHASE, INIT = os.environ.get("V13_PHASE", "2"), os.environ.get("V13_INIT", "")
+    ck = torch.load(INIT, map_location=dev) if INIT else None
+    tr_docs, ho_docs = _wiki_docs() if PHASE == "1" else ([], [])
+    if ck is not None:                                   # phase 2 from phase 1: the same fixed scale
+        T.mu, T.sd = ck["mu"], ck["sd"]
+    else:
+        T.fit_scale([x["lead"] for x in train_sp[:60]] + [f"{i} plus {i + 7} is {2 * i + 7} ." for i in range(10, 400, 13)]
+                    + [s_ for d_ in tr_docs[:40] for s_ in d_["sents"]])
     erng = random.Random(47)
     test_bio = mix(bio_events(test_sp, erng, n_after=4), [], erng)
     test_ar = arith_events(random.Random(48), 60, (1, 2, 3), keep=True)
     test_ar = [e for e in test_ar if e["t"] == "ask"]
     long_ar = [e for e in arith_events(random.Random(49), 80, (4, 5, 6), keep=True, long=True) if e["t"] == "ask"]
-    rel, mem, rdr = Rel13(E).to(dev), Mem13(E).to(dev), Reader13(E).to(dev)
+    rel, mem, rdr, dec = Rel13(E).to(dev), Mem13(E).to(dev), Reader13(E).to(dev), Dec13(E).to(dev)
+    wte = T.M.get_input_embeddings().weight.detach()
+    if ck is not None:                                   # perception pretrained in phase 1
+        rel.load_state_dict(ck["rel"])
+        mem.load_state_dict(ck["mem"], strict=False)
+        rdr.load_state_dict(ck["rdr"])
+        dec.load_state_dict(ck["dec"])
+        print(f"v13: perception loaded from {INIT} (phase 1)", flush=True)
     # ~50 demos for the reader (statements + questions, biology + arithmetic) and ~50 column steps (worked sums)
     drng = random.Random(71 + sd_)
     demo = []
@@ -5178,7 +5323,41 @@ def v13(steps=3000):
         copt.step()
     print(f"v13: reader taught on {len(demo)} demo units; op made for the relation words of the demo sums, "
           f"{len(demo_ar)} demo sums = {cols} column steps; FIXED: {V13_FIXED}", flush=True)
-    opt = torch.optim.AdamW(list(rel.parameters()) + list(mem.parameters()) + list(rdr.parameters()), lr=1e-3)
+    opt = torch.optim.AdamW(list(rel.parameters()) + list(mem.parameters()) + list(rdr.parameters()) + list(dec.parameters()),
+                            lr=1e-3)
+    W_RT, W_COST = float(os.environ.get("V13_RT", ".1")), float(os.environ.get("V13_COST", ".02"))
+    n_ops = [len(mem.ops)]
+
+    def train_on(pairs, stp):
+        """one update from an episode's targets (checks, blames, reader traces, round trips, node costs)"""
+        if len(mem.ops) > n_ops[0]:                      # a function the model made: its network joins the learning
+            for op in mem.ops[n_ops[0]:]:
+                opt.add_param_group({"params": list(op.parameters())})
+            n_ops[0] = len(mem.ops)
+        L, n_ = 0., 0
+        rw = .3 * max(0., 1. - stp / 1000.)              # (11-17 v13a0: the SAME 50 reader demos early, fading by 1000)
+        if rw > 0:
+            for Hs_, cl_ in random.sample(demo, 4):
+                L = L + rw * rdr.loss(Hs_, cl_)
+                n_ += 1
+        for p_ in pairs:
+            if isinstance(p_[0], str):
+                if p_[0] == "reader":
+                    L = L + p_[2] * rdr.loss(*p_[1])
+                elif p_[0] == "rt" and p_[2]:
+                    L = L + W_RT * dec.loss(rel.q(p_[1]), list(p_[2]), wte)
+                elif p_[0] == "cost":
+                    L = L + W_COST * F.cross_entropy(p_[1][None], torch.tensor([p_[2]], device=dev))
+                else:
+                    continue
+            else:
+                lg, tgt, wrong = p_
+                L = L + (1. if wrong else .1) * F.cross_entropy(lg[None], torch.tensor([tgt], device=dev))
+            n_ += 1
+        if n_:
+            opt.zero_grad()
+            (L / n_).backward()
+            opt.step()
 
     def report(tag):
         with torch.no_grad():
@@ -5199,40 +5378,19 @@ def v13(steps=3000):
                       f"{sb['check n']} | nodes {sb['nodes']}, edges {sb['edges']}, ops {sb['ops']}", flush=True)
                 for tr in sb.get("traces", []):
                     print(f"   TRACE {lab[:6]}: {tr}", flush=True)
+    if PHASE == "1":
+        _v13_phase1(T, rel, mem, rdr, dec, train_on, tr_docs, ho_docs, report, sd_)
+        return
     report("step 0")
     trng = random.Random(43 + sd_)
     at = {int(v) for v in os.environ.get("V13_AT", "").split(",") if v}
-    n_ops = len(mem.ops)
     for stp in range(steps):
         if stp in at and stp:
             report(f"step {stp}")
         bio = bio_events(trng.sample(train_sp, trng.randint(8, 20)), trng)
         stream = mix(bio, arith_events(trng, 20, (1, 2, 3)), trng)
         _, pairs = _v13_run(stream, T, rel, mem, rdr, train=True)
-        if len(mem.ops) > n_ops:                         # a function the model made: its network joins the learning
-            for op in mem.ops[n_ops:]:
-                opt.add_param_group({"params": list(op.parameters())})
-            n_ops = len(mem.ops)
-        L, n_ = 0., 0
-        rw = .3 * max(0., 1. - stp / 1000.)              # (11-17 v13a0: the reader forgot biology, claims 23 -> 0/90: the SAME
-        if rw > 0:                                       # 50 demos stay in the mix early, fading to 0 by step 1000)
-            for Hs_, cl_ in random.sample(demo, 4):
-                L = L + rw * rdr.loss(Hs_, cl_)
-                n_ += 1
-        for p_ in pairs:
-            if isinstance(p_[0], str) and p_[0] == "newop":
-                continue
-            if isinstance(p_[0], str) and p_[0] == "reader":
-                L = L + p_[2] * rdr.loss(*p_[1])
-            else:
-                lg, tgt, wrong = p_
-                L = L + (1. if wrong else .1) * F.cross_entropy(lg[None], torch.tensor([tgt], device=dev))
-            n_ += 1
-        if not n_:
-            continue
-        opt.zero_grad()
-        (L / n_).backward()
-        opt.step()
+        train_on(pairs, stp)
     report("final")
 
 
