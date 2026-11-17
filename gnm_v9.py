@@ -4301,8 +4301,12 @@ def v11_t5(steps=3000, ep_species=8):
                 said_c = {}                              # the LM's answer per statement (one question, same weights)
 
                 def walk(try_):
-                    """the walk from the question's node: greedy (10% random in training), or (try_) a sampled try among
-                    the answer / follow options (v12d: D7 outcome -- tries, a right one is the target)"""
+                    """the walk from the question's node: greedy, or (try_) a sampled try among the answer / follow
+                    options (v12d: D7 outcome -- tries, a right one is the target). (v12e, 11-18: the greedy walk had
+                    10% random picks in training; with tries those only added noise -- v12d step 500: the random picks'
+                    wrong answers taught 'don't know' 2184 times, every arm said don't know 120/120 while the right
+                    edge already scored highest among the answers. 'Don't know' is now taught only by its own wrong
+                    answers)"""
                     tk_, cur, hp, ae, g_, s_ = [], j, 0, None, None, None
                     for h in range(H + 1):
                         lg, eis = step_logits(rq, cur, h, R_)
@@ -4311,7 +4315,7 @@ def v11_t5(steps=3000, ep_species=8):
                                 break
                             k = 1 + int(torch.multinomial(F.softmax(lg[1:].detach(), 0), 1))
                         else:
-                            k = (random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax()))
+                            k = int(lg.argmax())
                         tk_.append((lg, k, eis))
                         if k == 0:
                             break
@@ -4513,6 +4517,18 @@ def v11_t5(steps=3000, ep_species=8):
             aopt.step()
         SAY["demos"] = len(demo_a)
         print(f"v12b: the LM's step taught on {len(demo_a)} demos (statement + question -> answer)", flush=True)
+        init12 = os.environ.get("V12_INIT", "")
+        if init12:                                       # v12e: resume from a report's checkpoint (box resets ~11 h)
+            ck_ = torch.load(init12, map_location=dev)
+            G10.load_state_dict(ck_["G10"])
+            for p_, v_ in zip(G10.eparams(), ck_["experts"]):
+                p_.data[:len(v_)] = v_.to(dev)
+            mem.load_state_dict(ck_["mem"])
+            reader.load_state_dict(ck_["reader"])
+            relm.load_state_dict(ck_["relm"])
+            WALK12["demos"] = 50                         # (its demonstrations were given before the checkpoint)
+            print(f"v12: resumed from {init12} (optimizer state fresh)", flush=True)
+        start12 = int(os.environ.get("V12_START", "0"))
         opt = torch.optim.AdamW(list(relm.parameters()) + list(mem.parameters()) + list(reader.parameters()) + g10p, lr=1e-3)
         learned = make_learned(relm)
 
@@ -4556,10 +4572,10 @@ def v11_t5(steps=3000, ep_species=8):
                                                                  for p in G10.eparams()],
                             "mem": mem.state_dict(), "reader": reader.state_dict(), "relm": relm.state_dict()},
                            os.path.join(ck, f"v12d_{tag.replace(' ', '')}.pt"))
-        rep12("step 0")
-        trng, wrng = random.Random(43 + sd_), random.Random(83 + sd_)
+        rep12(f"step {start12}" + (" (resumed)" if init12 else ""))
+        trng, wrng = random.Random(43 + sd_ + start12), random.Random(83 + sd_ + start12)
         at = {int(v) for v in os.environ.get("V11_T5_AT", "").split(",") if v}
-        for stp in range(steps):
+        for stp in range(start12, steps):
             if stp in at and stp:
                 rep12(f"step {stp}")
             stream = events(world(trng.sample(train_sp, min(len(train_sp), trng.randint(ep_species, 30))), wrng), trng)
