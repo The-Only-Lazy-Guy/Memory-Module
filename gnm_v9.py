@@ -4460,9 +4460,15 @@ def v11_t5(steps=3000, ep_species=8):
                 rep12(f"step {stp}")
             stream = events(trng.sample(train_sp, min(len(train_sp), trng.randint(ep_species, 30))), trng)
             _, pairs = run12(stream, learned(True), mem, reader, match=match_fn, train=True)
-            if not pairs:
-                continue
             L, n_ = 0., 0
+            # (11-18 v12b step 500: the reader's statement claims fell 38 -> 2/90 -- its only later teacher was its own
+            # right readings, almost all of questions; training reads with the reader, so memory got few edges and the
+            # walk learned 'don't know'. v13a0 had the same; agreed fix: the same ~50 demos stay early, fading by 1000)
+            rw = .3 * max(0., 1. - stp / 1000.)
+            if rw > 0:
+                for H_, cl in random.sample(demos, 4):
+                    L = L + rw * reader.loss(H_, cl)
+                    n_ += 1
             for p_ in pairs:
                 if p_[0] == "reader":
                     L = L + p_[2] * reader.loss(*p_[1])
@@ -4473,6 +4479,8 @@ def v11_t5(steps=3000, ep_species=8):
                     lg, tgt, wrong = p_
                     L = L + (1. if wrong else .1) * F.cross_entropy(lg[None], torch.tensor([tgt], device=dev))
                 n_ += 1
+            if not n_:
+                continue
             opt.zero_grad()
             (L / n_).backward()
             opt.step()
