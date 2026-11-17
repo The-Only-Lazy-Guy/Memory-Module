@@ -4616,13 +4616,19 @@ def _typ14(n):
 def _exec14(mem, net, store, A, B, how=None, oracle=None):
     """GNM computes A + B: each firing reads the two current nodes and the carry, writes a digit into the result object,
     and chooses the relation the signal goes on along (or stop); the same relation is followed from both current nodes.
-    how = None: the network alone (eval). how = (k, won, half): try k in training -- a firing whose case is in the kept
-    won steps reuses that step; any other firing takes its digit/carry outputs in turn (k), and from try 22 on its
-    control choices are drawn at random half the time. oracle(case) -> outputs: the mechanics check only.
-    Returns (result string or None, firing records (x, y, carry, digit, carry out, follow, write, had a previous digit))."""
+    how = None: the network alone (eval). how = (k, won): try k in training -- a firing whose case is in the kept won
+    steps reuses that step's digit / carry; any other firing takes its digit / carry outputs in turn (k); from try 22 on
+    control choices are also drawn at random (half the time at an open firing, .15 at a kept one).
+    oracle(case) -> outputs: the mechanics check only.
+    Returns (result string or None, firing records (x, y, carry, digit, carry out, follow, write, had a previous digit,
+    the follow choices that lead to the SAME next nodes as the one taken)).
+    (11-18 smoke: in a 1-digit sum every relation leads to 'nothing there', so the try was right whatever was chosen; the
+    network copied those arbitrary choices -- follow wrong on 0 -> 3 cases in 20 steps -- and kept steps locked them in
+    for longer sums. A choice is now learned only as the set of choices with the same effect, read off the lookups.)"""
     x, y, c, seq, pos, recs, nun = A, B, 0, [], None, [], 0
     if how is not None and EVAL14[0]:
         AUD14["eval tries"] += 1
+    nid = lambda n: None if n is None else id(n)
     with torch.no_grad():
         for _ in range(2 * (len(A["digits"]) + len(B["digits"])) + 6):
             case = (_typ14(x), _typ14(y), c)
@@ -4632,20 +4638,24 @@ def _exec14(mem, net, store, A, B, how=None, oracle=None):
                 v, cl, f, w = net(mem.inp14(*case)[None], store.R)
                 dg, cr, fo, wr = int(v[0].argmax()), int(cl[0].argmax()), int(f[0].argmax()), int(w[0].argmax())
                 if how is not None:
-                    k, won, half = how
-                    if case in won:                      # a kept won step (outputs that never mattered: the network's)
+                    k, won = how
+                    if case in won:                      # a kept won step: its digit / carry (carry: if it mattered)
                         w_ = won[case]
-                        dg, fo = w_[0], w_[2]
-                        cr = cr if w_[1] is None else w_[1]
-                        wr = wr if w_[3] is None else w_[3]
+                        dg, cr, pc = w_[0], (cr if w_[1] is None else w_[1]), .15
                     else:
                         m = (k // 22 ** nun) % 22
-                        dg, cr, nun = m // 2, m % 2, nun + 1
-                        if k >= 22 and random.random() < .5:
-                            fo = random.randrange(STOP14 + 1)
-                        if k >= 22 and random.random() < .5:
-                            wr = random.randrange(STOP14)
-            recs.append((case[0], case[1], c, dg, cr, fo, wr, pos is not None))
+                        dg, cr, nun, pc = m // 2, m % 2, nun + 1, .5
+                    if k >= 22 and random.random() < pc:
+                        fo = random.randrange(STOP14 + 1)
+                    if k >= 22 and random.random() < pc:
+                        wr = random.randrange(STOP14)
+            if fo == STOP14:
+                fset, nxt = (STOP14,), None
+            else:
+                nx = [(store.follow(x, k_), store.follow(y, k_)) for k_ in range(STOP14)]
+                key_ = lambda p: (nid(p[0]), nid(p[1]))
+                fset, nxt = tuple(k_ for k_ in range(STOP14) if key_(nx[k_]) == key_(nx[fo])), nx[fo]
+            recs.append((case[0], case[1], c, dg, cr, fo, wr, pos is not None, fset))
             if dg < 10:
                 if pos is None:
                     seq, pos = [dg], 0
@@ -4658,7 +4668,7 @@ def _exec14(mem, net, store, A, B, how=None, oracle=None):
                     return None, recs
             if fo == STOP14:
                 return ("".join(map(str, seq)) if seq else None), recs
-            x, y, c = store.follow(x, fo), store.follow(y, fo), cr
+            (x, y), c = nxt, cr
     return None, recs
 
 
@@ -4670,7 +4680,11 @@ def _trace_loss14(mem, net, recs):
     v, cl, f, w = net(inp, R)
     t = lambda i: torch.tensor([r[i] for r in recs], device=dev)
     go = t(5) != STOP14
-    L = F.cross_entropy(v, t(3)) + F.cross_entropy(f, t(5))
+    ok = torch.zeros_like(f, dtype=torch.bool)          # follow: any choice with the same effect counts as the one taken
+    for i, r in enumerate(recs):
+        ok[i, list(r[8])] = True
+    lf = torch.log_softmax(f, -1)
+    L = F.cross_entropy(v, t(3)) - torch.logsumexp(lf.masked_fill(~ok, -1e9), -1).mean()
     if go.any():
         L = L + F.cross_entropy(cl[go], t(4)[go])
     wm = torch.tensor([bool(r[7]) and r[3] < 10 for r in recs], device=dev)
@@ -4683,15 +4697,15 @@ def _oracle14(a, b):
     """the worked steps of a + b as firing records (writes the ~50 demos; the mechanics check). Order: start at the number
     nodes -> follow 'last' (units) -> each column: digit, carry, follow 'before', write 'before' -> stop after the last carry"""
     da, db = [int(ch) for ch in a[::-1]], [int(ch) for ch in b[::-1]]
-    recs, c, prev = [("num", "num", 0, 10, 0, 1, 3, False)], 0, False
+    recs, c, prev = [("num", "num", 0, 10, 0, 1, 3, False, (1,))], 0, False
     for i in range(max(len(da), len(db)) + 2):
         x = da[i] if i < len(da) else None
         y = db[i] if i < len(db) else None
         if x is None and y is None and c == 0:
-            recs.append((None, None, 0, 10, 0, STOP14, 3, prev))
+            recs.append((None, None, 0, 10, 0, STOP14, 3, prev, (STOP14,)))
             return recs
         s = (x or 0) + (y or 0) + c
-        recs.append((x, y, c, s % 10, s // 10, 3, 3, prev))
+        recs.append((x, y, c, s % 10, s // 10, 3, 3, prev, (3,)))
         prev, c = True, s // 10
     return recs
 
@@ -5192,16 +5206,14 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
                 if right is None:                        # tries (D7): differ only at firings no right try has shown
                     for kt in range(1, N_TRY14):
                         AUD14["tries"] += 1
-                        r_k, recs_k = _exec14(mem, mem.ops[oi], store, A_, B_, how=(kt, won, N_TRY14 // 2))
+                        r_k, recs_k = _exec14(mem, mem.ops[oi], store, A_, B_, how=(kt, won))
                         if sealed.eq(r_k) and (right is None or len(recs_k) < len(right)):
                             right = recs_k               # D6: of the right tries, the shortest
                 if right is not None:                    # its steps are kept (D8) and the network learns them (D7)
                     AUD14["right traces"] += 1
-                    for r_ in right:                     # an output that did not matter in this try is not kept
-                        old = won.get((r_[0], r_[1], r_[2]), (None,) * 4)
-                        cr_ = r_[4] if r_[5] != STOP14 else old[1]
-                        wr_ = r_[6] if (r_[7] and r_[3] < 10) else old[3]
-                        won[(r_[0], r_[1], r_[2])] = (r_[3], cr_, r_[5], wr_)
+                    for r_ in right:                     # digit / carry kept (a carry only where it mattered)
+                        old = won.get((r_[0], r_[1], r_[2]), (None, None))
+                        won[(r_[0], r_[1], r_[2])] = (r_[3], r_[4] if r_[5] != STOP14 else old[1])
                     check_pairs.append(("trace", oi, right))
         return got, k
 
