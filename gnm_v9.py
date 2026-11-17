@@ -4996,10 +4996,18 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
                 if dd["name"] == truth and dd["lg"] is not None and dd["j"] != dd["n"]:
                     pairs.append((dd["lg"], dd["n"], True))
             continue
-        vals = ev.get("values", {})
-        ok = [i for i in range(d["n"]) if nodes[i]["typ"] == "name" and all(path1(i, v) is not None for v in vals.values())]
+        # (11-17 v13 trace: with the genus on a split node no node reached ALL values -> the target was 'create' -> more
+        # splits. Pointing is blamed only AFTER reading, when the thing's own node exists: target = a node that reaches
+        # the ASKED value, the one the model itself rates most relevant)
+        ok = [i for i in range(d["n"]) if nodes[i]["typ"] == "name" and path1(i, truth) is not None]
         t_ = max(ok, key=lambda i: float(d["lg"][i])) if ok else d["n"]
         pairs.append((d["lg"], t_, True))
+        if ok and j != t_ and len(nodes[j]["m"]) > 1:   # blame up (3): the stored mention this question matched in
+            with torch.no_grad():                        # the wrong node was put there by a POINTING decision
+                k3 = int(rel.per_mention(mention(ids, Hs, claims[0][0][0]), nodes[j], len(nodes[j]["m"]) - 1).argmax())
+            dk = nodes[j]["md"][k3]
+            if dk is not d and dk["lg"] is not None and dk["j"] != dk["n"]:
+                pairs.append((dk["lg"], t_ if t_ < dk["n"] else dk["n"], True))
         if ok and j != t_:                               # blame up (1)
             dm = decs[nodes[j]["made_by"]]
             if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
