@@ -3572,6 +3572,9 @@ def v11_t5(steps=3000, ep_species=8):
         clean = not _re.search(r"(?:idae|aceae)\b", nf)
         x["split"] = clean and srng.random() < SPLIT
         x["lead_nf"], x["gstmt"] = nf, f"{x['genus']} is a genus in the family {x['family']} ."
+        # T9b (11-17 trace: the genus as a sub-span INSIDE the binomial merged / swapped with it -- an artifact of my
+        # parse, a real reader sees no separate genus mention there): the genus link is its own statement
+        x["bstmt"] = f"{x['binomial']} belongs to the genus {x['genus']} ."
     rng = random.Random(41)
     rng.shuffle(sp)
     test_sp, train_sp = sp[:30], sp[30:]
@@ -3582,10 +3585,11 @@ def v11_t5(steps=3000, ep_species=8):
     W = {"family": ["Which family is {n} in?", "What family does {n} belong to?", "{N} is placed in which family?", "Name the family of {n}."],
          "genus": ["Which genus is {n} in?", "What genus does {n} belong to?", "{N} is classified in which genus?", "Name the genus of {n}."]}
 
-    def span(ids, name):
+    def span(ids, name, last=False):
         for cand in (" " + name, " " + name[0].upper() + name[1:]):
             nid = tk(cand)["input_ids"]
-            st = next((i for i in range(len(ids)) if ids[i:i + len(nid)] == nid), None)
+            hits = [i for i in range(len(ids)) if ids[i:i + len(nid)] == nid]
+            st = (hits[-1] if last else hits[0]) if hits else None
             if st is not None:
                 return st, st + len(nid)
         return None
@@ -3601,11 +3605,11 @@ def v11_t5(steps=3000, ep_species=8):
     # states of its whole sentence / question)
     cache, scale = {}, {}
 
-    def mention(text, name):
-        key = (text, name)
+    def mention(text, name, last=False):
+        key = (text, name, last)
         if key not in cache:
             ids = tk(" " + text)["input_ids"]
-            sp_ = span(ids, name)
+            sp_ = span(ids, name, last)
             if sp_ is None:
                 return None
             H = ctx_states(ids)
@@ -3624,10 +3628,8 @@ def v11_t5(steps=3000, ep_species=8):
             if r_.random() < ask_before:
                 for rel, kind, t in r_.sample(qs, 2):
                     ev.append(("ask", x, rel, kind, t, variant(x, kind, r_)))
-            if x.get("split"):
-                ev.extend(("read", x, w) for w in r_.sample(["nf", "g"], 2))
-            else:
-                ev.append(("read", x, "lead"))
+            rd = ["nf", "b", "g"] if x.get("split") else ["lead", "b"]
+            ev.extend(("read", x, w) for w in r_.sample(rd, len(rd)))
             for rel, kind, t in r_.sample(qs, n_after):
                 ev.append(("ask", x, rel, kind, t, variant(x, kind, r_)))
             per.append(ev)
@@ -3790,12 +3792,13 @@ def v11_t5(steps=3000, ep_species=8):
             ent = x["binomial"]
             if ev[0] == "read":
                 which = ev[2]
-                text, kinds = {"lead": (x["lead"], ("common", "binomial", "family", "genus")),
-                               "nf": (x["lead_nf"], ("common", "binomial", "genus")),
+                text, kinds = {"lead": (x["lead"], ("common", "binomial", "family")),
+                               "nf": (x["lead_nf"], ("common", "binomial")),
+                               "b": (x["bstmt"], ("binomial", "genus")),
                                "g": (x["gstmt"], ("genus", "family"))}[which]
                 named = []
                 for kind in kinds:
-                    m_ = mention(text, x[kind])
+                    m_ = mention(text, x[kind], last=(which == "b" and kind == "genus"))   # (the genus written after "genus")
                     if m_ is None:
                         continue
                     j_, d_ = point(m_, ent if kind in ("common", "binomial") else x[kind])
@@ -3811,12 +3814,12 @@ def v11_t5(steps=3000, ep_species=8):
                                           "da": da})
                             stats["edges"] += 1
                 n_stmt[0] += 1
-                if which != "g":
+                if which in ("lead", "nf"):
                     jj = {k: j_ for k, j_, _, _ in named}
                     stats["reads"] += 1
                     stats["linked"] += jj.get("common", -1) == jj.get("binomial", -2)
                 n_read[ent] = n_read.get(ent, 0) + 1
-                if n_read[ent] == (2 if x.get("split") else 1):
+                if n_read[ent] == (3 if x.get("split") else 2):
                     read_done.add(ent)
                 continue
             _, rel, kind, t, var = ev[1:]
