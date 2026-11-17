@@ -3901,7 +3901,36 @@ def v11_t5(steps=3000, ep_species=8):
                         u = edges[ei]["b"]
             else:                                        # nothing reachable: 'don't know' at the start
                 pairs.append((taken[0][0], 0, taken[0][1] != 0))
-                # (blame up (6), cut chain, 11-17: tried, genus split 28 -> 23 only, test 74 -> 64 -> reverted)
+                # blame up (6) (11-17 T9 diag; reverted once when the genus sub-span artifact swamped it, re-tried on T9b: the genus statement's genus mostly CREATED a 2nd genus node -> chain cut,
+                # 'don't know' targets fought 'take the genus edge'): the answer's node exists but the question cannot
+                # reach it. U = nodes the question's node reaches (< H hops), V = nodes one edge from the answer; the
+                # most relevant (u, v) pair by the model's OWN relevance: if v was created while u existed, v's creating
+                # decision should have pointed to u (outcome + own relevance; no labels, no string match)
+                ans_nodes = {i for i, n_ in enumerate(nodes) if n_["names"][0] == truth}
+                if ent in read_done and match is not None and ans_nodes:
+                    U, front = {j}, [j]
+                    for _ in range(H - 1):
+                        front = [edges[ei]["b"] for u_ in front for ei in outs.get(u_, []) if edges[ei]["b"] not in U]
+                        U.update(front)
+                    V = {e["a"] for e in edges if e["b"] in ans_nodes} - U - ans_nodes
+                    best = None
+                    for v in V:
+                        nv = nodes[v]
+                        vm = (nv["m"][0], nv["names"][0], nv["alone"][0], nv["sp"][0], nv["cx"][0])
+                        dv = decs[nv["made_by"]]
+                        if dv["lg"] is None or dv["j"] != dv["n"]:
+                            continue
+                        Us = [u_ for u_ in U if u_ < dv["n"]]
+                        if not Us:
+                            continue
+                        flat = {f: [v_ for u_ in Us for v_ in nodes[u_][f]] for f in ("m", "cx", "sp")}
+                        own = [u_ for u_ in Us for _ in nodes[u_]["m"]]
+                        sc_ = match(vm, flat, len(flat["m"]))     # one batched call over all of U's mentions
+                        k6 = int(sc_.argmax())
+                        if best is None or float(sc_[k6]) > best[0]:
+                            best = (float(sc_[k6]), dv, own[k6])
+                    if best is not None:
+                        pairs.append((best[1]["lg"], best[2], True))
             if mode != "outcome" or d["lg"] is None:
                 continue
             if got == truth or pth is not None:          # the pointing reached the answer: lightly reinforce it
