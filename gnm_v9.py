@@ -4415,13 +4415,24 @@ def v11_t5(steps=3000, ep_species=8):
                     if e_r is None and got is not None:  # answered wrong, no right try: 'don't know'
                         WALK12["dk taught"] += 1
                         pairs.append((taken[0][0], 0, True))
-                    # blame up (2'): the walk's first edge and the right walk's first edge from different statements
-                    if e_r is not None and len(taken) and taken[0][1] > len(taken[0][2]):
-                        e_w = edges[taken[0][2][taken[0][1] - 1 - len(taken[0][2])]]
-                        if e_w["stmt"] != e_r["stmt"]:
-                            dl = max(e_w, e_r, key=lambda e: e["stmt"])["da"]
-                            if dl["lg"] is not None and dl["j"] != dl["n"]:
-                                pairs.append((dl["lg"], dl["n"], True))
+                    # blame up (2'): the walk's first edge and the right walk's first edge from different statements ->
+                    # the later statement's pointing made one node of two things (target: create). v12f (11-18): also
+                    # when that first edge is an answer-from edge, or the walk said 'don't know' (then: the option it
+                    # ranked first after 'don't know'). v12e step 1000: questions landed on nodes holding several
+                    # species ('stoma': A. hygrometricus, the nitrous bonnet, ...), same-relation edges tied just
+                    # under 'don't know', the walk never followed -- and this blame was follow-only (T9b; I never
+                    # extended it when v12b added answer-from edges), so nothing un-merged the nodes
+                    if e_r is not None and len(taken):
+                        lg0, k0, eis0 = taken[0]
+                        if k0 == 0 and len(lg0) > 1:
+                            k0 = 1 + int(lg0[1:].argmax())
+                        if k0:
+                            e_w = edges[eis0[k0 - 1] if k0 <= len(eis0) else eis0[k0 - 1 - len(eis0)]]
+                            if e_w["stmt"] != e_r["stmt"]:
+                                dl = max(e_w, e_r, key=lambda e: e["stmt"])["da"]
+                                if dl["lg"] is not None and dl["j"] != dl["n"]:
+                                    WALK12["un-merge blamed"] += 1
+                                    pairs.append((dl["lg"], dl["n"], True))
                 if mode != "outcome" or d["lg"] is None:
                     continue
                 if got == truth or pth is not None:
@@ -4557,7 +4568,7 @@ def v11_t5(steps=3000, ep_species=8):
                   f"{SAY['written']} written by the LM so far, none from a stored name (no such path in the code); its demos "
                   f"{SAY['demos']}, its own right answers trained {SAY['own']}. GNM picks the statement (identity + walk): "
                   f"walk demos {WALK12['demos']}, tries {WALK12['tries']} (right {WALK12['right tries']}), "
-                  f"'don't know' taught {WALK12['dk taught']}", flush=True)
+                  f"'don't know' taught {WALK12['dk taught']}, merges blamed {WALK12['un-merge blamed']}", flush=True)
             # v12d measurement (v12c final collapse, no weights kept): the LM step's own parts, and a checkpoint
             with torch.no_grad():
                 bmax = max(float(G10.bias(G10.ctl(G10.lm_run(list(t_))[0])).abs().max()) for s_, q_, _ in demo_a[:20]
