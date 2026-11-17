@@ -3611,10 +3611,10 @@ def v11_t5(steps=3000, ep_species=8):
             qs = [(rel, kind, t) for rel in rels for kind in ("common", "binomial") for t in (wordings or W[rel])]
             if r_.random() < ask_before:
                 for rel, kind, t in r_.sample(qs, 2):
-                    ev.append(("ask", x, rel, kind, t))
+                    ev.append(("ask", x, rel, kind, t, variant(x, kind, r_)))
             ev.append(("read", x))
             for rel, kind, t in r_.sample(qs, n_after):
-                ev.append(("ask", x, rel, kind, t))
+                ev.append(("ask", x, rel, kind, t, variant(x, kind, r_)))
             per.append(ev)
         out = []
         while any(per):
@@ -3622,9 +3622,29 @@ def v11_t5(steps=3000, ep_species=8):
             out.append(e.pop(0))
         return out
 
-    def qtext(x, rel, kind, t):
-        n = ("the " + x["common"]) if kind == "common" else x["binomial"]
-        return t.replace("{N}", n[0].upper() + n[1:]).replace("{n}", n), x[kind]
+    # T6 (11-17, Claude's proposal): with exact names + edges the T5 test is solved by fixed code (120/120) -- every
+    # question repeats the lead's exact spelling and no two species share a name. People refer to things by variants:
+    # V11_T5_VAR = share of questions asking by a natural variant of the name (abbreviated genus, plural, title case,
+    # hyphen as space). Same for train and test species; the variant forms are never names the lead used
+    VAR = float(os.environ.get("V11_T5_VAR", "0"))
+
+    def variant(x, kind, r_):
+        if VAR <= 0 or r_.random() >= VAR:
+            return None
+        if kind == "binomial":
+            g, e = x["binomial"].split()[:2]
+            return g[0] + ". " + e
+        c = x["common"]
+        opts = [c + ("es" if c.endswith(("s", "sh", "ch", "x")) else "s"),
+                " ".join(w if w == "@-@" else w[0].upper() + w[1:] for w in c.split())]
+        if " @-@ " in c:
+            opts.append(c.replace(" @-@ ", " "))
+        return opts[r_.randrange(len(opts))]
+
+    def qtext(x, rel, kind, t, var=None):
+        nm = var or x[kind]
+        n = ("the " + nm) if kind == "common" else nm
+        return t.replace("{N}", n[0].upper() + n[1:]).replace("{n}", n), nm
 
     class Rel(nn.Module):
         def __init__(s_):
@@ -3698,7 +3718,7 @@ def v11_t5(steps=3000, ep_species=8):
         nodes, decs, pairs, edges = [], [], [], []
         stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "linked": 0, "reads": 0,
                  "right common": 0, "n common": 0, "right binomial": 0, "n binomial": 0, "j1 top": 0, "create>j1": 0,
-                 "n link": 0, "miss same genus": 0, "miss existing": 0, "miss own": 0, "edges": 0, "via edge": 0,
+                 "n link": 0, "miss same genus": 0, "miss existing": 0, "miss own": 0, "edges": 0, "via edge": 0, "n variant": 0, "right variant": 0,
                  "via edge right": 0}
 
         def point(men, ent):
@@ -3748,8 +3768,8 @@ def v11_t5(steps=3000, ep_species=8):
                 nodes[j1]["hist"].append(({r_: x[r_] for r_ in rels}, d1))
                 read_done.add(ent)
                 continue
-            _, rel, kind, t = ev[1:]
-            q, nm = qtext(x, rel, kind, t)
+            _, rel, kind, t, var = ev[1:]
+            q, nm = qtext(x, rel, kind, t, var)
             men = mention(q, nm)
             if men is None:
                 continue
@@ -3796,6 +3816,8 @@ def v11_t5(steps=3000, ep_species=8):
                 stats["right"] += got == x[rel]
                 stats["n " + kind] += 1
                 stats["right " + kind] += got == x[rel]
+                stats["n variant"] += var is not None
+                stats["right variant"] += var is not None and got == x[rel]
             if mode != "outcome" or d["lg"] is None:
                 continue
             if got == x[rel] or reach:
@@ -3890,7 +3912,8 @@ def v11_t5(steps=3000, ep_species=8):
                   f"{st['right common']}/{st['n common']}, by binomial {st['right binomial']}/{st['n binomial']}) | lead's two names "
                   f"on one node {st['linked']}/{st['reads']} | asked before reading -> another thing's node {st['wrong_node']}/"
                   f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things | edges {st['edges']}, answered via "
-                  f"an edge {st['via edge']} (right {st['via edge right']})", flush=True)
+                  f"an edge {st['via edge']} (right {st['via edge right']}) | asked by a name variant: right {st['right variant']}/"
+                  f"{st['n variant']}", flush=True)
     with torch.no_grad():
         report("exact name string", exact)
         report("exact name string + always follow edges (fixed)", exact, follow_all)
@@ -3926,7 +3949,7 @@ def v11_t5(steps=3000, ep_species=8):
                               f"missed link -> an existing node {st['miss existing']}, of them its own (asked before) {st['miss own']}, "
                               f"holding a same-genus name {st['miss same genus']} | weights name "
                               f"{float(relm.wn):.2f} context {float(relm.wc):.2f} | edges {st['edges']} via edge "
-                              f"{st['via edge']} right {st['via edge right']}", flush=True)
+                              f"{st['via edge']} right {st['via edge right']} | variant {st['right variant']}/{st['n variant']}", flush=True)
             stream = events(trng.sample(train_sp[:n_tr], min(n_tr, trng.randint(ep_species, 30))), trng)   # (8-30: test has 30)
             _, pairs = run_episode(stream, learned(True), mode, match=match_fn, ans=make_ans(relm, True))
             if not pairs:
