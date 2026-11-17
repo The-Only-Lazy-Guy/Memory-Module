@@ -3560,6 +3560,18 @@ def v11_t5(steps=3000, ep_species=8):
             continue
         seen_b.add(b)
         sp.append({"common": c, "binomial": b, "family": fm[1] or fm[2], "genus": b.split()[0], "lead": s0})
+    # T9 (11-17, Claude's proposal; P2 = chains): V11_T5_SPLIT = share of species whose family is NOT in their own
+    # statement: they read the real lead with its family clause removed + "<Genus> is a genus in the family <F> ."
+    # (template from the real fact; only 5/139 genera have a real article). Then "which family is X in?" needs
+    # X -> genus -> family (2 hops); the rest keep the full lead (1 hop)
+    RM = r" ,? ?(?:with)?(?:in|of|to|within) the (?:[a-z]+ )?family [A-Z][a-z]+(?:idae|aceae)| ,? ?(?:in|of) the [A-Z][a-z]+(?:idae|aceae) family"
+    SPLIT = float(os.environ.get("V11_T5_SPLIT", "0"))
+    srng = random.Random(61)
+    for x in sp:
+        nf = _re.sub(RM, "", x["lead"])
+        clean = not _re.search(r"(?:idae|aceae)\b", nf)
+        x["split"] = clean and srng.random() < SPLIT
+        x["lead_nf"], x["gstmt"] = nf, f"{x['genus']} is a genus in the family {x['family']} ."
     rng = random.Random(41)
     rng.shuffle(sp)
     test_sp, train_sp = sp[:30], sp[30:]
@@ -3612,7 +3624,10 @@ def v11_t5(steps=3000, ep_species=8):
             if r_.random() < ask_before:
                 for rel, kind, t in r_.sample(qs, 2):
                     ev.append(("ask", x, rel, kind, t, variant(x, kind, r_)))
-            ev.append(("read", x))
+            if x.get("split"):
+                ev.extend(("read", x, w) for w in r_.sample(["nf", "g"], 2))
+            else:
+                ev.append(("read", x, "lead"))
             for rel, kind, t in r_.sample(qs, n_after):
                 ev.append(("ask", x, rel, kind, t, variant(x, kind, r_)))
             per.append(ev)
@@ -3722,7 +3737,7 @@ def v11_t5(steps=3000, ep_species=8):
         nodes, decs, pairs, edges, outs = [], [], [], [], {}
         stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "linked": 0, "reads": 0,
                  "right common": 0, "n common": 0, "right binomial": 0, "n binomial": 0, "edges": 0,
-                 "n variant": 0, "right variant": 0, "dont know": 0, "hops1": 0, "hops2+": 0}
+                 "n variant": 0, "right variant": 0, "dont know": 0, "hops1": 0, "hops2+": 0, "n 2hop": 0, "right 2hop": 0}
 
         def point(men, ent):
             j, lg = decide(men, nodes)
@@ -3768,14 +3783,18 @@ def v11_t5(steps=3000, ep_species=8):
                     meta.append(ei)
                     labs.append(edges[ei]["lab"])            # (gold pair labels: used ONLY by the fixed reference walk)
             return c, meta, labs
-        read_done = set()
+        read_done, n_read, n_stmt = set(), {}, [0]
         for ev in stream:
             x = ev[1]
             ent = x["binomial"]
             if ev[0] == "read":
+                which = ev[2]
+                text, kinds = {"lead": (x["lead"], ("common", "binomial", "family", "genus")),
+                               "nf": (x["lead_nf"], ("common", "binomial", "genus")),
+                               "g": (x["gstmt"], ("genus", "family"))}[which]
                 named = []
-                for kind in ("common", "binomial", "family", "genus"):
-                    m_ = mention(x["lead"], x[kind])
+                for kind in kinds:
+                    m_ = mention(text, x[kind])
                     if m_ is None:
                         continue
                     j_, d_ = point(m_, ent if kind in ("common", "binomial") else x[kind])
@@ -3784,13 +3803,17 @@ def v11_t5(steps=3000, ep_species=8):
                     for k2, b_, mb, _ in named:
                         if a_ != b_:
                             outs.setdefault(a_, []).append(len(edges))
-                            edges.append({"a": a_, "b": b_, "ma": ma, "mb": mb, "lab": (k1, k2), "stmt": stats["reads"],
+                            edges.append({"a": a_, "b": b_, "ma": ma, "mb": mb, "lab": (k1, k2), "stmt": n_stmt[0],
                                           "da": da})
                             stats["edges"] += 1
-                jj = {k: j_ for k, j_, _, _ in named}
-                stats["reads"] += 1
-                stats["linked"] += jj.get("common", -1) == jj.get("binomial", -2)
-                read_done.add(ent)
+                n_stmt[0] += 1
+                if which != "g":
+                    jj = {k: j_ for k, j_, _, _ in named}
+                    stats["reads"] += 1
+                    stats["linked"] += jj.get("common", -1) == jj.get("binomial", -2)
+                n_read[ent] = n_read.get(ent, 0) + 1
+                if n_read[ent] == (2 if x.get("split") else 1):
+                    read_done.add(ent)
                 continue
             _, rel, kind, t, var = ev[1:]
             q, nm = qtext(x, rel, kind, t, var)
@@ -3827,6 +3850,9 @@ def v11_t5(steps=3000, ep_species=8):
                 stats["n variant"] += var is not None
                 stats["right variant"] += var is not None and got == truth
                 stats["dont know"] += got is None
+                if x.get("split") and rel == "family":          # (T9) needs 2 hops: X -> genus -> family
+                    stats["n 2hop"] += 1
+                    stats["right 2hop"] += got == truth
                 if got == truth:
                     stats["hops1" if hops == 1 else "hops2+"] += hops >= 1
             if walk is None or taken[0][0] is None:
@@ -3909,6 +3935,9 @@ def v11_t5(steps=3000, ep_species=8):
         if any(l_ is not None and l_[0] == rel for l_ in labs):
             return 1, None
         for i, l_ in enumerate(labs):
+            if l_ is not None and rel == "family" and l_[1] == "genus":
+                return i, None
+        for i, l_ in enumerate(labs):
             if l_ is not None and l_[1] in ("common", "binomial"):
                 return i, None
         return 0, None
@@ -3949,7 +3978,8 @@ def v11_t5(steps=3000, ep_species=8):
     def fmt(st):
         return (f"right after reading {st['right']}/{st['asked_after']} (by common name {st['right common']}/{st['n common']}, "
                 f"by binomial {st['right binomial']}/{st['n binomial']}, by a name variant {st['right variant']}/{st['n variant']}) "
-                f"| right in 1 hop {st['hops1']}, 2+ hops {st['hops2+']}, don't know {st['dont know']} | lead's two names on "
+                f"| right in 1 hop {st['hops1']}, 2+ hops {st['hops2+']}, don't know {st['dont know']} | family via genus (needs 2 "
+                f"hops) {st['right 2hop']}/{st['n 2hop']} | lead's two names on "
                 f"one node {st['linked']}/{st['reads']} | asked before reading -> another thing's node {st['wrong_node']}/"
                 f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things, edges {st['edges']}")
 
