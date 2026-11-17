@@ -3858,6 +3858,8 @@ def v11_t5(steps=3000, ep_species=8):
                     stats.setdefault("walk2", {})
                     key = " ".join(cats[:2])
                     stats["walk2"][key] = stats["walk2"].get(key, 0) + 1
+                    stats["reach2"] = stats.get("reach2", 0) + (path_to(j, truth) is not None)   # chain exists at all?
+                    stats["genus split"] = stats.get("genus split", 0) + (sum(n_["names"][0] == x["genus"] for n_ in nodes) > 1)
                 if got == truth:
                     stats["hops1" if hops == 1 else "hops2+"] += hops >= 1
             if walk is None or taken[0][0] is None:
@@ -3987,7 +3989,8 @@ def v11_t5(steps=3000, ep_species=8):
                 f"hops) {st['right 2hop']}/{st['n 2hop']} | lead's two names on "
                 f"one node {st['linked']}/{st['reads']} | asked before reading -> another thing's node {st['wrong_node']}/"
                 f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things, edges {st['edges']}"
-                + (f" | 2-hop walks: {dict(sorted(st['walk2'].items(), key=lambda kv: -kv[1]))}" if st.get("walk2") else ""))
+                + (f" | 2-hop walks: {dict(sorted(st['walk2'].items(), key=lambda kv: -kv[1]))}, family reachable "
+                   f"{st['reach2']}, genus on 2+ nodes {st['genus split']}" if st.get("walk2") else ""))
 
     def report(name, d, w):
         for split, stream in (("test (30 never-trained species)", test_stream), ("train (30 training species)", train_stream)):
