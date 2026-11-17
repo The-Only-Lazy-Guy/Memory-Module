@@ -4628,7 +4628,6 @@ def _exec14(mem, net, store, A, B, how=None, oracle=None):
     x, y, c, seq, pos, recs, nun = A, B, 0, [], None, [], 0
     if how is not None and EVAL14[0]:
         AUD14["eval tries"] += 1
-    nid = lambda n: None if n is None else id(n)
     with torch.no_grad():
         for _ in range(2 * (len(A["digits"]) + len(B["digits"])) + 6):
             case = (_typ14(x), _typ14(y), c)
@@ -4649,13 +4648,8 @@ def _exec14(mem, net, store, A, B, how=None, oracle=None):
                         fo = random.randrange(STOP14 + 1)
                     if k >= 22 and random.random() < pc:
                         wr = random.randrange(STOP14)
-            if fo == STOP14:
-                fset, nxt = (STOP14,), None
-            else:
-                nx = [(store.follow(x, k_), store.follow(y, k_)) for k_ in range(STOP14)]
-                key_ = lambda p: (nid(p[0]), nid(p[1]))
-                fset, nxt = tuple(k_ for k_ in range(STOP14) if key_(nx[k_]) == key_(nx[fo])), nx[fo]
-            recs.append((case[0], case[1], c, dg, cr, fo, wr, pos is not None, fset))
+            nxt = None if fo == STOP14 else (store.follow(x, fo), store.follow(y, fo))
+            recs.append((case[0], case[1], c, dg, cr, fo, wr, pos is not None, (x, y)))   # (x, y): sets read later
             if dg < 10:
                 if pos is None:
                     seq, pos = [dg], 0
@@ -4670,6 +4664,22 @@ def _exec14(mem, net, store, A, B, how=None, oracle=None):
                 return ("".join(map(str, seq)) if seq else None), recs
             (x, y), c = nxt, cr
     return None, recs
+
+
+def _sets14(store, recs):
+    """a right trace's follow choices as SETS: every relation that leads to the same next nodes as the one taken (read
+    off the lookups; only right traces need it, so tries skip the cost)"""
+    nid = lambda n: None if n is None else id(n)
+    out = []
+    for r in recs:
+        x, y = r[8]
+        if r[5] == STOP14:
+            s = (STOP14,)
+        else:
+            nx = [(nid(store.follow(x, k_)), nid(store.follow(y, k_))) for k_ in range(STOP14)]
+            s = tuple(k_ for k_ in range(STOP14) if nx[k_] == nx[r[5]])
+        out.append(r[:8] + (s,))
+    return out
 
 
 def _trace_loss14(mem, net, recs):
@@ -4717,20 +4727,22 @@ def _cases14():
 
 
 def _want14(case):
-    """the right outputs for one case (digit, carry, follow, write); None = not used at that case"""
+    """the right outputs for one case: digit, carry, the follow choices right in EVERY context the case occurs in, write;
+    None = not used at that case. (nothing, nothing, carry 1): every relation leads from nothing to nothing -> any
+    relation; a digit present: only 'before' reaches the next column in every context; start: only 'last'."""
     x, y, c = case
     if x == "num":
-        return 10, 0, 1, None
-    if x is None and y is None and c == 0:
-        return 10, None, STOP14, None
+        return 10, 0, (1,), None
+    if x is None and y is None:
+        return (10, None, (STOP14,), None) if c == 0 else (1, 0, (0, 1, 2, 3), 3)
     s = (x or 0) + (y or 0) + c
-    return s % 10, s // 10, 3, 3
+    return s % 10, s // 10, (3,), 3
 
 
 def _oracle_fire14(case):
     """exact firing for the mechanics check (unused outputs filled with harmless values)"""
     dg, cr, fo, wr = _want14(case)
-    return dg, (cr or 0), fo, (3 if wr is None else wr)
+    return dg, (cr or 0), fo[-1], (3 if wr is None else wr)
 
 
 def _proof14(mem, oi, tag):
@@ -4742,13 +4754,15 @@ def _proof14(mem, oi, tag):
     with torch.no_grad():
         v, cl, f, w = net(torch.stack([mem.inp14(*c) for c in cs]), mem.rels14())
     bad = {"digit": 0, "carry": 0, "follow": 0, "write": 0}
-    wrong = []
+    wrong, by_head = [], {h: [] for h in bad}
     for i, c in enumerate(cs):
         want = _want14(c)
         got = (int(v[i].argmax()), int(cl[i].argmax()), int(f[i].argmax()), int(w[i].argmax()))
-        miss = [h for h, a_, b_ in zip(bad, want, got) if a_ is not None and a_ != b_]
+        miss = [h for h, a_, b_ in zip(bad, want, got)
+                if a_ is not None and ((b_ not in a_) if h == "follow" else a_ != b_)]
         for h in miss:
             bad[h] += 1
+            by_head[h].append(c)
         if miss:
             wrong.append(c)
     r_ = random.Random(5)
@@ -4769,7 +4783,8 @@ def _proof14(mem, oi, tag):
             n_o += 1
     won = mem.won14.get(oi, {})
     print(f"v14 {tag} PROOF: network right on {len(cs) - len(wrong)}/{len(cs)} firing cases (wrong per head {bad}"
-          f"{'; e.g. ' + str(wrong[:6]) if wrong else ''}); mechanics with exact firings {mech}/{n_m} (lengths 1-60); "
+          + "".join(f"; {h} wrong e.g. {by_head[h][:5]}" for h in bad if by_head[h])
+          + f"); mechanics with exact firings {mech}/{n_m} (lengths 1-60); "
           f"untrained network (bodies off) {off}/{n_o}; won steps kept {len(won)}/{len(cs)}"
           + (" => a + b right at EVERY length (induction on columns)" if not wrong and mech == n_m else ""), flush=True)
     print(f"v14 {tag} AUDIT: demo sums {AUD14['demo sums']} (limit 50), demo terms {AUD14['demo terms']} (all before step 0), "
@@ -5211,6 +5226,7 @@ def _v13_run(stream, T, rel, mem, rdr, train=False, gold=False, H=3, BETA=30.):
                             right = recs_k               # D6: of the right tries, the shortest
                 if right is not None:                    # its steps are kept (D8) and the network learns them (D7)
                     AUD14["right traces"] += 1
+                    right = _sets14(store, right)
                     for r_ in right:                     # digit / carry kept (a carry only where it mattered)
                         old = won.get((r_[0], r_[1], r_[2]), (None, None))
                         won[(r_[0], r_[1], r_[2])] = (r_[3], r_[4] if r_[5] != STOP14 else old[1])
