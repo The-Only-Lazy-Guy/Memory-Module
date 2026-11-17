@@ -3778,15 +3778,16 @@ def v11_t5(steps=3000, ep_species=8):
                     m_ = mention(x["lead"], x[kind])
                     if m_ is None:
                         continue
-                    j_, _ = point(m_, ent if kind in ("common", "binomial") else x[kind])
-                    named.append((kind, j_, m_))
-                for k1, a_, ma in named:                 # one statement names these nodes -> an edge per ordered pair
-                    for k2, b_, mb in named:
+                    j_, d_ = point(m_, ent if kind in ("common", "binomial") else x[kind])
+                    named.append((kind, j_, m_, d_))
+                for k1, a_, ma, da in named:             # one statement names these nodes -> an edge per ordered pair
+                    for k2, b_, mb, _ in named:
                         if a_ != b_:
                             outs.setdefault(a_, []).append(len(edges))
-                            edges.append({"a": a_, "b": b_, "ma": ma, "mb": mb, "lab": (k1, k2)})
+                            edges.append({"a": a_, "b": b_, "ma": ma, "mb": mb, "lab": (k1, k2), "stmt": stats["reads"],
+                                          "da": da})
                             stats["edges"] += 1
-                jj = {k: j_ for k, j_, _ in named}
+                jj = {k: j_ for k, j_, _, _ in named}
                 stats["reads"] += 1
                 stats["linked"] += jj.get("common", -1) == jj.get("binomial", -2)
                 read_done.add(ent)
@@ -3799,7 +3800,7 @@ def v11_t5(steps=3000, ep_species=8):
             j, d = point(men, ent)
             truth = x[rel]
             # the walk
-            cur, ans_node, taken = j, None, []
+            cur, ans_node, taken, tedges = j, None, [], []
             for h in range(H + 1):
                 c, meta, labs = cands_at(cur, h)
                 k, lg = walk(men, c, labs, rel) if walk is not None else (0, None)
@@ -3809,6 +3810,7 @@ def v11_t5(steps=3000, ep_species=8):
                 if meta[k] == "stop":
                     ans_node = cur
                     break
+                tedges.append(meta[k])
                 cur = edges[meta[k]]["b"]
             got = nodes[ans_node]["names"][0] if ans_node is not None else None
             hops = sum(1 for _, k in taken if k >= 2)
@@ -3833,6 +3835,13 @@ def v11_t5(steps=3000, ep_species=8):
             if got == truth:                             # right: lightly reinforce the steps taken
                 pairs.extend((lg, k, False) for lg, k in taken)
             elif pth is not None:                        # reachable: teacher-force the shortest path (the WALK erred)
+                # blame up (2') (11-17 v8 s0: before->other 25/32, conflated nodes shielded by 'reachable'): the walk's
+                # first edge and the right path's first edge come from DIFFERENT statements -> two statements were
+                # filed on one node; the later statement's pointing should have created (blame (2) for edges)
+                if mode == "outcome" and tedges and pth and edges[tedges[0]]["stmt"] != edges[pth[0]]["stmt"]:
+                    dl = max(edges[tedges[0]], edges[pth[0]], key=lambda e: e["stmt"])["da"]
+                    if dl["lg"] is not None and dl["j"] != dl["n"]:
+                        pairs.append((dl["lg"], dl["n"], True))
                 u = j
                 for h, ei in enumerate(pth + [None]):
                     c, meta, labs = cands_at(u, h)
@@ -3992,8 +4001,6 @@ def v11_t5(steps=3000, ep_species=8):
         with torch.no_grad():
             report(f"learned pointing + learned walk, trained on {mode} ({n_tr} training species)", learned(False),
                    make_walk(relm, False))
-            # (diagnosis: which half errs -- the same learned pointing with the fixed gold-labelled walk)
-            report("learned pointing + gold-labelled walk (diagnosis)", learned(False), gold_walk)
 
 
 # ====================================================================== inspection (11-14: e1b nodes all said the same few phrases)
