@@ -4029,6 +4029,413 @@ def v11_t5(steps=3000, ep_species=8):
     test_stream = events(test_sp, erng, ask_before=.5, n_after=4)
     train_stream = events(random.Random(53).sample(train_sp, 30), random.Random(59), ask_before=.5, n_after=4)
 
+    # ================================================================================ v12 (docs/GNM_v10.md §1c, 11-17)
+    # user 11-17: no LLM translator; "combine the 2 ideas together and fix the perception problem"; reuse GNM.
+    # C1/C2: one V11 memory -- an edge IS remember(op = learned relation vector r, args = [a]) -> b (bind with a position
+    # permutation; reverse direction = the other permutation). C3: identity = Rel point / create (T5). C4: answering =
+    # walk; its last hop is a V11 POINT with the question's relation vector at the current node. C5: perception = a
+    # learned READER that points at claims (thing A, relation words, thing B) in a sentence / question, no regex at run
+    # time. C6: ~50 demo sentences + ~50 demo questions (claims written by the old parse = demos and grading only), then
+    # outcome; the reader also trains on its own right traces (D7)
+    if os.environ.get("V12", "0") == "1":
+        D12, BETA = 1024, 30.
+        g12 = torch.Generator().manual_seed(7)
+        P0 = torch.randperm(D12, generator=g12).to(dev)
+        P1 = torch.randperm(D12, generator=g12).to(dev)
+        E_ = M.config.n_embd
+        Hc = {}
+
+        def sent(text):
+            if text not in Hc:
+                ids_ = tk(" " + text)["input_ids"]
+                Hc[text] = (ids_, ctx_states(ids_))
+            ids_, H_ = Hc[text]
+            return ids_, (H_ - scale["mu"]) / scale["sd"]
+
+        def men_at(text, sp_):                           # a mention from a span the READER chose (inclusive)
+            ids_, H_ = sent(text)
+            v_ = H_[sp_[0]:sp_[1] + 1]
+            return (v_.mean(0), tk.decode(ids_[sp_[0]:sp_[1] + 1]).strip(), None, v_, H_)
+
+        STMT = {"lead": [("common", "binomial"), ("common", "family")], "nf": [("common", "binomial")],
+                "b": [("binomial", "genus")], "g": [("genus", "family")]}
+
+        def text_of(x, which):
+            return {"lead": x["lead"], "nf": x["lead_nf"], "b": x["bstmt"], "g": x["gstmt"]}[which]
+
+        def gold_claims(x, which):
+            """demos / grading only: (thing A, relation words = last <=4 tokens between the names, thing B), inclusive"""
+            ids_, _ = sent(text_of(x, which))
+            out = []
+            for ka, kb in STMT[which]:
+                a_ = span(ids_, x[ka], last=(which == "b" and ka == "genus"))
+                b_ = span(ids_, x[kb], last=(which == "b" and kb == "genus"))
+                if a_ is None or b_ is None:
+                    return None
+                lo, hi = (a_[1], b_[0]) if a_[1] <= b_[0] else (b_[1], a_[0])
+                if hi - lo < 1:
+                    return None
+                out.append(((a_[0], a_[1] - 1), (max(lo, hi - 4), hi - 1), (b_[0], b_[1] - 1)))
+            return out
+
+        rel_tok12 = {r_: tk(" " + r_)["input_ids"][0] for r_ in rels}
+
+        def gold_q(q, nm, rel):
+            ids_, _ = sent(q)
+            a_ = span(ids_, nm)
+            rw = next((i for i, t_ in enumerate(ids_) if t_ == rel_tok12[rel]), None)
+            if a_ is None or rw is None:
+                return None
+            return [((a_[0], a_[1] - 1), (rw, rw), None)]
+
+        class Reader(nn.Module):
+            """C5: a loop over a sentence's token states; each step points at a claim (A start/end, relation start/end,
+            B start/end or none) or stops; the state remembers what was already taken"""
+            def __init__(s_):
+                super().__init__()
+                s_.cell = nn.GRUCell(3 * E_, 256)
+                s_.ptr = nn.Sequential(nn.Linear(E_ + 256, 256), nn.Tanh(), nn.Linear(256, 6))
+                s_.ctl = nn.Linear(E_ + 256, 2)          # [stop, B is none]
+
+            def logits(s_, H_, h):
+                return s_.ptr(torch.cat([H_, h[None].expand(len(H_), -1)], 1)), s_.ctl(torch.cat([H_.mean(0), h]))
+
+            def advance(s_, H_, h, c):
+                f = lambda sp_: H_[sp_[0]:sp_[1] + 1].mean(0) if sp_ is not None else torch.zeros(E_, device=dev)
+                return s_.cell(torch.cat([f(c[0]), f(c[1]), f(c[2])])[None], h[None])[0]
+
+            def loss(s_, H_, claims):
+                """teacher-forced on the given claims, then stop"""
+                h, L = torch.zeros(256, device=dev), 0.
+                T_ = lambda v: torch.tensor([v], device=dev)
+                for c in list(claims) + [None]:
+                    P, C = s_.logits(H_, h)
+                    L = L + F.binary_cross_entropy_with_logits(C[0], torch.tensor(float(c is None), device=dev))
+                    if c is None:
+                        break
+                    for col, t_ in ((0, c[0][0]), (1, c[0][1]), (2, c[1][0]), (3, c[1][1])):
+                        L = L + F.cross_entropy(P[:, col][None], T_(t_))
+                    L = L + F.binary_cross_entropy_with_logits(C[1], torch.tensor(float(c[2] is None), device=dev))
+                    if c[2] is not None:
+                        for col, t_ in ((4, c[2][0]), (5, c[2][1])):
+                            L = L + F.cross_entropy(P[:, col][None], T_(t_))
+                    h = s_.advance(H_, h, c)
+                return L
+
+            @torch.no_grad()
+            def read(s_, H_, kmax=4):
+                h, out = torch.zeros(256, device=dev), []
+                for _ in range(kmax):
+                    P, C = s_.logits(H_, h)
+                    if C[0] > 0:
+                        break
+
+                    def sp(c0, c1):
+                        st_ = int(P[:, c0].argmax())
+                        return st_, st_ + int(P[st_:st_ + 8, c1].argmax())
+                    c = (sp(0, 1), sp(2, 3), None if C[1] > 0 else sp(4, 5))
+                    out.append(c)
+                    h = s_.advance(H_, h, c)
+                return out
+
+        class Mem12(nn.Module):
+            """C1/C2/C4: relation vectors (learned from the relation words' states) used as V11 ops"""
+            def __init__(s_):
+                super().__init__()
+                s_.rv = nn.Linear(E_, D12)
+                s_.af = nn.Sequential(nn.Linear(2 * D12 + 1, 128), nn.ReLU(), nn.Linear(128, 1))   # follow an edge
+                s_.pa = nn.Parameter(torch.tensor(5.))  # answer by POINT: pa * best key cosine + pb
+                s_.pb = nn.Parameter(torch.tensor(-2.))
+                s_.anone = nn.Parameter(torch.tensor(0.))
+
+            def r(s_, rstate):
+                return F.normalize(s_.rv(rstate), dim=-1)
+
+        def key_of(rvec, atom, dr):                      # V11 bind: op (relation) with the argument at its position
+            return F.normalize(V11.bind(rvec, atom[P0 if dr == 0 else P1]), dim=0)
+
+        def run12(stream, decide, mem, reader, mode="outcome", match=None, train=False, gold_read=False, H=3):
+            nodes, decs, pairs, edges, outs = [], [], [], [], {}
+            rdr_traces = []                              # (H, claims, ent) of statements read (reader self-training)
+            stats = {"right": 0, "asked_after": 0, "wrong_node": 0, "asked_before": 0, "right common": 0, "n common": 0,
+                     "right binomial": 0, "n binomial": 0, "n variant": 0, "right variant": 0, "dont know": 0,
+                     "hops0": 0, "hops1+": 0, "n 2hop": 0, "right 2hop": 0, "claims gold": 0, "claims read right": 0,
+                     "q gold": 0, "q read right": 0, "nodes": 0, "edges": 0, "reads": 0, "linked": 0}
+            q_right_by_ent, q_n_by_ent = {}, {}
+
+            def point(men, ent):
+                j, lg = decide(men, nodes)
+                d = {"lg": lg, "n": len(nodes), "j": j, "name": men[1]}
+                decs.append(d)
+                if j == len(nodes):
+                    nodes.append({"m": [men[0]], "names": [men[1]], "alone": [None], "owner": ent, "made_by": len(decs) - 1,
+                                  "md": [d], "sp": [men[3]], "cx": [men[4]],
+                                  "atom": F.normalize(torch.randn(D12, generator=g12), dim=0).to(dev)})
+                else:
+                    for f, v in (("m", men[0]), ("names", men[1]), ("alone", None), ("md", d), ("sp", men[3]), ("cx", men[4])):
+                        nodes[j][f].append(v)
+                return j, d
+
+            def path12(start, truth):
+                """shortest edge path whose LAST edge is forward into a node named with the truth (the last hop is a
+                V11 point); -> list of edge indices or None"""
+                front, seen = [(start, [])], {start}
+                for _ in range(H):
+                    nxt = []
+                    for u, pth in front:
+                        for ei in outs.get(u, []):
+                            e = edges[ei]
+                            if e["dir"] == 0 and nodes[e["b"]]["names"][0] == truth:
+                                return pth + [ei]
+                            if e["b"] not in seen:
+                                seen.add(e["b"])
+                                nxt.append((e["b"], pth + [ei]))
+                    front = nxt
+                return None
+
+            def keys_now():
+                if not edges:
+                    return None, None
+                R_ = mem.r(torch.stack([e["rs"] for e in edges]))
+                K = torch.stack([key_of(R_[i], nodes[e["a"]]["atom"], e["dir"]) for i, e in enumerate(edges)])
+                V = torch.stack([nodes[e["b"]]["atom"] for e in edges])
+                return R_, (K, V)
+
+            def step_logits(rq, u, h, R_, KV):
+                """options: 0 = don't know, 1 = POINT with the question's relation here, 2.. = follow an edge of u"""
+                A = torch.stack([n_["atom"] for n_ in nodes])
+                q = key_of(rq, nodes[u]["atom"], 0)
+                sc = KV[0] @ q if KV is not None else torch.zeros(1, device=dev)
+                read_v = torch.softmax(BETA * sc, 0) @ KV[1] if KV is not None else torch.zeros(D12, device=dev)
+                clean = BETA * (A @ F.normalize(read_v, dim=0))          # cleanup: which node the point lands on
+                opts = [mem.anone, mem.pa * sc.max() + mem.pb]
+                eis = outs.get(u, []) if h < H else []
+                for ei in eis:
+                    opts.append(mem.af(torch.cat([rq, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])).squeeze())
+                return torch.stack(opts), eis, clean
+
+            read_done, n_read, n_stmt = set(), {}, [0]
+            for ev in stream:
+                x = ev[1]
+                ent = x["binomial"]
+                if ev[0] == "read":
+                    which = ev[2]
+                    text = text_of(x, which)
+                    ids_, H_ = sent(text)
+                    gc = gold_claims(x, which)
+                    claims = gc if gold_read else reader.read(H_)
+                    if gc is not None:
+                        stats["claims gold"] += len(gc)
+                        stats["claims read right"] += sum(c in claims for c in gc)
+                    if not gold_read:
+                        rdr_traces.append((H_, claims, ent))
+                    at = {}
+                    for c in claims:
+                        if c[2] is None:
+                            continue
+                        js = []
+                        for sp_ in (c[0], c[2]):
+                            if sp_ not in at:
+                                m_ = men_at(text, sp_)
+                                own = ent if m_[1] in (x["common"], x["binomial"]) else m_[1]
+                                at[sp_] = point(m_, own)
+                            js.append(at[sp_])
+                        (a_, da), (b_, _) = js
+                        if a_ == b_:
+                            continue
+                        rs = H_[c[1][0]:c[1][1] + 1].mean(0)
+                        for dr, (u, v) in ((0, (a_, b_)), (1, (b_, a_))):
+                            outs.setdefault(u, []).append(len(edges))
+                            edges.append({"a": u, "b": v, "rs": rs, "dir": dr, "stmt": n_stmt[0], "da": da})
+                        stats["edges"] += 1
+                    n_stmt[0] += 1
+                    n_read[ent] = n_read.get(ent, 0) + 1
+                    if n_read[ent] == (3 if x.get("split") else 2):
+                        read_done.add(ent)
+                    continue
+                _, rel, kind, t, var = ev[1:]
+                q, nm = qtext(x, rel, kind, t, var)
+                ids_, Hq = sent(q)
+                gq = gold_q(q, nm, rel)
+                qc = gq if gold_read else reader.read(Hq, kmax=1)
+                if gq is not None:
+                    stats["q gold"] += 1
+                    stats["q read right"] += bool(qc) and qc[0][:2] == gq[0][:2]
+                if not qc:
+                    got, j, d, taken = None, None, None, []
+                else:
+                    men = men_at(q, qc[0][0])
+                    j, d = point(men, ent)
+                    rq = mem.r(Hq[qc[0][1][0]:qc[0][1][1] + 1].mean(0))
+                    R_, KV = keys_now()
+                    cur, got, taken, hops = j, None, [], 0
+                    for h in range(H + 1):
+                        lg, eis, clean = step_logits(rq, cur, h, R_, KV)
+                        k = (random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax()))
+                        taken.append((lg, k))
+                        if k == 0:
+                            break
+                        if k == 1:
+                            got = nodes[int(clean.argmax())]["names"][0] if KV is not None else None
+                            break
+                        cur, hops = edges[eis[k - 2]]["b"], hops + 1
+                truth = x[rel]
+                if ent not in read_done:
+                    stats["asked_before"] += 1
+                    stats["wrong_node"] += j is not None and nodes[j]["owner"] != ent
+                    if got is None or got == truth:
+                        continue
+                else:
+                    stats["asked_after"] += 1
+                    ok_ = got == truth
+                    stats["right"] += ok_
+                    stats["n " + kind] += 1
+                    stats["right " + kind] += ok_
+                    stats["n variant"] += var is not None
+                    stats["right variant"] += var is not None and ok_
+                    stats["dont know"] += got is None
+                    if ok_:
+                        stats["hops0" if hops == 0 else "hops1+"] += 1
+                    if x.get("split") and rel == "family":
+                        stats["n 2hop"] += 1
+                        stats["right 2hop"] += ok_
+                    q_n_by_ent[ent] = q_n_by_ent.get(ent, 0) + 1
+                    q_right_by_ent[ent] = q_right_by_ent.get(ent, 0) + ok_
+                    if train and ok_ and not gold_read and qc:   # reader: its own right question reading (D7)
+                        pairs.append(("reader", (Hq, qc), .1))
+                if not train or j is None:
+                    continue
+                pth = path12(j, truth)
+                if got == truth:
+                    pairs.extend((lg, k, False) for lg, k in taken)
+                elif pth is not None:                    # reachable: teacher-force follow ... then POINT
+                    u = j
+                    for h, ei in enumerate(pth):
+                        lg_, eis, clean = step_logits(rq, u, h, R_, KV)
+                        if h == len(pth) - 1:
+                            pairs.append((lg_, 1, True))
+                            pairs.append((clean, edges[ei]["b"], True))   # the point must land on the answer node
+                        else:
+                            pairs.append((lg_, 2 + eis.index(ei), True))
+                            u = edges[ei]["b"]
+                    # blame up (2'): the walk's first edge and the right path's first edge from different statements
+                    if len(taken) and taken[0][1] >= 2:
+                        e_w = edges[outs.get(j, [])[taken[0][1] - 2]]
+                        e_r = edges[pth[0]]
+                        if e_w["stmt"] != e_r["stmt"]:
+                            dl = max(e_w, e_r, key=lambda e: e["stmt"])["da"]
+                            if dl["lg"] is not None and dl["j"] != dl["n"]:
+                                pairs.append((dl["lg"], dl["n"], True))
+                else:                                    # nothing reachable: don't know
+                    pairs.append((taken[0][0], 0, taken[0][1] != 0))
+                if mode != "outcome" or d["lg"] is None:
+                    continue
+                if got == truth or pth is not None:
+                    pairs.append((d["lg"], j, False))
+                    continue
+                if not any(n_["names"][0] == truth for n_ in nodes):          # blame up (5)
+                    for dd in decs:
+                        if dd["name"] == truth and dd["lg"] is not None and dd["j"] != dd["n"]:
+                            pairs.append((dd["lg"], dd["n"], True))
+                    continue
+                ok = [i for i in range(d["n"]) if all(path12(i, x[r_]) is not None for r_ in rels)]
+                t_ = max(ok, key=lambda i: float(d["lg"][i])) if ok else d["n"]
+                pairs.append((d["lg"], t_, True))
+                if ok and j != t_ and match is not None and len(nodes[j]["m"]) > 1:      # blame up (3)
+                    k3 = int(match(men, nodes[j], len(nodes[j]["m"]) - 1).argmax())
+                    dk = nodes[j]["md"][k3]
+                    if dk is not d and dk["lg"] is not None and dk["j"] != dk["n"]:
+                        pairs.append((dk["lg"], t_ if t_ < dk["n"] else dk["n"], True))
+                if ok and j != t_:                       # blame up (1)
+                    dm = decs[nodes[j]["made_by"]]
+                    if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
+                        pairs.append((dm["lg"], t_, True))
+            if train:                                    # reader: its own statement readings for species answered right
+                for H_, claims, ent in rdr_traces:
+                    if q_n_by_ent.get(ent) and q_right_by_ent.get(ent) == q_n_by_ent[ent] and claims:
+                        pairs.append(("reader", (H_, claims), .1))
+            stats["nodes"], stats["reads"] = len(nodes), n_stmt[0]
+            return stats, pairs
+
+        def fmt12(st):
+            pc = lambda a_, b_: f"{st[a_]}/{st[b_]}"
+            return (f"right after reading {pc('right', 'asked_after')} (common {pc('right common', 'n common')}, binomial "
+                    f"{pc('right binomial', 'n binomial')}, variant {pc('right variant', 'n variant')}) | family via genus "
+                    f"{pc('right 2hop', 'n 2hop')} | right by a point here {st['hops0']}, after 1+ followed edges {st['hops1+']}, "
+                    f"don't know {st['dont know']} | READER: statement claims exact {pc('claims read right', 'claims gold')}, "
+                    f"questions exact {pc('q read right', 'q gold')} | before reading -> another thing's node "
+                    f"{pc('wrong_node', 'asked_before')} | nodes {st['nodes']}, edges {st['edges']}")
+
+        sd_ = int(os.environ.get("V11_T5_SEED", "0"))
+        torch.manual_seed(sd_)
+        random.seed(sd_)
+        relm, mem, reader = Rel().to(dev), Mem12().to(dev), Reader().to(dev)
+        # C6: ~50 demo statements + ~50 demo questions from training species (claims by the old parse = demonstration)
+        drng = random.Random(71 + sd_)
+        demo_s, demo_q = [], []
+        for x in drng.sample(train_sp, len(train_sp)):
+            if len(demo_s) >= 50:
+                break
+            w_ = drng.choice(["nf", "b", "g"] if x.get("split") else ["lead", "b"])
+            gc = gold_claims(x, w_)
+            if gc:
+                demo_s.append((sent(text_of(x, w_))[1], gc))
+        for x in drng.sample(train_sp, len(train_sp)):
+            if len(demo_q) >= 50:
+                break
+            rel, kind = drng.choice(rels), drng.choice(["common", "binomial"])
+            q, nm = qtext(x, rel, kind, drng.choice(W[rel]), variant(x, kind, drng))
+            gq = gold_q(q, nm, rel)
+            if gq:
+                demo_q.append((sent(q)[1], gq))
+        ropt = torch.optim.AdamW(reader.parameters(), lr=1e-3)
+        demos = demo_s + demo_q
+        for it in range(int(os.environ.get("V12_DEMO_STEPS", "1500"))):
+            H_, cl = demos[it % len(demos)]
+            L = reader.loss(H_, cl)
+            ropt.zero_grad()
+            L.backward()
+            ropt.step()
+        print(f"v12: reader taught on {len(demo_s)} demo statements + {len(demo_q)} demo questions", flush=True)
+        opt = torch.optim.AdamW(list(relm.parameters()) + list(mem.parameters()) + list(reader.parameters()), lr=1e-3)
+        learned = make_learned(relm)
+
+        @torch.no_grad()
+        def match_fn(men, n_, k):
+            return relm.per_mention(men, n_, k)
+
+        def rep12(tag, at_step=None):
+            with torch.no_grad():
+                for sn, sm in (("test", test_stream), ("train", train_stream)):
+                    for gr in (False, True):
+                        st, _ = run12(sm, learned(False), mem, reader, gold_read=gr)
+                        lab = "gold claims (reference)" if gr else "READER claims"
+                        print(f"v12 {tag} {sn}: {lab}: {fmt12(st)}", flush=True)
+        rep12("step 0")
+        trng = random.Random(43 + sd_)
+        at = {int(v) for v in os.environ.get("V11_T5_AT", "").split(",") if v}
+        for stp in range(steps):
+            if stp in at and stp:
+                rep12(f"step {stp}")
+            stream = events(trng.sample(train_sp, min(len(train_sp), trng.randint(ep_species, 30))), trng)
+            _, pairs = run12(stream, learned(True), mem, reader, match=match_fn, train=True)
+            if not pairs:
+                continue
+            L, n_ = 0., 0
+            for p_ in pairs:
+                if p_[0] == "reader":
+                    L = L + p_[2] * reader.loss(*p_[1])
+                else:
+                    lg, tgt, wrong = p_
+                    L = L + (1. if wrong else .1) * F.cross_entropy(lg[None], torch.tensor([tgt], device=dev))
+                n_ += 1
+            opt.zero_grad()
+            (L / n_).backward()
+            opt.step()
+        rep12("final")
+        return
+
+
     def fmt(st):
         return (f"right after reading {st['right']}/{st['asked_after']} (by common name {st['right common']}/{st['n common']}, "
                 f"by binomial {st['right binomial']}/{st['n binomial']}, by a name variant {st['right variant']}/{st['n variant']}) "
