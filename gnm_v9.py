@@ -3642,6 +3642,7 @@ def v11_t5(steps=3000, ep_species=8):
     # V11_T5_VAR = share of questions asking by a natural variant of the name (abbreviated genus, plural, title case,
     # hyphen as space). Same for train and test species; the variant forms are never names the lead used
     VAR = float(os.environ.get("V11_T5_VAR", "0"))
+    TRACE = os.environ.get("V11_T5_TRACE", "0") == "1"   # (T9 diagnosis: dump failing 2-hop questions' subgraphs)
 
     def variant(x, kind, r_):
         if VAR <= 0 or r_.random() >= VAR:
@@ -3783,7 +3784,7 @@ def v11_t5(steps=3000, ep_species=8):
                     meta.append(ei)
                     labs.append(edges[ei]["lab"])            # (gold pair labels: used ONLY by the fixed reference walk)
             return c, meta, labs
-        read_done, n_read, n_stmt = set(), {}, [0]
+        read_done, n_read, n_stmt, gtrace = set(), {}, [0], {}
         for ev in stream:
             x = ev[1]
             ent = x["binomial"]
@@ -3799,6 +3800,9 @@ def v11_t5(steps=3000, ep_species=8):
                         continue
                     j_, d_ = point(m_, ent if kind in ("common", "binomial") else x[kind])
                     named.append((kind, j_, m_, d_))
+                    if kind == "genus":                  # (T9 trace, log only)
+                        gtrace.setdefault(x["genus"], []).append((which, "created" if d_["j"] == d_["n"] else "pointed", j_,
+                                                                 nodes[j_]["names"][0]))
                 for k1, a_, ma, da in named:             # one statement names these nodes -> an edge per ordered pair
                     for k2, b_, mb, _ in named:
                         if a_ != b_:
@@ -3860,6 +3864,16 @@ def v11_t5(steps=3000, ep_species=8):
                     stats["walk2"][key] = stats["walk2"].get(key, 0) + 1
                     stats["reach2"] = stats.get("reach2", 0) + (path_to(j, truth) is not None)   # chain exists at all?
                     stats["genus split"] = stats.get("genus split", 0) + (sum(n_["names"][0] == x["genus"] for n_ in nodes) > 1)
+                    if got != truth and TRACE and len(stats.setdefault("traces", [])) < 4:    # (T9 trace, log only)
+                        near = []
+                        for ei in outs.get(j, []):
+                            b1 = edges[ei]["b"]
+                            near.append(f"{edges[ei]['lab']}->{nodes[b1]['names'][0]}[" + ",".join(
+                                f"{edges[e2]['lab'][1]}:{nodes[edges[e2]['b']]['names'][0]}" for e2 in outs.get(b1, [])[:6]) + "]")
+                        stats["traces"].append(f"Q '{q}' -> node {j} '{nodes[j]['names'][0]}' (names {nodes[j]['names'][:4]}) "
+                                               f"walk {cats} got {got!r} truth {truth!r} | out: {near[:6]} | genus "
+                                               f"'{x['genus']}' mentions: {gtrace.get(x['genus'])} | nodes named it: "
+                                               f"{[i for i, n_ in enumerate(nodes) if n_['names'][0] == x['genus']]}")
                 if got == truth:
                     stats["hops1" if hops == 1 else "hops2+"] += hops >= 1
             if walk is None or taken[0][0] is None:
@@ -3884,36 +3898,7 @@ def v11_t5(steps=3000, ep_species=8):
                         u = edges[ei]["b"]
             else:                                        # nothing reachable: 'don't know' at the start
                 pairs.append((taken[0][0], 0, taken[0][1] != 0))
-                # blame up (6) (11-17 T9 diag: the genus statement's genus mostly CREATED a 2nd genus node -> chain cut,
-                # 'don't know' targets fought 'take the genus edge'): the answer's node exists but the question cannot
-                # reach it. U = nodes the question's node reaches (< H hops), V = nodes one edge from the answer; the
-                # most relevant (u, v) pair by the model's OWN relevance: if v was created while u existed, v's creating
-                # decision should have pointed to u (outcome + own relevance; no labels, no string match)
-                ans_nodes = {i for i, n_ in enumerate(nodes) if n_["names"][0] == truth}
-                if ent in read_done and match is not None and ans_nodes:
-                    U, front = {j}, [j]
-                    for _ in range(H - 1):
-                        front = [edges[ei]["b"] for u_ in front for ei in outs.get(u_, []) if edges[ei]["b"] not in U]
-                        U.update(front)
-                    V = {e["a"] for e in edges if e["b"] in ans_nodes} - U - ans_nodes
-                    best = None
-                    for v in V:
-                        nv = nodes[v]
-                        vm = (nv["m"][0], nv["names"][0], nv["alone"][0], nv["sp"][0], nv["cx"][0])
-                        dv = decs[nv["made_by"]]
-                        if dv["lg"] is None or dv["j"] != dv["n"]:
-                            continue
-                        Us = [u_ for u_ in U if u_ < dv["n"]]
-                        if not Us:
-                            continue
-                        flat = {f: [v_ for u_ in Us for v_ in nodes[u_][f]] for f in ("m", "cx", "sp")}
-                        own = [u_ for u_ in Us for _ in nodes[u_]["m"]]
-                        sc_ = match(vm, flat, len(flat["m"]))     # one batched call over all of U's mentions
-                        k6 = int(sc_.argmax())
-                        if best is None or float(sc_[k6]) > best[0]:
-                            best = (float(sc_[k6]), dv, own[k6])
-                    if best is not None:
-                        pairs.append((best[1]["lg"], best[2], True))
+                # (blame up (6), cut chain, 11-17: tried, genus split 28 -> 23 only, test 74 -> 64 -> reverted)
             if mode != "outcome" or d["lg"] is None:
                 continue
             if got == truth or pth is not None:          # the pointing reached the answer: lightly reinforce it
@@ -4026,6 +4011,8 @@ def v11_t5(steps=3000, ep_species=8):
         for split, stream in (("test (30 never-trained species)", test_stream), ("train (30 training species)", train_stream)):
             st, _ = run_episode(stream, d, walk=w)
             print(f"v11 T8 {split}: {name}: {fmt(st)}", flush=True)
+            for tr in st.get("traces", []):
+                print(f"   TRACE {split[:5]}: {tr}", flush=True)
     with torch.no_grad():
         report("exact name + gold-labelled walk (fixed reference)", exact, gold_walk)
         report("name-only cosine (centred) >= .8 + gold-labelled walk (fixed)", alone_cos(.8), gold_walk)
@@ -4054,6 +4041,8 @@ def v11_t5(steps=3000, ep_species=8):
                     for sn, sm in (("test", test_stream), ("train", train_stream)):
                         st, _ = run_episode(sm, learned(False), walk=make_walk(relm, False))
                         print(f"v11 T8 at step {stp} {sn}: {fmt(st)}", flush=True)
+                        for tr in (st.get("traces", []) if sn == "test" else []):
+                            print(f"   TRACE: {tr}", flush=True)
             stream = events(trng.sample(train_sp[:n_tr], min(n_tr, trng.randint(ep_species, 30))), trng)   # (8-30: test has 30)
             _, pairs = run_episode(stream, learned(True), mode, match=match_fn, walk=make_walk(relm, True))
             if not pairs:
