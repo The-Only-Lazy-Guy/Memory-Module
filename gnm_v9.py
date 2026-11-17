@@ -3823,11 +3823,12 @@ def v11_t5(steps=3000, ep_species=8):
             j, d = point(men, ent)
             truth = x[rel]
             # the walk
-            cur, ans_node, taken, tedges = j, None, [], []
+            cur, ans_node, taken, tedges, cats = j, None, [], [], []
             for h in range(H + 1):
                 c, meta, labs = cands_at(cur, h)
                 k, lg = walk(men, c, labs, rel) if walk is not None else (0, None)
                 taken.append((lg, k))
+                cats.append("dk" if meta[k] is None else "ans" if meta[k] == "stop" else "->" + labs[k][1])   # (log only)
                 if meta[k] is None:
                     break
                 if meta[k] == "stop":
@@ -3853,6 +3854,10 @@ def v11_t5(steps=3000, ep_species=8):
                 if x.get("split") and rel == "family":          # (T9) needs 2 hops: X -> genus -> family
                     stats["n 2hop"] += 1
                     stats["right 2hop"] += got == truth
+                    # (11-17 T9 diag, log only, reads the gold edge labels: what the walk chose at step 1 and 2)
+                    stats.setdefault("walk2", {})
+                    key = " ".join(cats[:2])
+                    stats["walk2"][key] = stats["walk2"].get(key, 0) + 1
                 if got == truth:
                     stats["hops1" if hops == 1 else "hops2+"] += hops >= 1
             if walk is None or taken[0][0] is None:
@@ -3981,7 +3986,8 @@ def v11_t5(steps=3000, ep_species=8):
                 f"| right in 1 hop {st['hops1']}, 2+ hops {st['hops2+']}, don't know {st['dont know']} | family via genus (needs 2 "
                 f"hops) {st['right 2hop']}/{st['n 2hop']} | lead's two names on "
                 f"one node {st['linked']}/{st['reads']} | asked before reading -> another thing's node {st['wrong_node']}/"
-                f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things, edges {st['edges']}")
+                f"{st['asked_before']} | nodes {st['nodes']} for {st['things']} things, edges {st['edges']}"
+                + (f" | 2-hop walks: {dict(sorted(st['walk2'].items(), key=lambda kv: -kv[1]))}" if st.get("walk2") else ""))
 
     def report(name, d, w):
         for split, stream in (("test (30 never-trained species)", test_stream), ("train (30 training species)", train_stream)):
