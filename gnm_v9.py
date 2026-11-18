@@ -4893,6 +4893,88 @@ def oracle(G, arts, nq=6):
         print(f"  {name:>22}: nll {nll / n:.3f} | token acc {ac / n:.3f}")
 
 
+def lm_probe():
+    """docs/GNM_v10.md §1g M0 (11-19, measurement only): how much can memory give GPT-2 at all on real text? An article
+    stream (memory persists across articles). For each sentence: CE of its tokens with the previous W stream tokens as
+    context (base); with the earlier OUT-OF-WINDOW sentence that shares the most rare words with it placed first
+    (oracle -- it looks at the sentence itself, so an upper bound: positive control); with a random earlier
+    out-of-window sentence placed first (negative control). Reported on all tokens and on memory tokens (the sentence's
+    rare words that the oracle sentence has and the window does not)."""
+    tk, M = lm()
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio")
+    src = os.environ.get("M0_DATA", "species_e1.json")
+    f_ = os.path.join(here, src)
+    arts = json.load(gzip.open(f_, "rt", encoding="utf-8")) if src.endswith(".gz") else json.load(open(f_, encoding="utf-8"))
+    arts = [a for a in arts if a.get("text")][:int(os.environ.get("M0_ARTS", "200"))]
+    W = int(os.environ.get("M0_WIN", "256"))
+    words = lambda s: {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z\-]{3,}", s)}
+    df = collections.Counter(w for a in arts for w in words(" ".join(a["text"])))
+    cut = max(2, int(len(arts) * float(os.environ.get("M0_RARE", ".05"))))
+    rare = lambda s: {w for w in words(s) if df[w] <= cut}
+    sents, stream = [], []
+    for a in arts:
+        for p in a["text"]:
+            for s in p.split(" . "):
+                s = s.strip()
+                if len(s.split()) < 4:
+                    continue
+                ids = tk(" " + s + " .")["input_ids"]
+                sents.append((s + " .", ids, len(stream)))
+                stream.extend(ids)
+    sep = tk("\n")["input_ids"]
+    rng = random.Random(5)
+    index = collections.defaultdict(list)                # rare word -> earlier sentences holding it
+    tot = collections.Counter()
+
+    @torch.no_grad()
+    def ce(prefix, ctx, tgt):
+        ids = (prefix + ctx + tgt)[-1024:]
+        lg = M(input_ids=torch.tensor([ids], device=dev)).logits[0].float()
+        lp = F.log_softmax(lg[-len(tgt) - 1:-1], -1)
+        return -lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0]
+
+    def mask_of(ids, ws):
+        m = torch.zeros(len(ids), dtype=torch.bool, device=dev)
+        for w in ws:
+            for cand in (" " + w, " " + w[0].upper() + w[1:]):
+                n = tk(cand)["input_ids"]
+                for i in range(len(ids) - len(n) + 1):
+                    if ids[i:i + len(n)] == n:
+                        m[i:i + len(n)] = True
+        return m
+    t0 = time.time()
+    for k, (s, ids, pos) in enumerate(sents):
+        rs = rare(s)
+        out_ok = lambda j: sents[j][2] + len(sents[j][1]) <= pos - W
+        cand = collections.Counter(j for w in rs for j in index[w] if out_ok(j))
+        tot["sentences"] += 1
+        if cand:
+            ctx = stream[max(0, pos - W):pos]
+            j = max(cand, key=lambda j_: (cand[j_], j_))
+            outside = [j_ for j_ in range(k) if out_ok(j_)]
+            jr = rng.choice(outside)
+            b, o, r = ce([], ctx, ids), ce(sents[j][1] + sep, ctx, ids), ce(sents[jr][1] + sep, ctx, ids)
+            mw = (rs & rare(sents[j][0])) - rare(tk.decode(ctx))
+            mk = mask_of(ids, mw)
+            tot["with an oracle"] += 1
+            tot["tokens"] += len(ids)
+            tot["memory tokens"] += int(mk.sum())
+            for nm, v in (("base", b), ("oracle", o), ("random", r)):
+                tot[nm + " all"] += float(v.sum())
+                tot[nm + " mem"] += float(v[mk].sum())
+        for w in rs:
+            index[w].append(k)
+        if k % 500 == 0:
+            print(f"M0 {k}/{len(sents)} sentences, {time.time() - t0:.0f}s", flush=True)
+    n_, m_ = max(1, tot["tokens"]), max(1, tot["memory tokens"])
+    print(f"M0 {src}: {len(arts)} articles, {tot['sentences']} sentences ({tot['with an oracle']} with an out-of-window "
+          f"sentence sharing rare words), window {W} tokens, rare = in <= {cut} articles", flush=True)
+    print(f"M0 CE per token, all {tot['tokens']} tokens: base {tot['base all'] / n_:.3f}, oracle {tot['oracle all'] / n_:.3f}, "
+          f"random {tot['random all'] / n_:.3f}", flush=True)
+    print(f"M0 CE per token, {tot['memory tokens']} memory tokens: base {tot['base mem'] / m_:.3f}, oracle "
+          f"{tot['oracle mem'] / m_:.3f}, random {tot['random mem'] / m_:.3f}", flush=True)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("task", nargs="?", default="e1")
@@ -4921,6 +5003,9 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "v11t5":
         v11_t5(steps=int(os.environ.get("V11_T5_STEPS", "3000")))
+        raise SystemExit
+    if a.task == "lmprobe":                    # §1g M0: headroom of memory for GPT-2 on real text (measurement)
+        lm_probe()
         raise SystemExit
     if a.task == "v11t3":
         v11_t3()
