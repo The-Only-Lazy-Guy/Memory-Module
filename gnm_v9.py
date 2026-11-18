@@ -4729,6 +4729,9 @@ def v11_t5(steps=3000, ep_species=8):
                 print(f"M1: mem keys not in the M1 checkpoint: {mem.load_state_dict(ck1['mem'], strict=False).missing_keys}",
                       flush=True)
                 funcs.load_state_dict(ck1["funcs"])
+                if "reader" in ck1:                     # (the reading side RL also trained)
+                    reader.load_state_dict(ck1["reader"])
+                    relm.load_state_dict(ck1["relm"])
                 for p_, v_ in zip(G10.eparams(), ck1["lora"]):
                     p_.data[:len(v_)] = v_.to(dev)
                 print(f"M1: loaded {m1_load} ({len(funcs.nets)} functions){' -- no training' if notrain else ''}", flush=True)
@@ -5074,6 +5077,7 @@ def v11_t5(steps=3000, ep_species=8):
                 os.makedirs(ck, exist_ok=True)
                 torch.save({"ask": ask.state_dict(), "proj": proj.state_dict(), "mem": mem.state_dict(),
                             "funcs": funcs.state_dict(), "n funcs": len(funcs.nets),
+                            "reader": reader.state_dict(), "relm": relm.state_dict(),
                             "lora": [p.detach()[:1].cpu() for p in G10.eparams()]},
                            os.path.join(ck, f"m1_{'nomem' if nomem else 'gnm'}.pt"))
 
