@@ -3721,11 +3721,20 @@ def v11_t5(steps=3000, ep_species=8):
             return s_.wn * name + s_.wc * torch.maximum(s1, s2)
 
         def forward(s_, men, nodes):
-            """logits over [nodes..., create]; a node's score = its most relevant stored mention"""
+            """logits over [nodes..., create]; a node's score = its most relevant stored mention (max), or with
+            s_.link == "avg" (v12k) the log of its AVERAGE exp-relevance over its stored mentions"""
             flat = {f: [v for n_ in nodes for v in n_[f]] for f in ("m", "cx", "sp")}     # all stored mentions at once
             own = torch.tensor([i for i, n_ in enumerate(nodes) for _ in n_["m"]], device=dev)
             sc = s_.per_mention(men, flat) / .1
             node_sc = torch.full((len(nodes),), -1e4, device=dev).scatter_reduce(0, own, sc, "amax")
+            if getattr(s_, "link", "max") == "avg":
+                # (v12k, 11-19: the max is single-linkage clustering, which chains -- v12j step 6000: one node
+                # ['Imperator', 'Small-Leaved Fig', 'Common Tern', ...] took 5 of 8 traced identity losses; every wrong
+                # merge gave it one more name to match. Average linkage: logsumexp - log(count); a node of a few names
+                # of one thing barely moves, a hub of many unrelated names pays ~log(count))
+                ex = torch.zeros(len(nodes), device=dev).index_add(0, own, torch.exp(sc - node_sc.detach()[own]))
+                cnt = torch.zeros(len(nodes), device=dev).index_add(0, own, torch.ones_like(sc))
+                node_sc = node_sc.detach() + torch.log(ex) - torch.log(cnt)   # (= logsumexp, softmax gradient)
             return torch.cat([node_sc, (s_.create + s_.cq(men[0]).squeeze())[None]])
 
     def run_episode(stream, decide, mode="labels", match=None, walk=None, H=3):
@@ -4600,6 +4609,7 @@ def v11_t5(steps=3000, ep_species=8):
         start12 = int(os.environ.get("V12_START", "0"))
         opt = torch.optim.AdamW(list(relm.parameters()) + list(mem.parameters()) + list(reader.parameters()) + g10p, lr=1e-3)
         learned = make_learned(relm, eps=0.)             # (v12i: no random pointing in training -- tries explore)
+        relm.link = os.environ.get("V12_LINK", "avg")     # (v12k: average linkage; "max" = v12j, for comparison)
 
         @torch.no_grad()
         def match_fn(men, n_, k):
