@@ -3720,12 +3720,15 @@ def v11_t5(steps=3000, ep_species=8):
             s2 = (torch.einsum("ksd,cd->ksc", SP, a_cx).amax(2) * msp).sum(1) / msp.sum(1)
             return s_.wn * name + s_.wc * torch.maximum(s1, s2)
 
-        def forward(s_, men, nodes):
+        def forward(s_, men, nodes, chunk=2048):
             """logits over [nodes..., create]; a node's score = its most relevant stored mention (max), or with
             s_.link == "avg" (v12k) the log of its AVERAGE exp-relevance over its stored mentions"""
             flat = {f: [v for n_ in nodes for v in n_[f]] for f in ("m", "cx", "sp")}     # all stored mentions at once
             own = torch.tensor([i for i, n_ in enumerate(nodes) for _ in n_["m"]], device=dev)
-            sc = s_.per_mention(men, flat) / .1
+            # (§1g M1, 11-19: one big world holds 10^4+ mentions -> scored in chunks; each mention's score is
+            # independent of the others, so this is exact)
+            sc = torch.cat([s_.per_mention(men, {f: flat[f][i:i + chunk] for f in flat})
+                            for i in range(0, len(flat["m"]), chunk)]) / .1
             node_sc = torch.full((len(nodes),), -1e4, device=dev).scatter_reduce(0, own, sc, "amax")
             if getattr(s_, "link", "max") == "avg":
                 # (v12k, 11-19: the max is single-linkage clustering, which chains -- v12j step 6000: one node
@@ -4740,22 +4743,52 @@ def v11_t5(steps=3000, ep_species=8):
             nodes, edges, outs = [], [], {}
             decide_ = learned(False)                     # identity: as trained in v12 (frozen in M1)
 
+            IDK = int(os.environ.get("M1_ID_TOPK", "32"))
+            id_top, mseq = {}, [0]                       # mention -> identity's top nodes when it was read
+
             def point_m(men):
+                """identity: the mention points at a node or creates one. A mention = (vector, name, -, its token
+                states, its sentence's states, sequence number); the read-time competitors are kept for the delayed
+                credit"""
                 j, _ = decide_(men, nodes)
+                if nodes:
+                    id_top[men[5]] = decide_.last[:-1].topk(min(IDK, len(nodes))).indices.tolist()
                 if j == len(nodes):
-                    nodes.append({"m": [men[0]], "names": [men[1]], "sp": [men[3]], "cx": [men[4]]})
+                    nodes.append({"m": [men[0]], "names": [men[1]], "sp": [men[3]], "cx": [men[4]], "seq": [men[5]]})
                 else:
-                    for f, v in (("m", men[0]), ("names", men[1]), ("sp", men[3]), ("cx", men[4])):
+                    for f, v in (("m", men[0]), ("names", men[1]), ("sp", men[3]), ("cx", men[4]), ("seq", men[5])):
                         nodes[j][f].append(v)
                 return j
+
+            def new_men(v, name, sp, cx):
+                mseq[0] += 1
+                return (v, name, None, sp, cx, mseq[0])
+
+            def id_credit(men, j):
+                """the identity decision behind an anchor, re-scored WITH gradients for the delayed credit: against the
+                memory as it was when the mention was read (only mentions stored before it -- 11-19 fix: the credit
+                scored the mention against itself), competitors = identity's top IDK nodes at that time (the rest
+                scored lowest; scoring the whole memory with gradients grew with the graph and ran the GPU out of
+                memory at ~4,000 sentences). -> cross-entropy toward the node it chose (or 'create')"""
+                s0, top = men[5], id_top.get(men[5], [])
+                view, keep = [], []
+                for i in top:
+                    c_ = sum(1 for s in nodes[i]["seq"] if s < s0)
+                    if c_:
+                        view.append({f: nodes[i][f][:c_] for f in ("m", "cx", "sp")})
+                        keep.append(i)
+                lg = relm(men, view) if view else relm.create[None] + relm.cq(men[0])
+                t_ = keep.index(j) if j in keep else len(keep)
+                return F.cross_entropy(lg[None], torch.tensor([t_], device=dev))
 
             rd_hist = {}                                 # sentence -> (its states, the reader's claims): own-trace training
 
             @torch.no_grad()
             def read_m(text, sid):
                 """the perception writes a sentence into GNM (v12 path); -> [(node, mention vector, mention)] it
-                touched"""
+                touched. All mentions of a sentence share one copy of its states (11-19: each kept its own copy)"""
                 ids_, H_ = sent(text)
+                Hc.pop(text, None)                       # (read once: the cache would hold a 2nd copy)
                 at, claims = {}, reader.read(H_)
                 for c in claims:
                     if c[2] is None:
@@ -4763,7 +4796,8 @@ def v11_t5(steps=3000, ep_species=8):
                     js = []
                     for sp_ in (c[0], c[2]):
                         if sp_ not in at:
-                            m_ = men_at(text, sp_)
+                            v_ = H_[sp_[0]:sp_[1] + 1]
+                            m_ = new_men(v_.mean(0), tk.decode(ids_[sp_[0]:sp_[1] + 1]).strip(), v_, H_)
                             at[sp_] = (point_m(m_), m_[0], m_)
                         js.append(at[sp_][0])
                     if js[0] == js[1]:
@@ -4819,7 +4853,11 @@ def v11_t5(steps=3000, ep_species=8):
                 if cs:
                     ft = torch.cat([torch.stack([torch.cat([need, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])
                                                  for ei, _ in cs]), ft])
-                    V = torch.cat([torch.stack([val(edges[ei]["b"]) for ei, _ in cs]), fo])
+                    vc = {}                              # (a node's value once per call: hubs are many edges' target)
+                    for ei, _ in cs:
+                        if edges[ei]["b"] not in vc:
+                            vc[edges[ei]["b"]] = val(edges[ei]["b"])
+                    V = torch.cat([torch.stack([vc[edges[ei]["b"]] for ei, _ in cs]), fo])
                     hp = [float(h_) for _, h_ in cs] + hp
                     ag = [math.log1p(max(0, (now or 0) - edges[ei].get("sid", 0))) / 5. for ei, _ in cs] + ag
                 sc = (mem.aa(ft).squeeze(-1) - F.softplus(mem.hc) * torch.tensor(hp, device=dev)
@@ -4831,7 +4869,7 @@ def v11_t5(steps=3000, ep_species=8):
                 node or creates one (identity decides), linked from the anchor by an edge whose relation is the
                 function's label. -> that node"""
                 o = out.detach()
-                j = point_m((o, f"<f{fi}>", None, o[None], o[None]))
+                j = point_m(new_men(o, f"<f{fi}>", o[None], o[None]))
                 if anchor is not None and anchor != j:
                     lbl = F.normalize(funcs.labels[fi].detach(), dim=0)
                     for dr, (u, v) in ((0, (anchor, j)), (1, (j, anchor))):
@@ -4962,11 +5000,41 @@ def v11_t5(steps=3000, ep_species=8):
                 fwd = [i for i, e in enumerate(edges) if e["dir"] == 0]
                 for i in random.Random(1).sample(fwd, min(16, len(fwd))):
                     print(f"GRAPH {tag} edge (sentence {edges[i].get('sid', 0)}): {desc(('edge', i))}", flush=True)
+                # (measurement, 11-19 -- user: "these are all estimated right? since they are all latent vectors?"): the
+                # relation words above are only the text each relation latent was computed from (my label, not what the
+                # model holds). What the latents hold: per group of the commonest relation words, its spread (0 = all
+                # its edges share one latent) and the groups whose mean latent is nearest
+                if fwd:
+                    with torch.no_grad():
+                        R_ = rels()
+                    grp = collections.defaultdict(list)
+                    for i in fwd:
+                        grp[edges[i].get("rw", "?")].append(i)
+                    top_ = [w for w, _ in rel.most_common(12)]
+                    C_ = F.normalize(torch.stack([R_[grp[w]].mean(0) for w in top_]), dim=-1)
+                    S_ = C_ @ C_.T
+                    for a_, w in enumerate(top_):
+                        nb = [(top_[b_], float(S_[a_, b_])) for b_ in S_[a_].argsort(descending=True).tolist() if b_ != a_]
+                        tight = float(F.normalize(R_[grp[w]], dim=-1).mean(0).norm())
+                        print(f"GRAPH {tag} relation latent '{w}' ({len(grp[w])} edges, spread {1 - tight:.2f}): nearest "
+                              + ", ".join(f"'{x}' {s_:.2f}" for x, s_ in nb[:4]), flush=True)
                 ck_ = os.environ.get("V12_CKPT", "") or "/marimo/out"
                 os.makedirs(ck_, exist_ok=True)
                 json.dump({"nodes": [[str(x) for x in n_["names"]] for n_ in nodes],
                            "edges": [[e["a"], e["b"], e.get("rw", "?"), e["dir"], e.get("sid", 0)] for e in edges]},
                           open(os.path.join(ck_, f"graph_{tag}.json"), "w"))
+
+            def save_m1():
+                """the trained M1 (11-19: also every 2,000 training sentences -- the first real run crashed at ~4,000
+                and kept nothing)"""
+                ck = os.environ.get("V12_CKPT", "")
+                if ck:
+                    os.makedirs(ck, exist_ok=True)
+                    torch.save({"ask": ask.state_dict(), "proj": proj.state_dict(), "mem": mem.state_dict(),
+                                "funcs": funcs.state_dict(), "n funcs": len(funcs.nets),
+                                "reader": reader.state_dict(), "relm": relm.state_dict(),
+                                "lora": [p.detach()[:1].cpu() for p in G10.eparams()]},
+                               os.path.join(ck, f"m1_{'nomem' if nomem else 'gnm'}.pt"))
 
             stream, recent = [], collections.deque(maxlen=3)   # token stream; mentions of the last 3 sentences
             index, sent_end = collections.defaultdict(list), []
@@ -5050,8 +5118,7 @@ def v11_t5(steps=3000, ep_species=8):
                                     loss = loss + .1 * a / len(rolls) * reader.loss(*rd_hist[edges[ix]["sid"]])
                                     S["reads credited"] += 1
                                 if r["A_m"][ia] is not None:
-                                    loss = loss + .1 * a / len(rolls) * F.cross_entropy(
-                                        relm(r["A_m"][ia], nodes)[None], torch.tensor([r["A_n"][ia]], device=dev))
+                                    loss = loss + .1 * a / len(rolls) * id_credit(r["A_m"][ia], r["A_n"][ia])
                                     S["identity credited"] += 1
                         S["reward"] += mu
                         S["reward kept"] += RW[best]
@@ -5130,8 +5197,14 @@ def v11_t5(steps=3000, ep_species=8):
                           f"reads credited {S['reads credited']}, identity credited {S['identity credited']} | function picks "
                           f"{S['function picks']} ({len(funcs.nets)} functions), memorized {S['memorized']} | nodes {len(nodes)}, "
                           f"edges {len(edges)} | cost per hop {float(F.softplus(mem.hc)):.2f}, age weight {float(mem.rc):.2f} | "
-                          f"{time.time() - t0:.0f}s", flush=True)
+                          f"GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
+                    torch.cuda.reset_peak_memory_stats()
                     S = collections.Counter()
+                if train and (k_s + 1) % 2000 == 0:
+                    save_m1()
+                if len(id_top) > 5000:                   # (only mentions of the last sentences can be anchors)
+                    for k_ in list(id_top)[:1000]:
+                        id_top.pop(k_)
                 if k_s + 1 == n_tr:
                     print("M1: training stream done; evaluation articles next (memory continues, no training)", flush=True)
             tn, mn = max(1, EV["tokens"]), max(1, EV["mem tokens"])
@@ -5144,14 +5217,7 @@ def v11_t5(steps=3000, ep_species=8):
             dump_graph("end")
             for tr_ in DIAG:
                 print(f"   FETCH {tr_}", flush=True)
-            ck = os.environ.get("V12_CKPT", "")
-            if ck:
-                os.makedirs(ck, exist_ok=True)
-                torch.save({"ask": ask.state_dict(), "proj": proj.state_dict(), "mem": mem.state_dict(),
-                            "funcs": funcs.state_dict(), "n funcs": len(funcs.nets),
-                            "reader": reader.state_dict(), "relm": relm.state_dict(),
-                            "lora": [p.detach()[:1].cpu() for p in G10.eparams()]},
-                           os.path.join(ck, f"m1_{'nomem' if nomem else 'gnm'}.pt"))
+            save_m1()
 
         if os.environ.get("V12_LM", "0") == "1":
             lm12()
