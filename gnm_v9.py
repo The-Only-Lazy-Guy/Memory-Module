@@ -4653,6 +4653,7 @@ def v11_t5(steps=3000, ep_species=8):
             QCOST = float(os.environ.get("M1_QCOST", ".002"))   # nats charged per query (D6: a cost per step)
             LSP = float(os.environ.get("M1_SP", "1"))    # weight of the local self-prediction loss (T3)
             TOKS = os.environ.get("M1_TOKENS", "1") == "1"   # a result node's name tokens go to the LLM too (T1)
+            TOKN = os.environ.get("M1_TOKNODES", "1") == "1"   # T10: every read token is also a node
             GA = int(os.environ.get("M1_ACCUM", "8"))
             SEGMAX, NSEG = int(os.environ.get("M1_SEG", "24")), int(os.environ.get("M1_MAXSEG", "4"))
             NF = int(os.environ.get("M1_FUNCS", "16"))
@@ -4769,6 +4770,9 @@ def v11_t5(steps=3000, ep_species=8):
                     s_.halt = nn.Sequential(nn.Linear(D12 + E_, 128), nn.Tanh(), nn.Linear(128, 1))
                     s_.new = nn.Parameter(torch.tensor(0.))
                     s_.tau = nn.Parameter(torch.tensor(10.))
+                    # T10: the relation latents of the structure reading gives (reading order; a span and its tokens)
+                    s_.nxt = nn.Parameter(F.normalize(torch.randn(D12), dim=0))
+                    s_.part = nn.Parameter(F.normalize(torch.randn(D12), dim=0))
 
             class Funcs(nn.Module):
                 """computing = the user's function nodes (§1g F1-F8): a learned label (in the space of edge relations:
@@ -4897,7 +4901,8 @@ def v11_t5(steps=3000, ep_species=8):
                     C_l, C_v, C_m = [], [], []
                     if cur is not None and outs.get(cur):
                         es = outs[cur][-64:]             # (compute limit: its 64 newest edges)
-                        R_ = torch.stack([edges[e]["R"] for e in es])
+                        R_ = torch.stack([edges[e]["R"] if "R" in edges[e] else F.normalize(getattr(solver, edges[e]["kind"]), dim=0)
+                                          for e in es])
                         dr = torch.tensor([[float(edges[e]["dir"])] for e in es], device=dev)
                         ag = torch.tensor([math.log1p(max(0, now - edges[e]["sid"])) / 5. for e in es], device=dev)
                         C_l.append(mem.aa(torch.cat([nd[None].expand(len(es), -1), R_, dr], 1)).squeeze(-1) + mem.rc * ag)
@@ -4933,6 +4938,7 @@ def v11_t5(steps=3000, ep_species=8):
                 claims = [c for c in reader.read(H_) if c[2] is not None and c[0] != c[2]]
                 st_, trs = collections.Counter(), []
                 if not claims:
+                    write_tokens(ids_, H_, sid, {})
                     return None, st_, trs
                 spans = list(dict.fromkeys(sp_ for c in claims for sp_ in (c[0], c[2])))
                 zi = {sp_: i for i, sp_ in enumerate(spans)}
@@ -4978,19 +4984,49 @@ def v11_t5(steps=3000, ep_species=8):
                         outs.setdefault(x, []).append(len(edges))
                         edges.append({"a": x, "b": y, "R": R[ci].detach(), "dir": dr, "sid": sid, "H": H_, "A": c[0],
                                       "rsp": c[1], "lim": lims[ci], "rw": tk.decode(ids_[c[1][0]:c[1][1] + 1]).strip()})
+                write_tokens(ids_, H_, sid, js)
                 return (torch.stack(L_).mean() if L_ else None), st_, trs
+
+            @torch.no_grad()
+            def write_tokens(ids_, H_, sid, js):
+                """T10 (Claude's proposal 11-19, after the smoke: a computed value can only be classified into a node
+                that exists, and the reader rarely makes values like ' 24' their own node): every read token is also a
+                node, linked in reading order ('next'), and each of the reader's spans to its tokens ('part'); both
+                relation latents are learned. A value read once can be pointed at later (the LLM then gets that exact
+                token), and a computation read once ('48/2 = 24') can be found again: identity, then 'next' --
+                cumulative"""
+                if not TOKN:
+                    return
+                Zt = enc.thing([H_[p:p + 1] for p in range(len(ids_))], [H_[:p + 1] for p in range(len(ids_))])
+                j0 = len(nodes)
+                for p in range(len(ids_)):
+                    nodes.append({"z": Zt[p], "m": [Zt[p]], "sp": [H_[p:p + 1]], "cx": [H_[:p + 1]], "tok": True,
+                                  "names": [tk.decode([ids_[p]]).strip() or tk.decode([ids_[p]])], "ids": [ids_[p]], "sid": sid})
+                pz_set(j0, Zt)
+
+                def link(x, y, kind):
+                    for dr, (u, v) in ((0, (x, y)), (1, (y, x))):
+                        outs.setdefault(u, []).append(len(edges))
+                        edges.append({"a": u, "b": v, "kind": kind, "dir": dr, "sid": sid, "rw": f"<{kind}>"})
+                for p in range(len(ids_) - 1):
+                    link(j0 + p, j0 + p + 1, "nxt")
+                for sp_, j in js.items():
+                    for p in range(sp_[0], min(sp_[1] + 1, len(ids_))):
+                        link(j, j0 + p, "part")
 
             @torch.no_grad()
             def refresh():
                 """stored latents follow the trained encoders (user 11-01: memory written before an encoder move is
                 re-transcribed)"""
-                for i in range(0, len(nodes), 256):
-                    ch = nodes[i:i + 256]
+                sn = [n_ for n_ in nodes if not n_.get("tok")]   # (token nodes keep their write-time latents: compute)
+                for i in range(0, len(sn), 256):
+                    ch = sn[i:i + 256]
                     Z = enc.thing([n_["sp"][0] for n_ in ch], [n_["cx"][0] for n_ in ch])
                     for n_, z in zip(ch, Z):
                         n_["z"], n_["m"] = z, [z]
-                    pz_set(i, Z)
-                fw = [i for i, e in enumerate(edges) if e["dir"] == 0]
+                for i in range(0, len(nodes), 4096):
+                    pz_set(i, torch.stack([n_["z"] for n_ in nodes[i:i + 4096]]))
+                fw = [i for i, e in enumerate(edges) if e["dir"] == 0 and "H" in e]
                 for i in range(0, len(fw), 256):
                     ch = [edges[k_] for k_ in fw[i:i + 256]]
                     R = mem.r(enc.rel([e["H"] for e in ch], [e["A"] for e in ch], [e["rsp"] for e in ch], [e["lim"] for e in ch]))
@@ -5084,10 +5120,11 @@ def v11_t5(steps=3000, ep_species=8):
 
             def dump_graph(tag):
                 """inspection: the graph (mention nodes, claim edges), identity neighbours, relation latent groups"""
-                fwd = [i for i, e in enumerate(edges) if e["dir"] == 0]
+                fwd = [i for i, e in enumerate(edges) if e["dir"] == 0 and "R" in e]
                 deg = collections.Counter(e["a"] for e in edges)
-                print(f"GRAPH {tag}: nodes {len(nodes)} (one per mention), edges {len(fwd)}, nodes with edges "
-                      f"{len(deg)}", flush=True)
+                ntok = sum(1 for n_ in nodes if n_.get("tok"))
+                print(f"GRAPH {tag}: nodes {len(nodes)} ({len(nodes) - ntok} reader mentions, {ntok} tokens), claim edges "
+                      f"{len(fwd)}, all edges {len(edges) // 2}, nodes with edges {len(deg)}", flush=True)
                 rel = collections.Counter(edges[i]["rw"] for i in fwd)
                 print(f"GRAPH {tag} commonest relation words (the text each latent came from, not what it holds): "
                       f"{rel.most_common(10)}", flush=True)
