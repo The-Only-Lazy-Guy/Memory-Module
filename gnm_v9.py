@@ -4313,7 +4313,11 @@ def v11_t5(steps=3000, ep_species=8):
                         if try_:
                             if len(lg) == 1:
                                 break
-                            k = 1 + int(torch.multinomial(F.softmax(lg[1:].detach(), 0), 1))
+                            # (v12g, 11-19: try "uniform" ignores the scores -- v12f step 2000: every right 1-hop try
+                            # pushed the other options down, follows sat at -4..-6, a score-sampled try followed <1% of
+                            # the time, so no 2-hop path was ever found: 2-hop 0-2/22)
+                            p_ = torch.ones(len(lg) - 1, device=dev) if try_ == "uniform" else F.softmax(lg[1:].detach(), 0)
+                            k = 1 + int(torch.multinomial(p_, 1))
                         else:
                             k = int(lg.argmax())
                         tk_.append((lg, k, eis))
@@ -4391,11 +4395,13 @@ def v11_t5(steps=3000, ep_species=8):
                 if got == truth:
                     pairs.extend((lg, k, False) for lg, k, _ in taken)
                 else:
-                    for _ in range(NTRY12):
-                        tk_, ae, g_, s_, _h = walk(True)
+                    for i_ in range(NTRY12):                # (v12g: the 2nd try is uniform -- exploration)
+                        tk_, ae, g_, s_, _h = walk("uniform" if i_ % 2 else True)
                         WALK12["tries"] += 1
                         if g_ == truth:
                             WALK12["right tries"] += 1
+                            WALK12["right uniform tries"] += i_ % 2
+                            WALK12["right tries through a follow"] += _h > 0
                             pairs.extend((lg, k, True) for lg, k, _ in tk_)
                             pairs.append(("say", edges[ae]["ids"], ids_, s_))   # the LM's own right answer (D7)
                             k0, eis0 = tk_[0][1], tk_[0][2]
@@ -4567,7 +4573,8 @@ def v11_t5(steps=3000, ep_species=8):
             print(f"v12 {tag} LLM IN THE LOOP: reads every text (its states feed the reader); writes every answer -- "
                   f"{SAY['written']} written by the LM so far, none from a stored name (no such path in the code); its demos "
                   f"{SAY['demos']}, its own right answers trained {SAY['own']}. GNM picks the statement (identity + walk): "
-                  f"walk demos {WALK12['demos']}, tries {WALK12['tries']} (right {WALK12['right tries']}), "
+                  f"walk demos {WALK12['demos']}, tries {WALK12['tries']} (right {WALK12['right tries']}: uniform "
+                  f"{WALK12['right uniform tries']}, through a follow {WALK12['right tries through a follow']}), "
                   f"'don't know' taught {WALK12['dk taught']}, merges blamed {WALK12['un-merge blamed']}", flush=True)
             # v12d measurement (v12c final collapse, no weights kept): the LM step's own parts, and a checkpoint
             with torch.no_grad():
