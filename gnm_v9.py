@@ -4831,18 +4831,35 @@ def v11_t5(steps=3000, ep_species=8):
 
             # ---------------------------------------------------------------- memory: nodes (one per mention), edges
             nodes, edges, outs = [], [], {}
-            PZb = {"t": torch.zeros(4096, 256, device=dev), "n": 0}   # nodes in identity space (relm.q), for search
+            # nodes in identity space (relm.q): "t" as projected, "c" centered (hubness fix below), for search
+            PZb = {"t": torch.zeros(4096, 256, device=dev), "c": torch.zeros(4096, 256, device=dev), "n": 0,
+                   "mu": torch.zeros(256, device=dev)}
 
             @torch.no_grad()
             def pz_set(i0, Z):
                 P_ = F.normalize(relm.q(Z), dim=-1)
                 while i0 + len(P_) > len(PZb["t"]):
                     PZb["t"] = torch.cat([PZb["t"], torch.zeros_like(PZb["t"])])
+                    PZb["c"] = torch.cat([PZb["c"], torch.zeros_like(PZb["c"])])
                 PZb["t"][i0:i0 + len(P_)] = P_
+                PZb["c"][i0:i0 + len(P_)] = F.normalize(P_ - PZb["mu"], dim=-1)
                 PZb["n"] = max(PZb["n"], i0 + len(P_))
 
             def PZ():
                 return PZb["t"][:PZb["n"]]
+
+            @torch.no_grad()
+            def pz_center():
+                """hubness fix (11-19: in the GSM8K run every held-out greedy pick ended on ONE node, '12.00' -- cosine
+                search in an uncentered space makes a few nodes near everything): the identity space is centered on
+                the mean of all nodes; search, classification and the self-prediction score use the centered space"""
+                if PZb["n"]:
+                    PZb["mu"] = PZ().mean(0)
+                    PZb["c"][:PZb["n"]] = F.normalize(PZ() - PZb["mu"], dim=-1)
+
+            def ip(x):
+                """a latent (or a batch) -> the centered identity space"""
+                return F.normalize(F.normalize(relm.q(x), dim=-1) - PZb["mu"], dim=-1)
 
             def nm(j):
                 return "<new value>" if j is None else str(nodes[j]["names"][0])
@@ -4876,7 +4893,7 @@ def v11_t5(steps=3000, ep_species=8):
                 if not nodes:
                     return []
                 with torch.no_grad():
-                    return (PZ() @ F.normalize(relm.q(z), dim=-1)).topk(min(k, len(nodes))).indices.tolist()
+                    return (PZb["c"][:PZb["n"]] @ ip(z)).topk(min(k, len(nodes))).indices.tolist()
 
             def classify(o, train):
                 """T1 (user 11-16: "node 1 add on node 1 (transform) and points to node 2"; "if cant point -> create
@@ -4884,9 +4901,9 @@ def v11_t5(steps=3000, ep_species=8):
                 top = near(o)
                 if not top:
                     return None, o
-                q = F.normalize(relm.q(o), dim=-1)
                 Zt = torch.stack([nodes[j]["z"] for j in top])
-                k, w = pick(torch.cat([solver.tau * (F.normalize(relm.q(Zt), dim=-1) @ q), solver.new[None]]), train)
+                k, w = pick(torch.cat([solver.tau * (ip(Zt) @ ip(o)), solver.new[None]]), train)
+                CLS[top[k] if k < len(top) else "new"] += 1   # (1a measurement: where classification lands)
                 return (top[k] if k < len(top) else None), w @ torch.cat([Zt, o[None]])
 
             def solve(men, need, arg2, train, now=0, tr=None, store=False):
@@ -4978,7 +4995,7 @@ def v11_t5(steps=3000, ep_species=8):
                 R = mem.r(enc.rel([H_] * len(claims), [c[0] for c in claims], [c[1] for c in claims], lims))
                 L_ = []
                 if nodes:
-                    Pz = F.normalize(relm.q(Z), dim=-1)
+                    Pz = ip(Z)
                     rnd = torch.randint(0, len(nodes), (32,), device=dev)
                     for ci, c in enumerate(claims):
                         a, b = c[0], c[2]
@@ -4987,11 +5004,19 @@ def v11_t5(steps=3000, ep_species=8):
                         menA = (Z[zi[a]], name(a), None, H_[a[0]:a[1] + 1], H_[:a[1] + 1])
                         tr = [] if len(trs) < 2 else None
                         v_hat, j_, _ = solve(menA, R[ci], torch.zeros(E_, device=dev), train, now=sid, tr=tr)
-                        q = F.normalize(relm.q(v_hat), dim=-1)
                         others = [zi[s_] for s_ in spans if s_ != b]
-                        lg = 10. * torch.cat([(q @ Pz[zi[b]])[None], Pz[others] @ q, PZ()[rnd] @ q])
+                        sc_ = lambda v_: 10. * torch.cat([(ip(v_) @ Pz[zi[b]])[None], Pz[others] @ ip(v_),
+                                                          PZb["c"][rnd] @ ip(v_)])
+                        lg = sc_(v_hat)
                         L_.append(F.cross_entropy(lg[None], torch.zeros(1, dtype=torch.long, device=dev)))
                         hit = int(lg.argmax()) == 0
+                        if train:                        # (1a: the GREEDY policy, as eval uses it -- the sampled hit
+                            with torch.no_grad():        #  rate hid a collapse 11-19)
+                                hit_g = int(sc_(solve(menA, R[ci].detach(), torch.zeros(E_, device=dev), False,
+                                                      now=sid)[0]).argmax()) == 0
+                        else:
+                            hit_g = hit
+                        st_["sp greedy hits"] += hit_g
                         num = any(ch.isdigit() for ch in name(b))
                         st_["sp n"] += 1
                         st_["sp hits"] += hit
@@ -5196,6 +5221,7 @@ def v11_t5(steps=3000, ep_species=8):
             S, EV = collections.Counter(), collections.Counter()
             SPW = {"hits": [], "failed": []}
             st_fb = [None]                               # the LLM's state after the last segment with GNM's results (U7)
+            CLS = collections.Counter()                  # (1a) where classification lands, per window
             t0 = time.time()
 
             def mem_mask(text, ids_, pos):
@@ -5220,7 +5246,7 @@ def v11_t5(steps=3000, ep_species=8):
                         f"tokens ({D_['n mem']}): {D_['ce0 mem'] / nm_:.3f} -> {D_['ce1 mem'] / nm_:.3f} | computed "
                         f"tokens ({D_['n comp']}): {D_['ce0 comp'] / nc_:.3f} -> {D_['ce1 comp'] / nc_:.3f}{ctl} | "
                         f"queries/sentence {D_['queries'] / max(1, D_['sentences']):.2f} | self-prediction (local): "
-                        f"{D_['sp hits']}/{D_['sp n']} hit, numbers {D_['sp num hits']}/{D_['sp num n']} | a result named "
+                        f"{D_['sp hits']}/{D_['sp n']} hit (greedy {D_['sp greedy hits']}), numbers {D_['sp num hits']}/{D_['sp num n']} | a result named "
                         f"the computed number: {D_['comp hits']}/{D_['comp segs']} segments")
 
             for k_s, (ai, text) in enumerate(sents):
@@ -5343,6 +5369,8 @@ def v11_t5(steps=3000, ep_species=8):
                 stream.extend(ids_t)
                 if train and REFRESH and (k_s + 1) % REFRESH == 0 and not nomem:
                     refresh()
+                if (k_s + 1) % 200 == 0 and not nomem:
+                    pz_center()
                 if DUMP and (k_s + 1) % DUMP == 0 and not nomem:
                     dump_graph(f"s{k_s + 1}")
                 if train and (k_s + 1) % 2000 == 0:
@@ -5354,6 +5382,12 @@ def v11_t5(steps=3000, ep_species=8):
                           f"{S['function picks']} ({len(funcs.nets)} functions), new values stored {S['created']} | reads "
                           f"credited +{S['reads credited +']} / -{S['reads credited -']} | nodes {len(nodes)}, edges {len(edges) // 2} "
                           f"| GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
+                    if CLS:
+                        top_c, n_c = CLS.most_common(1)[0]
+                        print(f"   classification landed on {len(CLS)} different nodes in {sum(CLS.values())} picks; most "
+                              f"often {'a new value' if top_c == 'new' else repr(nm(top_c))} ({n_c / sum(CLS.values()):.0%})",
+                              flush=True)
+                    CLS.clear()
                     torch.cuda.reset_peak_memory_stats()
                     S = collections.Counter()
                 if k_s + 1 == n_tr:
