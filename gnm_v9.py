@@ -4173,6 +4173,9 @@ def v11_t5(steps=3000, ep_species=8):
                 s_.af = nn.Sequential(nn.Linear(2 * D12 + 1, 128), nn.ReLU(), nn.Linear(128, 1))   # follow an edge
                 s_.aa = nn.Sequential(nn.Linear(2 * D12 + 1, 128), nn.ReLU(), nn.Linear(128, 1))   # answer from it
                 s_.anone = nn.Parameter(torch.tensor(0.))
+                # v12h: a learned cost per hop (D6: "no step cap, a cost per step"); af / anone are unused since v12h
+                # (kept so earlier checkpoints load)
+                s_.hc = nn.Parameter(torch.tensor(0.))
 
             def r(s_, rstate):
                 return F.normalize(s_.rv(rstate), dim=-1)
@@ -4241,14 +4244,33 @@ def v11_t5(steps=3000, ep_species=8):
             def rels_now():
                 return mem.r(torch.stack([e["rs"] for e in edges])) if edges else None
 
-            def step_logits(rq, u, h, R_):
-                """options at node u: 0 = don't know; 1..n = the answer is in edge i's statement (the LM writes it from
-                that statement); n+1..2n = follow edge i (while hops are left). Learned relevance of the question's
-                relation vector to each edge's"""
-                eis = outs.get(u, [])
-                ft = [torch.cat([rq, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)]) for ei in eis]
-                opts = [mem.anone] + [mem.aa(f_).squeeze() for f_ in ft] + ([mem.af(f_).squeeze() for f_ in ft] if h < H else [])
-                return torch.stack(opts), eis
+            def cands12(rq, start, R_):
+                """v12h (11-19; user: "punish dont know", "be clever"). The question POINTS at the edge whose statement
+                holds its answer, among every edge reachable from its node -- any distance, no cap, a learned cost per
+                hop (D6). Score = learned relevance of the question's relation to the edge's relation (+ direction)
+                minus cost x hops before the edge. Following is no longer a blind learned option (v12f: 'follow this
+                genus edge' was right for split species and wrong where the family edge is right here -- same
+                features, opposite targets): the walk goes where the best candidate is, the same decision at any depth.
+                'Don't know' is not an option; it happens only when nothing is reachable.
+                -> scores, [(edge, hops before it, first edge of its path)]"""
+                first, dist, front, cs = {start: None}, {start: 0}, [start], []
+                while front:
+                    nxt = []
+                    for u in front:
+                        for ei in outs.get(u, []):
+                            f_ = ei if first[u] is None else first[u]
+                            cs.append((ei, dist[u], f_))
+                            v = edges[ei]["b"]
+                            if v not in dist:
+                                dist[v], first[v] = dist[u] + 1, f_
+                                nxt.append(v)
+                    front = nxt
+                if not cs:
+                    return None, cs
+                ft = torch.stack([torch.cat([rq, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])
+                                  for ei, _, _ in cs])
+                hp_ = torch.tensor([float(h_) for _, h_, _ in cs], device=dev)
+                return mem.aa(ft).squeeze(-1) - F.softplus(mem.hc) * hp_, cs
 
             read_done, n_read, n_stmt = set(), {}, [0]
             for ev in stream:
@@ -4297,47 +4319,26 @@ def v11_t5(steps=3000, ep_species=8):
                 if gq is not None:
                     stats["q gold"] += 1
                     stats["q read right"] += bool(qc) and qc[0][:2] == gq[0][:2]
-                got, j, d, taken, ans_e, said, hops = None, None, None, [], None, None, 0
+                got, j, d, ans_e, said, hops = None, None, None, None, None, 0
+                lgq, cs, order = None, [], []
                 said_c = {}                              # the LM's answer per statement (one question, same weights)
 
-                def walk(try_):
-                    """the walk from the question's node: greedy, or (try_) a sampled try among the answer / follow
-                    options (v12d: D7 outcome -- tries, a right one is the target). (v12e, 11-18: the greedy walk had
-                    10% random picks in training; with tries those only added noise -- v12d step 500: the random picks'
-                    wrong answers taught 'don't know' 2184 times, every arm said don't know 120/120 while the right
-                    edge already scored highest among the answers. 'Don't know' is now taught only by its own wrong
-                    answers)"""
-                    tk_, cur, hp, ae, g_, s_ = [], j, 0, None, None, None
-                    for h in range(H + 1):
-                        lg, eis = step_logits(rq, cur, h, R_)
-                        if try_:
-                            if len(lg) == 1:
-                                break
-                            # (v12g, 11-19: try "uniform" ignores the scores -- v12f step 2000: every right 1-hop try
-                            # pushed the other options down, follows sat at -4..-6, a score-sampled try followed <1% of
-                            # the time, so no 2-hop path was ever found: 2-hop 0-2/22)
-                            p_ = torch.ones(len(lg) - 1, device=dev) if try_ == "uniform" else F.softmax(lg[1:].detach(), 0)
-                            k = 1 + int(torch.multinomial(p_, 1))
-                        else:
-                            k = int(lg.argmax())
-                        tk_.append((lg, k, eis))
-                        if k == 0:
-                            break
-                        if k <= len(eis):                # the answer is in this edge's statement: the LM writes it
-                            ae = eis[k - 1]
-                            key_ = tuple(edges[ae]["ids"])
-                            if key_ not in said_c:
-                                said_c[key_] = say12(edges[ae]["ids"], ids_)
-                            g_, s_ = said_c[key_]
-                            break
-                        cur, hp = edges[eis[k - 1 - len(eis)]]["b"], hp + 1
-                    return tk_, ae, g_, s_, hp
+                def ask12(i):
+                    """the LM writes the answer from candidate i's statement (cached per statement)"""
+                    key_ = tuple(edges[cs[i][0]]["ids"])
+                    if key_ not in said_c:
+                        said_c[key_] = say12(edges[cs[i][0]]["ids"], ids_)
+                    return said_c[key_]
                 if qc:
                     men = men_at(q, qc[0][0])
                     j, d = point(men, ent)
                     rq = mem.r(Hq[qc[0][1][0]:qc[0][1][1] + 1].mean(0))
                     R_ = rels_now()
-                    taken, ans_e, got, said, hops = walk(False)
+                    lgq, cs = cands12(rq, j, R_)
+                    if cs:                               # its pick = the best candidate
+                        order = torch.argsort(lgq.detach(), descending=True).tolist()
+                        ans_e, hops = cs[order[0]][0], cs[order[0]][1]
+                        got, said = ask12(order[0])
                 truth = x[rel]
                 if ent not in read_done:
                     stats["asked_before"] += 1
@@ -4359,16 +4360,15 @@ def v11_t5(steps=3000, ep_species=8):
                     stats["stmt has answer"] += ans_e is not None and truth in tk.decode(edges[ans_e]["ids"])
                     stats["lm right | stmt right"] += sr and ok_
                     stats["lm junk"] += got is not None and (got == "" or got != got.strip())
-                    if not train and not ok_ and taken and len(stats.setdefault("walk traces", [])) < 6:
-                        pt_ = path12(j, truth)                   # (diagnosis, log only: why the walk does not follow)
+                    if not train and not ok_ and cs and len(stats.setdefault("walk traces", [])) < 6:
+                        pt_ = path12(j, truth)                   # (diagnosis, log only: where the right edge ranked)
                         if pt_ is not None:
-                            lg0, eis0 = taken[0][0], taken[0][2]
                             nm_ = lambda ei: nodes[edges[ei]["b"]]["names"][0]
+                            rk = next((r_ for r_, i in enumerate(order) if cs[i][0] == pt_[-1]), None)
                             stats["walk traces"].append(
-                                f"'{q}' -> node '{nodes[j]['names'][0]}' | right path {[nm_(e) for e in pt_]} | step 1: dk "
-                                f"{float(lg0[0]):.2f}; answer-from " + ", ".join(f"{nm_(e)} {float(lg0[1 + i]):.2f}" for i, e in enumerate(eis0[:4]))
-                                + "; follow " + ", ".join(f"{nm_(e)} {float(lg0[1 + len(eis0) + i]):.2f}" for i, e in enumerate(eis0[:4]))
-                                + f" | took {taken[0][1]}")
+                                f"'{q}' -> node '{nodes[j]['names'][0]}' | right path {[nm_(e) for e in pt_]} (ranked {rk} "
+                                f"of {len(cs)}) | top: " + ", ".join(f"{nm_(cs[i][0])}@{cs[i][1]} {float(lgq[i]):.2f}"
+                                                                     for i in order[:4]))
                     if not train and ans_e is not None and not ok_ and len(stats.setdefault("say traces", [])) < 4:
                         stats["say traces"].append(f"'{q}' -> GNM picked '{tk.decode(edges[ans_e]['ids']).strip()}' -> "
                                                    f"LM wrote {got!r}, truth '{truth}'")
@@ -4391,54 +4391,39 @@ def v11_t5(steps=3000, ep_species=8):
                 # Not right -> a few sampled tries (the LM writes each one's answer); a right try = the target. The first
                 # ~50 reachable questions get the old search's path = the demonstrations. A wrong answer with no right
                 # try -> 'don't know'; 'don't know' with no right try -> nothing (no oracle says the answer was there)
-                e_r = None                               # the first edge of a right walk (blame 2')
+                e_r = None                               # the first edge of a right candidate's path (blame 2')
                 if got == truth:
-                    pairs.extend((lg, k, False) for lg, k, _ in taken)
-                else:
-                    for i_ in range(NTRY12):                # (v12g: the 2nd try is uniform -- exploration)
-                        tk_, ae, g_, s_, _h = walk("uniform" if i_ % 2 else True)
+                    pairs.append((lgq, order[0], False))
+                elif cs:
+                    # v12h tries: its next-best candidates, best first -- check the next most likely place (no dice);
+                    # a right one is the target (that also pushes its wrong pick down). Nothing right in reach -> the
+                    # walk is not blamed (memory is: the identity blames below)
+                    for i in order[1:1 + NTRY12]:
+                        g_, s_ = ask12(i)
                         WALK12["tries"] += 1
                         if g_ == truth:
                             WALK12["right tries"] += 1
-                            WALK12["right uniform tries"] += i_ % 2
-                            WALK12["right tries through a follow"] += _h > 0
-                            pairs.extend((lg, k, True) for lg, k, _ in tk_)
-                            pairs.append(("say", edges[ae]["ids"], ids_, s_))   # the LM's own right answer (D7)
-                            k0, eis0 = tk_[0][1], tk_[0][2]
-                            e_r = edges[eis0[k0 - 1] if k0 <= len(eis0) else eis0[k0 - 1 - len(eis0)]]
+                            WALK12["right tries through a follow"] += cs[i][1] > 0
+                            pairs.append((lgq, i, True))
+                            pairs.append(("say", edges[cs[i][0]]["ids"], ids_, s_))   # the LM's own right answer (D7)
+                            e_r = edges[cs[i][2]]
                             break
-                    if e_r is None and WALK12["demos"] < 50 and pth is not None:   # a demonstration walk
-                        WALK12["demos"] += 1
-                        u = j
-                        for h, ei in enumerate(pth):
-                            lg_, eis = step_logits(rq, u, h, R_)
-                            if h == len(pth) - 1:
-                                pairs.append((lg_, 1 + eis.index(ei), True))
-                            else:
-                                pairs.append((lg_, 1 + len(eis) + eis.index(ei), True))
-                                u = edges[ei]["b"]
-                        e_r = edges[pth[0]]
-                    if e_r is None and got is not None:  # answered wrong, no right try: 'don't know'
-                        WALK12["dk taught"] += 1
-                        pairs.append((taken[0][0], 0, True))
-                    # blame up (2'): the walk's first edge and the right walk's first edge from different statements ->
-                    # the later statement's pointing made one node of two things (target: create). v12f (11-18): also
-                    # when that first edge is an answer-from edge, or the walk said 'don't know' (then: the option it
-                    # ranked first after 'don't know'). v12e step 1000: questions landed on nodes holding several
-                    # species ('stoma': A. hygrometricus, the nitrous bonnet, ...), same-relation edges tied just
-                    # under 'don't know', the walk never followed -- and this blame was follow-only (T9b; I never
-                    # extended it when v12b added answer-from edges), so nothing un-merged the nodes
-                    if e_r is not None and len(taken):
-                        lg0, k0, eis0 = taken[0]
-                        if k0 == 0 and len(lg0) > 1:
-                            k0 = 1 + int(lg0[1:].argmax())
-                        if k0:
-                            e_w = edges[eis0[k0 - 1] if k0 <= len(eis0) else eis0[k0 - 1 - len(eis0)]]
-                            if e_w["stmt"] != e_r["stmt"]:
-                                dl = max(e_w, e_r, key=lambda e: e["stmt"])["da"]
-                                if dl["lg"] is not None and dl["j"] != dl["n"]:
-                                    WALK12["un-merge blamed"] += 1
-                                    pairs.append((dl["lg"], dl["n"], True))
+                    if e_r is None and WALK12["demos"] < 50 and pth is not None:   # a demonstration (the old search)
+                        i = next((i for i, c in enumerate(cs) if c[0] == pth[-1]), None)
+                        if i is not None:
+                            WALK12["demos"] += 1
+                            pairs.append((lgq, i, True))
+                            e_r = edges[pth[0]]
+                    # blame up (2'): its pick's first edge and the right candidate's first edge from different
+                    # statements -> the later statement's pointing made one node of two things (target: create)
+                    # (v12f: this was follow-only until then; v12h: first edges of the candidates' paths)
+                    if e_r is not None:
+                        e_w = edges[cs[order[0]][2]]
+                        if e_w["stmt"] != e_r["stmt"]:
+                            dl = max(e_w, e_r, key=lambda e: e["stmt"])["da"]
+                            if dl["lg"] is not None and dl["j"] != dl["n"]:
+                                WALK12["un-merge blamed"] += 1
+                                pairs.append((dl["lg"], dl["n"], True))
                 if mode != "outcome" or d["lg"] is None:
                     continue
                 if got == truth or pth is not None:
@@ -4540,7 +4525,8 @@ def v11_t5(steps=3000, ep_species=8):
             G10.load_state_dict(ck_["G10"])
             for p_, v_ in zip(G10.eparams(), ck_["experts"]):
                 p_.data[:len(v_)] = v_.to(dev)
-            mem.load_state_dict(ck_["mem"])
+            print(f"v12: mem keys not in the checkpoint: {mem.load_state_dict(ck_['mem'], strict=False).missing_keys}",
+                  flush=True)                            # (v12h: the cost per hop is new)
             reader.load_state_dict(ck_["reader"])
             relm.load_state_dict(ck_["relm"])
             WALK12["demos"] = 50                         # (its demonstrations were given before the checkpoint)
@@ -4573,9 +4559,9 @@ def v11_t5(steps=3000, ep_species=8):
             print(f"v12 {tag} LLM IN THE LOOP: reads every text (its states feed the reader); writes every answer -- "
                   f"{SAY['written']} written by the LM so far, none from a stored name (no such path in the code); its demos "
                   f"{SAY['demos']}, its own right answers trained {SAY['own']}. GNM picks the statement (identity + walk): "
-                  f"walk demos {WALK12['demos']}, tries {WALK12['tries']} (right {WALK12['right tries']}: uniform "
-                  f"{WALK12['right uniform tries']}, through a follow {WALK12['right tries through a follow']}), "
-                  f"'don't know' taught {WALK12['dk taught']}, merges blamed {WALK12['un-merge blamed']}", flush=True)
+                  f"walk demos {WALK12['demos']}, tries {WALK12['tries']} (right {WALK12['right tries']}, through a "
+                  f"follow {WALK12['right tries through a follow']}), merges blamed {WALK12['un-merge blamed']}, cost "
+                  f"per hop {float(F.softplus(mem.hc)):.2f}", flush=True)
             # v12d measurement (v12c final collapse, no weights kept): the LM step's own parts, and a checkpoint
             with torch.no_grad():
                 bmax = max(float(G10.bias(G10.ctl(G10.lm_run(list(t_))[0])).abs().max()) for s_, q_, _ in demo_a[:20]
