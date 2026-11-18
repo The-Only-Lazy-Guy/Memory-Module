@@ -4672,7 +4672,8 @@ def v11_t5(steps=3000, ep_species=8):
             ask = Ask().to(dev)
             proj = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, ED)).to(dev)
             new_p = list(ask.parameters()) + list(proj.parameters()) + list(mem.parameters())
-            lopt = torch.optim.AdamW([{"params": new_p, "lr": 1e-3}, {"params": G10.eparams(), "lr": 2e-4}])
+            lopt = torch.optim.AdamW([{"params": new_p, "lr": 1e-3}, {"params": G10.eparams(), "lr": 2e-4},
+                                      {"params": list(reader.parameters()) + list(relm.parameters()), "lr": 1e-4}])
             nodes, edges, outs = [], [], {}
             decide_ = learned(False)                     # identity: as trained in v12 (frozen in M1)
 
@@ -4685,26 +4686,33 @@ def v11_t5(steps=3000, ep_species=8):
                         nodes[j][f].append(v)
                 return j
 
+            rd_hist = {}                                 # sentence -> (its states, the reader's claims): own-trace training
+
             @torch.no_grad()
-            def read_m(text):
-                """the perception writes a sentence into GNM (v12 path); -> [(node, mention vector)] it touched"""
+            def read_m(text, sid):
+                """the perception writes a sentence into GNM (v12 path); -> [(node, mention vector, mention)] it
+                touched"""
                 ids_, H_ = sent(text)
-                at = {}
-                for c in reader.read(H_):
+                at, claims = {}, reader.read(H_)
+                for c in claims:
                     if c[2] is None:
                         continue
                     js = []
                     for sp_ in (c[0], c[2]):
                         if sp_ not in at:
                             m_ = men_at(text, sp_)
-                            at[sp_] = (point_m(m_), m_[0])
+                            at[sp_] = (point_m(m_), m_[0], m_)
                         js.append(at[sp_][0])
                     if js[0] == js[1]:
                         continue
                     rs = H_[c[1][0]:c[1][1] + 1].mean(0)
                     for dr, (u, v) in ((0, (js[0], js[1])), (1, (js[1], js[0]))):
                         outs.setdefault(u, []).append(len(edges))
-                        edges.append({"a": u, "b": v, "rs": rs, "dir": dr})
+                        edges.append({"a": u, "b": v, "rs": rs, "dir": dr, "sid": sid})
+                if claims:
+                    rd_hist[sid] = (H_, claims)
+                    if len(rd_hist) > 4000:
+                        rd_hist.pop(next(iter(rd_hist)))
                 return list(at.values())
 
             def val(j):
@@ -4725,13 +4733,14 @@ def v11_t5(steps=3000, ep_species=8):
                                 nxt.append(v)
                     front = nxt
                 if not cs:
-                    return None, None
+                    return None, None, None
                 ft = torch.stack([torch.cat([need, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])
                                   for ei, _ in cs])
                 sc = mem.aa(ft).squeeze(-1) - F.softplus(mem.hc) * torch.tensor([float(h_) for _, h_ in cs], device=dev)
                 w = F.softmax(sc, 0)
                 res = (w[:, None] * torch.stack([val(edges[ei]["b"]) for ei, _ in cs])).sum(0)
-                return res, edges[cs[int(sc.argmax())][0]]["b"]
+                best = cs[int(sc.argmax())][0]
+                return res, edges[best]["b"], best
 
             def llm(ctx, soft, tgt):
                 """GPT-2 + LoRA over [context][soft tokens][sentence] -> per-token CE of the sentence, and the state
@@ -4779,8 +4788,9 @@ def v11_t5(steps=3000, ep_species=8):
                 with torch.no_grad():
                     ce0, st0 = llm(ctx, None, ids_t)
                 soft, picks, stops, stopped, h_stop = [], [], [], False, None
-                A_v = [m_ for rc in recent for _, m_ in rc]
-                A_n = [j for rc in recent for j, _ in rc]
+                A_v = [m_ for rc in recent for _, m_, _ in rc]
+                A_n = [j for rc in recent for j, _, _ in rc]
+                A_m = [men for rc in recent for _, _, men in rc]   # the mention behind an anchor (None: a result)
                 with torch.set_grad_enabled(train):
                     if not nomem and A_v and edges:
                         R_ = mem.r(torch.stack([e["rs"] for e in edges]))
@@ -4793,15 +4803,17 @@ def v11_t5(steps=3000, ep_species=8):
                                 stopped, h_stop = True, h
                                 break
                             a_lg = ask.anchor_logits(h, torch.stack(A_v))
+                            ia = int(a_lg.argmax())
                             need = F.normalize(ask.need(h), dim=-1)
-                            res, tgt_node = solve(A_n[int(a_lg.argmax())], need, R_)
+                            res, tgt_node, be = solve(A_n[ia], need, R_)
                             if res is None:
                                 break
-                            picks.append((q, a_lg, need))
+                            picks.append((q, a_lg, need, ia, be))
                             soft.append(proj(res))
                             prev = res
                             A_v.append(res.detach())
                             A_n.append(tgt_node)
+                            A_m.append(None)
                             with torch.no_grad():
                                 _, st = llm(ctx, torch.stack(soft), [])
                     ce1 = llm(ctx, torch.stack(soft), ids_t)[0] if soft else None
@@ -4822,16 +4834,16 @@ def v11_t5(steps=3000, ep_species=8):
                         EV[k_] += v_
                 if train:
                     loss = ce1.mean()
-                    a_tg, s_tg = [], []                  # targets found in hindsight (no gradient while searching)
+                    a_tg, s_tg, rd_tg, id_tg = [], [], [], []   # targets found in hindsight (no gradient while searching)
                     if soft:
                         base = float(ce1.mean())
                         with torch.no_grad():
                             sd = [s_.detach() for s_ in soft]
-                            for (q, a_lg, need) in picks:
+                            for (q, a_lg, need, ia, be) in picks:
                                 order = torch.argsort(a_lg.detach(), descending=True).tolist()
                                 S["anchor tries"] += 1
                                 if len(order) > 1:       # its next-best anchor for this query
-                                    res2, _ = solve(A_n[order[1]], need.detach(), R_)
+                                    res2, _, _ = solve(A_n[order[1]], need.detach(), R_)
                                     if res2 is not None:
                                         sf2 = list(sd)
                                         sf2[q] = proj(res2)
@@ -4844,10 +4856,29 @@ def v11_t5(steps=3000, ep_species=8):
                                 S["queries helped"] += helped
                                 if q > 0:                # stop at step q was right iff this query did not help
                                     s_tg.append((stops[q], float(not helped)))
+                                if helped:               # the reading side's own right traces (D7): the sentence its
+                                    sid_ = edges[be].get("sid")   # best edge came from was read usefully
+                                    if sid_ in rd_hist:
+                                        rd_tg.append(rd_hist[sid_])
+                                    if A_m[ia] is not None:       # ... and the identity decision behind the anchor
+                                        id_tg.append((A_m[ia], A_n[ia], .1))
+                                if q == 0 and A_m[ia] is not None and len(nodes) > 1:
+                                    # identity try: the anchor mention on identity's 2nd most relevant node
+                                    sc_id = relm(A_m[ia], nodes)[:-1]
+                                    alt = [int(i) for i in torch.argsort(sc_id, descending=True) if int(i) != A_n[ia]][:1]
+                                    if alt:
+                                        res4, _, _ = solve(alt[0], need.detach(), R_)
+                                        S["identity tries"] += 1
+                                        if res4 is not None:
+                                            sf4 = list(sd)
+                                            sf4[q] = proj(res4)
+                                            if float(llm(ctx, torch.stack(sf4), ids_t)[0].mean()) < base - .01:
+                                                id_tg.append((A_m[ia], alt[0], 1.))
+                                                S["identity tries won"] += 1
                             if stopped and len(picks) < KQ:   # it stopped: would one more query have helped?
                                 need3 = F.normalize(ask.need(h_stop), dim=-1)
                                 ia3 = int(ask.anchor_logits(h_stop, torch.stack(A_v)).argmax())
-                                res3, _ = solve(A_n[ia3], need3, R_)
+                                res3, _, _ = solve(A_n[ia3], need3, R_)
                                 more = res3 is not None and float(
                                     llm(ctx, torch.stack(sd + [proj(res3)]), ids_t)[0].mean()) < base - .01
                                 s_tg.append((stops[len(picks)], float(not more)))   # punish 'stop' if it would
@@ -4856,13 +4887,18 @@ def v11_t5(steps=3000, ep_species=8):
                         loss = loss + F.cross_entropy(a_lg[None], torch.tensor([t_], device=dev))
                     for s_lg, t_ in s_tg:
                         loss = loss + F.binary_cross_entropy_with_logits(s_lg, torch.tensor(t_, device=dev))
+                    for H_r, cl_r in rd_tg:                # reader: imitate its own useful reading (.1)
+                        loss = loss + .1 * reader.loss(H_r, cl_r)
+                    for men_, j_, w_ in id_tg:             # identity: toward the node whose result lowered the CE
+                        loss = loss + w_ * F.cross_entropy(relm(men_, nodes)[None], torch.tensor([j_], device=dev))
+                    S["reads credited"] += len(rd_tg)
                     (loss / GA).backward()
                     if (k_s + 1) % GA == 0:
                         lopt.step()
                         lopt.zero_grad()
                 # the perception reads the sentence into GNM (after predicting it)
                 if not nomem:
-                    recent.append(read_m(text))
+                    recent.append(read_m(text, len(sent_end)))
                 for w in rare(text):
                     index[w].append(len(sent_end))
                 sent_end.append(pos + len(ids_t))
@@ -4873,7 +4909,8 @@ def v11_t5(steps=3000, ep_species=8):
                     print(f"M1 {tag} {k_s + 1}/{len(sents)} | CE all: LLM alone {S['ce0'] / tn:.3f}, with GNM {S['ce1'] / tn:.3f} "
                           f"| memory tokens ({S['mem tokens']}): alone {S['ce0 mem'] / mn:.3f}, with GNM {S['ce1 mem'] / mn:.3f} "
                           f"| queries/sentence {S['queries'] / max(1, S['sentences']):.2f}, helped {S['queries helped']}, anchor "
-                          f"tries won {S['anchor tries won']}/{S['anchor tries']}, stops punished {S['stops punished']} | "
+                          f"tries won {S['anchor tries won']}/{S['anchor tries']}, stops punished {S['stops punished']}, identity "
+                          f"tries won {S['identity tries won']}/{S['identity tries']}, reads credited {S['reads credited']} | "
                           f"nodes {len(nodes)}, edges {len(edges)} | cost per hop {float(F.softplus(mem.hc)):.2f} | "
                           f"{time.time() - t0:.0f}s", flush=True)
                     S = collections.Counter()
