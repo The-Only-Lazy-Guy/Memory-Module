@@ -4800,7 +4800,41 @@ def v11_t5(steps=3000, ep_species=8):
                     return torch.stack([net(x) for net in s_.nets]), F.normalize(torch.stack(list(s_.labels)), dim=-1)
             ask, enc, solver, funcs = Ask().to(dev), Enc().to(dev), Solver().to(dev), Funcs().to(dev)
             proj = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, ED)).to(dev)
-            new_p = [p_ for m_ in (ask, proj, mem, enc, solver) for p_ in m_.parameters()]
+            XL = int(os.environ.get("M1_XLAYERS", "2"))
+
+            class XAttn(nn.Module):
+                """T11 (Claude's design 11-19, replaces inserting result tokens into the LLM's input -- the fair baseline
+                beat that: 2.104 vs 2.185, and the LLM's own LoRA got worse, 2.222): GNM's results reach the LLM through
+                gated cross-attention added to the output of its last XL blocks, at the positions that predict the
+                segment. Values = the result vectors themselves (a result node's name-token embeddings + its latent's
+                soft vector), so an exact token can flow to the tied output head; a null slot lets a position take
+                nothing. The gate starts at 0: at the start the LLM is exactly the baseline, and the gate opens only
+                as far as the results lower the loss"""
+                def __init__(s_):
+                    super().__init__()
+                    s_.q = nn.ModuleList([nn.Linear(ED, 128) for _ in range(XL)])
+                    s_.k = nn.ModuleList([nn.Linear(ED, 128) for _ in range(XL)])
+                    s_.g = nn.Parameter(torch.zeros(XL))
+
+                def delta(s_, i, h, mem_):
+                    m_ = torch.cat([mem_, torch.zeros(1, ED, device=dev)])
+                    a_ = F.softmax(s_.q[i](h) @ s_.k[i](m_).T / 128 ** .5, -1)
+                    return torch.tanh(s_.g[i]) * (a_ @ m_)
+            xattn = XAttn().to(dev)
+            XA = {"mem": None, "s": 0}                   # the results of the segment being predicted, and where it starts
+
+            def _xhook(i):
+                def h_(mod, inp, out):
+                    if XA["mem"] is None:
+                        return out
+                    h = out[0] if isinstance(out, tuple) else out
+                    s0 = max(0, XA["s"] - 1)             # (the position before the segment predicts its first token)
+                    h2 = torch.cat([h[:, :s0], h[:, s0:] + xattn.delta(i, h[0, s0:].float(), XA["mem"]).to(h.dtype)[None]], 1)
+                    return (h2,) + tuple(out[1:]) if isinstance(out, tuple) else h2
+                return h_
+            for i_, blk in enumerate(M.transformer.h[-XL:]):
+                blk.register_forward_hook(_xhook(i_))
+            new_p = [p_ for m_ in (ask, proj, mem, enc, solver, xattn) for p_ in m_.parameters()]
             lopt = torch.optim.AdamW([{"params": new_p, "lr": 1e-3}, {"params": G10.eparams(), "lr": 2e-4},
                                       {"params": list(reader.parameters()) + list(relm.parameters()), "lr": 1e-4}])
             for _ in range(int(os.environ.get("M1_FUNCS0", "2"))):
@@ -4813,7 +4847,7 @@ def v11_t5(steps=3000, ep_species=8):
                 while len(funcs.nets) < ck1["n funcs"]:
                     lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0)), "lr": 1e-3})
                 for k_, m_ in (("ask", ask), ("proj", proj), ("mem", mem), ("enc", enc), ("solver", solver),
-                               ("funcs", funcs), ("reader", reader), ("relm", relm)):
+                               ("funcs", funcs), ("reader", reader), ("relm", relm), ("xattn", xattn)):
                     m_.load_state_dict(ck1[k_])
                 for p_, v_ in zip(G10.eparams(), ck1["lora"]):
                     p_.data[:len(v_)] = v_.to(dev)
@@ -4826,6 +4860,7 @@ def v11_t5(steps=3000, ep_species=8):
                     torch.save({"ask": ask.state_dict(), "proj": proj.state_dict(), "mem": mem.state_dict(),
                                 "enc": enc.state_dict(), "solver": solver.state_dict(), "funcs": funcs.state_dict(),
                                 "n funcs": len(funcs.nets), "reader": reader.state_dict(), "relm": relm.state_dict(),
+                                "xattn": xattn.state_dict(),
                                 "lora": [p.detach()[:1].cpu() for p in G10.eparams()]},
                                os.path.join(ck, f"m1_{'nomem' if nomem else 'gnm'}.pt"))
 
@@ -5143,25 +5178,26 @@ def v11_t5(steps=3000, ep_species=8):
                 return res, cost
 
             def to_llm(res):
-                """T1: each result -> the LLM: its name tokens when its node came from text (exact; forward only), then
-                its latent as a soft token (carries the gradient)"""
+                """T1 + T11: each result -> what the LLM's cross-attention reads: its name-token embeddings when its node
+                came from text (exact; forward only), and its latent as a soft vector (carries the gradient)"""
                 parts = []
                 for tok, node in res:
                     if TOKS and node is not None and nodes[node]["ids"]:   # (a stored new value has no tokens)
-                        parts.append(Wte(torch.tensor(nodes[node]["ids"], dtype=torch.long, device=dev)))
+                        parts.append(Wte(torch.tensor(nodes[node]["ids"], dtype=torch.long, device=dev)).float())
                     parts.append(tok[None])
                 return torch.cat(parts)
 
-            def llm(ctx, soft, tgt):
-                """GPT-2 + LoRA over [context][soft tokens][segment] -> (per-token CE of the segment, the LLM's state at
-                the end of the segment = what the perception reads before asking for the next one: U7 feedback)"""
-                parts = [Wte(torch.tensor(ctx, device=dev))] if ctx else []
-                parts += [soft] if soft is not None and len(soft) else []
-                parts += [Wte(torch.tensor(tgt, device=dev))]
-                emb = torch.cat(parts)
+            def llm(ctx, mem_, tgt):
+                """GPT-2 + LoRA over [context][segment] -- the plain text, as in the baseline -- with GNM's results read
+                by the gated cross-attention at the positions that predict the segment (T11) -> (per-token CE of the
+                segment, the LLM's state at the end of the segment = what the perception reads before asking for the
+                next one: U7 feedback)"""
+                emb = Wte(torch.tensor(ctx + tgt, device=dev))
                 G10.ex.active, G10.ex.w = 0, None
+                XA["mem"], XA["s"] = (mem_ if mem_ is not None and len(mem_) else None), len(ctx)
                 out = M(inputs_embeds=emb[None], position_ids=torch.arange(len(emb), device=dev)[None],
                         output_hidden_states=True)
+                XA["mem"] = None
                 G10.ex.active = None
                 lp = F.log_softmax(out.logits[0, -len(tgt) - 1:-1].float(), -1)
                 return -lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0], out.hidden_states[-1][0, -1].float().detach()
@@ -5287,12 +5323,12 @@ def v11_t5(steps=3000, ep_species=8):
                                     trs.append(f"COMPUTED '{tk.decode(ids_t[max(0, b - 6):b])}|{tk.decode(ids_t[b:b + 1])}': "
                                                f"results {[nm(n_) for _, n_ in res]} -> {'HIT' if hit_c else 'miss'}")
                             soft = to_llm(res) if res else None
-                            c1, st_fb[0] = llm(ctx + ids_t[:b], soft, ids_t[b:e])
+                            c1, st_fb[0] = llm(ctx + ids_t[:b], soft, ids_t[b:e])   # (soft = the results' memory, T11)
                             ce1_l.append(c1)
                             if heldout:                  # control: the same number of positions, NO memory content
                                 with torch.no_grad():
                                     cec_l.append(llm(ctx + ids_t[:b], proj(torch.zeros(len(soft), E_, device=dev)), ids_t[b:e])[0]
-                                                 if res else ce0[b:e])
+                                                 if res else ce0[b:e])   # (same number of slots, no content)
                             if tr is not None:
                                 trs.append(f"segment '{tk.decode(ids_t[b:e]).strip()[:50]}': CE alone "
                                            f"{float(ce0[b:e].mean()):.2f} -> GNM {float(c1.mean()):.2f} | " + " || ".join(tr))
@@ -5381,6 +5417,7 @@ def v11_t5(steps=3000, ep_species=8):
                     print(line(S, f"{tag} {k_s + 1}/{len(sents)}") + f" | picks: edges {S['edge picks']}, functions "
                           f"{S['function picks']} ({len(funcs.nets)} functions), new values stored {S['created']} | reads "
                           f"credited +{S['reads credited +']} / -{S['reads credited -']} | nodes {len(nodes)}, edges {len(edges) // 2} "
+                          f"| gate {[round(float(torch.tanh(g_)), 3) for g_ in xattn.g]} "
                           f"| GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
                     if CLS:
                         top_c, n_c = CLS.most_common(1)[0]
