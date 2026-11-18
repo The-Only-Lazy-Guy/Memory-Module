@@ -4186,6 +4186,7 @@ def v11_t5(steps=3000, ep_species=8):
         SAY = collections.Counter()                      # printed: answers written by the LM, demos, own right answers
         WALK12 = collections.Counter()                   # printed: walk demos, tries, right tries, 'don't know' taught
         NTRY12 = int(os.environ.get("V12_TRIES", "2"))
+        JOINT12 = os.environ.get("V12_JOINT", "1") == "1"   # (v12j; 0 = v12i's question pointing, for comparison)
 
         def say12(stmt_ids, q_ids, target=None):
             m10 = []
@@ -4211,9 +4212,27 @@ def v11_t5(steps=3000, ep_species=8):
                      "lm answered": 0, "stmt right": 0, "lm right | stmt right": 0, "stmt has answer": 0, "lm junk": 0}
             q_right_by_ent, q_n_by_ent = {}, {}
 
-            def point(men, ent):
+            def point(men, ent, joint=None):
                 j, lg = decide(men, nodes)
-                d = {"lg": lg, "n": len(nodes), "j": j, "name": men[1], "sc": getattr(decide, "last", None)}
+                sc_ = getattr(decide, "last", None)
+                if joint is not None and JOINT12 and j < len(nodes) and sc_ is not None and len(nodes) > 1:
+                    # v12j (11-19): a QUESTION points at its thing and its answer together. Over its most relevant
+                    # nodes: identity log-prob of the node + the walk's best candidate from it (v12i traces: questions
+                    # landed on nodes made by earlier questions -- only name variants, no facts -- because identity
+                    # sees names only; a node that cannot answer cannot win on names alone). Its mention is then
+                    # written to that node like any mention (user 10-19: "question node should be treated as normal
+                    # nodes"). Identity's 'create' stays its own decision
+                    lp = F.log_softmax(sc_, 0)
+                    best = None
+                    for s in [int(i) for i in torch.argsort(lp[:-1], descending=True)[:NTRY12 + 1]]:
+                        lg_s, cs_s = cands12(joint[0], s, joint[1])
+                        if cs_s:
+                            v_ = float(lp[s]) + float(lg_s.detach().max())
+                            if best is None or v_ > best[0]:
+                                best = (v_, s)
+                    if best is not None:
+                        j = best[1]
+                d = {"lg": lg, "n": len(nodes), "j": j, "name": men[1], "sc": sc_}
                 decs.append(d)
                 if j == len(nodes):
                     nodes.append({"m": [men[0]], "names": [men[1]], "alone": [None], "owner": ent, "made_by": len(decs) - 1,
@@ -4331,9 +4350,9 @@ def v11_t5(steps=3000, ep_species=8):
                     return said_c[key_]
                 if qc:
                     men = men_at(q, qc[0][0])
-                    j, d = point(men, ent)
                     rq = mem.r(Hq[qc[0][1][0]:qc[0][1][1] + 1].mean(0))
                     R_ = rels_now()
+                    j, d = point(men, ent, joint=(rq, R_))
                     lgq, cs = cands12(rq, j, R_)
                     if cs:                               # its pick = the best candidate
                         order = torch.argsort(lgq.detach(), descending=True).tolist()
