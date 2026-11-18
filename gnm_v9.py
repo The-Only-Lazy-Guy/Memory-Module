@@ -5122,8 +5122,8 @@ def v11_t5(steps=3000, ep_species=8):
                 its latent as a soft token (carries the gradient)"""
                 parts = []
                 for tok, node in res:
-                    if TOKS and node is not None:
-                        parts.append(Wte(torch.tensor(nodes[node]["ids"], device=dev)))
+                    if TOKS and node is not None and nodes[node]["ids"]:   # (a stored new value has no tokens)
+                        parts.append(Wte(torch.tensor(nodes[node]["ids"], dtype=torch.long, device=dev)))
                     parts.append(tok[None])
                 return torch.cat(parts)
 
