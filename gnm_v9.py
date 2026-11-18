@@ -4611,6 +4611,290 @@ def v11_t5(steps=3000, ep_species=8):
         learned = make_learned(relm, eps=0.)             # (v12i: no random pointing in training -- tries explore)
         relm.link = os.environ.get("V12_LINK", "avg")     # (v12k: average linkage; "max" = v12j, for comparison)
 
+        def lm12():
+            """docs/GNM_v10.md §1g M1 (user 11-19): GNM + LLM trained on ONE objective, the next-token CE of real text
+            (the text's own next token -- never GPT-2's predictions). Per sentence of an article stream (memory persists
+            across articles: one big world, user 10-19):
+            - ask: a query decoder (the perception's question side) reads the LLM's state and emits queries one by one
+              until its own stop; a query = (anchor, need): anchor = a pointer into what it has read (a mention of the
+              last sentences -> its node) or an earlier result; need = a learned direction;
+            - solve: GNM moves from the anchor along edges (v12h): every edge within reach is a candidate, weight =
+              learned relevance(need, edge relation, direction) - learned cost per hop; result = the weighted values of
+              the target nodes. No match score: nothing compares the query with stored content;
+            - tell: each result -> projector -> one soft token before the sentence; GPT-2 (frozen + LoRA) predicts it;
+              after each result the decoder reads the LLM's new state (the GNM + LLM <-> perception loop);
+            - learn: the CE gradient reaches LoRA, projector, relevance, cost per hop, need and the decoder through the
+              soft weights; the anchor and stop choices learn from the CE drop in hindsight (tries: its next-best
+              anchor; one more query; this query removed). 'Stop' is punished when one more query lowers the CE (user
+              11-19 "punish dont know");
+            - read: the perception writes the sentence into GNM (v12 reader -> identity -> edges), after predicting it.
+            V12_LM_NOMEM=1: the same LLM + LoRA trained on the same stream without GNM (the fair baseline)."""
+            nomem = os.environ.get("V12_LM_NOMEM", "0") == "1"
+            src = os.environ.get("M1_DATA", "species_e1.json")
+            f_ = os.path.join(here, src)
+            arts = (json.load(gzip.open(f_, "rt", encoding="utf-8")) if src.endswith(".gz")
+                    else json.load(open(f_, encoding="utf-8")))
+            arts = [a for a in arts if a.get("text")][:int(os.environ.get("M1_ARTS", "529"))]
+            n_ev = int(os.environ.get("M1_EVAL", "40"))
+            WIN, KQ = int(os.environ.get("M1_WIN", "256")), int(os.environ.get("M1_QUERIES", "3"))
+            HOP = int(os.environ.get("M1_HOPS", "2"))     # (compute limit on the reach; the cost per hop is learned)
+            GA = int(os.environ.get("M1_ACCUM", "8"))
+            wds = lambda s: {w.lower() for w in _re.findall(r"[A-Za-z][A-Za-z\-]{3,}", s)}
+            dfm = collections.Counter(w for a in arts for w in wds(" ".join(a["text"])))
+            cut = max(2, int(len(arts) * .05))
+            rare = lambda s: {w for w in wds(s) if dfm[w] <= cut}
+            sents = [(ai, s.strip() + " .") for ai, a in enumerate(arts) for p in a["text"] for s in p.split(" . ")
+                     if len(s.split()) >= 4]
+            n_tr = sum(ai < len(arts) - n_ev for ai, _ in sents)
+            print(f"M1: {len(arts)} articles ({len(arts) - n_ev} train, {n_ev} eval), {len(sents)} sentences ({n_tr} "
+                  f"train), window {WIN}, up to {KQ} queries, reach {HOP} hops, {'NO memory (baseline)' if nomem else 'GNM'}",
+                  flush=True)
+            Wte, ED = M.transformer.wte, M.config.n_embd
+            for B_ in G10.ex.B:                          # a fresh LoRA for the LM objective (the QA step's is not reused)
+                B_.data.zero_()
+
+            class Ask(nn.Module):
+                """the perception's question side: the LLM's state + the previous result -> stop; anchor pointer over
+                the mentions it read lately and its earlier results; need (a direction for GNM)"""
+                def __init__(s_):
+                    super().__init__()
+                    s_.inp = nn.Sequential(nn.LayerNorm(ED + E_), nn.Linear(ED + E_, 256))
+                    s_.cell = nn.GRUCell(256, 256)
+                    s_.stop = nn.Linear(256, 1)
+                    s_.ptr = nn.Sequential(nn.Linear(E_ + 256, 256), nn.Tanh(), nn.Linear(256, 1))
+                    s_.need = nn.Linear(256, D12)
+
+                def step(s_, h, st, prev):
+                    return s_.cell(s_.inp(torch.cat([st, prev]))[None], h[None])[0]
+
+                def anchor_logits(s_, h, A):
+                    return s_.ptr(torch.cat([A, h[None].expand(len(A), -1)], 1)).squeeze(-1)
+            ask = Ask().to(dev)
+            proj = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, ED)).to(dev)
+            new_p = list(ask.parameters()) + list(proj.parameters()) + list(mem.parameters())
+            lopt = torch.optim.AdamW([{"params": new_p, "lr": 1e-3}, {"params": G10.eparams(), "lr": 2e-4}])
+            nodes, edges, outs = [], [], {}
+            decide_ = learned(False)                     # identity: as trained in v12 (frozen in M1)
+
+            def point_m(men):
+                j, _ = decide_(men, nodes)
+                if j == len(nodes):
+                    nodes.append({"m": [men[0]], "names": [men[1]], "sp": [men[3]], "cx": [men[4]]})
+                else:
+                    for f, v in (("m", men[0]), ("names", men[1]), ("sp", men[3]), ("cx", men[4])):
+                        nodes[j][f].append(v)
+                return j
+
+            @torch.no_grad()
+            def read_m(text):
+                """the perception writes a sentence into GNM (v12 path); -> [(node, mention vector)] it touched"""
+                ids_, H_ = sent(text)
+                at = {}
+                for c in reader.read(H_):
+                    if c[2] is None:
+                        continue
+                    js = []
+                    for sp_ in (c[0], c[2]):
+                        if sp_ not in at:
+                            m_ = men_at(text, sp_)
+                            at[sp_] = (point_m(m_), m_[0])
+                        js.append(at[sp_][0])
+                    if js[0] == js[1]:
+                        continue
+                    rs = H_[c[1][0]:c[1][1] + 1].mean(0)
+                    for dr, (u, v) in ((0, (js[0], js[1])), (1, (js[1], js[0]))):
+                        outs.setdefault(u, []).append(len(edges))
+                        edges.append({"a": u, "b": v, "rs": rs, "dir": dr})
+                return list(at.values())
+
+            def val(j):
+                return torch.stack(nodes[j]["m"]).mean(0)
+
+            def solve(anchor, need, R_):
+                """GNM moves from the anchor along edges: candidates = edges within HOP hops; weight = relevance(need,
+                edge relation, direction) - cost per hop x hops before it -> (result vector, the best edge's target)"""
+                dist, front, cs = {anchor: 0}, [anchor], []
+                while front:
+                    nxt = []
+                    for u in front:
+                        for ei in outs.get(u, []):
+                            cs.append((ei, dist[u]))
+                            v = edges[ei]["b"]
+                            if v not in dist and dist[u] + 1 < HOP:
+                                dist[v] = dist[u] + 1
+                                nxt.append(v)
+                    front = nxt
+                if not cs:
+                    return None, None
+                ft = torch.stack([torch.cat([need, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])
+                                  for ei, _ in cs])
+                sc = mem.aa(ft).squeeze(-1) - F.softplus(mem.hc) * torch.tensor([float(h_) for _, h_ in cs], device=dev)
+                w = F.softmax(sc, 0)
+                res = (w[:, None] * torch.stack([val(edges[ei]["b"]) for ei, _ in cs])).sum(0)
+                return res, edges[cs[int(sc.argmax())][0]]["b"]
+
+            def llm(ctx, soft, tgt):
+                """GPT-2 + LoRA over [context][soft tokens][sentence] -> per-token CE of the sentence, and the state
+                at the last position before the sentence (what the LLM is about to say)"""
+                parts = [Wte(torch.tensor(ctx, device=dev))] if ctx else []
+                parts += [soft] if soft is not None and len(soft) else []
+                parts += [Wte(torch.tensor(tgt, device=dev))] if tgt else []
+                emb = torch.cat(parts)
+                G10.ex.active, G10.ex.w = 0, None
+                out = M(inputs_embeds=emb[None], position_ids=torch.arange(len(emb), device=dev)[None],
+                        output_hidden_states=True)
+                G10.ex.active = None
+                n_ = len(tgt)
+                st = out.hidden_states[-1][0, len(emb) - n_ - 1].float()
+                if not n_:
+                    return None, st
+                lp = F.log_softmax(out.logits[0, -n_ - 1:-1].float(), -1)
+                return -lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0], st
+
+            stream, recent = [], collections.deque(maxlen=3)   # token stream; mentions of the last 3 sentences
+            index, sent_end = collections.defaultdict(list), []
+            S, EV = collections.Counter(), collections.Counter()
+            t0 = time.time()
+
+            def mem_mask(text, ids_, pos):
+                """memory tokens: rare words of the sentence that an earlier sentence outside the window has and the
+                window does not (as in M0)"""
+                win_w = rare(tk.decode(stream[max(0, pos - WIN):pos])) if pos else set()
+                ws = {w for w in rare(text) if any(sent_end[j] <= pos - WIN for j in index[w])} - win_w
+                m = torch.zeros(len(ids_), dtype=torch.bool, device=dev)
+                for w in ws:
+                    for cand in (" " + w, " " + w[0].upper() + w[1:]):
+                        n = tk(cand)["input_ids"]
+                        for i in range(len(ids_) - len(n) + 1):
+                            if ids_[i:i + len(n)] == n:
+                                m[i:i + len(n)] = True
+                return m
+
+            for k_s, (ai, text) in enumerate(sents):
+                train = ai < len(arts) - n_ev
+                ids_t = tk(" " + text)["input_ids"][:200]
+                pos = len(stream)
+                ctx = stream[-WIN:] or [tk.eos_token_id]
+                mk = mem_mask(text, ids_t, pos)
+                with torch.no_grad():
+                    ce0, st0 = llm(ctx, None, ids_t)
+                soft, picks, stops, stopped, h_stop = [], [], [], False, None
+                A_v = [m_ for rc in recent for _, m_ in rc]
+                A_n = [j for rc in recent for j, _ in rc]
+                with torch.set_grad_enabled(train):
+                    if not nomem and A_v and edges:
+                        R_ = mem.r(torch.stack([e["rs"] for e in edges]))
+                        h, prev, st = torch.zeros(256, device=dev), torch.zeros(E_, device=dev), st0
+                        for q in range(KQ):
+                            h = ask.step(h, st, prev)
+                            s_lg = ask.stop(h).squeeze()
+                            stops.append(s_lg)
+                            if q > 0 and float(s_lg) > 0:   # (at least one query per sentence; then its own stop)
+                                stopped, h_stop = True, h
+                                break
+                            a_lg = ask.anchor_logits(h, torch.stack(A_v))
+                            need = F.normalize(ask.need(h), dim=-1)
+                            res, tgt_node = solve(A_n[int(a_lg.argmax())], need, R_)
+                            if res is None:
+                                break
+                            picks.append((q, a_lg, need))
+                            soft.append(proj(res))
+                            prev = res
+                            A_v.append(res.detach())
+                            A_n.append(tgt_node)
+                            with torch.no_grad():
+                                _, st = llm(ctx, torch.stack(soft), [])
+                    ce1 = llm(ctx, torch.stack(soft), ids_t)[0] if soft else None
+                    if ce1 is None:
+                        ce1 = ce0 if not train else llm(ctx, None, ids_t)[0]
+                S["sentences"] += 1
+                S["tokens"] += len(ids_t)
+                S["mem tokens"] += int(mk.sum())
+                S["ce0"] += float(ce0.sum())
+                S["ce1"] += float(ce1.sum())
+                S["ce0 mem"] += float(ce0[mk].sum())
+                S["ce1 mem"] += float(ce1[mk].sum())
+                S["queries"] += len(soft)
+                if not train:                            # the whole evaluation stream, kept apart from the windows
+                    for k_, v_ in (("tokens", len(ids_t)), ("mem tokens", int(mk.sum())), ("ce0", float(ce0.sum())),
+                                   ("ce1", float(ce1.sum())), ("ce0 mem", float(ce0[mk].sum())),
+                                   ("ce1 mem", float(ce1[mk].sum())), ("queries", len(soft)), ("sentences", 1)):
+                        EV[k_] += v_
+                if train:
+                    loss = ce1.mean()
+                    a_tg, s_tg = [], []                  # targets found in hindsight (no gradient while searching)
+                    if soft:
+                        base = float(ce1.mean())
+                        with torch.no_grad():
+                            sd = [s_.detach() for s_ in soft]
+                            for (q, a_lg, need) in picks:
+                                order = torch.argsort(a_lg.detach(), descending=True).tolist()
+                                S["anchor tries"] += 1
+                                if len(order) > 1:       # its next-best anchor for this query
+                                    res2, _ = solve(A_n[order[1]], need.detach(), R_)
+                                    if res2 is not None:
+                                        sf2 = list(sd)
+                                        sf2[q] = proj(res2)
+                                        if float(llm(ctx, torch.stack(sf2), ids_t)[0].mean()) < base - .01:
+                                            a_tg.append((a_lg, order[1]))
+                                            S["anchor tries won"] += 1
+                                wo = [s_ for i_, s_ in enumerate(sd) if i_ != q]   # this query removed
+                                ce_wo = float((llm(ctx, torch.stack(wo), ids_t)[0] if wo else ce0).mean())
+                                helped = ce_wo > base + .01
+                                S["queries helped"] += helped
+                                if q > 0:                # stop at step q was right iff this query did not help
+                                    s_tg.append((stops[q], float(not helped)))
+                            if stopped and len(picks) < KQ:   # it stopped: would one more query have helped?
+                                need3 = F.normalize(ask.need(h_stop), dim=-1)
+                                ia3 = int(ask.anchor_logits(h_stop, torch.stack(A_v)).argmax())
+                                res3, _ = solve(A_n[ia3], need3, R_)
+                                more = res3 is not None and float(
+                                    llm(ctx, torch.stack(sd + [proj(res3)]), ids_t)[0].mean()) < base - .01
+                                s_tg.append((stops[len(picks)], float(not more)))   # punish 'stop' if it would
+                                S["stops punished"] += more
+                    for a_lg, t_ in a_tg:
+                        loss = loss + F.cross_entropy(a_lg[None], torch.tensor([t_], device=dev))
+                    for s_lg, t_ in s_tg:
+                        loss = loss + F.binary_cross_entropy_with_logits(s_lg, torch.tensor(t_, device=dev))
+                    (loss / GA).backward()
+                    if (k_s + 1) % GA == 0:
+                        lopt.step()
+                        lopt.zero_grad()
+                # the perception reads the sentence into GNM (after predicting it)
+                if not nomem:
+                    recent.append(read_m(text))
+                for w in rare(text):
+                    index[w].append(len(sent_end))
+                sent_end.append(pos + len(ids_t))
+                stream.extend(ids_t)
+                if (k_s + 1) % 500 == 0 or k_s + 1 == n_tr or k_s + 1 == len(sents):
+                    tn, mn = max(1, S["tokens"]), max(1, S["mem tokens"])
+                    tag = "train" if train else "EVAL"
+                    print(f"M1 {tag} {k_s + 1}/{len(sents)} | CE all: LLM alone {S['ce0'] / tn:.3f}, with GNM {S['ce1'] / tn:.3f} "
+                          f"| memory tokens ({S['mem tokens']}): alone {S['ce0 mem'] / mn:.3f}, with GNM {S['ce1 mem'] / mn:.3f} "
+                          f"| queries/sentence {S['queries'] / max(1, S['sentences']):.2f}, helped {S['queries helped']}, anchor "
+                          f"tries won {S['anchor tries won']}/{S['anchor tries']}, stops punished {S['stops punished']} | "
+                          f"nodes {len(nodes)}, edges {len(edges)} | cost per hop {float(F.softplus(mem.hc)):.2f} | "
+                          f"{time.time() - t0:.0f}s", flush=True)
+                    S = collections.Counter()
+                if k_s + 1 == n_tr:
+                    print("M1: training stream done; evaluation articles next (memory continues, no training)", flush=True)
+            tn, mn = max(1, EV["tokens"]), max(1, EV["mem tokens"])
+            print(f"M1 EVAL TOTAL ({EV['sentences']} sentences of {n_ev} held-out articles, memory = everything read "
+                  f"before) | CE all: LLM alone {EV['ce0'] / tn:.3f}, with GNM {EV['ce1'] / tn:.3f} | memory tokens "
+                  f"({EV['mem tokens']}): alone {EV['ce0 mem'] / mn:.3f}, with GNM {EV['ce1 mem'] / mn:.3f} | queries/sentence "
+                  f"{EV['queries'] / max(1, EV['sentences']):.2f}", flush=True)
+            ck = os.environ.get("V12_CKPT", "")
+            if ck:
+                os.makedirs(ck, exist_ok=True)
+                torch.save({"ask": ask.state_dict(), "proj": proj.state_dict(), "mem": mem.state_dict(),
+                            "lora": [p.detach()[:1].cpu() for p in G10.eparams()]},
+                           os.path.join(ck, f"m1_{'nomem' if nomem else 'gnm'}.pt"))
+
+        if os.environ.get("V12_LM", "0") == "1":
+            lm12()
+            return
+
         @torch.no_grad()
         def match_fn(men, n_, k):
             return relm.per_mention(men, n_, k)
