@@ -4941,13 +4941,14 @@ def v11_t5(steps=3000, ep_species=8):
                 CLS[top[k] if k < len(top) else "new"] += 1   # (1a measurement: where classification lands)
                 return (top[k] if k < len(top) else None), w @ torch.cat([Zt, o[None]])
 
-            def solve(men, need, arg2, train, now=0, tr=None, store=False):
+            def solve(men, need, arg2, train, now=0, tr=None, store=False, fwd=True):
                 """GNM answers one query: identity (the anchor jumps to the most relevant node, or stays itself) -> up to
                 KS firings (follow an edge, or apply a function whose output is classified) -> learned halt (also before
                 the first firing: the node identity found can be the answer).
                 store: a value no node fits is memorized as a new node, linked from the node the function was applied
                 at by an edge labelled with that function (user 11-16: "if cant point -> create new node"; 11-19 audit:
                 it was given to the LLM but never stored).
+                fwd=False: computed only for the gradient of an ask 'stop' (T12) -- no memorization, no credit.
                 men = (latent, name, -, its token states, the text up to it). -> (value, node it ends on, used)"""
                 nb = near(men[0])
                 lg = relm(men, [nodes[j] for j in nb]) if nb else relm.create[None] + relm.cq(men[0])
@@ -4960,7 +4961,11 @@ def v11_t5(steps=3000, ep_species=8):
                 nd = need
                 for s_i in range(KS):
                     kh, wh = pick(torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v]))]), train)
-                    if kh == 1:
+                    # T12 (11-19: halting before any firing took over -- 'go' got no gradient once 'halt' was picked,
+                    # because the firing was never computed): in training the firing is computed in both cases; the
+                    # forward keeps the picked branch, the gradient compares the two
+                    taken = kh == 0
+                    if not taken and not (train and torch.is_grad_enabled()):
                         if tr is not None:
                             tr.append("halts")
                         break
@@ -4982,30 +4987,37 @@ def v11_t5(steps=3000, ep_species=8):
                     k, w = pick(lg_c, train)
                     o = w @ torch.cat(C_v)
                     if C_m[k][0] == "edge":
-                        if train and torch.is_grad_enabled() and "R" in edges[C_m[k][1]]:
+                        if taken and fwd and train and torch.is_grad_enabled() and "R" in edges[C_m[k][1]]:
                             lg_c.retain_grad()           # (C: the reading behind a picked claim edge gets this pick's credit)
                             credit.append((lg_c, k, C_m[k][1]))
-                        cur, vn = edges[C_m[k][1]]["b"], o
-                        d_ = f"--[{edges[C_m[k][1]].get('rw', '?')}{' (back)' if edges[C_m[k][1]]['dir'] else ''}]--> '{nm(cur)}'"
+                        nxt, vn = edges[C_m[k][1]]["b"], o
+                        d_ = f"--[{edges[C_m[k][1]].get('rw', '?')}{' (back)' if edges[C_m[k][1]]['dir'] else ''}]--> '{nm(nxt)}'"
                     else:
                         fi, at = C_m[k][1], cur
-                        funcs.used[fi] += 1
-                        cur, vn = classify(o, train)
-                        if cur is None and store:        # (A) memorization: the new value becomes a node
+                        if taken and fwd:
+                            funcs.used[fi] += 1
+                        nxt, vn = classify(o, train)
+                        if nxt is None and store and taken:   # (A) memorization: the new value becomes a node
                             z = vn.detach()
                             nodes.append({"z": z, "m": [z], "sp": [z[None]], "cx": [z[None]], "names": [f"<f{fi}>"],
                                           "ids": [], "sid": now})
-                            cur = len(nodes) - 1
-                            pz_set(cur, z[None])
+                            nxt = len(nodes) - 1
+                            pz_set(nxt, z[None])
                             if at is not None:
-                                for dr, (x, y) in ((0, (at, cur)), (1, (cur, at))):
+                                for dr, (x, y) in ((0, (at, nxt)), (1, (nxt, at))):
                                     outs.setdefault(x, []).append(len(edges))
                                     edges.append({"a": x, "b": y, "kind": "func", "fi": fi, "dir": dr, "sid": now,
                                                   "rw": f"<f{fi}>"})
                             S["created"] += 1
-                        d_ = f"function {fi} -> {nm(cur)!r}"
+                        d_ = f"function {fi} -> {nm(nxt)!r}"
+                    v_n = wh[0] * vn + wh[1] * v         # (forward: the picked branch)
+                    if not taken:
+                        v = v_n
+                        if tr is not None:
+                            tr.append("halts")
+                        break
+                    cur, v = nxt, v_n
                     used.append(C_m[k])
-                    v = wh[0] * vn + wh[1] * v
                     nd = F.normalize(solver.nc(v[None], nd[None])[0], dim=-1)
                     if tr is not None:
                         tr.append(d_)
@@ -5146,17 +5158,18 @@ def v11_t5(steps=3000, ep_species=8):
             def ask_seg(st0, A_lat, A_men, train, now, tr=None):
                 """T5: the perception asks on its OWN state (no LLM forward between queries) until its own stop (>= 1
                 query, cold start, flagged); anchor and 2nd input point at recently read spans or earlier results.
-                -> ([(soft token, node)], expected number of queries)"""
+                -> ([(soft token, node)], expected number of queries, number of queries asked)"""
                 h, prev = torch.zeros(256, device=dev), torch.zeros(E_, device=dev)
                 res, cost, R_l, R_m = [], 1., [], []
                 for q in range(KQ):
                     h = ask.step(h, st0, prev)
-                    gw = None
+                    gw, ks = None, 0
                     if q > 0:
                         s_lg = torch.cat([torch.zeros(1, device=dev), ask.stop(h)])
                         cost = cost + F.softmax(s_lg, 0)[0]
                         ks, gw = pick(s_lg, train)
-                        if ks == 1:
+                        # T12: in training a 'stop' still computes this query for the gradient (forward weight 0)
+                        if ks == 1 and not (train and torch.is_grad_enabled()):
                             break
                     CL = torch.stack(A_lat + R_l)
                     CM = A_men + R_m
@@ -5165,8 +5178,11 @@ def v11_t5(steps=3000, ep_species=8):
                     need = F.normalize(ask.need(h), dim=-1)
                     i2, w2 = pick(ask.arg2_logits(h, CL), train)
                     arg2 = w2 @ torch.cat([torch.zeros(1, E_, device=dev), CL])
-                    t_ = [] if tr is not None else None
-                    v, node, used = solve(men, need, arg2, train, now=now, tr=t_, store=True)
+                    t_ = [] if tr is not None and ks == 0 else None
+                    v, node, used = solve(men, need, arg2, train, now=now, tr=t_, store=ks == 0, fwd=ks == 0)
+                    if ks == 1:                          # (the 'stop' branch: in the memory with weight 0 -- forward
+                        res.append((gw[0] * proj(v), None))   # adds one empty slot, like the null slot)
+                        break
                     if tr is not None:
                         tr.append(f"q{q + 1} (2nd input {'none' if i2 == 0 else repr(CM[i2 - 1][1])}): " + " ; ".join(t_))
                     for u in used:
@@ -5175,7 +5191,7 @@ def v11_t5(steps=3000, ep_species=8):
                     R_l.append(v)
                     R_m.append((v, "<result>", None, v[None], v[None]))
                     prev = v
-                return res, cost
+                return res, cost, len(R_l)
 
             def to_llm(res):
                 """T1 + T11: each result -> what the LLM's cross-attention reads: its name-token embeddings when its node
@@ -5311,9 +5327,9 @@ def v11_t5(steps=3000, ep_species=8):
                             # U7 (11-19 audit fix): the perception reads the LLM's state AFTER GNM's last results (the
                             # previous segment's forward with them); only the stream's very first segment reads the LLM alone
                             st_in = st_fb[0] if st_fb[0] is not None else st_all[b]
-                            res, c_ = ask_seg(st_in, A_lat, A_men, train, len(sent_end), tr) if A_lat else ([], 0.)
+                            res, c_, nl_ = ask_seg(st_in, A_lat, A_men, train, len(sent_end), tr) if A_lat else ([], 0., 0)
                             cost = cost + c_
-                            n_q += len(res)
+                            n_q += nl_
                             if ck[b]:                    # (measurement: did a result name the computed number?)
                                 hit_c = any(n_ is not None and nodes[n_]["ids"][:1] == ids_t[b:b + 1] for _, n_ in res)
                                 for D_ in ((S, EV) if heldout else (S,)):
