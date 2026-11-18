@@ -3962,12 +3962,12 @@ def v11_t5(steps=3000, ep_species=8):
         stats["nodes"], stats["things"] = len(nodes), len(owners)
         return stats, pairs
 
-    def make_learned(relm):
+    def make_learned(relm, eps=.1):
         def learned(train):
             def d(men, nodes):
                 lg = relm(men, nodes) if nodes else relm.create[None] + relm.cq(men[0])
                 d.last = lg.detach()                     # (diagnosis only: read by run_episode's link stats)
-                j = random.randrange(len(lg)) if train and random.random() < .1 else int(lg.argmax())
+                j = random.randrange(len(lg)) if train and random.random() < eps else int(lg.argmax())
                 return j, (lg if train else None)
             return d
         return learned
@@ -4451,7 +4451,13 @@ def v11_t5(steps=3000, ep_species=8):
                                 pairs.append((dl["lg"], dl["n"], True))
                 if mode != "outcome" or d["lg"] is None:
                     continue
-                if got == truth or pth is not None:
+                # v12i (11-19), identity from outcome like the walk. Traces (v12h step 3500, eval): questions land on
+                # nodes holding several things (['Rhina', 'milking bonnet', 'M. galopus'] took C. falciformis and
+                # Picathartes oreas); the right node often ranked 2nd; 'create' ranked 13-86. Two of my rules fed
+                # those hubs: the chosen node was reinforced whenever the answer was merely REACHABLE from it (a hub
+                # reaches a lot), and the target was any node reaching the answer's VALUE (in a world, other species
+                # share genera). Now: reinforce only a right answer; a wrong one -> identity tries
+                if got == truth:
                     pairs.append((d["lg"], j, False))
                     continue
                 if not any(n_["names"][0] == truth for n_ in nodes):          # blame up (5)
@@ -4459,20 +4465,36 @@ def v11_t5(steps=3000, ep_species=8):
                         if dd["name"] == truth and dd["lg"] is not None and dd["j"] != dd["n"]:
                             pairs.append((dd["lg"], dd["n"], True))
                     continue
-                # (11-18 audit: this used ALL the species' gold values -- the question gave only the asked one -- and
-                # split facts made 'create' the target. Now: a node that reaches the ASKED value)
-                ok = [i for i in range(d["n"]) if path12(i, truth) is not None]
-                t_ = max(ok, key=lambda i: float(d["lg"][i])) if ok else d["n"]
+                if not any(path12(i, truth) is not None for i in range(d["n"])):
+                    pairs.append((d["lg"], d["n"], True))   # nothing reaches the answer: create (search -- flagged)
+                    continue
+                # identity tries: the walk starts from its 2nd and 3rd most relevant nodes (best first); the LM checks
+                # the best candidate from there; one that answers right = the target
+                t_ = None
+                for j2 in [int(i) for i in torch.argsort(d["lg"].detach()[:d["n"]], descending=True) if int(i) != j][:NTRY12]:
+                    lg2, cs2 = cands12(rq, j2, R_)
+                    if not cs2:
+                        continue
+                    ae2 = cs2[int(lg2.detach().argmax())][0]
+                    key_ = tuple(edges[ae2]["ids"])
+                    if key_ not in said_c:
+                        said_c[key_] = say12(edges[ae2]["ids"], ids_)
+                    WALK12["identity tries"] += 1
+                    if said_c[key_][0] == truth:
+                        WALK12["identity right tries"] += 1
+                        t_ = j2
+                        break
+                if t_ is None:
+                    continue
                 pairs.append((d["lg"], t_, True))
-                if ok and j != t_ and match is not None and len(nodes[j]["m"]) > 1:      # blame up (3)
+                if match is not None and len(nodes[j]["m"]) > 1:      # blame up (3)
                     k3 = int(match(men, nodes[j], len(nodes[j]["m"]) - 1).argmax())
                     dk = nodes[j]["md"][k3]
                     if dk is not d and dk["lg"] is not None and dk["j"] != dk["n"]:
                         pairs.append((dk["lg"], t_ if t_ < dk["n"] else dk["n"], True))
-                if ok and j != t_:                       # blame up (1)
-                    dm = decs[nodes[j]["made_by"]]
-                    if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
-                        pairs.append((dm["lg"], t_, True))
+                dm = decs[nodes[j]["made_by"]]           # blame up (1)
+                if dm is not d and dm["lg"] is not None and t_ < dm["n"]:
+                    pairs.append((dm["lg"], t_, True))
             if train:                                    # reader: its own statement readings for species answered right
                 for H_, claims, ent in rdr_traces:
                     if q_n_by_ent.get(ent) and q_right_by_ent.get(ent) == q_n_by_ent[ent] and claims:
@@ -4558,7 +4580,7 @@ def v11_t5(steps=3000, ep_species=8):
             print(f"v12: resumed from {init12} (optimizer state fresh)", flush=True)
         start12 = int(os.environ.get("V12_START", "0"))
         opt = torch.optim.AdamW(list(relm.parameters()) + list(mem.parameters()) + list(reader.parameters()) + g10p, lr=1e-3)
-        learned = make_learned(relm)
+        learned = make_learned(relm, eps=0.)             # (v12i: no random pointing in training -- tries explore)
 
         @torch.no_grad()
         def match_fn(men, n_, k):
@@ -4592,7 +4614,8 @@ def v11_t5(steps=3000, ep_species=8):
                   f"{SAY['demos']}, its own right answers trained {SAY['own']}. GNM picks the statement (identity + walk): "
                   f"walk demos {WALK12['demos']}, tries {WALK12['tries']} (right {WALK12['right tries']}, through a "
                   f"follow {WALK12['right tries through a follow']}), merges blamed {WALK12['un-merge blamed']}, cost "
-                  f"per hop {float(F.softplus(mem.hc)):.2f}", flush=True)
+                  f"per hop {float(F.softplus(mem.hc)):.2f}; identity tries {WALK12['identity tries']} (right "
+                  f"{WALK12['identity right tries']})", flush=True)
             # v12d measurement (v12c final collapse, no weights kept): the LM step's own parts, and a checkpoint
             with torch.no_grad():
                 bmax = max(float(G10.bias(G10.ctl(G10.lm_run(list(t_))[0])).abs().max()) for s_, q_, _ in demo_a[:20]
