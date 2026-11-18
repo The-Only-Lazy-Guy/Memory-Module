@@ -4847,6 +4847,18 @@ def v11_t5(steps=3000, ep_species=8):
             def nm(j):
                 return "<new value>" if j is None else str(nodes[j]["names"][0])
 
+            rd_hist, credit = {}, []                     # sentence -> (states, claims); picked claim edges (logits, k, edge)
+
+            def rlat(e):
+                """an edge's relation latent: a claim's (learned from context), or the learned latent of its kind
+                ('nxt', 'part'), or the label of the function that made it"""
+                e_ = edges[e]
+                if "R" in e_:
+                    return e_["R"]
+                if e_["kind"] == "func":
+                    return F.normalize(funcs.labels[e_["fi"]], dim=0)
+                return F.normalize(getattr(solver, e_["kind"]), dim=0)
+
             def pick(lg, train):
                 """a discrete choice (T7): forward = the hard pick (pointing = classification); backward = the soft
                 weights (straight-through). Training samples with Gumbel noise (the model's own beliefs, never uniform
@@ -4877,9 +4889,13 @@ def v11_t5(steps=3000, ep_species=8):
                 k, w = pick(torch.cat([solver.tau * (F.normalize(relm.q(Zt), dim=-1) @ q), solver.new[None]]), train)
                 return (top[k] if k < len(top) else None), w @ torch.cat([Zt, o[None]])
 
-            def solve(men, need, arg2, train, now=0, tr=None):
+            def solve(men, need, arg2, train, now=0, tr=None, store=False):
                 """GNM answers one query: identity (the anchor jumps to the most relevant node, or stays itself) -> up to
-                KS firings (follow an edge, or apply a function whose output is classified) -> learned halt.
+                KS firings (follow an edge, or apply a function whose output is classified) -> learned halt (also before
+                the first firing: the node identity found can be the answer).
+                store: a value no node fits is memorized as a new node, linked from the node the function was applied
+                at by an edge labelled with that function (user 11-16: "if cant point -> create new node"; 11-19 audit:
+                it was given to the LLM but never stored).
                 men = (latent, name, -, its token states, the text up to it). -> (value, node it ends on, used)"""
                 nb = near(men[0])
                 lg = relm(men, [nodes[j] for j in nb]) if nb else relm.create[None] + relm.cq(men[0])
@@ -4891,18 +4907,15 @@ def v11_t5(steps=3000, ep_species=8):
                     tr.append(f"'{men[1]}' is {'itself (new)' if cur is None else repr(nm(cur))}")
                 nd = need
                 for s_i in range(KS):
-                    wh = None
-                    if s_i > 0:
-                        kh, wh = pick(torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v]))]), train)
-                        if kh == 1:
-                            if tr is not None:
-                                tr.append("halts")
-                            break
+                    kh, wh = pick(torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v]))]), train)
+                    if kh == 1:
+                        if tr is not None:
+                            tr.append("halts")
+                        break
                     C_l, C_v, C_m = [], [], []
                     if cur is not None and outs.get(cur):
                         es = outs[cur][-64:]             # (compute limit: its 64 newest edges)
-                        R_ = torch.stack([edges[e]["R"] if "R" in edges[e] else F.normalize(getattr(solver, edges[e]["kind"]), dim=0)
-                                          for e in es])
+                        R_ = torch.stack([rlat(e) for e in es])
                         dr = torch.tensor([[float(edges[e]["dir"])] for e in es], device=dev)
                         ag = torch.tensor([math.log1p(max(0, now - edges[e]["sid"])) / 5. for e in es], device=dev)
                         C_l.append(mem.aa(torch.cat([nd[None].expand(len(es), -1), R_, dr], 1)).squeeze(-1) + mem.rc * ag)
@@ -4913,17 +4926,34 @@ def v11_t5(steps=3000, ep_species=8):
                                                 1)).squeeze(-1))
                     C_v.append(fo)
                     C_m += [("func", i) for i in range(len(fl))]
-                    k, w = pick(torch.cat(C_l), train)
+                    lg_c = torch.cat(C_l)
+                    k, w = pick(lg_c, train)
                     o = w @ torch.cat(C_v)
                     if C_m[k][0] == "edge":
+                        if train and torch.is_grad_enabled() and "R" in edges[C_m[k][1]]:
+                            lg_c.retain_grad()           # (C: the reading behind a picked claim edge gets this pick's credit)
+                            credit.append((lg_c, k, C_m[k][1]))
                         cur, vn = edges[C_m[k][1]]["b"], o
                         d_ = f"--[{edges[C_m[k][1]].get('rw', '?')}{' (back)' if edges[C_m[k][1]]['dir'] else ''}]--> '{nm(cur)}'"
                     else:
-                        funcs.used[C_m[k][1]] += 1
+                        fi, at = C_m[k][1], cur
+                        funcs.used[fi] += 1
                         cur, vn = classify(o, train)
-                        d_ = f"function {C_m[k][1]} -> {nm(cur)!r}"
+                        if cur is None and store:        # (A) memorization: the new value becomes a node
+                            z = vn.detach()
+                            nodes.append({"z": z, "m": [z], "sp": [z[None]], "cx": [z[None]], "names": [f"<f{fi}>"],
+                                          "ids": [], "sid": now})
+                            cur = len(nodes) - 1
+                            pz_set(cur, z[None])
+                            if at is not None:
+                                for dr, (x, y) in ((0, (at, cur)), (1, (cur, at))):
+                                    outs.setdefault(x, []).append(len(edges))
+                                    edges.append({"a": x, "b": y, "kind": "func", "fi": fi, "dir": dr, "sid": now,
+                                                  "rw": f"<f{fi}>"})
+                            S["created"] += 1
+                        d_ = f"function {fi} -> {nm(cur)!r}"
                     used.append(C_m[k])
-                    v = vn if wh is None else wh[0] * vn + wh[1] * v
+                    v = wh[0] * vn + wh[1] * v
                     nd = F.normalize(solver.nc(v[None], nd[None])[0], dim=-1)
                     if tr is not None:
                         tr.append(d_)
@@ -4985,6 +5015,9 @@ def v11_t5(steps=3000, ep_species=8):
                         edges.append({"a": x, "b": y, "R": R[ci].detach(), "dir": dr, "sid": sid, "H": H_, "A": c[0],
                                       "rsp": c[1], "lim": lims[ci], "rw": tk.decode(ids_[c[1][0]:c[1][1] + 1]).strip()})
                 write_tokens(ids_, H_, sid, js)
+                rd_hist[sid] = (H_, claims)
+                if len(rd_hist) > 4000:
+                    rd_hist.pop(next(iter(rd_hist)))
                 return (torch.stack(L_).mean() if L_ else None), st_, trs
 
             @torch.no_grad()
@@ -5073,7 +5106,7 @@ def v11_t5(steps=3000, ep_species=8):
                     i2, w2 = pick(ask.arg2_logits(h, CL), train)
                     arg2 = w2 @ torch.cat([torch.zeros(1, E_, device=dev), CL])
                     t_ = [] if tr is not None else None
-                    v, node, used = solve(men, need, arg2, train, now=now, tr=t_)
+                    v, node, used = solve(men, need, arg2, train, now=now, tr=t_, store=True)
                     if tr is not None:
                         tr.append(f"q{q + 1} (2nd input {'none' if i2 == 0 else repr(CM[i2 - 1][1])}): " + " ; ".join(t_))
                     for u in used:
@@ -5095,16 +5128,18 @@ def v11_t5(steps=3000, ep_species=8):
                 return torch.cat(parts)
 
             def llm(ctx, soft, tgt):
-                """GPT-2 + LoRA over [context][soft tokens][segment] -> per-token CE of the segment"""
+                """GPT-2 + LoRA over [context][soft tokens][segment] -> (per-token CE of the segment, the LLM's state at
+                the end of the segment = what the perception reads before asking for the next one: U7 feedback)"""
                 parts = [Wte(torch.tensor(ctx, device=dev))] if ctx else []
                 parts += [soft] if soft is not None and len(soft) else []
                 parts += [Wte(torch.tensor(tgt, device=dev))]
                 emb = torch.cat(parts)
                 G10.ex.active, G10.ex.w = 0, None
-                out = M(inputs_embeds=emb[None], position_ids=torch.arange(len(emb), device=dev)[None])
+                out = M(inputs_embeds=emb[None], position_ids=torch.arange(len(emb), device=dev)[None],
+                        output_hidden_states=True)
                 G10.ex.active = None
                 lp = F.log_softmax(out.logits[0, -len(tgt) - 1:-1].float(), -1)
-                return -lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0]
+                return -lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0], out.hidden_states[-1][0, -1].float().detach()
 
             @torch.no_grad()
             def llm_alone(ctx, tgt):
@@ -5160,6 +5195,7 @@ def v11_t5(steps=3000, ep_species=8):
             index, sent_end = collections.defaultdict(list), []
             S, EV = collections.Counter(), collections.Counter()
             SPW = {"hits": [], "failed": []}
+            st_fb = [None]                               # the LLM's state after the last segment with GNM's results (U7)
             t0 = time.time()
 
             def mem_mask(text, ids_, pos):
@@ -5202,7 +5238,7 @@ def v11_t5(steps=3000, ep_species=8):
                 n_q, loss, sp_st = 0, None, collections.Counter()
                 with torch.set_grad_enabled(train):
                     if nomem:
-                        ce1 = llm(ctx, None, ids_t) if train else ce0
+                        ce1 = llm(ctx, None, ids_t)[0] if train else ce0
                         if train:
                             loss = ce1.mean()
                     else:
@@ -5210,7 +5246,10 @@ def v11_t5(steps=3000, ep_species=8):
                         for (b, e) in segs(ids_t):
                             A_lat, A_men = anchors(recent_s, H_c, ids_f, b)
                             tr = [] if show else None
-                            res, c_ = ask_seg(st_all[b], A_lat, A_men, train, len(sent_end), tr) if A_lat else ([], 0.)
+                            # U7 (11-19 audit fix): the perception reads the LLM's state AFTER GNM's last results (the
+                            # previous segment's forward with them); only the stream's very first segment reads the LLM alone
+                            st_in = st_fb[0] if st_fb[0] is not None else st_all[b]
+                            res, c_ = ask_seg(st_in, A_lat, A_men, train, len(sent_end), tr) if A_lat else ([], 0.)
                             cost = cost + c_
                             n_q += len(res)
                             if ck[b]:                    # (measurement: did a result name the computed number?)
@@ -5222,11 +5261,11 @@ def v11_t5(steps=3000, ep_species=8):
                                     trs.append(f"COMPUTED '{tk.decode(ids_t[max(0, b - 6):b])}|{tk.decode(ids_t[b:b + 1])}': "
                                                f"results {[nm(n_) for _, n_ in res]} -> {'HIT' if hit_c else 'miss'}")
                             soft = to_llm(res) if res else None
-                            c1 = llm(ctx + ids_t[:b], soft, ids_t[b:e])
+                            c1, st_fb[0] = llm(ctx + ids_t[:b], soft, ids_t[b:e])
                             ce1_l.append(c1)
                             if heldout:                  # control: the same number of positions, NO memory content
                                 with torch.no_grad():
-                                    cec_l.append(llm(ctx + ids_t[:b], proj(torch.zeros(len(soft), E_, device=dev)), ids_t[b:e])
+                                    cec_l.append(llm(ctx + ids_t[:b], proj(torch.zeros(len(soft), E_, device=dev)), ids_t[b:e])[0]
                                                  if res else ce0[b:e])
                             if tr is not None:
                                 trs.append(f"segment '{tk.decode(ids_t[b:e]).strip()[:50]}': CE alone "
@@ -5239,6 +5278,20 @@ def v11_t5(steps=3000, ep_species=8):
                         trs += [f"SELF-PREDICTION {x}" for x in (sp_tr if show else [])]
                 if train:
                     (loss / GA).backward()
+                    # (C, 11-19 audit fix: the reader had no training signal) a picked claim edge's logit gradient says
+                    # whether picking it lowered the loss (CE + self-prediction); the reader imitates its own reading of
+                    # that sentence when it did, and is pushed away from it when it did not (x0.1, clipped)
+                    rl_ = []
+                    for lg_c, k_, e_ in credit:
+                        g_ = lg_c.grad
+                        sid_ = edges[e_]["sid"]
+                        if g_ is not None and sid_ in rd_hist and float(g_[k_]) != 0.:
+                            c_w = max(-1., min(1., -float(g_[k_]) * GA * 10.))
+                            rl_.append(.1 * c_w * reader.loss(*rd_hist[sid_]))
+                            S["reads credited +" if c_w > 0 else "reads credited -"] += 1
+                    credit.clear()
+                    if rl_:
+                        (torch.stack(rl_).sum() / GA).backward()
                     if (k_s + 1) % GA == 0:
                         lopt.step()
                         lopt.zero_grad()
@@ -5298,7 +5351,8 @@ def v11_t5(steps=3000, ep_species=8):
                 if (k_s + 1) % 500 == 0 or k_s + 1 == n_tr or k_s + 1 == len(sents):
                     tag = "EVAL" if heldout else ("train" if train else "read")
                     print(line(S, f"{tag} {k_s + 1}/{len(sents)}") + f" | picks: edges {S['edge picks']}, functions "
-                          f"{S['function picks']} ({len(funcs.nets)} functions) | nodes {len(nodes)}, edges {len(edges) // 2} "
+                          f"{S['function picks']} ({len(funcs.nets)} functions), new values stored {S['created']} | reads "
+                          f"credited +{S['reads credited +']} / -{S['reads credited -']} | nodes {len(nodes)}, edges {len(edges) // 2} "
                           f"| GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
                     torch.cuda.reset_peak_memory_stats()
                     S = collections.Counter()
