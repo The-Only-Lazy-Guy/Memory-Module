@@ -5184,7 +5184,8 @@ def v11_t5(steps=3000, ep_species=8):
                         f"tokens ({D_['n mem']}): {D_['ce0 mem'] / nm_:.3f} -> {D_['ce1 mem'] / nm_:.3f} | computed "
                         f"tokens ({D_['n comp']}): {D_['ce0 comp'] / nc_:.3f} -> {D_['ce1 comp'] / nc_:.3f}{ctl} | "
                         f"queries/sentence {D_['queries'] / max(1, D_['sentences']):.2f} | self-prediction (local): "
-                        f"{D_['sp hits']}/{D_['sp n']} hit, numbers {D_['sp num hits']}/{D_['sp num n']}")
+                        f"{D_['sp hits']}/{D_['sp n']} hit, numbers {D_['sp num hits']}/{D_['sp num n']} | a result named "
+                        f"the computed number: {D_['comp hits']}/{D_['comp segs']} segments")
 
             for k_s, (ai, text) in enumerate(sents):
                 heldout = ai >= len(arts) - n_ev
@@ -5212,6 +5213,14 @@ def v11_t5(steps=3000, ep_species=8):
                             res, c_ = ask_seg(st_all[b], A_lat, A_men, train, len(sent_end), tr) if A_lat else ([], 0.)
                             cost = cost + c_
                             n_q += len(res)
+                            if ck[b]:                    # (measurement: did a result name the computed number?)
+                                hit_c = any(n_ is not None and nodes[n_]["ids"][:1] == ids_t[b:b + 1] for _, n_ in res)
+                                for D_ in ((S, EV) if heldout else (S,)):
+                                    D_["comp segs"] += 1
+                                    D_["comp hits"] += hit_c
+                                if heldout and EV["comp segs"] <= 8:
+                                    trs.append(f"COMPUTED '{tk.decode(ids_t[max(0, b - 6):b])}|{tk.decode(ids_t[b:b + 1])}': "
+                                               f"results {[nm(n_) for _, n_ in res]} -> {'HIT' if hit_c else 'miss'}")
                             soft = to_llm(res) if res else None
                             c1 = llm(ctx + ids_t[:b], soft, ids_t[b:e])
                             ce1_l.append(c1)
