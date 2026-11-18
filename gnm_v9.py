@@ -4213,7 +4213,7 @@ def v11_t5(steps=3000, ep_species=8):
 
             def point(men, ent):
                 j, lg = decide(men, nodes)
-                d = {"lg": lg, "n": len(nodes), "j": j, "name": men[1]}
+                d = {"lg": lg, "n": len(nodes), "j": j, "name": men[1], "sc": getattr(decide, "last", None)}
                 decs.append(d)
                 if j == len(nodes):
                     nodes.append({"m": [men[0]], "names": [men[1]], "alone": [None], "owner": ent, "made_by": len(decs) - 1,
@@ -4362,13 +4362,23 @@ def v11_t5(steps=3000, ep_species=8):
                     stats["lm junk"] += got is not None and (got == "" or got != got.strip())
                     if not ok_:                          # (v12h measurement, 11-19: which part lost this answer)
                         pt_w = path12(j, truth) if j is not None else None
-                        if sr:                           # its pick points into the answer node: the LM lost it
+                        if j is None:
+                            k_ = "lost: reading (question not read)"
+                        elif sr:                         # its pick points into the answer node: the LM lost it
                             k_ = "lost: LM (picked the right edge)"
                         elif pt_w is not None:           # the right edge was in reach: the walk lost it
                             rk_ = next((r_ for r_, i in enumerate(order) if cs[i][0] == pt_w[-1]), None)
                             k_ = "lost: walk (right edge ranked 2nd)" if rk_ == 1 else "lost: walk (ranked 3rd+)"
                         elif any(n_["names"][0] == truth for n_ in nodes):
                             k_ = "lost: identity (answer in memory, not reachable)"
+                            if not train and len(stats.setdefault("identity traces", [])) < 8:
+                                sc_ = d["sc"]            # (log only: where the nodes that reach the answer ranked)
+                                rk = (lambda i: int((sc_ > sc_[i]).sum())) if sc_ is not None else (lambda i: None)
+                                good = [i for i in range(len(nodes)) if path12(i, truth) is not None]
+                                stats["identity traces"].append(
+                                    f"'{q}' mention '{men[1]}' -> node {nodes[j]['names'][:3]} (rank 0; create rank "
+                                    f"{rk(len(sc_) - 1) if sc_ is not None else None}) | nodes reaching '{truth}': "
+                                    + "; ".join(f"{nodes[i]['names'][:3]} rank {rk(i)}" for i in good[:3]))
                         else:
                             k_ = "lost: reading (answer not in memory)"
                         stats[k_] = stats.get(k_, 0) + 1
@@ -4575,6 +4585,8 @@ def v11_t5(steps=3000, ep_species=8):
                                                                    if k_.startswith("lost: ")), flush=True)
                         for tr_ in st.get("lm traces", []):
                             print(f"   LM {lab[:6]} {sn}: {tr_}", flush=True)
+                        for tr_ in st.get("identity traces", []):
+                            print(f"   ID {lab[:6]} {sn}: {tr_}", flush=True)
             print(f"v12 {tag} LLM IN THE LOOP: reads every text (its states feed the reader); writes every answer -- "
                   f"{SAY['written']} written by the LM so far, none from a stored name (no such path in the code); its demos "
                   f"{SAY['demos']}, its own right answers trained {SAY['own']}. GNM picks the statement (identity + walk): "
