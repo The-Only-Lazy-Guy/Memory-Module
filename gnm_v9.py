@@ -4360,6 +4360,21 @@ def v11_t5(steps=3000, ep_species=8):
                     stats["stmt has answer"] += ans_e is not None and truth in tk.decode(edges[ans_e]["ids"])
                     stats["lm right | stmt right"] += sr and ok_
                     stats["lm junk"] += got is not None and (got == "" or got != got.strip())
+                    if not ok_:                          # (v12h measurement, 11-19: which part lost this answer)
+                        pt_w = path12(j, truth) if j is not None else None
+                        if sr:                           # its pick points into the answer node: the LM lost it
+                            k_ = "lost: LM (picked the right edge)"
+                        elif pt_w is not None:           # the right edge was in reach: the walk lost it
+                            rk_ = next((r_ for r_, i in enumerate(order) if cs[i][0] == pt_w[-1]), None)
+                            k_ = "lost: walk (right edge ranked 2nd)" if rk_ == 1 else "lost: walk (ranked 3rd+)"
+                        elif any(n_["names"][0] == truth for n_ in nodes):
+                            k_ = "lost: identity (answer in memory, not reachable)"
+                        else:
+                            k_ = "lost: reading (answer not in memory)"
+                        stats[k_] = stats.get(k_, 0) + 1
+                    if not train and sr and not ok_ and len(stats.setdefault("lm traces", [])) < 4:
+                        stats["lm traces"].append(f"'{q}' -> GNM picked '{tk.decode(edges[ans_e]['ids']).strip()}' -> "
+                                                  f"LM wrote {got!r}, truth '{truth}'")
                     if not train and not ok_ and cs and len(stats.setdefault("walk traces", [])) < 6:
                         pt_ = path12(j, truth)                   # (diagnosis, log only: where the right edge ranked)
                         if pt_ is not None:
@@ -4556,6 +4571,10 @@ def v11_t5(steps=3000, ep_species=8):
                             print(f"   SAY {lab[:6]}: {tr_}", flush=True)
                         for tr_ in (st.get("walk traces", []) if sn == "new world" else []):
                             print(f"   WALK {lab[:6]}: {tr_}", flush=True)
+                        print(f"   LOST {lab[:6]} {sn}: " + ", ".join(f"{k_[6:]} {v_}" for k_, v_ in st.items()
+                                                                   if k_.startswith("lost: ")), flush=True)
+                        for tr_ in st.get("lm traces", []):
+                            print(f"   LM {lab[:6]} {sn}: {tr_}", flush=True)
             print(f"v12 {tag} LLM IN THE LOOP: reads every text (its states feed the reader); writes every answer -- "
                   f"{SAY['written']} written by the LM so far, none from a stored name (no such path in the code); its demos "
                   f"{SAY['demos']}, its own right answers trained {SAY['own']}. GNM picks the statement (identity + walk): "
