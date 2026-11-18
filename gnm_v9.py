@@ -4618,52 +4618,93 @@ def v11_t5(steps=3000, ep_species=8):
         relm.link = os.environ.get("V12_LINK", "avg")     # (v12k: average linkage; "max" = v12j, for comparison)
 
         def lm12():
-            """docs/GNM_v10.md §1g M1 (user 11-19): GNM + LLM trained on ONE objective, the next-token CE of real text
-            (the text's own next token -- never GPT-2's predictions). Per sentence of an article stream (memory persists
-            across articles: one big world, user 10-19):
-            - ask: a query decoder (the perception's question side) reads the LLM's state and emits queries one by one
-              until its own stop; a query = (anchor, need): anchor = a pointer into what it has read (a mention of the
-              last sentences -> its node) or an earlier result; need = a learned direction;
-            - solve: GNM moves from the anchor along edges (v12h): every edge within reach is a candidate, weight =
-              learned relevance(need, edge relation, direction) - learned cost per hop; result = the weighted values of
-              the target nodes. No match score: nothing compares the query with stored content;
-            - tell: each result -> projector -> one soft token before the sentence; GPT-2 (frozen + LoRA) predicts it;
-              after each result the decoder reads the LLM's new state (the GNM + LLM <-> perception loop);
-            - learn: the CE gradient reaches LoRA, projector, relevance, cost per hop, need and the decoder through the
-              soft weights; the anchor and stop choices learn from the CE drop in hindsight (tries: its next-best
-              anchor; one more query; this query removed). 'Stop' is punished when one more query lowers the CE (user
-              11-19 "punish dont know");
-            - read: the perception writes the sentence into GNM (v12 reader -> identity -> edges), after predicting it.
-            V12_LM_NOMEM=1: the same LLM + LoRA trained on the same stream without GNM (the fair baseline)."""
+            """docs/GNM_v10.md §1g (user 11-19): GNM + LLM trained on the next-token CE of real text (the text's own next
+            token), GNM = a memory + compute helper. 11-19 redesign (§1g TASKS; user: "no demos ... Make sure to close
+            the gap ... keep the core of the GNM ... very flexible and latent (I use graph because solving something
+            can be recurrent and cumulative -> best learning)"):
+            - memory = a graph of latent nodes; every mention the perception reads is its own node (no merging, T4);
+              edges = the reader's claims, each with its own relation latent learned from context (T6);
+            - identity = learned relevance used when solving: an anchor jumps to the node most relevant to it, or
+              stays itself (T4);
+            - solving = recurrent firings: each picks an edge to follow or a function to apply; a function's output is
+              CLASSIFIED -- it points at a node or creates a new value (T1); a learned halt ends the chain;
+            - asking: at each text segment the perception reads the LLM's state and asks queries on its OWN state until
+              its own stop; a query = anchor (any span of the recently read text, or an earlier result), 2nd input,
+              need (T5); each result -> the LLM: its latent as a soft token + its name tokens when it came from text
+              (T1);
+            - learning, no demos (T3, T7): (a) the LLM's next-token CE; (b) LOCAL self-prediction: before a read claim
+              (A, r, B) is written, GNM solves (A, r) and is scored on B -- the text is the teacher, no LLM involved.
+              Every discrete choice is a straight-through Gumbel pick (forward: the hard pick; backward: soft), so
+              both signals reach every decision.
+            V12_LM_NOMEM=1: the same LLM + LoRA on the same stream without GNM (the fair baseline)."""
             nomem = os.environ.get("V12_LM_NOMEM", "0") == "1"
-            src = os.environ.get("M1_DATA", "species_e1.json")
-            f_ = os.path.join(here, src)
-            arts = (json.load(gzip.open(f_, "rt", encoding="utf-8")) if src.endswith(".gz")
-                    else json.load(open(f_, encoding="utf-8")))
-            arts = [a for a in arts if a.get("text")][:int(os.environ.get("M1_ARTS", "529"))]
+
+            def load_arts(src):
+                f_ = os.path.join(here, src)
+                a_ = (json.load(gzip.open(f_, "rt", encoding="utf-8")) if src.endswith(".gz")
+                      else json.load(open(f_, encoding="utf-8")))
+                return [a for a in a_ if a.get("text")]
             n_ev = int(os.environ.get("M1_EVAL", "40"))
+            arts = load_arts(os.environ.get("M1_DATA", "species_e1.json"))[:int(os.environ.get("M1_ARTS", "529"))]
+            if os.environ.get("M1_EVAL_DATA"):           # (held-out articles from their own file, e.g. GSM8K test)
+                arts = arts + load_arts(os.environ["M1_EVAL_DATA"])[:n_ev]
             WIN, KQ = int(os.environ.get("M1_WIN", "256")), int(os.environ.get("M1_QUERIES", "3"))
-            HOP = int(os.environ.get("M1_HOPS", "2"))     # (compute limit on the reach; the cost per hop is learned)
-            NROLL = int(os.environ.get("M1_ROLLOUTS", "4"))   # sampled episodes per training sentence (RL group)
+            KS = int(os.environ.get("M1_STEPS", "2"))    # (firings per query: compute limit; a learned halt ends earlier)
             QCOST = float(os.environ.get("M1_QCOST", ".002"))   # nats charged per query (D6: a cost per step)
+            LSP = float(os.environ.get("M1_SP", "1"))    # weight of the local self-prediction loss (T3)
+            TOKS = os.environ.get("M1_TOKENS", "1") == "1"   # a result node's name tokens go to the LLM too (T1)
             GA = int(os.environ.get("M1_ACCUM", "8"))
+            SEGMAX, NSEG = int(os.environ.get("M1_SEG", "24")), int(os.environ.get("M1_MAXSEG", "4"))
+            NF = int(os.environ.get("M1_FUNCS", "16"))
+            REFRESH = int(os.environ.get("M1_REFRESH", "1000"))
             wds = lambda s: {w.lower() for w in _re.findall(r"[A-Za-z][A-Za-z\-]{3,}", s)}
             dfm = collections.Counter(w for a in arts for w in wds(" ".join(a["text"])))
             cut = max(2, int(len(arts) * .05))
             rare = lambda s: {w for w in wds(s) if dfm[w] <= cut}
-            sents = [(ai, s.strip() + " .") for ai, a in enumerate(arts) for p in a["text"] for s in p.split(" . ")
-                     if len(s.split()) >= 4]
+
+            def split_s(p):
+                if " . " in p or p.endswith(" ."):       # (WikiText's spaced punctuation)
+                    out = [s.strip() for s in p.split(" . ")]
+                    return [s if s.endswith(".") else s + " ." for s in out]
+                return [s.strip() for s in _re.split(r"(?<=[.!?])\s+", p)]
+            sents = [(ai, s) for ai, a in enumerate(arts) for p in a["text"] for s in split_s(p) if len(s.split()) >= 4]
             n_tr = sum(ai < len(arts) - n_ev for ai, _ in sents)
             print(f"M1: {len(arts)} articles ({len(arts) - n_ev} train, {n_ev} eval), {len(sents)} sentences ({n_tr} "
-                  f"train), window {WIN}, up to {KQ} queries, reach {HOP} hops, {'NO memory (baseline)' if nomem else 'GNM'}",
-                  flush=True)
+                  f"train), window {WIN}, up to {KQ} queries per segment, {KS} firings per query, "
+                  f"{'NO memory (baseline)' if nomem else 'GNM'}", flush=True)
             Wte, ED = M.transformer.wte, M.config.n_embd
             for B_ in G10.ex.B:                          # a fresh LoRA for the LM objective (the QA step's is not reused)
                 B_.data.zero_()
+            PUN = {i for i in range(len(tk)) if tk.decode([i]).strip() in {".", ",", ";", ":", "=", "?", "!", "(", ")"}}
+            pad_ = torch.nn.utils.rnn.pad_sequence
+
+            def segs(ids_):
+                """T5: the LLM gets GNM's results before each segment; a segment ends at punctuation (incl. '=') or
+                after M1_SEG tokens -- so a result can arrive before the tokens that need it (my choice, flagged)"""
+                b, out = 0, []
+                for i, t in enumerate(ids_):
+                    if t in PUN or i + 1 - b >= SEGMAX:
+                        out.append((b, i + 1))
+                        b = i + 1
+                if b < len(ids_):
+                    out.append((b, len(ids_)))
+                if len(out) > NSEG:                      # (compute: at most NSEG per sentence; the rest is one)
+                    out = out[:NSEG - 1] + [(out[NSEG - 1][0], out[-1][1])]
+                return out
+
+            def comp_mask(text, n):
+                """computed tokens (T2 metric): the number right after '=' or 'answer is' -- a computation's result"""
+                enc_ = tk(" " + text, return_offsets_mapping=True)
+                sp_ = [m.span(1) for m in _re.finditer(r"(?:=|answer is)\s*\$?\s*(-?\d[\d,]*(?:\.\d+)?)", " " + text)]
+                m = torch.zeros(n, dtype=torch.bool, device=dev)
+                for i, (a, b) in enumerate(enc_["offset_mapping"][:n]):
+                    if any(a < e and b > s_ for s_, e in sp_):
+                        m[i] = True
+                return m
 
             class Ask(nn.Module):
-                """the perception's question side: the LLM's state + the previous result -> stop; anchor pointer over
-                the mentions it read lately and its earlier results; need (a direction for GNM)"""
+                """the perception's question side (U3-U5): the LLM's state + the previous result -> stop; anchor and
+                2nd-input pointers over the recently read text spans and earlier results; need (a direction for GNM)"""
                 def __init__(s_):
                     super().__init__()
                     s_.inp = nn.Sequential(nn.LayerNorm(ED + E_), nn.Linear(ED + E_, 256))
@@ -4671,8 +4712,6 @@ def v11_t5(steps=3000, ep_species=8):
                     s_.stop = nn.Linear(256, 1)
                     s_.ptr = nn.Sequential(nn.Linear(E_ + 256, 256), nn.Tanh(), nn.Linear(256, 1))
                     s_.need = nn.Linear(256, D12)
-                    # (11-19) a function's 2nd input: a pointer over the earlier results of this sentence, or none --
-                    # with it the firings form any computation tree, one firing = one step (user 11-14)
                     s_.ptr2 = nn.Sequential(nn.Linear(E_ + 256, 256), nn.Tanh(), nn.Linear(256, 1))
                     s_.none2 = nn.Parameter(torch.tensor(0.))
 
@@ -4683,25 +4722,65 @@ def v11_t5(steps=3000, ep_species=8):
                     return s_.ptr(torch.cat([A, h[None].expand(len(A), -1)], 1)).squeeze(-1)
 
                 def arg2_logits(s_, h, Rv):
-                    """[none] + one per earlier result"""
-                    if not len(Rv):
-                        return s_.none2[None]
                     return torch.cat([s_.none2[None], s_.ptr2(torch.cat([Rv, h[None].expand(len(Rv), -1)], 1)).squeeze(-1)])
-            ask = Ask().to(dev)
-            proj = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, ED)).to(dev)
+
+            class Enc(nn.Module):
+                """T6, the perception's encoder side (U3), learned by the same signals -- no decoder (user 11-19: "why do
+                we even need universal encoder-decoder?"). Replaces my placeholders (plain span means):
+                - thing latent of a mention = learned weights over its tokens + what the text up to it says (zero at
+                  start = the old mean); never sees text after the mention;
+                - relation latent of a claim = thing A asks the text before thing B what links them (attention; starts
+                  on the reader's relation span = the old mean); never sees B (so it can be a self-prediction need)"""
+                def __init__(s_):
+                    super().__init__()
+                    s_.rq, s_.rk = nn.Linear(E_, 128), nn.Linear(E_, 128)
+                    s_.rb = nn.Parameter(torch.tensor(10.))
+                    s_.tg = nn.Linear(E_, 1)
+                    s_.cq, s_.ck, s_.cw = nn.Linear(E_, 128), nn.Linear(E_, 128), nn.Linear(E_, E_)
+                    for l_ in (s_.tg, s_.cw):
+                        nn.init.zeros_(l_.weight)
+                        nn.init.zeros_(l_.bias)
+
+                def thing(s_, sps, cxs):
+                    SP = pad_(sps, batch_first=True)
+                    ms = torch.arange(SP.shape[1], device=dev)[None] < torch.tensor([len(x) for x in sps], device=dev)[:, None]
+                    z = torch.einsum("ns,nse->ne", F.softmax(s_.tg(SP).squeeze(-1).masked_fill(~ms, -1e4), 1), SP)
+                    CX = pad_(cxs, batch_first=True)
+                    mc = torch.arange(CX.shape[1], device=dev)[None] < torch.tensor([len(x) for x in cxs], device=dev)[:, None]
+                    sc = (torch.einsum("nd,ntd->nt", s_.cq(z), s_.ck(CX)) / 128 ** .5).masked_fill(~mc, -1e4)
+                    return z + s_.cw(torch.einsum("nt,nte->ne", F.softmax(sc, 1), CX))
+
+                def rel(s_, Hs, As, rsps, lims):
+                    CX = pad_([H[:l] for H, l in zip(Hs, lims)], batch_first=True)
+                    ar = torch.arange(CX.shape[1], device=dev)[None]
+                    q = s_.rq(torch.stack([H[a[0]:a[1] + 1].mean(0) for H, a in zip(Hs, As)]))
+                    sc = torch.einsum("nd,ntd->nt", q, s_.rk(CX)) / 128 ** .5
+                    r0 = torch.tensor([r[0] for r in rsps], device=dev)[:, None]
+                    r1 = torch.tensor([r[1] for r in rsps], device=dev)[:, None]
+                    sc = (sc + s_.rb * ((ar >= r0) & (ar <= r1)).float()).masked_fill(ar >= torch.tensor(lims, device=dev)[:, None], -1e4)
+                    return torch.einsum("nt,nte->ne", F.softmax(sc, 1), CX)
+
+            class Solver(nn.Module):
+                """GNM's own recurrence (T1, T7): the next firing's need from the last result; a learned halt; the
+                classification's 'create' option and sharpness"""
+                def __init__(s_):
+                    super().__init__()
+                    s_.nc = nn.GRUCell(E_, D12)
+                    s_.halt = nn.Sequential(nn.Linear(D12 + E_, 128), nn.Tanh(), nn.Linear(128, 1))
+                    s_.new = nn.Parameter(torch.tensor(0.))
+                    s_.tau = nn.Parameter(torch.tensor(10.))
 
             class Funcs(nn.Module):
-                """computing = the user's function nodes (§1g F1-F8): each function = a learned label (its purpose, in
-                the space of edge relations, so functions compete with edges in the same pointing) + its own net over
-                (the anchor's value, the previous result) -> a new latent value. Created by the model: a new one is
-                spawned when nothing in reach lowered the CE (copy of the most used one + noise, label = the need
-                that failed). (Not yet: F4 typed codec, F6 / F7 editing values / other functions -- flagged)"""
+                """computing = the user's function nodes (§1g F1-F8): a learned label (in the space of edge relations:
+                functions compete with edges in the same pick) + its own net over (focus value, 2nd input, need) -> a
+                value that is then CLASSIFIED (points at a node or is new). Created by the model when the local
+                self-prediction stops improving (signal-driven, F3/F5)"""
                 def __init__(s_):
                     super().__init__()
                     s_.labels, s_.nets, s_.used = nn.ParameterList(), nn.ModuleList(), []
 
                 def spawn(s_, label, src=None):
-                    net = nn.Sequential(nn.Linear(2 * E_, 256), nn.GELU(), nn.Linear(256, E_)).to(dev)
+                    net = nn.Sequential(nn.Linear(2 * E_ + D12, 256), nn.GELU(), nn.Linear(256, E_)).to(dev)
                     if src is not None:
                         net.load_state_dict(s_.nets[src].state_dict())
                         with torch.no_grad():
@@ -4712,335 +4791,338 @@ def v11_t5(steps=3000, ep_species=8):
                     s_.used.append(0)
                     return list(net.parameters()) + [s_.labels[-1]]
 
-                def apply(s_, a_val, prev):
-                    x = torch.cat([a_val, prev])
+                def apply(s_, v, prev, need):
+                    x = torch.cat([v, prev, need])
                     return torch.stack([net(x) for net in s_.nets]), F.normalize(torch.stack(list(s_.labels)), dim=-1)
-            funcs = Funcs().to(dev)
-            NF = int(os.environ.get("M1_FUNCS", "16"))
-            new_p = list(ask.parameters()) + list(proj.parameters()) + list(mem.parameters())
+            ask, enc, solver, funcs = Ask().to(dev), Enc().to(dev), Solver().to(dev), Funcs().to(dev)
+            proj = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, ED)).to(dev)
+            new_p = [p_ for m_ in (ask, proj, mem, enc, solver) for p_ in m_.parameters()]
             lopt = torch.optim.AdamW([{"params": new_p, "lr": 1e-3}, {"params": G10.eparams(), "lr": 2e-4},
                                       {"params": list(reader.parameters()) + list(relm.parameters()), "lr": 1e-4}])
-            lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0)), "lr": 1e-3})
+            for _ in range(int(os.environ.get("M1_FUNCS0", "2"))):
+                lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0)), "lr": 1e-3})
             notrain = os.environ.get("M1_NOTRAIN", "0") == "1"   # (re-read the stream and evaluate a trained M1)
-            noask = os.environ.get("M1_NOASK", "0") == "1"       # (inspection: read only -- the perception's graph)
             DUMP = int(os.environ.get("M1_DUMP_EVERY", "0"))
             m1_load = os.environ.get("M1_LOAD", "")
             if m1_load:
                 ck1 = torch.load(m1_load, map_location=dev)
-                while len(funcs.nets) < ck1.get("n funcs", 1):
-                    funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0))
-                ask.load_state_dict(ck1["ask"])
-                proj.load_state_dict(ck1["proj"])
-                print(f"M1: mem keys not in the M1 checkpoint: {mem.load_state_dict(ck1['mem'], strict=False).missing_keys}",
-                      flush=True)
-                funcs.load_state_dict(ck1["funcs"])
-                if "reader" in ck1:                     # (the reading side RL also trained)
-                    reader.load_state_dict(ck1["reader"])
-                    relm.load_state_dict(ck1["relm"])
+                while len(funcs.nets) < ck1["n funcs"]:
+                    lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0)), "lr": 1e-3})
+                for k_, m_ in (("ask", ask), ("proj", proj), ("mem", mem), ("enc", enc), ("solver", solver),
+                               ("funcs", funcs), ("reader", reader), ("relm", relm)):
+                    m_.load_state_dict(ck1[k_])
                 for p_, v_ in zip(G10.eparams(), ck1["lora"]):
                     p_.data[:len(v_)] = v_.to(dev)
                 print(f"M1: loaded {m1_load} ({len(funcs.nets)} functions){' -- no training' if notrain else ''}", flush=True)
-            nodes, edges, outs = [], [], {}
-            decide_ = learned(False)                     # identity: as trained in v12 (frozen in M1)
-
-            IDK = int(os.environ.get("M1_ID_TOPK", "32"))
-            id_top, mseq = {}, [0]                       # mention -> identity's top nodes when it was read
-
-            def point_m(men):
-                """identity: the mention points at a node or creates one. A mention = (vector, name, -, its token
-                states, its sentence's states, sequence number); the read-time competitors are kept for the delayed
-                credit"""
-                j, _ = decide_(men, nodes)
-                if nodes:
-                    id_top[men[5]] = decide_.last[:-1].topk(min(IDK, len(nodes))).indices.tolist()
-                if j == len(nodes):
-                    nodes.append({"m": [men[0]], "names": [men[1]], "sp": [men[3]], "cx": [men[4]], "seq": [men[5]]})
-                else:
-                    for f, v in (("m", men[0]), ("names", men[1]), ("sp", men[3]), ("cx", men[4]), ("seq", men[5])):
-                        nodes[j][f].append(v)
-                return j
-
-            def new_men(v, name, sp, cx):
-                mseq[0] += 1
-                return (v, name, None, sp, cx, mseq[0])
-
-            def id_credit(men, j):
-                """the identity decision behind an anchor, re-scored WITH gradients for the delayed credit: against the
-                memory as it was when the mention was read (only mentions stored before it -- 11-19 fix: the credit
-                scored the mention against itself), competitors = identity's top IDK nodes at that time (the rest
-                scored lowest; scoring the whole memory with gradients grew with the graph and ran the GPU out of
-                memory at ~4,000 sentences). -> cross-entropy toward the node it chose (or 'create')"""
-                s0, top = men[5], id_top.get(men[5], [])
-                view, keep = [], []
-                for i in top:
-                    c_ = sum(1 for s in nodes[i]["seq"] if s < s0)
-                    if c_:
-                        view.append({f: nodes[i][f][:c_] for f in ("m", "cx", "sp")})
-                        keep.append(i)
-                lg = relm(men, view) if view else relm.create[None] + relm.cq(men[0])
-                t_ = keep.index(j) if j in keep else len(keep)
-                return F.cross_entropy(lg[None], torch.tensor([t_], device=dev))
-
-            rd_hist = {}                                 # sentence -> (its states, the reader's claims): own-trace training
-
-            @torch.no_grad()
-            def read_m(text, sid):
-                """the perception writes a sentence into GNM (v12 path); -> [(node, mention vector, mention)] it
-                touched. All mentions of a sentence share one copy of its states (11-19: each kept its own copy)"""
-                ids_, H_ = sent(text)
-                Hc.pop(text, None)                       # (read once: the cache would hold a 2nd copy)
-                at, claims = {}, reader.read(H_)
-                for c in claims:
-                    if c[2] is None:
-                        continue
-                    js = []
-                    for sp_ in (c[0], c[2]):
-                        if sp_ not in at:
-                            v_ = H_[sp_[0]:sp_[1] + 1]
-                            m_ = new_men(v_.mean(0), tk.decode(ids_[sp_[0]:sp_[1] + 1]).strip(), v_, H_)
-                            at[sp_] = (point_m(m_), m_[0], m_)
-                        js.append(at[sp_][0])
-                    if js[0] == js[1]:
-                        continue
-                    rs = H_[c[1][0]:c[1][1] + 1].mean(0)
-                    for dr, (u, v) in ((0, (js[0], js[1])), (1, (js[1], js[0]))):
-                        outs.setdefault(u, []).append(len(edges))
-                        edges.append({"a": u, "b": v, "rs": rs, "dir": dr, "sid": sid,
-                                      "rw": tk.decode(ids_[c[1][0]:c[1][1] + 1]).strip()})
-                if claims:
-                    rd_hist[sid] = (H_, claims)
-                    if len(rd_hist) > 4000:
-                        rd_hist.pop(next(iter(rd_hist)))
-                return list(at.values())
-
-            def val(j):
-                return torch.stack(nodes[j]["m"]).mean(0)
-
-            def rels():
-                """every edge's relation vector: text edges from the relation words' states (mem.r); edges a function
-                made carry that function's label"""
-                if not edges:
-                    return None
-                R = torch.zeros(len(edges), D12, device=dev)
-                ti = [i for i, e in enumerate(edges) if e.get("rs") is not None]
-                if ti:
-                    R[ti] = mem.r(torch.stack([edges[i]["rs"] for i in ti]))
-                for i, e in enumerate(edges):
-                    if e.get("rl") is not None:
-                        R[i] = e["rl"]
-                return R
-
-            def cands(anchor, a_vec, need, R_, prev, now=None):
-                """GNM from the anchor, ONE pointing over two kinds of candidates: every edge within HOP hops (lookup)
-                and every function applied to (the anchor's value, its 2nd input) (computing, §1g F1-F5); score =
-                relevance(need, edge relation or function label, direction) - cost per hop x hops + learned age weight
-                x the edge's age (D10 / F6: newer information can override older).
-                -> (scores, values, [("edge", edge) | ("func", function)])"""
-                dist, front, cs = {anchor: 0}, ([anchor] if anchor is not None else []), []
-                while front:
-                    nxt = []
-                    for u in front:
-                        for ei in outs.get(u, []):
-                            cs.append((ei, dist[u]))
-                            v = edges[ei]["b"]
-                            if v not in dist and dist[u] + 1 < HOP:
-                                dist[v] = dist[u] + 1
-                                nxt.append(v)
-                    front = nxt
-                fo, fl = funcs.apply(a_vec, prev)
-                ft = torch.cat([need[None].expand(len(fl), -1), fl, torch.zeros(len(fl), 1, device=dev)], 1)
-                V, hp, ag = fo, [0.] * len(fl), [0.] * len(fl)
-                if cs:
-                    ft = torch.cat([torch.stack([torch.cat([need, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])
-                                                 for ei, _ in cs]), ft])
-                    vc = {}                              # (a node's value once per call: hubs are many edges' target)
-                    for ei, _ in cs:
-                        if edges[ei]["b"] not in vc:
-                            vc[edges[ei]["b"]] = val(edges[ei]["b"])
-                    V = torch.cat([torch.stack([vc[edges[ei]["b"]] for ei, _ in cs]), fo])
-                    hp = [float(h_) for _, h_ in cs] + hp
-                    ag = [math.log1p(max(0, (now or 0) - edges[ei].get("sid", 0))) / 5. for ei, _ in cs] + ag
-                sc = (mem.aa(ft).squeeze(-1) - F.softplus(mem.hc) * torch.tensor(hp, device=dev)
-                      + mem.rc * torch.tensor(ag, device=dev))
-                return sc, V, [("edge", ei) for ei, _ in cs] + [("func", i) for i in range(len(fl))]
-            def memorize(anchor, out, fi, sid):
-                """computation = classification + memorization (user 11-16: "node 1 add on node 1 (transform) and
-                points to node 2"; "if cant point -> create new node"): the function's output points at an existing
-                node or creates one (identity decides), linked from the anchor by an edge whose relation is the
-                function's label. -> that node"""
-                o = out.detach()
-                j = point_m(new_men(o, f"<f{fi}>", o[None], o[None]))
-                if anchor is not None and anchor != j:
-                    lbl = F.normalize(funcs.labels[fi].detach(), dim=0)
-                    for dr, (u, v) in ((0, (anchor, j)), (1, (j, anchor))):
-                        outs.setdefault(u, []).append(len(edges))
-                        edges.append({"a": u, "b": v, "rs": None, "rl": lbl, "dir": dr, "sid": sid, "rw": f"<f{fi}>"})
-                return j
-
-            def llm(ctx, soft, tgt):
-                """GPT-2 + LoRA over [context][soft tokens][sentence] -> per-token CE of the sentence, and the state
-                at the last position before the sentence (what the LLM is about to say)"""
-                parts = [Wte(torch.tensor(ctx, device=dev))] if ctx else []
-                parts += [soft] if soft is not None and len(soft) else []
-                parts += [Wte(torch.tensor(tgt, device=dev))] if tgt else []
-                emb = torch.cat(parts)
-                G10.ex.active, G10.ex.w = 0, None
-                out = M(inputs_embeds=emb[None], position_ids=torch.arange(len(emb), device=dev)[None],
-                        output_hidden_states=True)
-                G10.ex.active = None
-                n_ = len(tgt)
-                st = out.hidden_states[-1][0, len(emb) - n_ - 1].float()
-                if not n_:
-                    return None, st
-                lp = F.log_softmax(out.logits[0, -n_ - 1:-1].float(), -1)
-                return -lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0], st
-
-            def nm(j):
-                """a node as text (inspection)"""
-                if j is None:
-                    return "<an earlier result>"
-                return " / ".join(dict.fromkeys(str(x) for x in nodes[j]["names"][:3]))
-
-            def desc(m_):
-                """a candidate as text: an edge A --[relation words]--> B, or a function"""
-                if m_[0] == "func":
-                    return f"function {m_[1]}"
-                e = edges[m_[1]]
-                return f"{nm(e['a'])} --[{e.get('rw', '?')}{' (back)' if e['dir'] else ''}]--> {nm(e['b'])}"
-
-            def rollout(ctx, ids_t, st0, A_v, A_n, A_m, R_, now, sample):
-                """one episode of asking for this sentence (§1g, full RL -- user 11-19 "cant you just do full RL for
-                GNM?"): every decision is drawn from its own policy while training (sample) or taken greedily (eval):
-                stop (after the first query), anchor, 2nd input, and the pick among edges and functions (hard
-                pointing). Exploration = sampling the model's own beliefs, never uniform dice.
-                -> dict(ce per token, log-probs of its decisions, what it used (credit), function outputs (to
-                   memorize), number of queries, needs)"""
-                A_v, A_n, A_m = list(A_v), list(A_n), list(A_m)
-                h, prev, st = torch.zeros(256, device=dev), torch.zeros(E_, device=dev), st0
-                soft, R_v, lps, used, fx, needs, trace = [], [], [], [], [], [], []
-
-                def pick(lg):
-                    if len(lg) == 1:
-                        return 0
-                    k_ = int(torch.multinomial(F.softmax(lg.detach(), 0), 1)) if sample else int(lg.argmax())
-                    lps.append(F.log_softmax(lg, 0)[k_])
-                    return k_
-                for q in range(KQ):
-                    h = ask.step(h, st, prev)
-                    if q > 0:                            # (at least one query per sentence; then its own stop)
-                        s_lg = ask.stop(h).squeeze()
-                        stop = bool(torch.bernoulli(torch.sigmoid(s_lg.detach()))) if sample else float(s_lg) > 0
-                        lps.append(F.logsigmoid(s_lg) if stop else F.logsigmoid(-s_lg))
-                        if not sample:
-                            trace.append(f"stop? p={float(torch.sigmoid(s_lg)):.2f} -> {'stops' if stop else 'goes on'}")
-                        if stop:
-                            break
-                    ia = pick(ask.anchor_logits(h, torch.stack(A_v)))
-                    need = F.normalize(ask.need(h), dim=-1)
-                    ia2 = pick(ask.arg2_logits(h, torch.stack(R_v) if R_v else []))
-                    arg2 = torch.zeros(E_, device=dev) if ia2 == 0 else R_v[ia2 - 1]
-                    sc, V, meta = cands(A_n[ia], A_v[ia], need, R_, arg2, now)
-                    k = pick(sc)
-                    res = V[k]
-                    if meta[k][0] == "edge":
-                        node = edges[meta[k][1]]["b"]
-                    else:
-                        node = None                      # (a function's output: memorized after the episode)
-                        fx.append((A_n[ia], res, meta[k][1]))
-                    used.append((meta[k][0], meta[k][1], ia))
-                    if not sample:                       # (inspection, log only: one step of its reasoning)
-                        top = torch.argsort(sc.detach(), descending=True)[:3].tolist()
-                        trace.append(f"step {q + 1}: asks about '{nm(A_n[ia])}' (2nd input {'none' if ia2 == 0 else 'result ' + str(ia2)})"
-                                     f" -> " + "; ".join(f"{desc(meta[i_])} {float(sc[i_]):.2f}" for i_ in top)
-                                     + f" -> picks {desc(meta[k])}")
-                    needs.append(need.detach())
-                    soft.append(proj(res))
-                    R_v.append(res.detach())
-                    prev = res
-                    A_v.append(res.detach())
-                    A_n.append(node)
-                    A_m.append(None)
-                    with torch.no_grad():
-                        _, st = llm(ctx, torch.stack(soft), [])
-                ce = llm(ctx, torch.stack(soft), ids_t)[0] if soft else None
-                return {"ce": ce, "lps": lps, "used": used, "fx": fx, "n": len(soft), "needs": needs, "A_m": A_m,
-                        "trace": trace, "A_n": A_n}
-            def dump_graph(tag):
-                """inspection (user 11-19: "can you inspect the graph midrun? is it a nice grpah structure?"): the graph
-                GNM has built -- summary, hubs, relation words, sample edges in the log; the full graph as JSON"""
-                deg, comp = collections.Counter(), list(range(len(nodes)))
-
-                def root(x):
-                    while comp[x] != x:
-                        comp[x] = comp[comp[x]]
-                        x = comp[x]
-                    return x
-                for e in edges:
-                    deg[e["a"]] += 1
-                    ra, rb = root(e["a"]), root(e["b"])
-                    if ra != rb:
-                        comp[ra] = rb
-                sizes = collections.Counter(root(i) for i in range(len(nodes)))
-                made = sum(1 for n_ in nodes if all(str(x).startswith("<f") for x in n_["names"]))
-                by_name = collections.defaultdict(set)
-                for i, n_ in enumerate(nodes):
-                    for x in n_["names"]:
-                        if not str(x).startswith("<f"):
-                            by_name[str(x).lower()].add(i)
-                many = sum(1 for n_ in nodes if len({str(x).lower() for x in n_["names"] if not str(x).startswith("<f")}) > 3)
-                rel = collections.Counter(e.get("rw", "?") for e in edges if e["dir"] == 0)
-                print(f"GRAPH {tag}: nodes {len(nodes)} ({made} made by functions), edges {len(edges) // 2}, components "
-                      f"{len(sizes)} (largest {max(sizes.values()) if sizes else 0} nodes, isolated "
-                      f"{sum(1 for v in sizes.values() if v == 1)}), names on more than one node "
-                      f"{sum(1 for v in by_name.values() if len(v) > 1)}, nodes with > 3 different names {many}", flush=True)
-                print(f"GRAPH {tag} commonest relation words: {rel.most_common(12)}", flush=True)
-                for j, d_ in deg.most_common(8):
-                    print(f"GRAPH {tag} hub '{nm(j)}': {d_} edges, {len(nodes[j]['names'])} mentions, names "
-                          f"{list(dict.fromkeys(str(x) for x in nodes[j]['names']))[:8]}", flush=True)
-                fwd = [i for i, e in enumerate(edges) if e["dir"] == 0]
-                for i in random.Random(1).sample(fwd, min(16, len(fwd))):
-                    print(f"GRAPH {tag} edge (sentence {edges[i].get('sid', 0)}): {desc(('edge', i))}", flush=True)
-                # (measurement, 11-19 -- user: "these are all estimated right? since they are all latent vectors?"): the
-                # relation words above are only the text each relation latent was computed from (my label, not what the
-                # model holds). What the latents hold: per group of the commonest relation words, its spread (0 = all
-                # its edges share one latent) and the groups whose mean latent is nearest
-                if fwd:
-                    with torch.no_grad():
-                        R_ = rels()
-                    grp = collections.defaultdict(list)
-                    for i in fwd:
-                        grp[edges[i].get("rw", "?")].append(i)
-                    top_ = [w for w, _ in rel.most_common(12)]
-                    C_ = F.normalize(torch.stack([R_[grp[w]].mean(0) for w in top_]), dim=-1)
-                    S_ = C_ @ C_.T
-                    for a_, w in enumerate(top_):
-                        nb = [(top_[b_], float(S_[a_, b_])) for b_ in S_[a_].argsort(descending=True).tolist() if b_ != a_]
-                        tight = float(F.normalize(R_[grp[w]], dim=-1).mean(0).norm())
-                        print(f"GRAPH {tag} relation latent '{w}' ({len(grp[w])} edges, spread {1 - tight:.2f}): nearest "
-                              + ", ".join(f"'{x}' {s_:.2f}" for x, s_ in nb[:4]), flush=True)
-                ck_ = os.environ.get("V12_CKPT", "") or "/marimo/out"
-                os.makedirs(ck_, exist_ok=True)
-                json.dump({"nodes": [[str(x) for x in n_["names"]] for n_ in nodes],
-                           "edges": [[e["a"], e["b"], e.get("rw", "?"), e["dir"], e.get("sid", 0)] for e in edges]},
-                          open(os.path.join(ck_, f"graph_{tag}.json"), "w"))
 
             def save_m1():
-                """the trained M1 (11-19: also every 2,000 training sentences -- the first real run crashed at ~4,000
-                and kept nothing)"""
                 ck = os.environ.get("V12_CKPT", "")
                 if ck:
                     os.makedirs(ck, exist_ok=True)
                     torch.save({"ask": ask.state_dict(), "proj": proj.state_dict(), "mem": mem.state_dict(),
-                                "funcs": funcs.state_dict(), "n funcs": len(funcs.nets),
-                                "reader": reader.state_dict(), "relm": relm.state_dict(),
+                                "enc": enc.state_dict(), "solver": solver.state_dict(), "funcs": funcs.state_dict(),
+                                "n funcs": len(funcs.nets), "reader": reader.state_dict(), "relm": relm.state_dict(),
                                 "lora": [p.detach()[:1].cpu() for p in G10.eparams()]},
                                os.path.join(ck, f"m1_{'nomem' if nomem else 'gnm'}.pt"))
 
-            stream, recent = [], collections.deque(maxlen=3)   # token stream; mentions of the last 3 sentences
+            # ---------------------------------------------------------------- memory: nodes (one per mention), edges
+            nodes, edges, outs = [], [], {}
+            PZb = {"t": torch.zeros(4096, 256, device=dev), "n": 0}   # nodes in identity space (relm.q), for search
+
+            @torch.no_grad()
+            def pz_set(i0, Z):
+                P_ = F.normalize(relm.q(Z), dim=-1)
+                while i0 + len(P_) > len(PZb["t"]):
+                    PZb["t"] = torch.cat([PZb["t"], torch.zeros_like(PZb["t"])])
+                PZb["t"][i0:i0 + len(P_)] = P_
+                PZb["n"] = max(PZb["n"], i0 + len(P_))
+
+            def PZ():
+                return PZb["t"][:PZb["n"]]
+
+            def nm(j):
+                return "<new value>" if j is None else str(nodes[j]["names"][0])
+
+            def pick(lg, train):
+                """a discrete choice (T7): forward = the hard pick (pointing = classification); backward = the soft
+                weights (straight-through). Training samples with Gumbel noise (the model's own beliefs, never uniform
+                dice); eval = argmax. -> (index, weights)"""
+                g = lg - torch.log(-torch.log(torch.rand_like(lg).clamp(1e-9, 1 - 1e-9))) if train else lg
+                k = int(g.argmax())
+                hard = torch.zeros_like(lg)
+                hard[k] = 1.
+                if not torch.is_grad_enabled():
+                    return k, hard
+                y = F.softmax(g, 0)
+                return k, hard - y.detach() + y
+
+            def near(z, k=16):
+                if not nodes:
+                    return []
+                with torch.no_grad():
+                    return (PZ() @ F.normalize(relm.q(z), dim=-1)).topk(min(k, len(nodes))).indices.tolist()
+
+            def classify(o, train):
+                """T1 (user 11-16: "node 1 add on node 1 (transform) and points to node 2"; "if cant point -> create
+                new node"): a computed value points at the most relevant node, or is a new value. -> (node, value)"""
+                top = near(o)
+                if not top:
+                    return None, o
+                q = F.normalize(relm.q(o), dim=-1)
+                Zt = torch.stack([nodes[j]["z"] for j in top])
+                k, w = pick(torch.cat([solver.tau * (F.normalize(relm.q(Zt), dim=-1) @ q), solver.new[None]]), train)
+                return (top[k] if k < len(top) else None), w @ torch.cat([Zt, o[None]])
+
+            def solve(men, need, arg2, train, now=0, tr=None):
+                """GNM answers one query: identity (the anchor jumps to the most relevant node, or stays itself) -> up to
+                KS firings (follow an edge, or apply a function whose output is classified) -> learned halt.
+                men = (latent, name, -, its token states, the text up to it). -> (value, node it ends on, used)"""
+                nb = near(men[0])
+                lg = relm(men, [nodes[j] for j in nb]) if nb else relm.create[None] + relm.cq(men[0])
+                k, w = pick(lg, train)
+                v = w @ torch.stack([nodes[j]["z"] for j in nb] + [men[0]])
+                cur = nb[k] if k < len(nb) else None
+                used = []
+                if tr is not None:
+                    tr.append(f"'{men[1]}' is {'itself (new)' if cur is None else repr(nm(cur))}")
+                nd = need
+                for s_i in range(KS):
+                    wh = None
+                    if s_i > 0:
+                        kh, wh = pick(torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v]))]), train)
+                        if kh == 1:
+                            if tr is not None:
+                                tr.append("halts")
+                            break
+                    C_l, C_v, C_m = [], [], []
+                    if cur is not None and outs.get(cur):
+                        es = outs[cur][-64:]             # (compute limit: its 64 newest edges)
+                        R_ = torch.stack([edges[e]["R"] for e in es])
+                        dr = torch.tensor([[float(edges[e]["dir"])] for e in es], device=dev)
+                        ag = torch.tensor([math.log1p(max(0, now - edges[e]["sid"])) / 5. for e in es], device=dev)
+                        C_l.append(mem.aa(torch.cat([nd[None].expand(len(es), -1), R_, dr], 1)).squeeze(-1) + mem.rc * ag)
+                        C_v.append(torch.stack([nodes[edges[e]["b"]]["z"] for e in es]))
+                        C_m += [("edge", e) for e in es]
+                    fo, fl = funcs.apply(v, arg2, nd)
+                    C_l.append(mem.aa(torch.cat([nd[None].expand(len(fl), -1), fl, torch.zeros(len(fl), 1, device=dev)],
+                                                1)).squeeze(-1))
+                    C_v.append(fo)
+                    C_m += [("func", i) for i in range(len(fl))]
+                    k, w = pick(torch.cat(C_l), train)
+                    o = w @ torch.cat(C_v)
+                    if C_m[k][0] == "edge":
+                        cur, vn = edges[C_m[k][1]]["b"], o
+                        d_ = f"--[{edges[C_m[k][1]].get('rw', '?')}{' (back)' if edges[C_m[k][1]]['dir'] else ''}]--> '{nm(cur)}'"
+                    else:
+                        funcs.used[C_m[k][1]] += 1
+                        cur, vn = classify(o, train)
+                        d_ = f"function {C_m[k][1]} -> {nm(cur)!r}"
+                    used.append(C_m[k])
+                    v = vn if wh is None else wh[0] * vn + wh[1] * v
+                    nd = F.normalize(solver.nc(v[None], nd[None])[0], dim=-1)
+                    if tr is not None:
+                        tr.append(d_)
+                return v, cur, used
+
+            def read_m(text, ids_, H_, sid, train):
+                """the perception writes a sentence into GNM -- after the LOCAL self-prediction of its claims (T3): for a
+                claim (A, r, B) with A before B, GNM solves (A, r) before the claim is written and is scored on B
+                (InfoNCE in identity space against the sentence's other mentions and random memory nodes). Then every
+                mention becomes its own node (T4) and each claim an edge with its relation latent (T6).
+                -> (self-prediction loss or None, stats, traces)"""
+                claims = [c for c in reader.read(H_) if c[2] is not None and c[0] != c[2]]
+                st_, trs = collections.Counter(), []
+                if not claims:
+                    return None, st_, trs
+                spans = list(dict.fromkeys(sp_ for c in claims for sp_ in (c[0], c[2])))
+                zi = {sp_: i for i, sp_ in enumerate(spans)}
+                name = lambda sp_: tk.decode(ids_[sp_[0]:sp_[1] + 1]).strip()
+                lims = [max(1, c[0][0], c[2][0]) for c in claims]
+                Z = enc.thing([H_[a:b + 1] for a, b in spans], [H_[:b + 1] for a, b in spans])
+                R = mem.r(enc.rel([H_] * len(claims), [c[0] for c in claims], [c[1] for c in claims], lims))
+                L_ = []
+                if nodes:
+                    Pz = F.normalize(relm.q(Z), dim=-1)
+                    rnd = torch.randint(0, len(nodes), (32,), device=dev)
+                    for ci, c in enumerate(claims):
+                        a, b = c[0], c[2]
+                        if a[1] >= b[0]:                 # (A must come before B: nothing of B in A or r)
+                            continue
+                        menA = (Z[zi[a]], name(a), None, H_[a[0]:a[1] + 1], H_[:a[1] + 1])
+                        tr = [] if len(trs) < 2 else None
+                        v_hat, j_, _ = solve(menA, R[ci], torch.zeros(E_, device=dev), train, now=sid, tr=tr)
+                        q = F.normalize(relm.q(v_hat), dim=-1)
+                        others = [zi[s_] for s_ in spans if s_ != b]
+                        lg = 10. * torch.cat([(q @ Pz[zi[b]])[None], Pz[others] @ q, PZ()[rnd] @ q])
+                        L_.append(F.cross_entropy(lg[None], torch.zeros(1, dtype=torch.long, device=dev)))
+                        hit = int(lg.argmax()) == 0
+                        num = any(ch.isdigit() for ch in name(b))
+                        st_["sp n"] += 1
+                        st_["sp hits"] += hit
+                        st_["sp num n"] += num
+                        st_["sp num hits"] += hit and num
+                        if not hit:
+                            st_.setdefault("failed", []).append(R[ci].detach())
+                        if tr is not None:
+                            trs.append(f"'{name(a)}' --[{tk.decode(ids_[c[1][0]:c[1][1] + 1]).strip()}]--> ? : "
+                                       + " ; ".join(tr) + f" | text says '{name(b)}' | {'HIT' if hit else 'miss'}")
+                js = {}
+                for sp_ in spans:
+                    z = Z[zi[sp_]].detach()
+                    nodes.append({"z": z, "m": [z], "sp": [H_[sp_[0]:sp_[1] + 1]], "cx": [H_[:sp_[1] + 1]],
+                                  "names": [name(sp_)], "ids": ids_[sp_[0]:sp_[1] + 1], "sid": sid})
+                    js[sp_] = len(nodes) - 1
+                pz_set(len(nodes) - len(spans), torch.stack([nodes[js[s_]]["z"] for s_ in spans]))
+                for ci, c in enumerate(claims):
+                    for dr, (x, y) in ((0, (js[c[0]], js[c[2]])), (1, (js[c[2]], js[c[0]]))):
+                        outs.setdefault(x, []).append(len(edges))
+                        edges.append({"a": x, "b": y, "R": R[ci].detach(), "dir": dr, "sid": sid, "H": H_, "A": c[0],
+                                      "rsp": c[1], "lim": lims[ci], "rw": tk.decode(ids_[c[1][0]:c[1][1] + 1]).strip()})
+                return (torch.stack(L_).mean() if L_ else None), st_, trs
+
+            @torch.no_grad()
+            def refresh():
+                """stored latents follow the trained encoders (user 11-01: memory written before an encoder move is
+                re-transcribed)"""
+                for i in range(0, len(nodes), 256):
+                    ch = nodes[i:i + 256]
+                    Z = enc.thing([n_["sp"][0] for n_ in ch], [n_["cx"][0] for n_ in ch])
+                    for n_, z in zip(ch, Z):
+                        n_["z"], n_["m"] = z, [z]
+                    pz_set(i, Z)
+                fw = [i for i, e in enumerate(edges) if e["dir"] == 0]
+                for i in range(0, len(fw), 256):
+                    ch = [edges[k_] for k_ in fw[i:i + 256]]
+                    R = mem.r(enc.rel([e["H"] for e in ch], [e["A"] for e in ch], [e["rsp"] for e in ch], [e["lim"] for e in ch]))
+                    for k_, r in zip(fw[i:i + 256], R):
+                        edges[k_]["R"] = edges[k_ + 1]["R"] = r
+
+            def anchors(recent_s, H_c, ids_c, t):
+                """what the perception has read lately: every token position of the last 2 sentences and of the current
+                sentence's prefix -> a span latent (a 4-token window; its learned token weights pick the span) + the
+                mention tuple identity needs. Never the text after the prefix (that is what the LLM predicts)"""
+                items = list(recent_s) + ([(H_c[:t], ids_c[:t])] if t > 0 else [])
+                sps, cxs, names = [], [], []
+                for H, ids in items:
+                    for p in range(len(H)):
+                        e = min(len(H), p + 4)
+                        sps.append(H[p:e])
+                        cxs.append(H[:e])
+                        names.append(tk.decode(ids[p:e]).strip())
+                if not sps:
+                    return [], []
+                Z = enc.thing(sps, cxs)
+                return list(Z), [(z, n_, None, s_, c_) for z, n_, s_, c_ in zip(Z, names, sps, cxs)]
+
+            def ask_seg(st0, A_lat, A_men, train, now, tr=None):
+                """T5: the perception asks on its OWN state (no LLM forward between queries) until its own stop (>= 1
+                query, cold start, flagged); anchor and 2nd input point at recently read spans or earlier results.
+                -> ([(soft token, node)], expected number of queries)"""
+                h, prev = torch.zeros(256, device=dev), torch.zeros(E_, device=dev)
+                res, cost, R_l, R_m = [], 1., [], []
+                for q in range(KQ):
+                    h = ask.step(h, st0, prev)
+                    gw = None
+                    if q > 0:
+                        s_lg = torch.cat([torch.zeros(1, device=dev), ask.stop(h)])
+                        cost = cost + F.softmax(s_lg, 0)[0]
+                        ks, gw = pick(s_lg, train)
+                        if ks == 1:
+                            break
+                    CL = torch.stack(A_lat + R_l)
+                    CM = A_men + R_m
+                    ia, wa = pick(ask.anchor_logits(h, CL), train)
+                    men = (wa @ CL,) + tuple(CM[ia][1:])
+                    need = F.normalize(ask.need(h), dim=-1)
+                    i2, w2 = pick(ask.arg2_logits(h, CL), train)
+                    arg2 = w2 @ torch.cat([torch.zeros(1, E_, device=dev), CL])
+                    t_ = [] if tr is not None else None
+                    v, node, used = solve(men, need, arg2, train, now=now, tr=t_)
+                    if tr is not None:
+                        tr.append(f"q{q + 1} (2nd input {'none' if i2 == 0 else repr(CM[i2 - 1][1])}): " + " ; ".join(t_))
+                    for u in used:
+                        S["edge picks" if u[0] == "edge" else "function picks"] += 1
+                    res.append((proj(v) if gw is None else gw[0] * proj(v), node))
+                    R_l.append(v)
+                    R_m.append((v, "<result>", None, v[None], v[None]))
+                    prev = v
+                return res, cost
+
+            def to_llm(res):
+                """T1: each result -> the LLM: its name tokens when its node came from text (exact; forward only), then
+                its latent as a soft token (carries the gradient)"""
+                parts = []
+                for tok, node in res:
+                    if TOKS and node is not None:
+                        parts.append(Wte(torch.tensor(nodes[node]["ids"], device=dev)))
+                    parts.append(tok[None])
+                return torch.cat(parts)
+
+            def llm(ctx, soft, tgt):
+                """GPT-2 + LoRA over [context][soft tokens][segment] -> per-token CE of the segment"""
+                parts = [Wte(torch.tensor(ctx, device=dev))] if ctx else []
+                parts += [soft] if soft is not None and len(soft) else []
+                parts += [Wte(torch.tensor(tgt, device=dev))]
+                emb = torch.cat(parts)
+                G10.ex.active, G10.ex.w = 0, None
+                out = M(inputs_embeds=emb[None], position_ids=torch.arange(len(emb), device=dev)[None])
+                G10.ex.active = None
+                lp = F.log_softmax(out.logits[0, -len(tgt) - 1:-1].float(), -1)
+                return -lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0]
+
+            @torch.no_grad()
+            def llm_alone(ctx, tgt):
+                """the LLM alone (same LoRA) over [context][sentence] -> per-token CE and its state before each token"""
+                emb = Wte(torch.tensor(ctx + tgt, device=dev))
+                G10.ex.active, G10.ex.w = 0, None
+                out = M(inputs_embeds=emb[None], position_ids=torch.arange(len(emb), device=dev)[None],
+                        output_hidden_states=True)
+                G10.ex.active = None
+                lp = F.log_softmax(out.logits[0, len(ctx) - 1:-1].float(), -1)
+                return (-lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0],
+                        out.hidden_states[-1][0, len(ctx) - 1:-1].float())
+
+            def dump_graph(tag):
+                """inspection: the graph (mention nodes, claim edges), identity neighbours, relation latent groups"""
+                fwd = [i for i, e in enumerate(edges) if e["dir"] == 0]
+                deg = collections.Counter(e["a"] for e in edges)
+                print(f"GRAPH {tag}: nodes {len(nodes)} (one per mention), edges {len(fwd)}, nodes with edges "
+                      f"{len(deg)}", flush=True)
+                rel = collections.Counter(edges[i]["rw"] for i in fwd)
+                print(f"GRAPH {tag} commonest relation words (the text each latent came from, not what it holds): "
+                      f"{rel.most_common(10)}", flush=True)
+                with torch.no_grad():
+                    for j in random.Random(len(nodes)).sample(range(len(nodes)), min(6, len(nodes))):
+                        n_ = nodes[j]
+                        men = (n_["z"], nm(j), None, n_["sp"][0], n_["cx"][0])
+                        nb = [i for i in near(n_["z"], 6) if i != j][:5]
+                        if nb:
+                            lg = relm(men, [nodes[i] for i in nb])
+                            print(f"GRAPH {tag} identity '{nm(j)}': " + ", ".join(
+                                f"'{nm(i)}' {float(s_):.1f}" for i, s_ in zip(nb, lg[:-1])) + f" | new {float(lg[-1]):.1f}",
+                                flush=True)
+                    for i in random.Random(1).sample(fwd, min(10, len(fwd))):
+                        e = edges[i]
+                        print(f"GRAPH {tag} edge (sentence {e['sid']}): '{nm(e['a'])}' --[{e['rw']}]--> '{nm(e['b'])}'",
+                              flush=True)
+                    if fwd:
+                        grp = collections.defaultdict(list)
+                        for i in fwd:
+                            grp[edges[i]["rw"]].append(i)
+                        top_ = [w for w, _ in rel.most_common(10)]
+                        C_ = F.normalize(torch.stack([torch.stack([edges[i]["R"] for i in grp[w]]).mean(0) for w in top_]), dim=-1)
+                        S_ = C_ @ C_.T
+                        for a_, w in enumerate(top_):
+                            nb_ = [(top_[b_], float(S_[a_, b_])) for b_ in S_[a_].argsort(descending=True).tolist() if b_ != a_]
+                            tight = float(torch.stack([edges[i]["R"] for i in grp[w]]).mean(0).norm())
+                            print(f"GRAPH {tag} relation latent '{w}' ({len(grp[w])} edges, spread {1 - tight:.2f}): "
+                                  "nearest " + ", ".join(f"'{x}' {s_:.2f}" for x, s_ in nb_[:4]), flush=True)
+
+            # ---------------------------------------------------------------- the stream
+            stream, recent_s = [], collections.deque(maxlen=2)
             index, sent_end = collections.defaultdict(list), []
             S, EV = collections.Counter(), collections.Counter()
-            SP = {"asked": 0, "sentences": 0, "failed needs": []}
-            DIAG = []                                    # (eval traces: what GNM fetched for sentences that need memory)
+            SPW = {"hits": [], "failed": []}
             t0 = time.time()
 
             def mem_mask(text, ids_, pos):
@@ -5057,166 +5139,129 @@ def v11_t5(steps=3000, ep_species=8):
                                 m[i:i + len(n)] = True
                 return m
 
+            def line(D_, tag):
+                n_, nm_, nc_ = max(1, D_["n"]), max(1, D_["n mem"]), max(1, D_["n comp"])
+                ctl = (f" | no-content control: all {D_['cec'] / n_:.3f}, memory {D_['cec mem'] / nm_:.3f}, computed "
+                       f"{D_['cec comp'] / nc_:.3f}") if D_.get("cec") else ""
+                return (f"M1 {tag} | CE all: LLM alone {D_['ce0'] / n_:.3f}, with GNM {D_['ce1'] / n_:.3f} | memory "
+                        f"tokens ({D_['n mem']}): {D_['ce0 mem'] / nm_:.3f} -> {D_['ce1 mem'] / nm_:.3f} | computed "
+                        f"tokens ({D_['n comp']}): {D_['ce0 comp'] / nc_:.3f} -> {D_['ce1 comp'] / nc_:.3f}{ctl} | "
+                        f"queries/sentence {D_['queries'] / max(1, D_['sentences']):.2f} | self-prediction (local): "
+                        f"{D_['sp hits']}/{D_['sp n']} hit, numbers {D_['sp num hits']}/{D_['sp num n']}")
+
             for k_s, (ai, text) in enumerate(sents):
                 heldout = ai >= len(arts) - n_ev
                 train = not heldout and not notrain
-                ids_t = tk(" " + text)["input_ids"][:200]
+                ids_f, H_c = sent(text)
+                Hc.pop(text, None)                       # (read once: the cache would hold a 2nd copy)
+                ids_t = ids_f[:200]
                 pos = len(stream)
                 ctx = stream[-WIN:] or [tk.eos_token_id]
-                mk = mem_mask(text, ids_t, pos)
-                with torch.no_grad():
-                    ce0, st0 = llm(ctx, None, ids_t)
-                A_v = [m_ for rc in recent for _, m_, _ in rc]
-                A_n = [j for rc in recent for j, _, _ in rc]
-                A_m = [men for rc in recent for _, _, men in rc]   # the mention behind an anchor (None: a result)
-                now = len(sent_end)                      # this sentence's index (edges' age)
-                rolls, ce_plain = [], None
+                mk, ck = mem_mask(text, ids_t, pos), comp_mask(text, len(ids_t))
+                show = heldout and EV["sentences"] < 10 or k_s % 400 == 0
+                ce0, st_all = llm_alone(ctx, ids_t)
+                ce1_l, cec_l, trs = [], [], []
+                n_q, loss, sp_st = 0, None, collections.Counter()
                 with torch.set_grad_enabled(train):
-                    if not nomem and A_v and not noask:
-                        R_ = rels()
-                        rolls = [rollout(ctx, ids_t, st0, A_v, A_n, A_m, R_, now, sample=train)
-                                 for _ in range(NROLL if train else 1)]
-                    if not rolls and train:
-                        ce_plain = llm(ctx, None, ids_t)[0]   # (nothing to ask about: LoRA still learns the text)
-                # reward of an episode = the nats GPT-2 saves on this sentence with its results - a cost per query (D6)
-                RW = [float(ce0.mean() - r["ce"].mean()) - QCOST * r["n"] for r in rolls]
-                best = max(range(len(rolls)), key=lambda i: RW[i]) if rolls else None
-                ce1 = rolls[best]["ce"] if rolls else (ce_plain if train else ce0)
-                n_q = rolls[best]["n"] if rolls else 0
-                if rolls:
-                    for kind, ix, _ in rolls[best]["used"]:
-                        if kind == "func":
-                            funcs.used[ix] += 1
-                            S["function picks"] += 1
-                S["sentences"] += 1
-                S["tokens"] += len(ids_t)
-                S["mem tokens"] += int(mk.sum())
-                S["ce0"] += float(ce0.sum())
-                S["ce1"] += float(ce1.sum())
-                S["ce0 mem"] += float(ce0[mk].sum())
-                S["ce1 mem"] += float(ce1[mk].sum())
-                S["queries"] += n_q
-                if heldout:                              # the whole evaluation stream, kept apart from the windows
-                    for k_, v_ in (("tokens", len(ids_t)), ("mem tokens", int(mk.sum())), ("ce0", float(ce0.sum())),
-                                   ("ce1", float(ce1.sum())), ("ce0 mem", float(ce0[mk].sum())),
-                                   ("ce1 mem", float(ce1[mk].sum())), ("queries", n_q), ("sentences", 1)):
-                        EV[k_] += v_
-                if train:
-                    if rolls:
-                        # group-relative advantage (GRPO-style, no value net); every decision of an episode gets it
-                        mu = sum(RW) / len(RW)
-                        sd_r = (sum((x - mu) ** 2 for x in RW) / len(RW)) ** .5
-                        adv = [max(-2., min(2., (x - mu) / sd_r)) if sd_r > 1e-6 else 0. for x in RW]
-                        loss = torch.stack([r["ce"].mean() for r in rolls]).mean()   # continuous parts: exact CE grad
-                        for r, a in zip(rolls, adv):
-                            if not a:
-                                continue
-                            if r["lps"]:
-                                loss = loss - a * torch.stack(r["lps"]).sum() / len(rolls)
-                            for kind, ix, ia in r["used"]:   # delayed credit: the writes this episode used
-                                if kind == "edge" and edges[ix].get("rs") is not None and edges[ix].get("sid") in rd_hist:
-                                    loss = loss + .1 * a / len(rolls) * reader.loss(*rd_hist[edges[ix]["sid"]])
-                                    S["reads credited"] += 1
-                                if r["A_m"][ia] is not None:
-                                    loss = loss + .1 * a / len(rolls) * id_credit(r["A_m"][ia], r["A_n"][ia])
-                                    S["identity credited"] += 1
-                        S["reward"] += mu
-                        S["reward kept"] += RW[best]
-                        for i_, r in enumerate(rolls):
-                            SP["asked"] += r["n"]
-                            if RW[i_] <= 0:
-                                SP["failed needs"].extend(r["needs"])
+                    if nomem:
+                        ce1 = llm(ctx, None, ids_t) if train else ce0
+                        if train:
+                            loss = ce1.mean()
                     else:
-                        loss = ce_plain.mean()
+                        cost = 0.
+                        for (b, e) in segs(ids_t):
+                            A_lat, A_men = anchors(recent_s, H_c, ids_f, b)
+                            tr = [] if show else None
+                            res, c_ = ask_seg(st_all[b], A_lat, A_men, train, len(sent_end), tr) if A_lat else ([], 0.)
+                            cost = cost + c_
+                            n_q += len(res)
+                            soft = to_llm(res) if res else None
+                            c1 = llm(ctx + ids_t[:b], soft, ids_t[b:e])
+                            ce1_l.append(c1)
+                            if heldout:                  # control: the same number of positions, NO memory content
+                                with torch.no_grad():
+                                    cec_l.append(llm(ctx + ids_t[:b], proj(torch.zeros(len(soft), E_, device=dev)), ids_t[b:e])
+                                                 if res else ce0[b:e])
+                            if tr is not None:
+                                trs.append(f"segment '{tk.decode(ids_t[b:e]).strip()[:50]}': CE alone "
+                                           f"{float(ce0[b:e].mean()):.2f} -> GNM {float(c1.mean()):.2f} | " + " || ".join(tr))
+                        ce1 = torch.cat(ce1_l)
+                        # the perception reads the sentence into GNM (after the LLM predicted it); local signal first
+                        sp_loss, sp_st, sp_tr = read_m(text, ids_f, H_c, len(sent_end), train)
+                        if train:
+                            loss = ce1.mean() + QCOST * cost + (LSP * sp_loss if sp_loss is not None else 0.)
+                        trs += [f"SELF-PREDICTION {x}" for x in (sp_tr if show else [])]
+                if train:
                     (loss / GA).backward()
                     if (k_s + 1) % GA == 0:
                         lopt.step()
                         lopt.zero_grad()
-                    # the model creates a function (F3) when, over the last 200 sentences, most episodes earned
-                    # nothing: label = the needs of those episodes, net = a copy of the most used function
-                    SP["sentences"] += 1
-                    if SP["sentences"] >= 200:
-                        if (len(funcs.nets) < NF and SP["asked"] and len(SP["failed needs"]) > .5 * SP["asked"]
-                                and k_s >= 200):
+                ce1 = ce1.detach()
+                for k_, v_ in sp_st.items():
+                    if k_ != "failed":
+                        S[k_] += v_
+                        if heldout:
+                            EV[k_] += v_
+                for d_ in ((S, True), (EV, heldout)):
+                    if not d_[1]:
+                        continue
+                    D_ = d_[0]
+                    D_["sentences"] += 1
+                    D_["tokens"] += len(ids_t)
+                    D_["queries"] += n_q
+                    for nm_, msk in (("", None), (" mem", mk), (" comp", ck)):
+                        D_["n" + nm_] += len(ids_t) if msk is None else int(msk.sum())
+                        D_["ce0" + nm_] += float(ce0.sum() if msk is None else ce0[msk].sum())
+                        D_["ce1" + nm_] += float(ce1.sum() if msk is None else ce1[msk].sum())
+                        if heldout and D_ is EV and not nomem:
+                            cc = torch.cat(cec_l)
+                            D_["cec" + nm_] += float(cc.sum() if msk is None else cc[msk].sum())
+                if trs:
+                    print(f"REASON sentence {k_s}{' (held out)' if heldout else ''}: '{text[:100]}'", flush=True)
+                    for t_ in trs:
+                        print(f"   {t_}", flush=True)
+                # function creation (F3), signal-driven by the LOCAL self-prediction: when its hit rate over the last
+                # 200 training sentences did not improve on the 200 before, a new function is spawned: label = the
+                # needs that failed, net = a copy of the most used one
+                if train and not nomem:
+                    SPW["hits"].append((sp_st["sp hits"], sp_st["sp n"]))
+                    SPW["failed"] += sp_st.get("failed", [])
+                    SPW["failed"] = SPW["failed"][-2000:]
+                    if len(SPW["hits"]) >= 400 and len(SPW["hits"]) % 200 == 0 and len(funcs.nets) < NF:
+                        rate = lambda h_: sum(a for a, _ in h_) / max(1, sum(n for _, n in h_))
+                        if rate(SPW["hits"][-200:]) <= rate(SPW["hits"][-400:-200]) and SPW["failed"]:
                             src = max(range(len(funcs.used)), key=lambda i: funcs.used[i])
-                            lbl = F.normalize(torch.stack(SP["failed needs"]).mean(0), dim=0)
-                            lopt.add_param_group({"params": funcs.spawn(lbl, src), "lr": 1e-3})
-                            print(f"M1: function {len(funcs.nets) - 1} created (from {src}; {len(SP['failed needs'])} of "
-                                  f"{SP['asked']} queries earned nothing)", flush=True)
-                        SP = {"asked": 0, "sentences": 0, "failed needs": []}
-                if rolls:                                # computation = classification + memorization: the kept
-                    with torch.no_grad():                # episode's computed values point-or-create into memory
-                        for anc, out, fi in rolls[best]["fx"]:
-                            memorize(anc, out, fi, now)
-                            S["memorized"] += 1
-                if heldout:                              # control: the same number of soft tokens with NO memory
-                    with torch.no_grad():                # content (the projector's constant) -- a gain below this
-                        ce_c = (llm(ctx, proj(torch.zeros(n_q, E_, device=dev)), ids_t)[0] if n_q else ce0)   # is memory's
-                    EV["ce const"] += float(ce_c.sum())
-                    EV["ce const mem"] += float(ce_c[mk].sum())
-                    # (diagnosis, log only): did GNM fetch the facts this sentence needs? memory words = the sentence's
-                    # rare words that only memory holds; a hit = the picked node's names contain one of them
-                    mw = {w for w in rare(text) if any(sent_end[j] <= pos - WIN for j in index[w])} - (
-                        rare(tk.decode(stream[max(0, pos - WIN):pos])) if pos else set())
-                    if rolls and mw:
-                        EV["sentences needing memory"] += 1
-                        picked = []
-                        An_r = rolls[best]["A_n"]
-                        for kind, ix, ia in rolls[best]["used"]:
-                            nd = edges[ix]["b"] if kind == "edge" else None
-                            nm_ = " ".join(nodes[nd]["names"][:3]).lower() if nd is not None else f"<function {ix}>"
-                            picked.append((kind, nm_, " ".join(str(n) for n in nodes[An_r[ia]]["names"][:2])
-                                           if An_r[ia] is not None else "<result>"))
-                        hit = any(w in p_[1] for w in mw for p_ in picked)
-                        EV["fetch hits"] += hit
-                        if len(DIAG) < 12:
-                            DIAG.append(f"memory words {sorted(mw)[:4]} | asked about {[p_[2] for p_ in picked]} -> picked "
-                                        f"{[p_[1][:40] for p_ in picked]} | hit {hit} | CE on memory tokens: alone "
-                                        f"{float(ce0[mk].mean()) if mk.any() else 0:.2f}, GNM {float(ce1[mk].mean()) if mk.any() else 0:.2f}")
-                if rolls and rolls[best].get("trace") and (heldout and EV["sentences"] <= 12 or k_s % 400 == 0):
-                    print(f"REASON sentence {k_s}: '{text[:110]}' | CE alone {float(ce0.mean()):.2f} -> with GNM "
-                          f"{float(ce1.mean()):.2f}", flush=True)
-                    for tr_ in rolls[best]["trace"]:
-                        print(f"   {tr_}", flush=True)
-                if DUMP and (k_s + 1) % DUMP == 0:
-                    dump_graph(f"s{k_s + 1}")
-                # the perception reads the sentence into GNM (after predicting it)
+                            lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.stack(SPW["failed"]).mean(0), dim=0),
+                                                                        src), "lr": 1e-3})
+                            print(f"M1: function {len(funcs.nets) - 1} created (from {src}; self-prediction hits "
+                                  f"{rate(SPW['hits'][-200:]):.3f} vs {rate(SPW['hits'][-400:-200]):.3f} before)", flush=True)
+                            SPW["failed"] = []
                 if not nomem:
-                    recent.append(read_m(text, len(sent_end)))
+                    recent_s.append((H_c, ids_f))
                 for w in rare(text):
                     index[w].append(len(sent_end))
                 sent_end.append(pos + len(ids_t))
                 stream.extend(ids_t)
-                if (k_s + 1) % 500 == 0 or k_s + 1 == n_tr or k_s + 1 == len(sents):
-                    tn, mn = max(1, S["tokens"]), max(1, S["mem tokens"])
-                    tag = "EVAL" if heldout else ("train" if train else "read")
-                    print(f"M1 {tag} {k_s + 1}/{len(sents)} | CE all: LLM alone {S['ce0'] / tn:.3f}, with GNM {S['ce1'] / tn:.3f} "
-                          f"| memory tokens ({S['mem tokens']}): alone {S['ce0 mem'] / mn:.3f}, with GNM {S['ce1 mem'] / mn:.3f} "
-                          f"| queries/sentence {S['queries'] / max(1, S['sentences']):.2f} | RL: reward per sentence (nats saved "
-                          f"- query cost) sampled {S['reward'] / max(1, S['sentences']):.4f}, kept {S['reward kept'] / max(1, S['sentences']):.4f}; "
-                          f"reads credited {S['reads credited']}, identity credited {S['identity credited']} | function picks "
-                          f"{S['function picks']} ({len(funcs.nets)} functions), memorized {S['memorized']} | nodes {len(nodes)}, "
-                          f"edges {len(edges)} | cost per hop {float(F.softplus(mem.hc)):.2f}, age weight {float(mem.rc):.2f} | "
-                          f"GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
-                    torch.cuda.reset_peak_memory_stats()
-                    S = collections.Counter()
+                if train and REFRESH and (k_s + 1) % REFRESH == 0 and not nomem:
+                    refresh()
+                if DUMP and (k_s + 1) % DUMP == 0 and not nomem:
+                    dump_graph(f"s{k_s + 1}")
                 if train and (k_s + 1) % 2000 == 0:
                     save_m1()
-                if len(id_top) > 5000:                   # (only mentions of the last sentences can be anchors)
-                    for k_ in list(id_top)[:1000]:
-                        id_top.pop(k_)
+
+                if (k_s + 1) % 500 == 0 or k_s + 1 == n_tr or k_s + 1 == len(sents):
+                    tag = "EVAL" if heldout else ("train" if train else "read")
+                    print(line(S, f"{tag} {k_s + 1}/{len(sents)}") + f" | picks: edges {S['edge picks']}, functions "
+                          f"{S['function picks']} ({len(funcs.nets)} functions) | nodes {len(nodes)}, edges {len(edges) // 2} "
+                          f"| GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
+                    torch.cuda.reset_peak_memory_stats()
+                    S = collections.Counter()
                 if k_s + 1 == n_tr:
                     print("M1: training stream done; evaluation articles next (memory continues, no training)", flush=True)
-            tn, mn = max(1, EV["tokens"]), max(1, EV["mem tokens"])
-            print(f"M1 EVAL TOTAL ({EV['sentences']} sentences of {n_ev} held-out articles, memory = everything read "
-                  f"before) | CE all: LLM alone {EV['ce0'] / tn:.3f}, with GNM {EV['ce1'] / tn:.3f}, control (same soft "
-                  f"tokens, no memory content) {EV['ce const'] / tn:.3f} | memory tokens ({EV['mem tokens']}): alone "
-                  f"{EV['ce0 mem'] / mn:.3f}, with GNM {EV['ce1 mem'] / mn:.3f}, control {EV['ce const mem'] / mn:.3f} | "
-                  f"queries/sentence {EV['queries'] / max(1, EV['sentences']):.2f} | fetched a node holding a memory word: "
-                  f"{EV['fetch hits']}/{EV['sentences needing memory']} sentences that need memory", flush=True)
-            dump_graph("end")
-            for tr_ in DIAG:
-                print(f"   FETCH {tr_}", flush=True)
+            print(line(EV, f"EVAL TOTAL ({EV['sentences']} sentences of {n_ev} held-out articles, memory = everything "
+                       f"read before)"), flush=True)
+            if not nomem:
+                dump_graph("end")
             save_m1()
 
         if os.environ.get("V12_LM", "0") == "1":
