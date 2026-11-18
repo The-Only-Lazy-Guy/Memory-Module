@@ -4719,6 +4719,8 @@ def v11_t5(steps=3000, ep_species=8):
                                       {"params": list(reader.parameters()) + list(relm.parameters()), "lr": 1e-4}])
             lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0)), "lr": 1e-3})
             notrain = os.environ.get("M1_NOTRAIN", "0") == "1"   # (re-read the stream and evaluate a trained M1)
+            noask = os.environ.get("M1_NOASK", "0") == "1"       # (inspection: read only -- the perception's graph)
+            DUMP = int(os.environ.get("M1_DUMP_EVERY", "0"))
             m1_load = os.environ.get("M1_LOAD", "")
             if m1_load:
                 ck1 = torch.load(m1_load, map_location=dev)
@@ -4769,7 +4771,8 @@ def v11_t5(steps=3000, ep_species=8):
                     rs = H_[c[1][0]:c[1][1] + 1].mean(0)
                     for dr, (u, v) in ((0, (js[0], js[1])), (1, (js[1], js[0]))):
                         outs.setdefault(u, []).append(len(edges))
-                        edges.append({"a": u, "b": v, "rs": rs, "dir": dr, "sid": sid})
+                        edges.append({"a": u, "b": v, "rs": rs, "dir": dr, "sid": sid,
+                                      "rw": tk.decode(ids_[c[1][0]:c[1][1] + 1]).strip()})
                 if claims:
                     rd_hist[sid] = (H_, claims)
                     if len(rd_hist) > 4000:
@@ -4833,7 +4836,7 @@ def v11_t5(steps=3000, ep_species=8):
                     lbl = F.normalize(funcs.labels[fi].detach(), dim=0)
                     for dr, (u, v) in ((0, (anchor, j)), (1, (j, anchor))):
                         outs.setdefault(u, []).append(len(edges))
-                        edges.append({"a": u, "b": v, "rs": None, "rl": lbl, "dir": dr, "sid": sid})
+                        edges.append({"a": u, "b": v, "rs": None, "rl": lbl, "dir": dr, "sid": sid, "rw": f"<f{fi}>"})
                 return j
 
             def llm(ctx, soft, tgt):
@@ -4854,6 +4857,19 @@ def v11_t5(steps=3000, ep_species=8):
                 lp = F.log_softmax(out.logits[0, -n_ - 1:-1].float(), -1)
                 return -lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0], st
 
+            def nm(j):
+                """a node as text (inspection)"""
+                if j is None:
+                    return "<an earlier result>"
+                return " / ".join(dict.fromkeys(str(x) for x in nodes[j]["names"][:3]))
+
+            def desc(m_):
+                """a candidate as text: an edge A --[relation words]--> B, or a function"""
+                if m_[0] == "func":
+                    return f"function {m_[1]}"
+                e = edges[m_[1]]
+                return f"{nm(e['a'])} --[{e.get('rw', '?')}{' (back)' if e['dir'] else ''}]--> {nm(e['b'])}"
+
             def rollout(ctx, ids_t, st0, A_v, A_n, A_m, R_, now, sample):
                 """one episode of asking for this sentence (§1g, full RL -- user 11-19 "cant you just do full RL for
                 GNM?"): every decision is drawn from its own policy while training (sample) or taken greedily (eval):
@@ -4863,7 +4879,7 @@ def v11_t5(steps=3000, ep_species=8):
                    memorize), number of queries, needs)"""
                 A_v, A_n, A_m = list(A_v), list(A_n), list(A_m)
                 h, prev, st = torch.zeros(256, device=dev), torch.zeros(E_, device=dev), st0
-                soft, R_v, lps, used, fx, needs = [], [], [], [], [], []
+                soft, R_v, lps, used, fx, needs, trace = [], [], [], [], [], [], []
 
                 def pick(lg):
                     if len(lg) == 1:
@@ -4877,6 +4893,8 @@ def v11_t5(steps=3000, ep_species=8):
                         s_lg = ask.stop(h).squeeze()
                         stop = bool(torch.bernoulli(torch.sigmoid(s_lg.detach()))) if sample else float(s_lg) > 0
                         lps.append(F.logsigmoid(s_lg) if stop else F.logsigmoid(-s_lg))
+                        if not sample:
+                            trace.append(f"stop? p={float(torch.sigmoid(s_lg)):.2f} -> {'stops' if stop else 'goes on'}")
                         if stop:
                             break
                     ia = pick(ask.anchor_logits(h, torch.stack(A_v)))
@@ -4892,6 +4910,11 @@ def v11_t5(steps=3000, ep_species=8):
                         node = None                      # (a function's output: memorized after the episode)
                         fx.append((A_n[ia], res, meta[k][1]))
                     used.append((meta[k][0], meta[k][1], ia))
+                    if not sample:                       # (inspection, log only: one step of its reasoning)
+                        top = torch.argsort(sc.detach(), descending=True)[:3].tolist()
+                        trace.append(f"step {q + 1}: asks about '{nm(A_n[ia])}' (2nd input {'none' if ia2 == 0 else 'result ' + str(ia2)})"
+                                     f" -> " + "; ".join(f"{desc(meta[i_])} {float(sc[i_]):.2f}" for i_ in top)
+                                     + f" -> picks {desc(meta[k])}")
                     needs.append(need.detach())
                     soft.append(proj(res))
                     R_v.append(res.detach())
@@ -4903,7 +4926,48 @@ def v11_t5(steps=3000, ep_species=8):
                         _, st = llm(ctx, torch.stack(soft), [])
                 ce = llm(ctx, torch.stack(soft), ids_t)[0] if soft else None
                 return {"ce": ce, "lps": lps, "used": used, "fx": fx, "n": len(soft), "needs": needs, "A_m": A_m,
-                        "A_n": A_n}
+                        "trace": trace, "A_n": A_n}
+            def dump_graph(tag):
+                """inspection (user 11-19: "can you inspect the graph midrun? is it a nice grpah structure?"): the graph
+                GNM has built -- summary, hubs, relation words, sample edges in the log; the full graph as JSON"""
+                deg, comp = collections.Counter(), list(range(len(nodes)))
+
+                def root(x):
+                    while comp[x] != x:
+                        comp[x] = comp[comp[x]]
+                        x = comp[x]
+                    return x
+                for e in edges:
+                    deg[e["a"]] += 1
+                    ra, rb = root(e["a"]), root(e["b"])
+                    if ra != rb:
+                        comp[ra] = rb
+                sizes = collections.Counter(root(i) for i in range(len(nodes)))
+                made = sum(1 for n_ in nodes if all(str(x).startswith("<f") for x in n_["names"]))
+                by_name = collections.defaultdict(set)
+                for i, n_ in enumerate(nodes):
+                    for x in n_["names"]:
+                        if not str(x).startswith("<f"):
+                            by_name[str(x).lower()].add(i)
+                many = sum(1 for n_ in nodes if len({str(x).lower() for x in n_["names"] if not str(x).startswith("<f")}) > 3)
+                rel = collections.Counter(e.get("rw", "?") for e in edges if e["dir"] == 0)
+                print(f"GRAPH {tag}: nodes {len(nodes)} ({made} made by functions), edges {len(edges) // 2}, components "
+                      f"{len(sizes)} (largest {max(sizes.values()) if sizes else 0} nodes, isolated "
+                      f"{sum(1 for v in sizes.values() if v == 1)}), names on more than one node "
+                      f"{sum(1 for v in by_name.values() if len(v) > 1)}, nodes with > 3 different names {many}", flush=True)
+                print(f"GRAPH {tag} commonest relation words: {rel.most_common(12)}", flush=True)
+                for j, d_ in deg.most_common(8):
+                    print(f"GRAPH {tag} hub '{nm(j)}': {d_} edges, {len(nodes[j]['names'])} mentions, names "
+                          f"{list(dict.fromkeys(str(x) for x in nodes[j]['names']))[:8]}", flush=True)
+                fwd = [i for i, e in enumerate(edges) if e["dir"] == 0]
+                for i in random.Random(1).sample(fwd, min(16, len(fwd))):
+                    print(f"GRAPH {tag} edge (sentence {edges[i].get('sid', 0)}): {desc(('edge', i))}", flush=True)
+                ck_ = os.environ.get("V12_CKPT", "") or "/marimo/out"
+                os.makedirs(ck_, exist_ok=True)
+                json.dump({"nodes": [[str(x) for x in n_["names"]] for n_ in nodes],
+                           "edges": [[e["a"], e["b"], e.get("rw", "?"), e["dir"], e.get("sid", 0)] for e in edges]},
+                          open(os.path.join(ck_, f"graph_{tag}.json"), "w"))
+
             stream, recent = [], collections.deque(maxlen=3)   # token stream; mentions of the last 3 sentences
             index, sent_end = collections.defaultdict(list), []
             S, EV = collections.Counter(), collections.Counter()
@@ -4940,7 +5004,7 @@ def v11_t5(steps=3000, ep_species=8):
                 now = len(sent_end)                      # this sentence's index (edges' age)
                 rolls, ce_plain = [], None
                 with torch.set_grad_enabled(train):
-                    if not nomem and A_v:
+                    if not nomem and A_v and not noask:
                         R_ = rels()
                         rolls = [rollout(ctx, ids_t, st0, A_v, A_n, A_m, R_, now, sample=train)
                                  for _ in range(NROLL if train else 1)]
@@ -5042,6 +5106,13 @@ def v11_t5(steps=3000, ep_species=8):
                             DIAG.append(f"memory words {sorted(mw)[:4]} | asked about {[p_[2] for p_ in picked]} -> picked "
                                         f"{[p_[1][:40] for p_ in picked]} | hit {hit} | CE on memory tokens: alone "
                                         f"{float(ce0[mk].mean()) if mk.any() else 0:.2f}, GNM {float(ce1[mk].mean()) if mk.any() else 0:.2f}")
+                if rolls and rolls[best].get("trace") and (heldout and EV["sentences"] <= 12 or k_s % 400 == 0):
+                    print(f"REASON sentence {k_s}: '{text[:110]}' | CE alone {float(ce0.mean()):.2f} -> with GNM "
+                          f"{float(ce1.mean()):.2f}", flush=True)
+                    for tr_ in rolls[best]["trace"]:
+                        print(f"   {tr_}", flush=True)
+                if DUMP and (k_s + 1) % DUMP == 0:
+                    dump_graph(f"s{k_s + 1}")
                 # the perception reads the sentence into GNM (after predicting it)
                 if not nomem:
                     recent.append(read_m(text, len(sent_end)))
@@ -5070,6 +5141,7 @@ def v11_t5(steps=3000, ep_species=8):
                   f"{EV['ce0 mem'] / mn:.3f}, with GNM {EV['ce1 mem'] / mn:.3f}, control {EV['ce const mem'] / mn:.3f} | "
                   f"queries/sentence {EV['queries'] / max(1, EV['sentences']):.2f} | fetched a node holding a memory word: "
                   f"{EV['fetch hits']}/{EV['sentences needing memory']} sentences that need memory", flush=True)
+            dump_graph("end")
             for tr_ in DIAG:
                 print(f"   FETCH {tr_}", flush=True)
             ck = os.environ.get("V12_CKPT", "")
