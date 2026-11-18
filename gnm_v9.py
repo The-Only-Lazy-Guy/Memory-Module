@@ -4671,9 +4671,38 @@ def v11_t5(steps=3000, ep_species=8):
                     return s_.ptr(torch.cat([A, h[None].expand(len(A), -1)], 1)).squeeze(-1)
             ask = Ask().to(dev)
             proj = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, ED)).to(dev)
+
+            class Funcs(nn.Module):
+                """computing = the user's function nodes (§1g F1-F8): each function = a learned label (its purpose, in
+                the space of edge relations, so functions compete with edges in the same pointing) + its own net over
+                (the anchor's value, the previous result) -> a new latent value. Created by the model: a new one is
+                spawned when nothing in reach lowered the CE (copy of the most used one + noise, label = the need
+                that failed). (Not yet: F4 typed codec, F6 / F7 editing values / other functions -- flagged)"""
+                def __init__(s_):
+                    super().__init__()
+                    s_.labels, s_.nets, s_.used = nn.ParameterList(), nn.ModuleList(), []
+
+                def spawn(s_, label, src=None):
+                    net = nn.Sequential(nn.Linear(2 * E_, 256), nn.GELU(), nn.Linear(256, E_)).to(dev)
+                    if src is not None:
+                        net.load_state_dict(s_.nets[src].state_dict())
+                        with torch.no_grad():
+                            for p_ in net.parameters():
+                                p_.add_(.01 * torch.randn_like(p_))
+                    s_.nets.append(net)
+                    s_.labels.append(nn.Parameter(label.detach().clone()))
+                    s_.used.append(0)
+                    return list(net.parameters()) + [s_.labels[-1]]
+
+                def apply(s_, a_val, prev):
+                    x = torch.cat([a_val, prev])
+                    return torch.stack([net(x) for net in s_.nets]), F.normalize(torch.stack(list(s_.labels)), dim=-1)
+            funcs = Funcs().to(dev)
+            NF = int(os.environ.get("M1_FUNCS", "16"))
             new_p = list(ask.parameters()) + list(proj.parameters()) + list(mem.parameters())
             lopt = torch.optim.AdamW([{"params": new_p, "lr": 1e-3}, {"params": G10.eparams(), "lr": 2e-4},
                                       {"params": list(reader.parameters()) + list(relm.parameters()), "lr": 1e-4}])
+            lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0)), "lr": 1e-3})
             nodes, edges, outs = [], [], {}
             decide_ = learned(False)                     # identity: as trained in v12 (frozen in M1)
 
@@ -4718,10 +4747,12 @@ def v11_t5(steps=3000, ep_species=8):
             def val(j):
                 return torch.stack(nodes[j]["m"]).mean(0)
 
-            def solve(anchor, need, R_):
-                """GNM moves from the anchor along edges: candidates = edges within HOP hops; weight = relevance(need,
-                edge relation, direction) - cost per hop x hops before it -> (result vector, the best edge's target)"""
-                dist, front, cs = {anchor: 0}, [anchor], []
+            def solve(anchor, a_vec, need, R_, prev):
+                """GNM from the anchor, ONE pointing over two kinds of candidates: every edge within HOP hops (lookup)
+                and every function applied to (the anchor's value, the previous result) (computing, §1g F1-F5);
+                weight = relevance(need, edge relation or function label, direction) - cost per hop x hops.
+                -> (result vector, best edge's target node or None, best edge or None, best function or None)"""
+                dist, front, cs = {anchor: 0}, ([anchor] if anchor is not None else []), []
                 while front:
                     nxt = []
                     for u in front:
@@ -4732,15 +4763,20 @@ def v11_t5(steps=3000, ep_species=8):
                                 dist[v] = dist[u] + 1
                                 nxt.append(v)
                     front = nxt
-                if not cs:
-                    return None, None, None
-                ft = torch.stack([torch.cat([need, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])
-                                  for ei, _ in cs])
-                sc = mem.aa(ft).squeeze(-1) - F.softplus(mem.hc) * torch.tensor([float(h_) for _, h_ in cs], device=dev)
-                w = F.softmax(sc, 0)
-                res = (w[:, None] * torch.stack([val(edges[ei]["b"]) for ei, _ in cs])).sum(0)
-                best = cs[int(sc.argmax())][0]
-                return res, edges[best]["b"], best
+                fo, fl = funcs.apply(a_vec, prev)
+                ft = torch.cat([need[None].expand(len(fl), -1), fl, torch.zeros(len(fl), 1, device=dev)], 1)
+                V, hp = fo, [0.] * len(fl)
+                if cs:
+                    ft = torch.cat([torch.stack([torch.cat([need, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])
+                                                 for ei, _ in cs]), ft])
+                    V = torch.cat([torch.stack([val(edges[ei]["b"]) for ei, _ in cs]), fo])
+                    hp = [float(h_) for _, h_ in cs] + hp
+                sc = mem.aa(ft).squeeze(-1) - F.softplus(mem.hc) * torch.tensor(hp, device=dev)
+                res = (F.softmax(sc, 0)[:, None] * V).sum(0)
+                b = int(sc.argmax())
+                if b < len(cs):
+                    return res, edges[cs[b][0]]["b"], cs[b][0], None
+                return res, None, None, b - len(cs)
 
             def llm(ctx, soft, tgt):
                 """GPT-2 + LoRA over [context][soft tokens][sentence] -> per-token CE of the sentence, and the state
@@ -4763,6 +4799,7 @@ def v11_t5(steps=3000, ep_species=8):
             stream, recent = [], collections.deque(maxlen=3)   # token stream; mentions of the last 3 sentences
             index, sent_end = collections.defaultdict(list), []
             S, EV = collections.Counter(), collections.Counter()
+            SP = {"asked": 0, "sentences": 0, "failed needs": []}
             t0 = time.time()
 
             def mem_mask(text, ids_, pos):
@@ -4792,8 +4829,8 @@ def v11_t5(steps=3000, ep_species=8):
                 A_n = [j for rc in recent for j, _, _ in rc]
                 A_m = [men for rc in recent for _, _, men in rc]   # the mention behind an anchor (None: a result)
                 with torch.set_grad_enabled(train):
-                    if not nomem and A_v and edges:
-                        R_ = mem.r(torch.stack([e["rs"] for e in edges]))
+                    if not nomem and A_v:
+                        R_ = mem.r(torch.stack([e["rs"] for e in edges])) if edges else None
                         h, prev, st = torch.zeros(256, device=dev), torch.zeros(E_, device=dev), st0
                         for q in range(KQ):
                             h = ask.step(h, st, prev)
@@ -4805,10 +4842,11 @@ def v11_t5(steps=3000, ep_species=8):
                             a_lg = ask.anchor_logits(h, torch.stack(A_v))
                             ia = int(a_lg.argmax())
                             need = F.normalize(ask.need(h), dim=-1)
-                            res, tgt_node, be = solve(A_n[ia], need, R_)
-                            if res is None:
-                                break
-                            picks.append((q, a_lg, need, ia, be))
+                            res, tgt_node, be, bf = solve(A_n[ia], A_v[ia], need, R_, prev)
+                            picks.append((q, a_lg, need, ia, be, bf, prev.detach()))
+                            if bf is not None:
+                                funcs.used[bf] += 1
+                                S["function picks"] += 1
                             soft.append(proj(res))
                             prev = res
                             A_v.append(res.detach())
@@ -4839,48 +4877,48 @@ def v11_t5(steps=3000, ep_species=8):
                         base = float(ce1.mean())
                         with torch.no_grad():
                             sd = [s_.detach() for s_ in soft]
-                            for (q, a_lg, need, ia, be) in picks:
+                            for (q, a_lg, need, ia, be, bf, prev_q) in picks:
                                 order = torch.argsort(a_lg.detach(), descending=True).tolist()
                                 S["anchor tries"] += 1
                                 if len(order) > 1:       # its next-best anchor for this query
-                                    res2, _, _ = solve(A_n[order[1]], need.detach(), R_)
-                                    if res2 is not None:
-                                        sf2 = list(sd)
-                                        sf2[q] = proj(res2)
-                                        if float(llm(ctx, torch.stack(sf2), ids_t)[0].mean()) < base - .01:
-                                            a_tg.append((a_lg, order[1]))
-                                            S["anchor tries won"] += 1
+                                    res2 = solve(A_n[order[1]], A_v[order[1]], need.detach(), R_, prev_q)[0]
+                                    sf2 = list(sd)
+                                    sf2[q] = proj(res2)
+                                    if float(llm(ctx, torch.stack(sf2), ids_t)[0].mean()) < base - .01:
+                                        a_tg.append((a_lg, order[1]))
+                                        S["anchor tries won"] += 1
                                 wo = [s_ for i_, s_ in enumerate(sd) if i_ != q]   # this query removed
                                 ce_wo = float((llm(ctx, torch.stack(wo), ids_t)[0] if wo else ce0).mean())
                                 helped = ce_wo > base + .01
                                 S["queries helped"] += helped
                                 if q > 0:                # stop at step q was right iff this query did not help
                                     s_tg.append((stops[q], float(not helped)))
-                                if helped:               # the reading side's own right traces (D7): the sentence its
-                                    sid_ = edges[be].get("sid")   # best edge came from was read usefully
+                                if helped and be is not None:   # the reading side's own right traces (D7): the
+                                    sid_ = edges[be].get("sid")   # sentence its best edge came from was read usefully
                                     if sid_ in rd_hist:
                                         rd_tg.append(rd_hist[sid_])
-                                    if A_m[ia] is not None:       # ... and the identity decision behind the anchor
-                                        id_tg.append((A_m[ia], A_n[ia], .1))
+                                if helped and A_m[ia] is not None:   # ... and the identity decision behind the anchor
+                                    id_tg.append((A_m[ia], A_n[ia], .1))
+                                if not helped:
+                                    SP["failed needs"].append(need.detach())
                                 if q == 0 and A_m[ia] is not None and len(nodes) > 1:
                                     # identity try: the anchor mention on identity's 2nd most relevant node
                                     sc_id = relm(A_m[ia], nodes)[:-1]
                                     alt = [int(i) for i in torch.argsort(sc_id, descending=True) if int(i) != A_n[ia]][:1]
                                     if alt:
-                                        res4, _, _ = solve(alt[0], need.detach(), R_)
+                                        res4 = solve(alt[0], val(alt[0]), need.detach(), R_, prev_q)[0]
                                         S["identity tries"] += 1
-                                        if res4 is not None:
-                                            sf4 = list(sd)
-                                            sf4[q] = proj(res4)
-                                            if float(llm(ctx, torch.stack(sf4), ids_t)[0].mean()) < base - .01:
-                                                id_tg.append((A_m[ia], alt[0], 1.))
-                                                S["identity tries won"] += 1
+                                        sf4 = list(sd)
+                                        sf4[q] = proj(res4)
+                                        if float(llm(ctx, torch.stack(sf4), ids_t)[0].mean()) < base - .01:
+                                            id_tg.append((A_m[ia], alt[0], 1.))
+                                            S["identity tries won"] += 1
                             if stopped and len(picks) < KQ:   # it stopped: would one more query have helped?
                                 need3 = F.normalize(ask.need(h_stop), dim=-1)
                                 ia3 = int(ask.anchor_logits(h_stop, torch.stack(A_v)).argmax())
-                                res3, _, _ = solve(A_n[ia3], need3, R_)
-                                more = res3 is not None and float(
-                                    llm(ctx, torch.stack(sd + [proj(res3)]), ids_t)[0].mean()) < base - .01
+                                res3 = solve(A_n[ia3], A_v[ia3], need3, R_,
+                                             A_v[-1] if picks else torch.zeros(E_, device=dev))[0]
+                                more = float(llm(ctx, torch.stack(sd + [proj(res3)]), ids_t)[0].mean()) < base - .01
                                 s_tg.append((stops[len(picks)], float(not more)))   # punish 'stop' if it would
                                 S["stops punished"] += more
                     for a_lg, t_ in a_tg:
@@ -4896,6 +4934,27 @@ def v11_t5(steps=3000, ep_species=8):
                     if (k_s + 1) % GA == 0:
                         lopt.step()
                         lopt.zero_grad()
+                    # the model creates a function (F3) when, over the last 200 sentences, most queries found nothing
+                    # in reach that lowered the CE: label = the needs that failed, net = a copy of the most used one
+                    SP["asked"] += len(picks)
+                    SP["sentences"] += 1
+                    if SP["sentences"] >= 200:
+                        if (len(funcs.nets) < NF and SP["asked"] and len(SP["failed needs"]) > .5 * SP["asked"]
+                                and k_s >= 200):
+                            src = max(range(len(funcs.used)), key=lambda i: funcs.used[i])
+                            lbl = F.normalize(torch.stack(SP["failed needs"]).mean(0), dim=0)
+                            lopt.add_param_group({"params": funcs.spawn(lbl, src), "lr": 1e-3})
+                            print(f"M1: function {len(funcs.nets) - 1} created (from {src}; {len(SP['failed needs'])} of "
+                                  f"{SP['asked']} queries found nothing helpful)", flush=True)
+                        SP = {"asked": 0, "sentences": 0, "failed needs": []}
+                elif soft:                               # control: the same number of soft tokens with NO memory
+                    with torch.no_grad():                # content (the projector's constant) -- a gain below this
+                        ce_c = llm(ctx, proj(torch.zeros(len(soft), E_, device=dev)), ids_t)[0]   # is memory's
+                    EV["ce const"] += float(ce_c.sum())
+                    EV["ce const mem"] += float(ce_c[mk].sum())
+                else:
+                    EV["ce const"] += float(ce0.sum())
+                    EV["ce const mem"] += float(ce0[mk].sum())
                 # the perception reads the sentence into GNM (after predicting it)
                 if not nomem:
                     recent.append(read_m(text, len(sent_end)))
@@ -4910,7 +4969,8 @@ def v11_t5(steps=3000, ep_species=8):
                           f"| memory tokens ({S['mem tokens']}): alone {S['ce0 mem'] / mn:.3f}, with GNM {S['ce1 mem'] / mn:.3f} "
                           f"| queries/sentence {S['queries'] / max(1, S['sentences']):.2f}, helped {S['queries helped']}, anchor "
                           f"tries won {S['anchor tries won']}/{S['anchor tries']}, stops punished {S['stops punished']}, identity "
-                          f"tries won {S['identity tries won']}/{S['identity tries']}, reads credited {S['reads credited']} | "
+                          f"tries won {S['identity tries won']}/{S['identity tries']}, reads credited {S['reads credited']}, "
+                          f"function picks {S['function picks']} ({len(funcs.nets)} functions) | "
                           f"nodes {len(nodes)}, edges {len(edges)} | cost per hop {float(F.softplus(mem.hc)):.2f} | "
                           f"{time.time() - t0:.0f}s", flush=True)
                     S = collections.Counter()
@@ -4918,13 +4978,15 @@ def v11_t5(steps=3000, ep_species=8):
                     print("M1: training stream done; evaluation articles next (memory continues, no training)", flush=True)
             tn, mn = max(1, EV["tokens"]), max(1, EV["mem tokens"])
             print(f"M1 EVAL TOTAL ({EV['sentences']} sentences of {n_ev} held-out articles, memory = everything read "
-                  f"before) | CE all: LLM alone {EV['ce0'] / tn:.3f}, with GNM {EV['ce1'] / tn:.3f} | memory tokens "
-                  f"({EV['mem tokens']}): alone {EV['ce0 mem'] / mn:.3f}, with GNM {EV['ce1 mem'] / mn:.3f} | queries/sentence "
-                  f"{EV['queries'] / max(1, EV['sentences']):.2f}", flush=True)
+                  f"before) | CE all: LLM alone {EV['ce0'] / tn:.3f}, with GNM {EV['ce1'] / tn:.3f}, control (same soft "
+                  f"tokens, no memory content) {EV['ce const'] / tn:.3f} | memory tokens ({EV['mem tokens']}): alone "
+                  f"{EV['ce0 mem'] / mn:.3f}, with GNM {EV['ce1 mem'] / mn:.3f}, control {EV['ce const mem'] / mn:.3f} | "
+                  f"queries/sentence {EV['queries'] / max(1, EV['sentences']):.2f}", flush=True)
             ck = os.environ.get("V12_CKPT", "")
             if ck:
                 os.makedirs(ck, exist_ok=True)
                 torch.save({"ask": ask.state_dict(), "proj": proj.state_dict(), "mem": mem.state_dict(),
+                            "funcs": funcs.state_dict(), "n funcs": len(funcs.nets),
                             "lora": [p.detach()[:1].cpu() for p in G10.eparams()]},
                            os.path.join(ck, f"m1_{'nomem' if nomem else 'gnm'}.pt"))
 
