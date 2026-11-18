@@ -4891,6 +4891,7 @@ def v11_t5(steps=3000, ep_species=8):
             index, sent_end = collections.defaultdict(list), []
             S, EV = collections.Counter(), collections.Counter()
             SP = {"asked": 0, "sentences": 0, "failed needs": []}
+            DIAG = []                                    # (eval traces: what GNM fetched for sentences that need memory)
             t0 = time.time()
 
             def mem_mask(text, ids_, pos):
@@ -5004,6 +5005,25 @@ def v11_t5(steps=3000, ep_species=8):
                         ce_c = (llm(ctx, proj(torch.zeros(n_q, E_, device=dev)), ids_t)[0] if n_q else ce0)   # is memory's
                     EV["ce const"] += float(ce_c.sum())
                     EV["ce const mem"] += float(ce_c[mk].sum())
+                    # (diagnosis, log only): did GNM fetch the facts this sentence needs? memory words = the sentence's
+                    # rare words that only memory holds; a hit = the picked node's names contain one of them
+                    mw = {w for w in rare(text) if any(sent_end[j] <= pos - WIN for j in index[w])} - (
+                        rare(tk.decode(stream[max(0, pos - WIN):pos])) if pos else set())
+                    if rolls and mw:
+                        EV["sentences needing memory"] += 1
+                        picked = []
+                        An_r = rolls[best]["A_n"]
+                        for kind, ix, ia in rolls[best]["used"]:
+                            nd = edges[ix]["b"] if kind == "edge" else None
+                            nm_ = " ".join(nodes[nd]["names"][:3]).lower() if nd is not None else f"<function {ix}>"
+                            picked.append((kind, nm_, " ".join(str(n) for n in nodes[An_r[ia]]["names"][:2])
+                                           if An_r[ia] is not None else "<result>"))
+                        hit = any(w in p_[1] for w in mw for p_ in picked)
+                        EV["fetch hits"] += hit
+                        if len(DIAG) < 12:
+                            DIAG.append(f"memory words {sorted(mw)[:4]} | asked about {[p_[2] for p_ in picked]} -> picked "
+                                        f"{[p_[1][:40] for p_ in picked]} | hit {hit} | CE on memory tokens: alone "
+                                        f"{float(ce0[mk].mean()) if mk.any() else 0:.2f}, GNM {float(ce1[mk].mean()) if mk.any() else 0:.2f}")
                 # the perception reads the sentence into GNM (after predicting it)
                 if not nomem:
                     recent.append(read_m(text, len(sent_end)))
@@ -5030,7 +5050,10 @@ def v11_t5(steps=3000, ep_species=8):
                   f"before) | CE all: LLM alone {EV['ce0'] / tn:.3f}, with GNM {EV['ce1'] / tn:.3f}, control (same soft "
                   f"tokens, no memory content) {EV['ce const'] / tn:.3f} | memory tokens ({EV['mem tokens']}): alone "
                   f"{EV['ce0 mem'] / mn:.3f}, with GNM {EV['ce1 mem'] / mn:.3f}, control {EV['ce const mem'] / mn:.3f} | "
-                  f"queries/sentence {EV['queries'] / max(1, EV['sentences']):.2f}", flush=True)
+                  f"queries/sentence {EV['queries'] / max(1, EV['sentences']):.2f} | fetched a node holding a memory word: "
+                  f"{EV['fetch hits']}/{EV['sentences needing memory']} sentences that need memory", flush=True)
+            for tr_ in DIAG:
+                print(f"   FETCH {tr_}", flush=True)
             ck = os.environ.get("V12_CKPT", "")
             if ck:
                 os.makedirs(ck, exist_ok=True)
