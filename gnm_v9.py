@@ -4718,6 +4718,20 @@ def v11_t5(steps=3000, ep_species=8):
             lopt = torch.optim.AdamW([{"params": new_p, "lr": 1e-3}, {"params": G10.eparams(), "lr": 2e-4},
                                       {"params": list(reader.parameters()) + list(relm.parameters()), "lr": 1e-4}])
             lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0)), "lr": 1e-3})
+            notrain = os.environ.get("M1_NOTRAIN", "0") == "1"   # (re-read the stream and evaluate a trained M1)
+            m1_load = os.environ.get("M1_LOAD", "")
+            if m1_load:
+                ck1 = torch.load(m1_load, map_location=dev)
+                while len(funcs.nets) < ck1.get("n funcs", 1):
+                    funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0))
+                ask.load_state_dict(ck1["ask"])
+                proj.load_state_dict(ck1["proj"])
+                print(f"M1: mem keys not in the M1 checkpoint: {mem.load_state_dict(ck1['mem'], strict=False).missing_keys}",
+                      flush=True)
+                funcs.load_state_dict(ck1["funcs"])
+                for p_, v_ in zip(G10.eparams(), ck1["lora"]):
+                    p_.data[:len(v_)] = v_.to(dev)
+                print(f"M1: loaded {m1_load} ({len(funcs.nets)} functions){' -- no training' if notrain else ''}", flush=True)
             nodes, edges, outs = [], [], {}
             decide_ = learned(False)                     # identity: as trained in v12 (frozen in M1)
 
@@ -4909,7 +4923,8 @@ def v11_t5(steps=3000, ep_species=8):
                 return m
 
             for k_s, (ai, text) in enumerate(sents):
-                train = ai < len(arts) - n_ev
+                heldout = ai >= len(arts) - n_ev
+                train = not heldout and not notrain
                 ids_t = tk(" " + text)["input_ids"][:200]
                 pos = len(stream)
                 ctx = stream[-WIN:] or [tk.eos_token_id]
@@ -4946,7 +4961,7 @@ def v11_t5(steps=3000, ep_species=8):
                 S["ce0 mem"] += float(ce0[mk].sum())
                 S["ce1 mem"] += float(ce1[mk].sum())
                 S["queries"] += n_q
-                if not train:                            # the whole evaluation stream, kept apart from the windows
+                if heldout:                              # the whole evaluation stream, kept apart from the windows
                     for k_, v_ in (("tokens", len(ids_t)), ("mem tokens", int(mk.sum())), ("ce0", float(ce0.sum())),
                                    ("ce1", float(ce1.sum())), ("ce0 mem", float(ce0[mk].sum())),
                                    ("ce1 mem", float(ce1[mk].sum())), ("queries", n_q), ("sentences", 1)):
@@ -5000,7 +5015,7 @@ def v11_t5(steps=3000, ep_species=8):
                         for anc, out, fi in rolls[best]["fx"]:
                             memorize(anc, out, fi, now)
                             S["memorized"] += 1
-                if not train:                            # control: the same number of soft tokens with NO memory
+                if heldout:                              # control: the same number of soft tokens with NO memory
                     with torch.no_grad():                # content (the projector's constant) -- a gain below this
                         ce_c = (llm(ctx, proj(torch.zeros(n_q, E_, device=dev)), ids_t)[0] if n_q else ce0)   # is memory's
                     EV["ce const"] += float(ce_c.sum())
@@ -5033,7 +5048,7 @@ def v11_t5(steps=3000, ep_species=8):
                 stream.extend(ids_t)
                 if (k_s + 1) % 500 == 0 or k_s + 1 == n_tr or k_s + 1 == len(sents):
                     tn, mn = max(1, S["tokens"]), max(1, S["mem tokens"])
-                    tag = "train" if train else "EVAL"
+                    tag = "EVAL" if heldout else ("train" if train else "read")
                     print(f"M1 {tag} {k_s + 1}/{len(sents)} | CE all: LLM alone {S['ce0'] / tn:.3f}, with GNM {S['ce1'] / tn:.3f} "
                           f"| memory tokens ({S['mem tokens']}): alone {S['ce0 mem'] / mn:.3f}, with GNM {S['ce1 mem'] / mn:.3f} "
                           f"| queries/sentence {S['queries'] / max(1, S['sentences']):.2f} | RL: reward per sentence (nats saved "
