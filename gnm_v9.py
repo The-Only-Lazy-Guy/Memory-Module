@@ -4185,6 +4185,9 @@ def v11_t5(steps=3000, ep_species=8):
                 # v12h: a learned cost per hop (D6: "no step cap, a cost per step"); af / anone are unused since v12h
                 # (kept so earlier checkpoints load)
                 s_.hc = nn.Parameter(torch.tensor(0.))
+                # §1g M1 (11-19): a learned weight on an edge's age (D10: new information updates old; F6: a function's
+                # newer output overrides an older value) -- its sign is learned
+                s_.rc = nn.Parameter(torch.tensor(0.))
 
             def r(s_, rstate):
                 return F.normalize(s_.rv(rstate), dim=-1)
@@ -4663,12 +4666,22 @@ def v11_t5(steps=3000, ep_species=8):
                     s_.stop = nn.Linear(256, 1)
                     s_.ptr = nn.Sequential(nn.Linear(E_ + 256, 256), nn.Tanh(), nn.Linear(256, 1))
                     s_.need = nn.Linear(256, D12)
+                    # (11-19) a function's 2nd input: a pointer over the earlier results of this sentence, or none --
+                    # with it the firings form any computation tree, one firing = one step (user 11-14)
+                    s_.ptr2 = nn.Sequential(nn.Linear(E_ + 256, 256), nn.Tanh(), nn.Linear(256, 1))
+                    s_.none2 = nn.Parameter(torch.tensor(0.))
 
                 def step(s_, h, st, prev):
                     return s_.cell(s_.inp(torch.cat([st, prev]))[None], h[None])[0]
 
                 def anchor_logits(s_, h, A):
                     return s_.ptr(torch.cat([A, h[None].expand(len(A), -1)], 1)).squeeze(-1)
+
+                def arg2_logits(s_, h, Rv):
+                    """[none] + one per earlier result"""
+                    if not len(Rv):
+                        return s_.none2[None]
+                    return torch.cat([s_.none2[None], s_.ptr2(torch.cat([Rv, h[None].expand(len(Rv), -1)], 1)).squeeze(-1)])
             ask = Ask().to(dev)
             proj = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, ED)).to(dev)
 
@@ -4747,11 +4760,27 @@ def v11_t5(steps=3000, ep_species=8):
             def val(j):
                 return torch.stack(nodes[j]["m"]).mean(0)
 
-            def solve(anchor, a_vec, need, R_, prev):
+            def rels():
+                """every edge's relation vector: text edges from the relation words' states (mem.r); edges a function
+                made carry that function's label"""
+                if not edges:
+                    return None
+                R = torch.zeros(len(edges), D12, device=dev)
+                ti = [i for i, e in enumerate(edges) if e.get("rs") is not None]
+                if ti:
+                    R[ti] = mem.r(torch.stack([edges[i]["rs"] for i in ti]))
+                for i, e in enumerate(edges):
+                    if e.get("rl") is not None:
+                        R[i] = e["rl"]
+                return R
+
+            def solve(anchor, a_vec, need, R_, prev, now=None):
                 """GNM from the anchor, ONE pointing over two kinds of candidates: every edge within HOP hops (lookup)
-                and every function applied to (the anchor's value, the previous result) (computing, §1g F1-F5);
-                weight = relevance(need, edge relation or function label, direction) - cost per hop x hops.
-                -> (result vector, best edge's target node or None, best edge or None, best function or None)"""
+                and every function applied to (the anchor's value, its 2nd input) (computing, §1g F1-F5); weight =
+                relevance(need, edge relation or function label, direction) - cost per hop x hops + learned age weight
+                x the edge's age (D10 / F6: newer information can override older).
+                -> (result vector, best edge's target node or None, best edge or None, best function or None,
+                    that function's own output or None)"""
                 dist, front, cs = {anchor: 0}, ([anchor] if anchor is not None else []), []
                 while front:
                     nxt = []
@@ -4765,18 +4794,34 @@ def v11_t5(steps=3000, ep_species=8):
                     front = nxt
                 fo, fl = funcs.apply(a_vec, prev)
                 ft = torch.cat([need[None].expand(len(fl), -1), fl, torch.zeros(len(fl), 1, device=dev)], 1)
-                V, hp = fo, [0.] * len(fl)
+                V, hp, ag = fo, [0.] * len(fl), [0.] * len(fl)
                 if cs:
                     ft = torch.cat([torch.stack([torch.cat([need, R_[ei], torch.tensor([float(edges[ei]["dir"])], device=dev)])
                                                  for ei, _ in cs]), ft])
                     V = torch.cat([torch.stack([val(edges[ei]["b"]) for ei, _ in cs]), fo])
                     hp = [float(h_) for _, h_ in cs] + hp
-                sc = mem.aa(ft).squeeze(-1) - F.softplus(mem.hc) * torch.tensor(hp, device=dev)
+                    ag = [math.log1p(max(0, (now or 0) - edges[ei].get("sid", 0))) / 5. for ei, _ in cs] + ag
+                sc = (mem.aa(ft).squeeze(-1) - F.softplus(mem.hc) * torch.tensor(hp, device=dev)
+                      + mem.rc * torch.tensor(ag, device=dev))
                 res = (F.softmax(sc, 0)[:, None] * V).sum(0)
                 b = int(sc.argmax())
                 if b < len(cs):
-                    return res, edges[cs[b][0]]["b"], cs[b][0], None
-                return res, None, None, b - len(cs)
+                    return res, edges[cs[b][0]]["b"], cs[b][0], None, None
+                return res, None, None, b - len(cs), fo[b - len(cs)]
+
+            def memorize(anchor, out, fi, sid):
+                """computation = classification + memorization (user 11-16: "node 1 add on node 1 (transform) and
+                points to node 2"; "if cant point -> create new node"): the function's output points at an existing
+                node or creates one (identity decides), linked from the anchor by an edge whose relation is the
+                function's label. -> that node"""
+                o = out.detach()
+                j = point_m((o, f"<f{fi}>", None, o[None], o[None]))
+                if anchor is not None and anchor != j:
+                    lbl = F.normalize(funcs.labels[fi].detach(), dim=0)
+                    for dr, (u, v) in ((0, (anchor, j)), (1, (j, anchor))):
+                        outs.setdefault(u, []).append(len(edges))
+                        edges.append({"a": u, "b": v, "rs": None, "rl": lbl, "dir": dr, "sid": sid})
+                return j
 
             def llm(ctx, soft, tgt):
                 """GPT-2 + LoRA over [context][soft tokens][sentence] -> per-token CE of the sentence, and the state
@@ -4828,9 +4873,12 @@ def v11_t5(steps=3000, ep_species=8):
                 A_v = [m_ for rc in recent for _, m_, _ in rc]
                 A_n = [j for rc in recent for j, _, _ in rc]
                 A_m = [men for rc in recent for _, _, men in rc]   # the mention behind an anchor (None: a result)
+                now = len(sent_end)                      # this sentence's index (edges' age)
+                R_v = []                                 # this sentence's results (a function's 2nd input)
+                z_ = torch.zeros(E_, device=dev)
                 with torch.set_grad_enabled(train):
                     if not nomem and A_v:
-                        R_ = mem.r(torch.stack([e["rs"] for e in edges])) if edges else None
+                        R_ = rels()
                         h, prev, st = torch.zeros(256, device=dev), torch.zeros(E_, device=dev), st0
                         for q in range(KQ):
                             h = ask.step(h, st, prev)
@@ -4842,12 +4890,18 @@ def v11_t5(steps=3000, ep_species=8):
                             a_lg = ask.anchor_logits(h, torch.stack(A_v))
                             ia = int(a_lg.argmax())
                             need = F.normalize(ask.need(h), dim=-1)
-                            res, tgt_node, be, bf = solve(A_n[ia], A_v[ia], need, R_, prev)
-                            picks.append((q, a_lg, need, ia, be, bf, prev.detach()))
+                            a2_lg = ask.arg2_logits(h, torch.stack(R_v) if R_v else [])
+                            ia2 = int(a2_lg.argmax())
+                            arg2 = z_ if ia2 == 0 else R_v[ia2 - 1]
+                            res, tgt_node, be, bf, fout = solve(A_n[ia], A_v[ia], need, R_, arg2, now)
+                            picks.append((q, a_lg, need, ia, be, bf, a2_lg, ia2, arg2))
                             if bf is not None:
                                 funcs.used[bf] += 1
                                 S["function picks"] += 1
+                                tgt_node = memorize(A_n[ia], fout, bf, now)   # point-or-create + edge
+                                R_ = rels()
                             soft.append(proj(res))
+                            R_v.append(res.detach())
                             prev = res
                             A_v.append(res.detach())
                             A_n.append(tgt_node)
@@ -4877,16 +4931,25 @@ def v11_t5(steps=3000, ep_species=8):
                         base = float(ce1.mean())
                         with torch.no_grad():
                             sd = [s_.detach() for s_ in soft]
-                            for (q, a_lg, need, ia, be, bf, prev_q) in picks:
+                            for (q, a_lg, need, ia, be, bf, a2_lg, ia2, arg2_q) in picks:
                                 order = torch.argsort(a_lg.detach(), descending=True).tolist()
                                 S["anchor tries"] += 1
                                 if len(order) > 1:       # its next-best anchor for this query
-                                    res2 = solve(A_n[order[1]], A_v[order[1]], need.detach(), R_, prev_q)[0]
+                                    res2 = solve(A_n[order[1]], A_v[order[1]], need.detach(), R_, arg2_q.detach(), now)[0]
                                     sf2 = list(sd)
                                     sf2[q] = proj(res2)
                                     if float(llm(ctx, torch.stack(sf2), ids_t)[0].mean()) < base - .01:
                                         a_tg.append((a_lg, order[1]))
                                         S["anchor tries won"] += 1
+                                if bf is not None and len(a2_lg) > 1:   # its next-best 2nd input for the function
+                                    o2 = [int(i) for i in torch.argsort(a2_lg.detach(), descending=True) if int(i) != ia2][0]
+                                    res5 = solve(A_n[ia], A_v[ia], need.detach(), R_, z_ if o2 == 0 else R_v[o2 - 1], now)[0]
+                                    sf5 = list(sd)
+                                    sf5[q] = proj(res5)
+                                    S["2nd input tries"] += 1
+                                    if float(llm(ctx, torch.stack(sf5), ids_t)[0].mean()) < base - .01:
+                                        a_tg.append((a2_lg, o2))
+                                        S["2nd input tries won"] += 1
                                 wo = [s_ for i_, s_ in enumerate(sd) if i_ != q]   # this query removed
                                 ce_wo = float((llm(ctx, torch.stack(wo), ids_t)[0] if wo else ce0).mean())
                                 helped = ce_wo > base + .01
@@ -4906,7 +4969,7 @@ def v11_t5(steps=3000, ep_species=8):
                                     sc_id = relm(A_m[ia], nodes)[:-1]
                                     alt = [int(i) for i in torch.argsort(sc_id, descending=True) if int(i) != A_n[ia]][:1]
                                     if alt:
-                                        res4 = solve(alt[0], val(alt[0]), need.detach(), R_, prev_q)[0]
+                                        res4 = solve(alt[0], val(alt[0]), need.detach(), R_, arg2_q.detach(), now)[0]
                                         S["identity tries"] += 1
                                         sf4 = list(sd)
                                         sf4[q] = proj(res4)
@@ -4916,8 +4979,9 @@ def v11_t5(steps=3000, ep_species=8):
                             if stopped and len(picks) < KQ:   # it stopped: would one more query have helped?
                                 need3 = F.normalize(ask.need(h_stop), dim=-1)
                                 ia3 = int(ask.anchor_logits(h_stop, torch.stack(A_v)).argmax())
-                                res3 = solve(A_n[ia3], A_v[ia3], need3, R_,
-                                             A_v[-1] if picks else torch.zeros(E_, device=dev))[0]
+                                a2s = ask.arg2_logits(h_stop, torch.stack(R_v) if R_v else [])
+                                i2s = int(a2s.argmax())
+                                res3 = solve(A_n[ia3], A_v[ia3], need3, R_, z_ if i2s == 0 else R_v[i2s - 1], now)[0]
                                 more = float(llm(ctx, torch.stack(sd + [proj(res3)]), ids_t)[0].mean()) < base - .01
                                 s_tg.append((stops[len(picks)], float(not more)))   # punish 'stop' if it would
                                 S["stops punished"] += more
