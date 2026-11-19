@@ -5995,6 +5995,53 @@ def lm_probe():
           f"{tot['oracle mem'] / m_:.3f}, random {tot['random mem'] / m_:.3f}", flush=True)
 
 
+@torch.no_grad()
+def attn_probe():
+    """D1 E9 probe (11-19, measurement only -- docs/TASK_STACK.md D1): when GPT-2 has read 'x op y =' (GSM8K, the
+    problem and the solution so far as context) and predicts what comes next, where does its attention from that
+    position go? For every layer and head: how often its most-attended earlier token (GPT-2's attention sink at position
+    0 and the position itself left out) is an operand token, and how often both operands are among its top 3; the same
+    for the head average of each layer. Chance = operand tokens / earlier tokens. The regex that finds the operands is
+    the measurement only, never a model input."""
+    tk, M = lm()
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio")
+    arts = json.load(open(os.path.join(here, "gsm8k_test.json"), encoding="utf-8"))[:int(os.environ.get("AP_N", "300"))]
+    L_, H_ = M.config.n_layer, M.config.n_head
+    one, both = torch.zeros(L_ + 1, H_ + 1), torch.zeros(L_ + 1, H_ + 1)
+    n, chance = 0, 0.
+    num = r"(\d[\d,]*(?:\.\d+)?)"
+    for a in arts:
+        text = " " + " ".join(a["text"])
+        for m in re.finditer(num + r"\s*[-+*/x]\s*" + num + r"\s*=", text):
+            enc = tk(text[:m.end()], return_offsets_mapping=True)
+            ids, offs = enc["input_ids"][-1024:], enc["offset_mapping"][-1024:]
+            o1 = [i for i, (s, e) in enumerate(offs) if s < m.end(1) and e > m.start(1)]
+            o2 = [i for i, (s, e) in enumerate(offs) if s < m.end(2) and e > m.start(2)]
+            if not o1 or not o2 or len(ids) < 4:
+                continue
+            att = torch.stack([x[0, :, -1, :] for x in M(input_ids=torch.tensor([ids], device=dev),
+                                                          output_attentions=True).attentions]).float().cpu()   # (L, H, T)
+            att = torch.cat([att, att.mean(1, keepdim=True)], 1)                                  # (+ head average)
+            att = torch.cat([att, att.mean(0, keepdim=True)], 0)                                  # (+ layer average)
+            att[:, :, 0] = att[:, :, -1] = -1.
+            top = att.topk(3, -1).indices                                                          # (L+1, H+1, 3)
+            in1, in2 = torch.tensor(o1), torch.tensor(o2)
+            one += (top[..., :1, None] == torch.cat([in1, in2])).any(-1).any(-1).float()
+            both += ((top[..., None] == in1).any(-1).any(-1) & (top[..., None] == in2).any(-1).any(-1)).float()
+            n += 1
+            chance += (len(o1) + len(o2)) / max(1, len(ids) - 2)
+    one, both = one / max(1, n), both / max(1, n)
+    print(f"ATTN probe: {n} 'x op y =' points in {len(arts)} held-out GSM8K problems; chance that a random earlier token "
+          f"is an operand {chance / max(1, n):.3f}", flush=True)
+    for l in range(L_ + 1):
+        h = int(one[l, :H_].argmax())
+        print(f"ATTN layer {'avg' if l == L_ else l}: head average -> top-1 is an operand {one[l, H_]:.2f}, both operands "
+              f"in top-3 {both[l, H_]:.2f} | best head {h}: {one[l, h]:.2f} / {both[l, h]:.2f}", flush=True)
+    bl, bh = divmod(int(both[:L_, :H_].argmax()), H_)
+    print(f"ATTN best head for both operands in top-3: layer {bl} head {bh}: {both[bl, bh]:.2f} (top-1 operand "
+          f"{one[bl, bh]:.2f})", flush=True)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("task", nargs="?", default="e1")
@@ -6026,6 +6073,9 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "lmprobe":                    # §1g M0: headroom of memory for GPT-2 on real text (measurement)
         lm_probe()
+        raise SystemExit
+    if a.task == "attnprobe":                  # D1 E9: where GPT-2 looks from 'x op y =' (measurement)
+        attn_probe()
         raise SystemExit
     if a.task == "v11t3":
         v11_t3()
