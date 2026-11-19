@@ -5650,13 +5650,31 @@ def v11_t5(steps=3000, ep_species=8):
                         break
                 return out
 
+            def forms(node):
+                """E20 (11-20): a result's word in each surface form the LLM writes it in -- the token(s) where it was
+                stated, and the word with / without a leading space (' 24' and '24' are different tokens; the D1 check
+                compares words, tword). e27 windows 8,000-14,500: the policy's result was the computed number (by word)
+                34-57 times per window, the exact token the LLM needed was among its results only 15-38 times -- a
+                value stated after '$' is '24', the same value after '= ' is ' 24'. -> [token id lists]"""
+                n_ = nodes[node]
+                fs = [list(n_["ids"])]
+                w = n_["names"][0]
+                if w.strip():
+                    for t_ in (" " + w, w):
+                        ids_ = tk(t_)["input_ids"]
+                        if ids_ and ids_ not in fs:
+                            fs.append(ids_)
+                return fs
+
             def to_llm(res):
                 """T1 + T11: each result -> what the LLM's cross-attention reads: its name-token embeddings when its node
-                came from text (exact; forward only), and its latent as a soft vector (carries the gradient)"""
+                came from text (exact, in each surface form -- E20; forward only), and its latent as a soft vector
+                (carries the gradient)"""
                 parts = []
                 for tok, node in res:
                     if TOKS and node is not None and nodes[node]["ids"]:   # (a stored new value has no tokens)
-                        parts.append(Wte(torch.tensor(nodes[node]["ids"], dtype=torch.long, device=dev)).float())
+                        for ids_ in forms(node):
+                            parts.append(Wte(torch.tensor(ids_, dtype=torch.long, device=dev)).float())
                     parts.append(tok[None])
                 return torch.cat(parts)
 
@@ -5951,7 +5969,10 @@ def v11_t5(steps=3000, ep_species=8):
                             cost = cost + c_
                             n_q += nl_
                             if ck[b]:                    # (benchmark measurement: did a result name the computed number?)
-                                hit_c = any(n_ is not None and nodes[n_]["ids"][:1] == ids_t[b:b + 1] for _, n_ in res)
+                                # (the exact token the LLM needs is among its results -- E20: in any surface form)
+                                hit_c = any(n_ is not None and nodes[n_]["ids"] and any(f_[:1] == ids_t[b:b + 1]
+                                                                                       for f_ in forms(n_))
+                                            for _, n_ in res)
                                 for D_ in ((S, EV) if heldout else (S,)):
                                     D_["comp segs"] += 1
                                     D_["comp hits"] += hit_c
