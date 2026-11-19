@@ -4656,7 +4656,7 @@ def v11_t5(steps=3000, ep_species=8):
             TOKN = os.environ.get("M1_TOKNODES", "1") == "1"   # T10: every read token is also a node
             GA = int(os.environ.get("M1_ACCUM", "8"))
             SEGMAX, NSEG = int(os.environ.get("M1_SEG", "24")), int(os.environ.get("M1_MAXSEG", "4"))
-            NF = int(os.environ.get("M1_FUNCS", "16"))
+            NF = int(os.environ.get("M1_FUNCS", "24"))
             REFRESH = int(os.environ.get("M1_REFRESH", "1000"))
             wds = lambda s: {w.lower() for w in _re.findall(r"[A-Za-z][A-Za-z\-]{3,}", s)}
             dfm = collections.Counter(w for a in arts for w in wds(" ".join(a["text"])))
@@ -4842,7 +4842,9 @@ def v11_t5(steps=3000, ep_species=8):
                     # C1a: what a firing gives when its memory holds no key for the inputs (unknown -- no value is made up)
                     s_.unk = nn.Parameter(torch.zeros(E_))
                     # C1: a function is pointed at by the relevance of the need to its label (cosine x this sharpness)
+                    # plus whether its memory points at all (it holds the exact key = it knows the answer)
                     s_.ft = nn.Parameter(torch.tensor(10.))
+                    s_.hb = nn.Parameter(torch.tensor(3.))
 
             class Funcs(nn.Module):
                 """C1a -- computing = the user's classification + memorization (11-16: "node 1 add on node 1 (transform)
@@ -5077,12 +5079,15 @@ def v11_t5(steps=3000, ep_species=8):
                     # by cosine; the C1 smoke 11-19 with an MLP score: 16 functions created, function 0 held 502 of
                     # 555 keys -- a function created on confusion attracted nothing, operators stayed mixed)
                     fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
-                    C_l.append(solver.ft * (fl @ nd))
                     fn_ = [None] * len(fl)
                     if Dc is not None and Dy is not None:
                         for fi in range(len(fl)):
                             k_ = int(funcs.find(fi, funcs.key(fi, Dc, Dy))[0])
                             fn_[fi] = funcs.value(fi, k_)[2] if k_ >= 0 else None
+                    # (C1 run b 11-19: with the score from the need alone, a fact was found only when the pick landed
+                    # on the one function it had been written to -- 1-5 of ~200 computed numbers named per window)
+                    C_l.append(solver.ft * (fl @ nd) + solver.hb * torch.tensor([float(j_ is not None) for j_ in fn_],
+                                                                                 device=dev))
                     C_v.append(torch.stack([nodes[j_]["z"] if j_ is not None else solver.unk for j_ in fn_]))
                     C_m += [("func", fi, fn_[fi]) for fi in range(len(fl))]
                     lg_c = torch.cat(C_l)
@@ -5300,6 +5305,8 @@ def v11_t5(steps=3000, ep_species=8):
                     rec = None
                     if q == 0:                           # (C1g: the numbers of this prefix it could point at, its logits)
                         rec = rec0 = {"anchor": al, "arg2": a2l, "need": need.detach(),
+                                      "anchor_name": CM[ia][1] if CD[ia] is not None else None,
+                                      "arg2_name": CM[i2 - 1][1] if i2 > 0 and CD[i2 - 1] is not None else None,
                                       "cands": [(i, d_, CM[i][1]) for i, d_ in enumerate(CD) if d_ is not None and A_pre[i]]}
                     t_ = [] if tr is not None and ks == 0 else None
                     v, node, used = solve(men, need, train, now=now, tr=t_, fwd=ks == 0, Dm=CD[ia],
@@ -5431,11 +5438,10 @@ def v11_t5(steps=3000, ep_species=8):
                   dont rely to LLM)"): for each segment that starts with a number z, GNM searches its OWN memory as it was
                   before this sentence for a question among its first query's candidates that answers z; if one does,
                   the first query imitates it (anchor, 2nd input, that function, go) -- its own right trace (D7);
-                - C1f, remember (one shot, no gradient): the two numbers right before z in the sentence are written
-                  (x, y) -> z into that function, else into the one the context routes to (the function pick's
-                  preference for this need). A computation that recurs is counted again;
-                - C1h: if the routed function holds the pair with another value stated >= 2 times, it is confused (e.g.
-                  '+' and '-' facts in one function) -> the model creates a new function (label = this need) for it.
+                - C1f, remember (one shot, no gradient): 'x op y = z' -- the two numbers right before z in the sentence
+                  are written (x, y) -> z into the function the operator symbol between them names (the perception
+                  reads the symbol as it reads digits; proposal). A computation that recurs is counted again;
+                - C1h: a symbol no function names yet -> the model creates a function for it (label = this need).
                 -> the local loss or None"""
                 runs, L_, todo = num_runs(ids_t), [], []
                 for b, rec in recs:
@@ -5447,40 +5453,48 @@ def v11_t5(steps=3000, ep_species=8):
                     hit = hindsight(rec, zc)
                     if hit is not None:
                         C1S["memory could answer"] += 1
+                        # (measurement: did the first query point at that pair -- by value, either order?)
+                        vals = {i: c_ for i, _, c_ in rec["cands"]}
+                        pv = (rec["anchor_name"], rec["arg2_name"])
+                        C1S["it pointed at that pair"] += collections.Counter(pv) == collections.Counter((vals[hit[2]], vals[hit[3]]))
                         if train and "pick0" in rec:
                             _, fi, xi, yi = hit
                             pi = next(i for i, m_ in enumerate(rec["cm0"]) if m_[0] == "func" and m_[1] == fi)
                             T_ = lambda i: torch.tensor([i], device=dev)
                             L_.append(F.cross_entropy(rec["anchor"][None], T_(xi)) + F.cross_entropy(rec["arg2"][None], T_(yi + 1))
                                       + F.cross_entropy(rec["pick0"][None], T_(pi)) + F.cross_entropy(rec["halt0"][None], T_(0)))
-                    todo.append((b, rec, zc, rn[st[0]], hit[1] if hit is not None else None))
-                for b, rec, zc, znode, fh in todo:
+                    todo.append((b, rec, zc, rn[st[0]]))
+                for b, rec, zc, znode in todo:
                     pre = [r for r in runs if r[1] < b]
-                    # (the two numbers right before the stated value, as written: 'x op y = z'. Offline check on the
-                    # run's GSM8K split: writing every pair of earlier numbers instead gave 7,173 confused keys and
-                    # 151 wrong held-out answers vs 486 / 83 with this rule, at the same coverage -- docs/TASK_STACK.md)
-                    P = [(pre[-2][2], pre[-1][2])] if len(pre) >= 2 else []
-                    if not P:
+                    if len(pre) < 2:
                         continue
-                    fi = fh
-                    if fi is None:                       # (no function answered: the function this need points at)
-                        with torch.no_grad():
-                            fi = int((F.normalize(torch.stack(list(funcs.labels)), dim=-1) @ rec["need"]).argmax())
-                    Dx, Dy = torch.stack([numD(x) for x, _ in P]), torch.stack([numD(y) for _, y in P])
-                    ks, _ = funcs.find(fi, funcs.key(fi, Dx, Dy))
-                    # (C1h only when the function was a guess: one that answered z is right for this context)
-                    if fh is None and len(funcs.labels) < NF and any(
-                            k_ >= 0 and funcs.value(fi, k_)[0] != zc and funcs.value(fi, k_)[1] >= 2 for k_ in ks.tolist()):
-                        lopt.add_param_group({"params": funcs.spawn(rec["need"]), "lr": 1e-3})
-                        print(f"M1: function {len(funcs.labels) - 1} created: function {fi} held a pair before '{zc}' with "
-                              f"another value stated twice or more (confusion)", flush=True)
-                        fi = len(funcs.labels) - 1
+                    # 'x op y = z': the two numbers right before the stated value, as written (offline check on the
+                    # run's GSM8K split: writing every pair of earlier numbers instead gave 7,173 confused keys and
+                    # 151 wrong held-out answers vs 486 / 83 with this rule -- docs/TASK_STACK.md), into the function
+                    # their operator symbol names. (C1 runs a-b 11-19: routed by the need, every function held mixed
+                    # operators -- e.g. '*' 19%, '+' 16%, '-' 13% -- so the routing had no consistent target to learn)
+                    btw = tk.decode(ids_t[pre[-2][1] + 1:pre[-1][0]])
+                    op = _re.sub(r"[A-Za-z\s$]", "", btw) or btw.strip()
+                    if not op:
+                        continue
+                    fi = OPFN.get(op)
+                    if fi is None:                       # (C1h: a symbol no function has yet -> the model creates one)
+                        free = [i for i in range(len(funcs.labels)) if i not in OPFN.values()]
+                        if free:
+                            fi = free[0]
+                        elif len(funcs.labels) < NF:
+                            lopt.add_param_group({"params": funcs.spawn(rec["need"]), "lr": 1e-3})
+                            fi = len(funcs.labels) - 1
+                        else:
+                            continue
+                        OPFN[op] = fi
                         C1S["functions created"] += 1
-                    for q_ in funcs.key(fi, Dx, Dy):
-                        funcs.write(fi, q_, zc, znode)
-                    C1S["facts written"] += len(P)
-                    # (measurement only: the text between the two numbers -- does a function hold one operator?)
-                    OPF[fi][tk.decode(ids_t[pre[-2][1] + 1:pre[-1][0]]).strip()[:8] or "(none)"] += 1
+                        print(f"M1: function {fi} = the one '{op}' names (first fact: "
+                              f"'{tk.decode(ids_t[pre[-2][0]:b]).strip()} {zc}')", flush=True)
+                    q_ = funcs.key(fi, numD(pre[-2][2]), numD(pre[-1][2]))
+                    funcs.write(fi, q_, zc, znode)
+                    C1S["facts written"] += 1
+                    OPF[fi][op[:8]] += 1                 # (measurement: what each function holds)
                 return torch.stack(L_).mean() if L_ else None
 
             # ---------------------------------------------------------------- the stream
@@ -5490,6 +5504,7 @@ def v11_t5(steps=3000, ep_species=8):
             st_fb = [None]                               # the LLM's state after the last segment with GNM's results (U7)
             C1S = collections.Counter()                  # (C1 measurements of the current sentence)
             OPF = collections.defaultdict(collections.Counter)   # (measurement: function -> text between its operands)
+            OPFN = {}                                    # (C1h: operator symbol -> the function it names)
             t0 = time.time()
 
             def mem_mask(text, ids_, pos):
@@ -5517,7 +5532,8 @@ def v11_t5(steps=3000, ep_species=8):
                         f"{D_['sp hits']}/{D_['sp n']} hit (greedy {D_['sp greedy hits']}), numbers {D_['sp num hits']}/{D_['sp num n']} | a result named "
                         f"the computed number: {D_['comp hits']}/{D_['comp segs']} segments | C1: numbers stated where GNM "
                         f"was asked {D_['stated numbers']}, its memory held a question among its candidates that answers "
-                        f"them {D_['memory could answer']}, fired functions found their key {D_['function hits']}/"
+                        f"them {D_['memory could answer']} (its first query pointed at that pair "
+                        f"{D_['it pointed at that pair']}), fired functions found their key {D_['function hits']}/"
                         f"{D_['function firings']}")
 
             for k_s, (ai, text) in enumerate(sents):
