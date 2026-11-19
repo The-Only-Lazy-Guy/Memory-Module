@@ -5007,15 +5007,19 @@ def v11_t5(steps=3000, ep_species=8):
                 with torch.no_grad():
                     return (PZb["c"][:PZb["n"]] @ ip(z)).topk(min(k, len(nodes))).indices.tolist()
 
-            def solve(men, need, train, now=0, tr=None, fwd=True, Dm=None, Dy=None, rec=None):
+            def solve(men, need, train, now=0, tr=None, fwd=True, Dm=None, Dy=None, rec=None, force=False):
                 """GNM answers one query: identity (the anchor jumps to the most relevant node, or stays itself) -> up to
                 KS firings (follow an edge, or fire a function = ONE lookup in its own memory, C1a) -> learned halt (also
                 before the first firing: the node identity found can be the answer).
                 Dm / Dy: the definitions of the anchor and of the 2nd input (D1 E5: exact text; None = no input). After a
                 firing, the node it gave is the next firing's first input (C1c).
-                fwd=False: after the perception's own stop (exploration only) -- no credit, no counts.
+                fwd=False: an exploration try -- no credit, no counts.
+                force: an exploration try computes -- it fires at least once whatever the halt says (the halt's logits
+                are recorded with 'go', so a try the text confirms teaches the policy to go; D1 smoke 11-19: tries that
+                used the policy's own halt stopped firing -- picks per 500 sentences 520 -> 181 -> 26 -> 9 -> 0).
                 rec: filled with the query's own trace -- every decision as (logits, the choice taken) -- and each taken
-                function firing as (function, key, the node it pointed at or None) for D1 (check, imitation, remember).
+                function firing as (function, D(input 1), D(input 2), the node it pointed at or None) for D1 (check,
+                imitation, remember).
                 men = (latent, name, -, its token states, the text up to it). -> (value, node it ends on, used)"""
                 nb = near(men[0])
                 lg = relm(men, [nodes[j] for j in nb]) if nb else relm.create[None] + relm.cq(men[0])
@@ -5032,6 +5036,8 @@ def v11_t5(steps=3000, ep_species=8):
                 for s_i in range(KS):
                     hl = torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v]))])
                     kh, wh = pick(hl, train)
+                    if force and s_i == 0:               # (an exploration try computes)
+                        kh, wh = 0, torch.tensor([1., 0.], device=dev)
                     if rec is not None:
                         rec["picks"].append((hl, kh))
                     # T12 (11-19: halting before any firing took over -- 'go' got no gradient once 'halt' was picked,
@@ -5069,7 +5075,10 @@ def v11_t5(steps=3000, ep_species=8):
                     C_v.append(torch.stack([nodes[j_]["z"] if j_ is not None else solver.unk for j_ in fn_]))
                     C_m += [("func", fi, fn_[fi]) for fi in range(len(fl))]
                     lg_c = torch.cat(C_l)
-                    k, w = pick(lg_c, train)
+                    # (a try's first firing is a computation: it picks among the functions; the pick is recorded over all
+                    # candidates, so a right try teaches the policy that function over the edges)
+                    nfe = len(C_m) - len(fl)
+                    k, w = pick(torch.cat([lg_c[:nfe] - 1e4, lg_c[nfe:]]) if force and s_i == 0 else lg_c, train)
                     if rec is not None and taken:
                         rec["picks"].append((lg_c, k))
                     o = w @ torch.cat(C_v)
@@ -5239,27 +5248,29 @@ def v11_t5(steps=3000, ep_species=8):
             def ask_seg(st0, A_lat, A_men, A_D, train, now, tr=None):
                 """T5 + D1: the perception asks on its OWN state (no LLM forward between queries); anchor and 2nd input
                 point at recently read spans / tokens or earlier results; a fired function keys on their definitions.
-                D1 E1 (user 11-19: "when input come for training, it can help explore, basically doing computation
-                multiple times (the multi query thing)"): while training it asks KT queries -- the computation done several
-                times, each sampled from its own beliefs, each seeing the earlier results; the LLM gets the results its
-                own stop would have given (the later ones weight 0 in the forward). At eval: its own stop (<= KQ).
-                -> ([(soft token, node)], expected number of queries, number asked, each query's own trace)"""
+                The policy (what the LLM gets): queries autoregressively until its own stop (<= KQ); in training a
+                'stop' still computes that query for the gradient, with forward weight 0 (T12).
+                D1 E1 exploration (user 11-19: "when input come for training, it can help explore, basically doing
+                computation multiple times (the multi query thing)"): while training, KT more samples of the FIRST
+                question from the same state -- N rollouts of it (user 11-03 "N rollouts, best = target"). Each try
+                computes: it takes a real 2nd input and fires once (`force`), drawn from the perception's own beliefs
+                without the 'do nothing' options. Tries never reach the LLM; the text checks them (explore_after).
+                (D1 smoke 11-19: with tries on the policy's own halt / 'no 2nd input', the CE taught the policy that
+                doing nothing is safest and the tries stopped computing -- picks 520 -> 0 per 500 sentences)
+                -> ([(soft token, node)], expected number of queries, number asked, every query's and try's trace)"""
                 h, prev = torch.zeros(256, device=dev), torch.zeros(E_, device=dev)
-                res, cost, R_l, R_m, R_D, recs_q, alive, n_pol = [], 1., [], [], [], [], None, 0
-                explore = train and torch.is_grad_enabled()
-                for q in range(KT if explore else KQ):
+                res, cost, R_l, R_m, R_D, recs_q, h0 = [], 1., [], [], [], [], None
+                for q in range(KQ):
                     h = ask.step(h, st0, prev)
-                    rec = {"picks": [], "fired": [], "q": q}
+                    h0 = h if q == 0 else h0
+                    gw, ks = None, 0
+                    rec = {"picks": [], "fired": [], "pol": True}
                     if q > 0:
                         s_lg = torch.cat([torch.zeros(1, device=dev), ask.stop(h)])
                         cost = cost + F.softmax(s_lg, 0)[0]
                         ks, gw = pick(s_lg, train)
-                        rec["stop"] = (s_lg, ks)
-                        if ks == 1 and not explore:
+                        if ks == 1 and not (train and torch.is_grad_enabled()):
                             break
-                        alive = gw[0] if alive is None else alive * gw[0]   # (0 after its own stop: exploration only)
-                    pol = alive is None or float(alive) > .5
-                    rec["pol"] = pol
                     CL = torch.stack(A_lat + R_l)
                     CM = A_men + R_m
                     CD = A_D + R_D
@@ -5272,26 +5283,42 @@ def v11_t5(steps=3000, ep_species=8):
                     i2, w2 = pick(a2l, train)
                     rec["picks"].append((a2l, i2))
                     rec["need"] = need.detach()
-                    t_ = [] if tr is not None and pol else None
-                    v, node, used = solve(men, need, train, now=now, tr=t_, fwd=pol, Dm=CD[ia],
+                    t_ = [] if tr is not None and ks == 0 else None
+                    v, node, used = solve(men, need, train, now=now, tr=t_, fwd=ks == 0, Dm=CD[ia],
                                           Dy=CD[i2 - 1] if i2 > 0 else None, rec=rec)
+                    if ks == 1:                          # (T12: the 'stop' branch, in the memory with weight 0)
+                        res.append((gw[0] * proj(v), None))
+                        break
                     rec["result"] = node
                     recs_q.append(rec)
                     if t_ is not None:
                         tr.append(f"q{q + 1} (2nd input {'none' if i2 == 0 else repr(CM[i2 - 1][1])}): " + " ; ".join(t_))
-                    if pol:
-                        for u in used:
-                            S["edge picks" if u[0] == "edge" else "function picks"] += 1
-                            if u[0] == "func":           # (measurement: a fired function found the key or not)
-                                C1S["function firings"] += 1
-                                C1S["function hits"] += u[2] is not None
-                    # (after its own stop a result is exploration: weight 0 and no tokens for the LLM)
-                    res.append((proj(v) if alive is None else alive * proj(v), node if pol else None))
-                    n_pol += pol
+                    for u in used:
+                        S["edge picks" if u[0] == "edge" else "function picks"] += 1
+                        if u[0] == "func":               # (measurement: a fired function found the key or not)
+                            C1S["function firings"] += 1
+                            C1S["function hits"] += u[2] is not None
+                    res.append((proj(v) if gw is None else gw[0] * proj(v), node))
                     R_l.append(v)
                     R_m.append((v, "<result>", None, v[None], v[None]))
                     R_D.append(nodes[node].get("D") if node is not None else None)
                     prev = v
+                n_pol = len(R_l)
+                if train and torch.is_grad_enabled() and h0 is not None and len(A_lat) > 1:   # (D1 E1: the tries)
+                    CL0 = torch.stack(A_lat)
+                    al0, need0 = ask.anchor_logits(h0, CL0), F.normalize(ask.need(h0), dim=-1)
+                    for _ in range(KT):
+                        rec = {"picks": [], "fired": [], "pol": False, "need": need0.detach()}
+                        ia, wa = pick(al0, train)
+                        rec["picks"].append((al0, ia))
+                        a2l = ask.arg2_logits(h0, wa @ CL0, CL0)
+                        j2, _ = pick(a2l[1:], train)     # (a try takes a real 2nd input)
+                        rec["picks"].append((a2l, j2 + 1))
+                        _, node, used = solve((wa @ CL0,) + tuple(A_men[ia][1:]), need0, train, now=now, fwd=False,
+                                              Dm=A_D[ia], Dy=A_D[j2], rec=rec, force=True)
+                        rec["result"] = node
+                        recs_q.append(rec)
+                        C1S["tries fired"] += any(u[0] == "func" for u in used)
                 return res, cost, n_pol, recs_q
 
             def to_llm(res):
@@ -5375,8 +5402,8 @@ def v11_t5(steps=3000, ep_species=8):
                   after that point, and that word was not in view (not in the recent text the perception could point at)
                   -- GNM is right when it supplies what could not be copied (user 11-16: "the model know its mistakes
                   and a update is local too (signal dont rely to LLM)");
-                - E3 a right query is the target for all its own picks, and the stop for right after it -- its own right
-                  trace (D7; user 11-03 "N rollouts, best = target");
+                - E3 a right query or try is the target for all its own picks -- its own right trace (D7; user 11-03 "N
+                  rollouts, best = target"); a right try teaches the policy's first question;
                 - E4 remember (one shot, no gradient): a firing that pointed at nothing gets that word (user 11-16 "if
                   cant point -> create new node", T4 open slots filled by later reading); a value the text contradicts
                   is outcounted, and a function that had it stated twice or more is confused -> the model creates a new
@@ -5400,11 +5427,8 @@ def v11_t5(steps=3000, ep_species=8):
                     C1S["segments with a right query"] += bool(right)
                     C1S["... one of them before its own stop"] += any(r["pol"] for r in right)
                     if train and right:
-                        jr = min(r["q"] for r in right)
                         for r in right:
                             L_ += [F.cross_entropy(lg_[None], T_(k_)) for lg_, k_ in r["picks"]]
-                        L_ += [F.cross_entropy(r["stop"][0][None], T_(int(r["q"] == jr + 1)))
-                               for r in recs_q if "stop" in r and r["q"] <= jr + 1]
                     for r in recs_q:
                         # (only the firing that gave the query's answer is judged -- an earlier one in a chain was a step)
                         for fi, Dx, Dy, gave in r["fired"][-1:] if r["fired"] and r["fired"][-1][3] == r["result"] else []:
@@ -5454,9 +5478,10 @@ def v11_t5(steps=3000, ep_species=8):
                         f"{D_['sp hits']}/{D_['sp n']} hit (greedy {D_['sp greedy hits']}), numbers {D_['sp num hits']}/{D_['sp num n']} | a result named "
                         f"the computed number: {D_['comp hits']}/{D_['comp segs']} segments | D1: new words the text "
                         f"stated where GNM was asked {D_['new words stated where GNM was asked']}, segments with a right "
-                        f"query {D_['segments with a right query']} (one before its own stop "
-                        f"{D_['... one of them before its own stop']}; right queries {D_['right queries']}), fired "
-                        f"functions found their key {D_['function hits']}/{D_['function firings']}")
+                        f"query or try {D_['segments with a right query']} (a policy query among them "
+                        f"{D_['... one of them before its own stop']}; right ones {D_['right queries']}), tries that "
+                        f"fired a function {D_['tries fired']}, the policy's fired functions found their key "
+                        f"{D_['function hits']}/{D_['function firings']}")
 
             for k_s, (ai, text) in enumerate(sents):
                 heldout = ai >= len(arts) - n_ev
