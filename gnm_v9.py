@@ -4837,6 +4837,8 @@ def v11_t5(steps=3000, ep_species=8):
                     s_.part = nn.Parameter(F.normalize(torch.randn(D12), dim=0))
                     # C1a: what a firing gives when its memory holds no key for the inputs (unknown -- no value is made up)
                     s_.unk = nn.Parameter(torch.zeros(E_))
+                    # C1: a function is pointed at by the relevance of the need to its label (cosine x this sharpness)
+                    s_.ft = nn.Parameter(torch.tensor(10.))
 
             class Funcs(nn.Module):
                 """C1a -- computing = the user's classification + memorization (11-16: "node 1 add on node 1 (transform)
@@ -5067,10 +5069,11 @@ def v11_t5(steps=3000, ep_species=8):
                         C_m += [("edge", e) for e in es]
                     # C1a: every function is ONE lookup in its own memory: bind(atom, D(focus), D(2nd input)) -> the
                     # exact key's node (the value the text stated), else unknown; functions compete with edges in the
-                    # same pick by their label's relevance to the need
+                    # same pick. A function is pointed at by the relevance of the need to its label (classification
+                    # by cosine; the C1 smoke 11-19 with an MLP score: 16 functions created, function 0 held 502 of
+                    # 555 keys -- a function created on confusion attracted nothing, operators stayed mixed)
                     fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
-                    C_l.append(mem.aa(torch.cat([nd[None].expand(len(fl), -1), fl, torch.zeros(len(fl), 1, device=dev)],
-                                                1)).squeeze(-1))
+                    C_l.append(solver.ft * (fl @ nd))
                     fn_ = [None] * len(fl)
                     if Dc is not None and Dy is not None:
                         for fi in range(len(fl)):
@@ -5452,11 +5455,9 @@ def v11_t5(steps=3000, ep_species=8):
                     if not P:
                         continue
                     fi = fh
-                    if fi is None:                       # (no function answered: the context's own routing)
+                    if fi is None:                       # (no function answered: the function this need points at)
                         with torch.no_grad():
-                            fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
-                            fi = int(mem.aa(torch.cat([rec["need"][None].expand(len(fl), -1), fl,
-                                                       torch.zeros(len(fl), 1, device=dev)], 1)).squeeze(-1).argmax())
+                            fi = int((F.normalize(torch.stack(list(funcs.labels)), dim=-1) @ rec["need"]).argmax())
                     Dx, Dy = torch.stack([numD(x) for x, _ in P]), torch.stack([numD(y) for _, y in P])
                     ks, _ = funcs.find(fi, funcs.key(fi, Dx, Dy))
                     # (C1h only when the function was a guess: one that answered z is right for this context)
