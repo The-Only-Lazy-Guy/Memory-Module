@@ -4775,19 +4775,23 @@ def v11_t5(steps=3000, ep_species=8):
                     s_.inp = nn.Sequential(nn.LayerNorm(ED + E_), nn.Linear(ED + E_, 256))
                     s_.cell = nn.GRUCell(256, 256)
                     s_.stop = nn.Linear(256, 1)
-                    s_.ptr = nn.Sequential(nn.Linear(E_ + 256, 256), nn.Tanh(), nn.Linear(256, 1))
                     s_.need = nn.Linear(256, D12)
-                    s_.ptr2 = nn.Sequential(nn.Linear(E_ + 256, 256), nn.Tanh(), nn.Linear(256, 1))
+                    # pointers = attention scores (query from the ask's state, key from the candidate). (C1 run 11-19:
+                    # the additive MLP pointer -- score = f([candidate, state]) -- never learned to point at the
+                    # operands of 'x op y =' in 8,000 sentences; a match between what the state holds and a candidate is
+                    # a product, not a sum)
+                    s_.q1, s_.k1 = nn.Linear(256, 128), nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, 128))
+                    s_.q2, s_.k2 = nn.Linear(256, 128), nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, 128))
                     s_.none2 = nn.Parameter(torch.tensor(0.))
 
                 def step(s_, h, st, prev):
                     return s_.cell(s_.inp(torch.cat([st, prev]))[None], h[None])[0]
 
                 def anchor_logits(s_, h, A):
-                    return s_.ptr(torch.cat([A, h[None].expand(len(A), -1)], 1)).squeeze(-1)
+                    return s_.k1(A) @ s_.q1(h) / 128 ** .5
 
                 def arg2_logits(s_, h, Rv):
-                    return torch.cat([s_.none2[None], s_.ptr2(torch.cat([Rv, h[None].expand(len(Rv), -1)], 1)).squeeze(-1)])
+                    return torch.cat([s_.none2[None], s_.k2(Rv) @ s_.q2(h) / 128 ** .5])
 
             class Enc(nn.Module):
                 """T6, the perception's encoder side (U3), learned by the same signals -- no decoder (user 11-19: "why do
@@ -5244,27 +5248,29 @@ def v11_t5(steps=3000, ep_species=8):
                 sentence's prefix -> a span latent (a 4-token window; its learned token weights pick the span) + the
                 mention tuple identity needs. Never the text after the prefix (that is what the LLM predicts).
                 C1b: every number read lately is also its own candidate, with its definition (windows have none).
-                -> (latents, mention tuples, definitions)"""
+                -> (latents, mention tuples, definitions, which candidates are numbers of the current prefix)"""
                 items = list(recent_s) + ([(H_c[:t], ids_c[:t])] if t > 0 else [])
-                sps, cxs, names, Ds = [], [], [], []
-                for H, ids in items:
+                sps, cxs, names, Ds, Pre = [], [], [], [], []
+                for ii, (H, ids) in enumerate(items):
                     for p in range(len(H)):
                         e = min(len(H), p + 4)
                         sps.append(H[p:e])
                         cxs.append(H[:e])
                         names.append(tk.decode(ids[p:e]).strip())
                         Ds.append(None)
+                        Pre.append(False)
                     for a, b, c_ in num_runs(ids[:len(H)]):
                         sps.append(H[a:b + 1])
                         cxs.append(H[:b + 1])
                         names.append(c_)
                         Ds.append(numD(c_))
+                        Pre.append(t > 0 and ii == len(items) - 1)
                 if not sps:
-                    return [], [], []
+                    return [], [], [], []
                 Z = enc.thing(sps, cxs)
-                return list(Z), [(z, n_, None, s_, c_) for z, n_, s_, c_ in zip(Z, names, sps, cxs)], Ds
+                return list(Z), [(z, n_, None, s_, c_) for z, n_, s_, c_ in zip(Z, names, sps, cxs)], Ds, Pre
 
-            def ask_seg(st0, A_lat, A_men, A_D, train, now, tr=None):
+            def ask_seg(st0, A_lat, A_men, A_D, A_pre, train, now, tr=None):
                 """T5: the perception asks on its OWN state (no LLM forward between queries) until its own stop (>= 1
                 query, cold start, flagged); anchor and 2nd input point at recently read spans or earlier results.
                 C1: a function fired by a query keys on the definitions of the anchor and of the 2nd input.
@@ -5292,9 +5298,9 @@ def v11_t5(steps=3000, ep_species=8):
                     a2l = ask.arg2_logits(h, CL)
                     i2, w2 = pick(a2l, train)
                     rec = None
-                    if q == 0:                           # (C1g: what the first query could point at, and its logits)
+                    if q == 0:                           # (C1g: the numbers of this prefix it could point at, its logits)
                         rec = rec0 = {"anchor": al, "arg2": a2l, "need": need.detach(),
-                                      "cands": [(i, d_, CM[i][1]) for i, d_ in enumerate(CD) if d_ is not None]}
+                                      "cands": [(i, d_, CM[i][1]) for i, d_ in enumerate(CD) if d_ is not None and A_pre[i]]}
                     t_ = [] if tr is not None and ks == 0 else None
                     v, node, used = solve(men, need, train, now=now, tr=t_, fwd=ks == 0, Dm=CD[ia],
                                           Dy=CD[i2 - 1] if i2 > 0 else None, rec=rec)
@@ -5401,8 +5407,10 @@ def v11_t5(steps=3000, ep_species=8):
 
             def hindsight(rec, zc):
                 """C1g: which of the first query's own candidate questions (a function, input 1 and input 2 among the
-                numbers it could point at) does GNM's memory answer with zc? -> (times stated, function, anchor index,
-                2nd-input index) of the most confirmed one, or None"""
+                numbers of this sentence before zc -- what memory holds is always such a pair, C1f) does GNM's memory
+                answer with zc? -> (times stated, function, anchor index, 2nd-input index) of the most confirmed one,
+                or None. (11-19 C1 run: searching the last 2 sentences' numbers too made 93% of the targets an earlier
+                mention of the same values -- or another pair -- instead of the numbers the text computes with)"""
                 cs = rec["cands"]
                 P = [(a, b_) for a in range(len(cs)) for b_ in range(len(cs)) if a != b_]
                 if not P:
@@ -5471,6 +5479,8 @@ def v11_t5(steps=3000, ep_species=8):
                     for q_ in funcs.key(fi, Dx, Dy):
                         funcs.write(fi, q_, zc, znode)
                     C1S["facts written"] += len(P)
+                    # (measurement only: the text between the two numbers -- does a function hold one operator?)
+                    OPF[fi][tk.decode(ids_t[pre[-2][1] + 1:pre[-1][0]]).strip()[:8] or "(none)"] += 1
                 return torch.stack(L_).mean() if L_ else None
 
             # ---------------------------------------------------------------- the stream
@@ -5479,6 +5489,7 @@ def v11_t5(steps=3000, ep_species=8):
             S, EV = collections.Counter(), collections.Counter()
             st_fb = [None]                               # the LLM's state after the last segment with GNM's results (U7)
             C1S = collections.Counter()                  # (C1 measurements of the current sentence)
+            OPF = collections.defaultdict(collections.Counter)   # (measurement: function -> text between its operands)
             t0 = time.time()
 
             def mem_mask(text, ids_, pos):
@@ -5531,13 +5542,13 @@ def v11_t5(steps=3000, ep_species=8):
                     else:
                         cost = 0.
                         for (b, e) in segs(ids_t):
-                            A_lat, A_men, A_D = anchors(recent_s, H_c, ids_f, b)
+                            A_lat, A_men, A_D, A_pre = anchors(recent_s, H_c, ids_f, b)
                             tr = [] if show else None
                             # U7 (11-19 audit fix): the perception reads the LLM's state AFTER GNM's last results (the
                             # previous segment's forward with them); only the stream's very first segment reads the LLM alone
                             st_in = st_fb[0] if st_fb[0] is not None else st_all[b]
-                            res, c_, nl_, rec_ = (ask_seg(st_in, A_lat, A_men, A_D, train, len(sent_end), tr) if A_lat
-                                                  else ([], 0., 0, None))
+                            res, c_, nl_, rec_ = (ask_seg(st_in, A_lat, A_men, A_D, A_pre, train, len(sent_end), tr)
+                                                  if A_lat else ([], 0., 0, None))
                             recs.append((b, rec_))
                             cost = cost + c_
                             n_q += nl_
@@ -5638,6 +5649,9 @@ def v11_t5(steps=3000, ep_species=8):
                     print(f"   C1 memory: facts written {S['facts written']} (keys now {sum(funcs.n)} in {len(funcs.labels)} "
                           f"functions: {funcs.n}), functions created by confusion {S['functions created']} | fired "
                           f"functions found their key {S['function hits']}/{S['function firings']}", flush=True)
+                    print("   C1 what each function holds (text between the operands of its facts, all so far): " + " | ".join(
+                        f"f{fi}: " + ", ".join(f"'{o}' {n / sum(c.values()):.0%}" for o, n in c.most_common(3))
+                        for fi, c in sorted(OPF.items()) if sum(c.values()) >= 20), flush=True)
                     torch.cuda.reset_peak_memory_stats()
                     S = collections.Counter()
                 if k_s + 1 == n_tr:
