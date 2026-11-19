@@ -4673,8 +4673,17 @@ def v11_t5(steps=3000, ep_species=8):
             # two numbers are about the 3rd-9th best pair of 'x op y =')
             gV = torch.Generator().manual_seed(11)
             atomV = lambda: F.normalize(torch.randn(DV, generator=gV), dim=0).to(dev)
-            permV = [torch.randperm(DV, generator=gV).to(dev) for _ in range(2)]   # (argument position = a permutation)
+            permV = [torch.randperm(DV, generator=gV).to(dev) for _ in range(3)]   # (argument position = a permutation)
             TOKD, TSTR = {}, {}
+
+            def pair_def(dy, dz):
+                """E14 (11-20): a question's inputs after the first, bound into one definition: the 2nd alone, or the 2nd
+                and the 3rd (position = permutation), so a function keys on up to 3 things read -- 'x op y' is one key
+                (e22 + offline count: a key of the two numbers holds 2+3 and 2x3 alike; the majority of a pair's earlier
+                answers is right for only 9-21% of GSM8K computations, the same (x, op, y) was stated before for 18-59%)"""
+                if dz is None:
+                    return dy
+                return F.normalize(bindv(dy[..., permV[1]], dz[..., permV[2]]), dim=-1)
 
             def bindv(a, b):
                 """V11 binding: circular convolution (fixed math, nothing learned)"""
@@ -4759,6 +4768,10 @@ def v11_t5(steps=3000, ep_species=8):
                     s_.q2 = nn.Sequential(nn.LayerNorm(256 + E_), nn.Linear(256 + E_, 128))
                     s_.k2 = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, 128))
                     s_.none2 = nn.Parameter(torch.tensor(0.))
+                    # E14 (11-20): a 3rd input, chosen knowing the first two, or none (then the question has two)
+                    s_.q3 = nn.Sequential(nn.LayerNorm(256 + 2 * E_), nn.Linear(256 + 2 * E_, 128))
+                    s_.k3 = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, 128))
+                    s_.none3 = nn.Parameter(torch.tensor(0.))
                     # E9 (user 11-19 "sure then lets build"): the pointers start from where the LLM itself looks from the
                     # asking point -- a learned mix over its layers / heads (starts uniform; attnprobe 11-19: the head
                     # average puts an operand first 95% of the time from '=', chance 2.6%) with a learned weight each
@@ -4767,7 +4780,7 @@ def v11_t5(steps=3000, ep_species=8):
                     # (the learned part of both pointers starts at exactly 0, so they start where the LLM looks -- E10
                     # trace 11-19: a random start moved the pointers by about as much as the prior's own gaps, '?' over
                     # '48' at '48/2 =' before any training step; the key side still learns once the query moves)
-                    for l_ in (s_.q1, s_.q2[1]):
+                    for l_ in (s_.q1, s_.q2[1], s_.q3[1]):
                         nn.init.zeros_(l_.weight)
                         nn.init.zeros_(l_.bias)
 
@@ -4782,6 +4795,11 @@ def v11_t5(steps=3000, ep_species=8):
                     # its learned offset; at 0 it beat every candidate, log share < 0, so greedy never took a 2nd input)
                     return torch.cat([s_.none2[None] + s_.lam2 * p0,
                                       s_.k2(Rv) @ s_.q2(torch.cat([h, a])) / 128 ** .5 + s_.lam2 * pri])
+
+                def arg3_logits(s_, h, a, b, Rv, pri, p0=0.):
+                    # (E14: [no 3rd input] + candidates, knowing the first two; 'none' at chance level like the 2nd's)
+                    return torch.cat([s_.none3[None] + s_.lam2 * p0,
+                                      s_.k3(Rv) @ s_.q3(torch.cat([h, a, b])) / 128 ** .5 + s_.lam2 * pri])
 
             class Enc(nn.Module):
                 """T6, the perception's encoder side (U3), learned by the same signals -- no decoder (user 11-19: "why do
@@ -4957,6 +4975,7 @@ def v11_t5(steps=3000, ep_species=8):
                 return [("LLM-attention prior (E9)", [ask.e9, ask.lam1, ask.lam2]),
                         ("1st-input pointer", list(ask.q1.parameters()) + list(ask.k1.parameters())),
                         ("2nd-input pointer", list(ask.q2.parameters()) + list(ask.k2.parameters()) + [ask.none2]),
+                        ("3rd-input pointer", list(ask.q3.parameters()) + list(ask.k3.parameters()) + [ask.none3]),
                         ("asking state + need", list(ask.inp.parameters()) + list(ask.cell.parameters())
                          + list(ask.need.parameters())),
                         ("stop", list(ask.stop.parameters())),
@@ -5025,7 +5044,7 @@ def v11_t5(steps=3000, ep_species=8):
                                  "cnt": funcs.cnt, "at": funcs.at, "used": funcs.used},
                        "TOKD": TOKD, "gV": gV.get_state(), "stream": stream, "recent_s": list(recent_s),
                        "recent_p": list(recent_p), "index": dict(index), "sent_end": sent_end, "rd_hist": rd_hist,
-                       "st_fb": st_fb[0], "lopt": lopt.state_dict(),
+                       "st_fb": st_fb[0], "lopt": lopt.state_dict(), "newf": NEWF,
                        "model": {k_: m_.state_dict() for k_, m_ in M1_PARTS()},
                        "lora": [p.detach().cpu() for p in G10.eparams()]}
                 tmp = os.path.join(ck, "m1_mem.pt.tmp")
@@ -5483,6 +5502,19 @@ def v11_t5(steps=3000, ep_species=8):
                         m[:len(SP)] |= (SP[:, 0] == it) & (SP[:, 1] < e) & (SP[:, 2] > p)
                     return m
                 no_ = torch.zeros(1, dtype=torch.bool, device=dev)
+
+                def rpos(i):
+                    """where candidate i was read (an earlier result: after all text)"""
+                    return (A_sp[i][0], A_sp[i][1]) if A_sp and i < len(A_sp) else (10 ** 6, i)
+
+                def qdefs(sel, CD):
+                    """E14: a question's definitions in READING order of its inputs [(index, pointer weights)] -- a
+                    function keys on what was read in the order the text wrote it, so the policy and the tries ask the
+                    same key for the same tokens, and 'x - y' stays apart from 'y - x' -> (first, the rest bound)"""
+                    if any(CD[i] is None for i, _ in sel):
+                        return (soft_def(sel[0][1], CD) if CD[sel[0][0]] is not None else None), None
+                    ds = [soft_def(w, CD) for _, w in sorted(sel, key=lambda t: rpos(t[0]))]
+                    return ds[0], (pair_def(ds[1], ds[2] if len(ds) > 2 else None) if len(ds) > 1 else None)
                 for q in range(KQ):
                     h = ask.step(h, st0, prev)
                     h0 = h if q == 0 else h0
@@ -5506,18 +5538,28 @@ def v11_t5(steps=3000, ep_species=8):
                     a2l = ask.arg2_logits(h, wa @ CL, CL, pri, p0).masked_fill(torch.cat([no_, shares(ia, len(CL))]), -1e4)
                     i2, w2 = pick(a2l, train)
                     rec["picks"].append((a2l, i2))
+                    sel = [(ia, wa)]
+                    if i2 > 0:                           # (E14: a 3rd input, knowing the first two, or none)
+                        sel.append((i2 - 1, w2[1:]))
+                        a3l = ask.arg3_logits(h, wa @ CL, w2[1:] @ CL, CL, pri, p0).masked_fill(
+                            torch.cat([no_, shares(ia, len(CL)) | shares(i2 - 1, len(CL))]), -1e4)
+                        i3, w3 = pick(a3l, train)
+                        rec["picks"].append((a3l, i3))
+                        if i3 > 0:
+                            sel.append((i3 - 1, w3[1:]))
                     rec["need"] = need.detach()
+                    rec["asked"] = tuple(i for i, _ in sel)
+                    Dm_, Dy_ = qdefs(sel, CD)
+                    rec["qd"] = (Dm_.detach() if Dm_ is not None else None, Dy_.detach() if Dy_ is not None else None)
                     t_ = [] if tr is not None and ks == 0 else None
-                    v, node, used = solve(men, need, train, now=now, tr=t_, fwd=ks == 0,
-                                          Dm=soft_def(wa, CD) if CD[ia] is not None else None,
-                                          Dy=soft_def(w2[1:], CD) if i2 > 0 and CD[i2 - 1] is not None else None, rec=rec)
+                    v, node, used = solve(men, need, train, now=now, tr=t_, fwd=ks == 0, Dm=Dm_, Dy=Dy_, rec=rec)
                     if ks == 1:                          # (T12: the 'stop' branch, in the memory with weight 0)
                         res.append((gw[0] * proj(v), None))
                         break
                     rec["result"] = node
                     recs_q.append(rec)
                     if t_ is not None:
-                        tr.append(f"q{q + 1} (2nd input {'none' if i2 == 0 else repr(CM[i2 - 1][1])}): " + " ; ".join(t_))
+                        tr.append(f"q{q + 1} (inputs {[CM[i][1] for i in rec['asked']]}): " + " ; ".join(t_))
                     for u in used:
                         S["edge picks" if u[0] == "edge" else "function picks"] += 1
                         if u[0] == "func":               # (measurement: a fired function found the key or not)
@@ -5532,7 +5574,7 @@ def v11_t5(steps=3000, ep_species=8):
                 if train and torch.is_grad_enabled() and h0 is not None and len(A_lat) > 1:   # (D1 E1: the tries)
                     CL0 = torch.stack(A_lat)
                     al0, need0 = ask.anchor_logits(h0, CL0, pri_A), F.normalize(ask.need(h0), dim=-1)
-                    for ia, j2, fi in best_questions(need0, A_D, pri_A, shares):
+                    for ia, j2, j3, fi in best_questions(need0, A_D, pri_A, shares, rpos, p0):
                         rec = {"picks": [], "fired": [], "pol": False, "need": need0.detach()}
                         wa = st(al0, ia)
                         rec["picks"].append((al0, ia))
@@ -5540,10 +5582,16 @@ def v11_t5(steps=3000, ep_species=8):
                             torch.cat([no_, shares(ia, len(CL0))]), -1e4)
                         w2t = st(a2l[1:], j2)            # (a try takes a real 2nd input)
                         rec["picks"].append((a2l, j2 + 1))
+                        a3l = ask.arg3_logits(h0, wa @ CL0, w2t @ CL0, CL0, pri_A, p0).masked_fill(
+                            torch.cat([no_, shares(ia, len(CL0)) | shares(j2, len(CL0))]), -1e4)
+                        w3t = st(a3l, j3 + 1)            # (E14: its 3rd input, or none)
+                        rec["picks"].append((a3l, j3 + 1))
+                        sel = [(ia, wa), (j2, w2t)] + ([(j3, w3t[1:])] if j3 >= 0 else [])
+                        Dm_, Dy_ = qdefs(sel, A_D)
                         _, node, used = solve((wa @ CL0,) + tuple(A_men[ia][1:]), need0, train, now=now, fwd=False,
-                                              Dm=soft_def(wa, A_D), Dy=soft_def(w2t, A_D), rec=rec, force=fi)
+                                              Dm=Dm_, Dy=Dy_, rec=rec, force=fi)
                         rec["result"] = node
-                        rec["asked"] = (ia, j2)
+                        rec["asked"] = tuple(i for i, _ in sel)
                         recs_q.append(rec)
                         C1S["tries fired"] += any(u[0] == "func" for u in used)
                         C1S["tries"] += 1
@@ -5551,7 +5599,7 @@ def v11_t5(steps=3000, ep_species=8):
                 return res, cost, n_pol, recs_q
 
             @torch.no_grad()
-            def best_questions(need0, D_, pri, shares):
+            def best_questions(need0, D_, pri, shares, rpos, p0):
                 """E10 (11-19; user: "why you think random will help ... be clever"): the KT best questions, no dice --
                 inputs ranked by where the LLM looks from the asking point (the E9 prior: log p(anchor) + log p(2nd
                 input | anchor)), each pair with the function the solver itself ranks first (relevance of the need to
@@ -5569,7 +5617,7 @@ def v11_t5(steps=3000, ep_species=8):
                 lpa = F.log_softmax(ask.lam1 * pri, 0)
                 fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
                 fs = solver.ft * (fl @ need0)                     # (per function)
-                cand = []
+                trip = []                                         # (score, anchor, 2nd, 3rd or -1)
                 for ia in lpa.topk(min(KT, n_)).indices.tolist():
                     a2 = ask.lam2 * pri.clone()
                     ex = shares(ia, n_)
@@ -5577,23 +5625,33 @@ def v11_t5(steps=3000, ep_species=8):
                         continue
                     a2[ex] = -1e4                                 # (the 2nd input is another thing: no shared token)
                     lpb = F.log_softmax(a2, 0)
-                    jb = lpb.topk(min(KT, int((~ex).sum()))).indices.tolist()
-                    Dx = D_[ia][None].expand(len(jb), -1)
-                    Dy = torch.stack([D_[j] for j in jb])
-                    ks_ = [funcs.find(fi, funcs.key(fi, Dx, Dy))[0].tolist() for fi in range(len(fl))]  # (per function)
-                    hit = torch.tensor([[float(funcs.sure(fi, ks_[fi][r_]) > .5) for fi in range(len(fl))]
-                                        for r_ in range(len(jb))], device=dev)   # (pairs, functions): memory points
-                    lpf = F.log_softmax(fs[None] + solver.hb * hit, 1)
-                    bf, fb = lpf.max(1)                           # (each pair's best function)
-                    for r_, j in enumerate(jb):
-                        cand.append((float(lpa[ia] + lpb[j] + bf[r_]), ia, j, int(fb[r_])))
-                cand.sort(key=lambda c_: -c_[0])
+                    for j in lpb.topk(min(KT, int((~ex).sum()))).indices.tolist():
+                        ex3 = ex | shares(j, n_)                  # (E14: the 3rd, or none, at chance + its offset)
+                        a3 = torch.cat([(ask.none3 + ask.lam2 * p0)[None], ask.lam2 * pri])
+                        a3[1:][ex3] = -1e4
+                        lpc = F.log_softmax(a3, 0)
+                        for k in lpc.topk(min(3, 1 + int((~ex3).sum()))).indices.tolist():
+                            trip.append((float(lpa[ia] + lpb[j] + lpc[k]), ia, j, k - 1))
+                if not trip:
+                    return []
+                # (the key of each question: its inputs in reading order, E14 qdefs; batched over all questions)
+                Dx, Dy, qid = [], [], []
+                for _, ia, j, k in trip:
+                    ix = sorted([ia, j] + ([k] if k >= 0 else []), key=rpos)
+                    Dx.append(D_[ix[0]])
+                    Dy.append(pair_def(D_[ix[1]], D_[ix[2]] if len(ix) > 2 else None))
+                    qid.append(tuple(id(D_[i]) for i in ix))     # (same texts in the same order = one key)
+                Dx, Dy = torch.stack(Dx), torch.stack(Dy)
+                ks_ = [funcs.find(fi, funcs.key(fi, Dx, Dy))[0].tolist() for fi in range(len(fl))]  # (per function)
+                hit = torch.tensor([[float(funcs.sure(fi, ks_[fi][r_]) > .5) for fi in range(len(fl))]
+                                    for r_ in range(len(trip))], device=dev)   # (questions, functions): memory points
+                bf, fb = F.log_softmax(fs[None] + solver.hb * hit, 1).max(1)   # (each question's best function)
+                order = sorted(range(len(trip)), key=lambda r_: -(trip[r_][0] + float(bf[r_])))
                 out, seen = [], set()
-                for _, ia, j, fi in cand:                         # (different QUESTIONS: two tokens with the same text
-                    q_id = (id(D_[ia]), id(D_[j]))                #  have one definition, so they ask the same key)
-                    if q_id not in seen:
-                        seen.add(q_id)
-                        out.append((ia, j, fi))
+                for r_ in order:                                  # (different QUESTIONS)
+                    if qid[r_] not in seen:
+                        seen.add(qid[r_])
+                        out.append(trip[r_][1:] + (int(fb[r_]),))
                     if len(out) == KT:
                         break
                 return out
@@ -5704,7 +5762,8 @@ def v11_t5(steps=3000, ep_species=8):
                 -> local loss or None"""
                 if j0 is None:
                     return None
-                L_, newf = [], {}                        # (newf: a question split this sentence -> its new function)
+                L_, newf = [], NEWF                      # (a question split once -> its new function, for good: e22
+                                                         #  split function 18's '30'/'8' question twice)
                 T_ = lambda i: torch.tensor([i], device=dev)
                 for b, recs_q in qrecs:
                     if not recs_q or b >= len(ids_t):
@@ -5760,6 +5819,7 @@ def v11_t5(steps=3000, ep_species=8):
             st_fb = [None]                               # the LLM's state after the last segment with GNM's results (U7)
             C1S = collections.Counter()                  # (measurements of the current sentence)
             PEND = []                                    # (D1 E4 memory writes of the current sentence)
+            NEWF = {}                                    # (E11: (function, key) split -> the function made for it)
             RW = collections.Counter()                   # (measurement: words GNM supplied right, per window)
             t0 = time.time()
             start_k = 0
@@ -5772,6 +5832,7 @@ def v11_t5(steps=3000, ep_species=8):
                 sent_end.extend(st_r["sent_end"])
                 rd_hist.update(st_r["rd_hist"])
                 st_fb[0] = st_r["st_fb"]
+                NEWF.update(st_r.get("newf", {}))
                 start_k = st_r["done"]
                 print(f"M1: resumed {os.environ['M1_RESUME']} after {start_k} sentences ({len(nodes)} nodes, "
                       f"{sum(funcs.n)} function keys in {len(funcs.labels)} functions)", flush=True)
@@ -5852,13 +5913,26 @@ def v11_t5(steps=3000, ep_species=8):
                                 if len(nums) == 2 and len(want) == 2:
                                     pol_ = [r for r in recs_q if r["pol"]][:1]
                                     try_ = [r for r in recs_q if not r["pol"]]
-                                    asked = lambda r: {r["picks"][0][1], r["picks"][1][1] - 1}
-                                    # (the same QUESTION = the same two texts: an earlier '24' asks the same key)
-                                    txt = lambda ix: sorted(A_men[i][1] if 0 <= i < len(A_men) else "" for i in ix)
+                                    # (the same QUESTION = the same texts: an earlier '24' asks the same key; E14: the
+                                    # two numbers among the question's up to 3 inputs)
+                                    txt = lambda ix: [A_men[i][1] if 0 <= i < len(A_men) else "" for i in ix]
+                                    got = lambda r: all(w_ in txt(r["asked"]) for w_ in txt(sorted(want)))
                                     C1S["computed points (both numbers readable)"] += 1
-                                    C1S["... the policy asked them"] += bool(pol_) and txt(asked(pol_[0])) == txt(want)
-                                    C1S["... the best try asked them"] += bool(try_) and txt(try_[0]["asked"]) == txt(want)
-                                    C1S["... some try asked them"] += any(txt(r["asked"]) == txt(want) for r in try_)
+                                    C1S["... the policy asked them"] += bool(pol_) and got(pol_[0])
+                                    if pol_ and got(pol_[0]):    # (where the chain breaks after that)
+                                        qd_ = pol_[0].get("qd", (None, None))
+                                        kn_ = [(fi, funcs.find(fi, funcs.key(fi, qd_[0], qd_[1]))[0])
+                                               for fi in range(len(funcs.labels))] if qd_[1] is not None else []
+                                        kn_ = [(fi, int(k_)) for fi, k_ in kn_ if funcs.sure(fi, int(k_)) > .5]
+                                        C1S["... and memory was sure of an answer"] += bool(kn_)
+                                        C1S["... and that answer was the number"] += any(
+                                            funcs.value(fi, k_)[0] == tword(ids_t[b]) for fi, k_ in kn_)
+                                        C1S["... and the policy fired"] += bool(pol_[0]["fired"])
+                                        C1S["... and its result was the number"] += (
+                                            pol_[0].get("result") is not None
+                                            and nodes[pol_[0]["result"]]["names"][0] == tword(ids_t[b]))
+                                    C1S["... the best try asked them"] += bool(try_) and got(try_[0])
+                                    C1S["... some try asked them"] += any(got(r) for r in try_)
                                     if S["E10 traces"] < 3 and try_:   # (what the LLM looks at vs what was asked)
                                         S["E10 traces"] += 1
                                         nm_c = lambda i: A_men[i][1] if 0 <= i < len(A_men) else ("none" if i < 0 else "<res>")
@@ -5867,8 +5941,8 @@ def v11_t5(steps=3000, ep_species=8):
                                                    f"': numbers {[nm_c(i) for i in sorted(want)]} (prior "
                                                    f"{[round(float(pri_A[i]), 1) for i in sorted(want)]}); LLM looks at "
                                                    f"{[(nm_c(i), round(float(pri_A[i]), 1)) for i in top_]}; tries "
-                                                   f"{[(nm_c(r['asked'][0]), nm_c(r['asked'][1])) for r in try_]}; policy "
-                                                   f"{[nm_c(i) for i in sorted(asked(pol_[0]))] if pol_ else None}")
+                                                   f"{[tuple(nm_c(i) for i in r['asked']) for r in try_]}; policy "
+                                                   f"{[nm_c(i) for i in pol_[0]['asked']] if pol_ else None}")
                             cost = cost + c_
                             n_q += nl_
                             if ck[b]:                    # (benchmark measurement: did a result name the computed number?)
@@ -6002,8 +6076,10 @@ def v11_t5(steps=3000, ep_species=8):
                     print(f"   E10 check: tries that asked a stored question {S['tries that asked a stored question']}/"
                           f"{S['tries']} | at {S['computed points (both numbers readable)']} computed points the two "
                           f"numbers right before it were asked by the best try {S['... the best try asked them']}, by "
-                          f"some try {S['... some try asked them']}, by the policy {S['... the policy asked them']}",
-                          flush=True)
+                          f"some try {S['... some try asked them']}, by the policy {S['... the policy asked them']} "
+                          f"(then: memory sure {S['... and memory was sure of an answer']}, its answer the number "
+                          f"{S['... and that answer was the number']}, fired {S['... and the policy fired']}, result the "
+                          f"number {S['... and its result was the number']})", flush=True)
                     if GD and GS:                        # (measurement: mean gradient norm per part and signal)
                         for nm_, _ in grad_groups():
                             print(f"   GRAD {nm_}: " + " | ".join(
