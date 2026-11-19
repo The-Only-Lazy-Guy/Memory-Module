@@ -5534,7 +5534,9 @@ def v11_t5(steps=3000, ep_species=8):
                                     lopt.add_param_group({"params": funcs.spawn(r["need"]), "lr": 1e-3})
                                     fi = len(funcs.labels) - 1
                                     C1S["functions created"] += 1
-                            funcs.write(fi, funcs.key(fi, Dx, Dy), zw, zn, nodes[zn]["z"])
+                            # (applied after this sentence's backward: the soft pointing (P1) keeps the memory for the
+                            # gradient -- writing it in place before the backward broke autograd, P1+E9 run 11-19)
+                            PEND.append((fi, funcs.key(fi, Dx, Dy), zw, zn, nodes[zn]["z"]))
                             C1S["facts written"] += 1
                 return torch.stack(L_).mean() if L_ else None
 
@@ -5545,6 +5547,7 @@ def v11_t5(steps=3000, ep_species=8):
             S, EV = collections.Counter(), collections.Counter()
             st_fb = [None]                               # the LLM's state after the last segment with GNM's results (U7)
             C1S = collections.Counter()                  # (measurements of the current sentence)
+            PEND = []                                    # (D1 E4 memory writes of the current sentence)
             RW = collections.Counter()                   # (measurement: words GNM supplied right, per window)
             t0 = time.time()
 
@@ -5697,6 +5700,9 @@ def v11_t5(steps=3000, ep_species=8):
                     for t_ in trs:
                         print(f"   {t_}", flush=True)
                 # (function creation: a confused function -> a new one, in explore_after, D1 E4)
+                for w_ in PEND:                          # (remember: this sentence's facts, after its backward)
+                    funcs.write(*w_)
+                PEND.clear()
                 if not nomem:
                     recent_s.append((H_c, ids_f))
                     recent_p.append(pos)
