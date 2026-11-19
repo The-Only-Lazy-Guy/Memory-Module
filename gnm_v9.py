@@ -4634,8 +4634,8 @@ def v11_t5(steps=3000, ep_species=8):
               (T1);
             - learning, no demos (T3, T7): (a) the LLM's next-token CE; (b) LOCAL self-prediction: before a read claim
               (A, r, B) is written, GNM solves (A, r) and is scored on B -- the text is the teacher, no LLM involved.
-              Every discrete choice is a straight-through Gumbel pick (forward: the hard pick; backward: soft), so
-              both signals reach every decision.
+              Every discrete choice is a straight-through pick (forward: the hard pick; backward: soft). ~~Gumbel
+              samples in training~~ -> E10 (11-19): the model's own best choice, as at eval -- no dice.
             V12_LM_NOMEM=1: the same LLM + LoRA on the same stream without GNM (the fair baseline)."""
             nomem = os.environ.get("V12_LM_NOMEM", "0") == "1"
 
@@ -4769,8 +4769,11 @@ def v11_t5(steps=3000, ep_species=8):
                 def anchor_logits(s_, h, A, pri):
                     return s_.k1(A) @ s_.q1(h) / 128 ** .5 + s_.lam1 * pri
 
-                def arg2_logits(s_, h, a, Rv, pri):
-                    return torch.cat([s_.none2[None], s_.k2(Rv) @ s_.q2(torch.cat([h, a])) / 128 ** .5 + s_.lam2 * pri])
+                def arg2_logits(s_, h, a, Rv, pri, p0=0.):
+                    # (E10e: 'no 2nd input' is scored like an input the LLM does not look at -- chance level p0 -- plus
+                    # its learned offset; at 0 it beat every candidate, log share < 0, so greedy never took a 2nd input)
+                    return torch.cat([s_.none2[None] + s_.lam2 * p0,
+                                      s_.k2(Rv) @ s_.q2(torch.cat([h, a])) / 128 ** .5 + s_.lam2 * pri])
 
             class Enc(nn.Module):
                 """T6, the perception's encoder side (U3), learned by the same signals -- no decoder (user 11-19: "why do
@@ -4814,7 +4817,8 @@ def v11_t5(steps=3000, ep_species=8):
                 def __init__(s_):
                     super().__init__()
                     s_.nc = nn.GRUCell(E_, D12)
-                    s_.halt = nn.Sequential(nn.Linear(D12 + E_, 128), nn.Tanh(), nn.Linear(128, 1))
+                    # (E12 11-19: + 1 input -- how sure a function's memory is of the answer for the current inputs)
+                    s_.halt = nn.Sequential(nn.Linear(D12 + E_ + 1, 128), nn.Tanh(), nn.Linear(128, 1))
                     # T10: the relation latents of the structure reading gives (reading order; a span and its tokens)
                     s_.nxt = nn.Parameter(F.normalize(torch.randn(D12), dim=0))
                     s_.part = nn.Parameter(F.normalize(torch.randn(D12), dim=0))
@@ -5023,18 +5027,23 @@ def v11_t5(steps=3000, ep_species=8):
                     return F.normalize(funcs.labels[e_["fi"]], dim=0)
                 return F.normalize(getattr(solver, e_["kind"]), dim=0)
 
-            def pick(lg, train):
-                """a discrete choice (T7): forward = the hard pick (pointing = classification); backward = the soft
-                weights (straight-through). Training samples with Gumbel noise (the model's own beliefs, never uniform
-                dice); eval = argmax. -> (index, weights)"""
-                g = lg - torch.log(-torch.log(torch.rand_like(lg).clamp(1e-9, 1 - 1e-9))) if train else lg
-                k = int(g.argmax())
+            def st(lg, k):
+                """choice k, straight-through: forward = one-hot (pointing = classification), backward = the softmax"""
                 hard = torch.zeros_like(lg)
                 hard[k] = 1.
                 if not torch.is_grad_enabled():
-                    return k, hard
-                y = F.softmax(g, 0)
-                return k, hard - y.detach() + y
+                    return hard
+                y = F.softmax(lg, 0)
+                return hard - y.detach() + y
+
+            def pick(lg, train):
+                """a discrete choice (T7) = the model's own best option, in training as at eval. E10 (11-19): ~~Gumbel
+                samples in training~~ -- the P1+E9 inspection: sampled over ~300 candidates the same question was almost
+                never asked twice (8,450 facts -> 5,519 keys), so the text never confirmed a stored answer; user 11-19
+                "why you think random will help". Exploration = the tries, the model's next-best questions (ask_seg).
+                -> (index, straight-through weights)"""
+                k = int(lg.argmax())
+                return k, st(lg, k)
 
             def near(z, k=16):
                 if not nodes:
@@ -5042,16 +5051,18 @@ def v11_t5(steps=3000, ep_species=8):
                 with torch.no_grad():
                     return (PZb["c"][:PZb["n"]] @ ip(z)).topk(min(k, len(nodes))).indices.tolist()
 
-            def solve(men, need, train, now=0, tr=None, fwd=True, Dm=None, Dy=None, rec=None, force=False):
+            def solve(men, need, train, now=0, tr=None, fwd=True, Dm=None, Dy=None, rec=None, force=None):
                 """GNM answers one query: identity (the anchor jumps to the most relevant node, or stays itself) -> up to
                 KS firings (follow an edge, or fire a function = ONE lookup in its own memory, C1a) -> learned halt (also
                 before the first firing: the node identity found can be the answer).
                 Dm / Dy: the definitions of the anchor and of the 2nd input (D1 E5: exact text; None = no input). After a
                 firing, the node it gave is the next firing's first input (C1c).
                 fwd=False: an exploration try -- no credit, no counts.
-                force: an exploration try computes -- it fires at least once whatever the halt says (the halt's logits
-                are recorded with 'go', so a try the text confirms teaches the policy to go; D1 smoke 11-19: tries that
-                used the policy's own halt stopped firing -- picks per 500 sentences 520 -> 181 -> 26 -> 9 -> 0).
+                force = a function index: an exploration try = ONE question = one firing of that function, then it
+                halts (E10; user 11-14 "one firing = one step"; C1 run c: a 2nd firing replaced the right value). The
+                halt's logits are recorded with 'go' then 'halt' and the pick with that function, so a try the text
+                confirms teaches the policy its whole trace (D1 smoke 11-19: tries that used the policy's own halt
+                stopped firing -- picks per 500 sentences 520 -> 181 -> 26 -> 9 -> 0).
                 rec: filled with the query's own trace -- every decision as (logits, the choice taken) -- and each taken
                 function firing as (function, D(input 1), D(input 2), the node it pointed at or None) for D1 (check,
                 imitation, remember).
@@ -5069,9 +5080,32 @@ def v11_t5(steps=3000, ep_species=8):
                     tr.append(f"'{men[1]}' is {'itself (new)' if cur is None else repr(nm(cur))}")
                 nd = need
                 for s_i in range(KS):
-                    hl = torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v]))])
+                    # C1a: every function is ONE lookup in its own memory: bind(atom, D(focus), D(2nd input)) -> the
+                    # exact key's node (the value the text stated), else unknown. E12 (11-19): the lookups come BEFORE
+                    # the halt, and the halt sees how sure a memory is of the answer for these inputs (the answer's
+                    # share of what the text stated for that key; 0 = no key) -- without it the halt had the same
+                    # features where firing gives the stored answer and where it gives 'unknown' or a word that
+                    # differs every time (opposite targets), learned the average (don't fire) and every run's
+                    # firings went to 0 (D1 smoke 520 -> 0, P1+E9 inspection 229 -> 13 -> 0)
+                    fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
+                    fn_, qk_, sure = [None] * len(fl), [None] * len(fl), 0.
+                    if Dc is not None and Dy is not None:
+                        for fi in range(len(fl)):
+                            qk_[fi] = funcs.key(fi, Dc, Dy)
+                            k_ = int(funcs.find(fi, qk_[fi].detach())[0])
+                            if k_ >= 0:
+                                _, c_n, fn_[fi] = funcs.value(fi, k_)
+                                sure = max(sure, c_n / sum(funcs.cnt[fi][k_].values()))
+                    knows = torch.tensor([sure], device=dev)
+                    hl = torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v, knows]))])
                     kh, wh = pick(hl, train)
-                    if force and s_i == 0:               # (an exploration try computes)
+                    if force is not None and s_i > 0:    # (a try is one firing: it halts after it)
+                        if rec is not None:
+                            rec["picks"].append((hl, 1))
+                        if tr is not None:
+                            tr.append("halts")
+                        break
+                    if force is not None:                # (an exploration try computes)
                         kh, wh = 0, torch.tensor([1., 0.], device=dev)
                     if rec is not None:
                         rec["picks"].append((hl, kh))
@@ -5092,19 +5126,13 @@ def v11_t5(steps=3000, ep_species=8):
                         C_l.append(mem.aa(torch.cat([nd[None].expand(len(es), -1), R_, dr], 1)).squeeze(-1) + mem.rc * ag)
                         C_v.append(torch.stack([nodes[edges[e]["b"]]["z"] for e in es]))
                         C_m += [("edge", e) for e in es]
-                    # C1a: every function is ONE lookup in its own memory: bind(atom, D(focus), D(2nd input)) -> the
-                    # exact key's node (the value the text stated), else unknown; functions compete with edges in the
-                    # same pick. A function is pointed at by the relevance of the need to its label (classification
-                    # by cosine; the C1 smoke 11-19 with an MLP score: 16 functions created, function 0 held 502 of
-                    # 555 keys -- a function created on confusion attracted nothing, operators stayed mixed)
-                    fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
-                    fn_ = [None] * len(fl)
+                    # functions compete with edges in the same pick. A function is pointed at by the relevance of the
+                    # need to its label (classification by cosine; the C1 smoke 11-19 with an MLP score: 16 functions
+                    # created, function 0 held 502 of 555 keys -- a function created on confusion attracted nothing,
+                    # operators stayed mixed)
                     fv_ = []
                     for fi in range(len(fl)):
-                        if Dc is not None and Dy is not None:
-                            q_ = funcs.key(fi, Dc, Dy)
-                            k_ = int(funcs.find(fi, q_.detach())[0])
-                            fn_[fi] = funcs.value(fi, k_)[2] if k_ >= 0 else None
+                        q_ = qk_[fi]
                         val = nodes[fn_[fi]]["z"] if fn_[fi] is not None else solver.unk
                         if Dc is not None and Dy is not None and (Dc.requires_grad or Dy.requires_grad):
                             # P1 (user 11-19 "sure then lets build"): the forward is the exact lookup; the gradient
@@ -5122,10 +5150,15 @@ def v11_t5(steps=3000, ep_species=8):
                     C_v.append(torch.stack(fv_))
                     C_m += [("func", fi, fn_[fi]) for fi in range(len(fl))]
                     lg_c = torch.cat(C_l)
-                    # (a try's first firing is a computation: it picks among the functions; the pick is recorded over all
-                    # candidates, so a right try teaches the policy that function over the edges)
+                    # (a try fires the function of its question -- E10: the tries are the model's best whole questions;
+                    # the pick is recorded over all candidates, so a right try teaches the policy that function over the
+                    # edges and the other functions)
                     nfe = len(C_m) - len(fl)
-                    k, w = pick(torch.cat([lg_c[:nfe] - 1e4, lg_c[nfe:]]) if force and s_i == 0 else lg_c, train)
+                    if force is not None:
+                        k = nfe + force
+                        w = st(torch.cat([lg_c[:nfe] - 1e4, lg_c[nfe:]]), k)
+                    else:
+                        k, w = pick(lg_c, train)
                     if rec is not None and taken:
                         rec["picks"].append((lg_c, k))
                     o = w @ torch.cat(C_v)
@@ -5297,42 +5330,51 @@ def v11_t5(steps=3000, ep_species=8):
                 return list(Z), [(z, n_, None, s_, c_) for z, n_, s_, c_ in zip(Z, names, sps, cxs)], Ds, pos
 
             def att_prior(arow, cpos):
-                """E9: each candidate's share of the LLM's attention from the asking point (its tokens summed; the
-                layers / heads mixed by the learned ask.e9) -> log prior; log 1/T where the LLM cannot see it"""
+                """E9: how much the LLM looks at each candidate from the asking point (the layers / heads mixed by the
+                learned ask.e9) -> (log prior per candidate, chance level). E10d: the MEAN over the candidate's tokens
+                (~~summed~~: a 4-token window holding both operands then always outranked each operand -- best-first
+                would ask windows, not the numbers). Chance = log 1/(positions it can look at): the prior of what the
+                LLM does not see (an earlier result) and of 'no 2nd input' (E10e)"""
                 mix = F.softmax(ask.e9, 0) @ arow                 # (T,)
                 ii = [i for i, ps in enumerate(cpos) for _ in ps]
                 mass = torch.zeros(len(cpos), device=dev)
                 if ii:
                     mass = mass.index_add(0, torch.tensor(ii, device=dev),
                                           mix[torch.tensor([p for ps in cpos for p in ps], device=dev)])
+                cnt = torch.tensor([max(1, len(ps)) for ps in cpos], device=dev)
+                chance = -math.log(max(1, int((arow[0] > 0).sum())))
                 seen = torch.tensor([bool(ps) for ps in cpos], device=dev)
-                return torch.where(seen, torch.log(mass + 1e-6), torch.full_like(mass, -math.log(arow.shape[-1])))
+                return torch.where(seen, torch.log(mass / cnt + 1e-6), torch.full_like(mass, chance)), chance
 
             def soft_def(w, Ds):
                 """P1: the definition a pointer chose, straight-through -- forward = the picked candidate's exact
                 definition, backward = through the pointer's soft weights over all candidates' definitions"""
                 return w @ torch.stack([d if d is not None else torch.zeros(DV, device=dev) for d in Ds])
 
-            def ask_seg(st0, A_lat, A_men, A_D, train, now, tr=None, pri_A=None):
+            def ask_seg(st0, A_lat, A_men, A_D, train, now, tr=None, pri_A=None, p0=0.):
                 """T5 + D1: the perception asks on its OWN state (no LLM forward between queries); anchor and 2nd input
                 point at recently read spans / tokens or earlier results; a fired function keys on their definitions.
                 The policy (what the LLM gets): queries autoregressively until its own stop (<= KQ); in training a
                 'stop' still computes that query for the gradient, with forward weight 0 (T12).
                 D1 E1 exploration (user 11-19: "when input come for training, it can help explore, basically doing
-                computation multiple times (the multi query thing)"): while training, KT more samples of the FIRST
-                question from the same state -- N rollouts of it (user 11-03 "N rollouts, best = target"). Each try
-                computes: it takes a real 2nd input and fires once (`force`), drawn from the perception's own beliefs
-                without the 'do nothing' options. Tries never reach the LLM; the text checks them (explore_after).
-                (D1 smoke 11-19: with tries on the policy's own halt / 'no 2nd input', the CE taught the policy that
-                doing nothing is safest and the tries stopped computing -- picks 520 -> 0 per 500 sentences)
-                E9: pri_A = the LLM-attention prior of each text candidate (earlier results get log 1/T); P1: a fired
-                function keys on the pointers' choices straight-through (soft_def), so the loss reaches the pointers.
+                computation multiple times (the multi query thing)"): while training, KT more versions of the FIRST
+                question from the same state. Each try computes: a real 2nd input, one firing (`force`), then halt.
+                Tries never reach the LLM; the text checks them (explore_after). (D1 smoke 11-19: with tries on the
+                policy's own halt / 'no 2nd input', the CE taught the policy that doing nothing is safest and the tries
+                stopped computing -- picks 520 -> 0 per 500 sentences)
+                E10 (11-19): ~~each try sampled from the perception's beliefs~~ -> the tries = the model's KT BEST whole
+                questions (best_questions), the same in the same context, so the text can confirm a stored answer the
+                2nd time (P1+E9 inspection: sampled, ~65% of questions were asked once); the 2nd input is never the
+                anchor itself (two inputs = two things read; C1 run d asked (38, 38)).
+                E9: pri_A = the LLM-attention prior of each text candidate, p0 = chance level (an earlier result and 'no
+                2nd input' get it, E10e); P1: a fired function keys on the pointers' choices straight-through
+                (soft_def), so the loss reaches the pointers.
                 -> ([(soft token, node)], expected number of queries, number asked, every query's and try's trace)"""
                 h, prev = torch.zeros(256, device=dev), torch.zeros(E_, device=dev)
                 res, cost, R_l, R_m, R_D, recs_q, h0 = [], 1., [], [], [], [], None
                 if pri_A is None:
                     pri_A = torch.zeros(len(A_lat), device=dev)
-                pri_R = float(pri_A.min()) if len(pri_A) else 0.      # (an earlier result: as unseen as the least seen)
+                pri_R = p0                               # (an earlier result: the LLM does not see it -> chance level)
                 for q in range(KQ):
                     h = ask.step(h, st0, prev)
                     h0 = h if q == 0 else h0
@@ -5353,7 +5395,7 @@ def v11_t5(steps=3000, ep_species=8):
                     rec["picks"].append((al, ia))
                     men = (wa @ CL,) + tuple(CM[ia][1:])
                     need = F.normalize(ask.need(h), dim=-1)
-                    a2l = ask.arg2_logits(h, wa @ CL, CL, pri)
+                    a2l = ask.arg2_logits(h, wa @ CL, CL, pri, p0).index_fill(0, torch.tensor([ia + 1], device=dev), -1e4)
                     i2, w2 = pick(a2l, train)
                     rec["picks"].append((a2l, i2))
                     rec["need"] = need.detach()
@@ -5382,19 +5424,51 @@ def v11_t5(steps=3000, ep_species=8):
                 if train and torch.is_grad_enabled() and h0 is not None and len(A_lat) > 1:   # (D1 E1: the tries)
                     CL0 = torch.stack(A_lat)
                     al0, need0 = ask.anchor_logits(h0, CL0, pri_A), F.normalize(ask.need(h0), dim=-1)
-                    for _ in range(KT):
+                    for ia, j2, fi in best_questions(h0, al0, need0, CL0, A_D, pri_A):
                         rec = {"picks": [], "fired": [], "pol": False, "need": need0.detach()}
-                        ia, wa = pick(al0, train)
+                        wa = st(al0, ia)
                         rec["picks"].append((al0, ia))
-                        a2l = ask.arg2_logits(h0, wa @ CL0, CL0, pri_A)
-                        j2, w2t = pick(a2l[1:], train)   # (a try takes a real 2nd input)
+                        a2l = ask.arg2_logits(h0, wa @ CL0, CL0, pri_A, p0).index_fill(
+                            0, torch.tensor([ia + 1], device=dev), -1e4)
+                        w2t = st(a2l[1:], j2)            # (a try takes a real 2nd input)
                         rec["picks"].append((a2l, j2 + 1))
                         _, node, used = solve((wa @ CL0,) + tuple(A_men[ia][1:]), need0, train, now=now, fwd=False,
-                                              Dm=soft_def(wa, A_D), Dy=soft_def(w2t, A_D), rec=rec, force=True)
+                                              Dm=soft_def(wa, A_D), Dy=soft_def(w2t, A_D), rec=rec, force=fi)
                         rec["result"] = node
+                        rec["asked"] = (ia, j2)
                         recs_q.append(rec)
                         C1S["tries fired"] += any(u[0] == "func" for u in used)
+                        C1S["tries"] += 1
+                        C1S["tries that asked a stored question"] += any(u[0] == "func" and u[2] is not None for u in used)
                 return res, cost, n_pol, recs_q
+
+            @torch.no_grad()
+            def best_questions(h0, al0, need0, CL0, D_, pri):
+                """E10 (11-19; user: "why you think random will help ... be clever"): the KT best whole questions by the
+                model's OWN scores -- log p(anchor) + log p(2nd input | anchor) + log p(function | need, which memories
+                point) -- the same scores the policy and the solver use (the solver's step-0 function score: relevance
+                of the need to the label + whether its memory holds the key). Best-first: the same context asks the
+                same questions, so a value the text states twice is confirmed. -> [(anchor, 2nd input, function)]"""
+                n_ = len(CL0)
+                lpa = F.log_softmax(al0, 0)
+                fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
+                fs = solver.ft * (fl @ need0)                     # (per function)
+                cand = []
+                for ia in lpa.topk(min(KT, n_)).indices.tolist():
+                    a2 = ask.arg2_logits(h0, CL0[ia], CL0, pri)[1:]
+                    a2[ia] = -1e4                                 # (the 2nd input is another thing)
+                    lpb = F.log_softmax(a2, 0)
+                    jb = lpb.topk(min(KT, n_ - 1)).indices.tolist()
+                    Dx = D_[ia][None].expand(len(jb), -1)
+                    Dy = torch.stack([D_[j] for j in jb])
+                    hit = torch.stack([(funcs.find(fi, funcs.key(fi, Dx, Dy))[0] >= 0).float()
+                                       for fi in range(len(fl))], 1)   # (pairs, functions)
+                    lpf = F.log_softmax(fs[None] + solver.hb * hit, 1)
+                    for r_, j in enumerate(jb):
+                        for fi in range(len(fl)):
+                            cand.append((float(lpa[ia] + lpb[j] + lpf[r_, fi]), ia, j, fi))
+                cand.sort(key=lambda c_: -c_[0])
+                return [(ia, j, fi) for _, ia, j, fi in cand[:KT]]
 
             def to_llm(res):
                 """T1 + T11: each result -> what the LLM's cross-attention reads: its name-token embeddings when its node
@@ -5497,12 +5571,12 @@ def v11_t5(steps=3000, ep_species=8):
                   rollouts, best = target"); a right try teaches the policy's first question;
                 - E4 remember (one shot, no gradient): a firing that pointed at nothing gets that word (user 11-16 "if
                   cant point -> create new node", T4 open slots filled by later reading); a value the text contradicts
-                  is outcounted, and a function that had it stated twice or more is confused -> the model creates a new
-                  function (label = that query's need) for the fact.
+                  is outcounted; E11: when one question has two answers the text confirmed (each stated >= 2x), the
+                  model creates a new function (label = that query's need) for the 2nd.
                 -> local loss or None"""
                 if j0 is None:
                     return None
-                L_ = []
+                L_, newf = [], {}                        # (newf: a question split this sentence -> its new function)
                 T_ = lambda i: torch.tensor([i], device=dev)
                 for b, recs_q in qrecs:
                     if not recs_q or b >= len(ids_t):
@@ -5527,13 +5601,21 @@ def v11_t5(steps=3000, ep_species=8):
                         for fi, Dx, Dy, gave in r["fired"][-1:] if r["fired"] and r["fired"][-1][3] == r["result"] else []:
                             if gave is not None and nodes[gave]["names"][0] != zw:   # (contradicted by the text)
                                 k_ = int(funcs.find(fi, funcs.key(fi, Dx, Dy))[0])
-                                if k_ >= 0 and funcs.value(fi, k_)[1] >= 2 and len(funcs.labels) < NF:
-                                    print(f"M1: function {len(funcs.labels)} created: function {fi} said "
-                                          f"'{funcs.value(fi, k_)[0]}' ({funcs.value(fi, k_)[1]}x), the text said '{zw}'",
-                                          flush=True)
-                                    lopt.add_param_group({"params": funcs.spawn(r["need"]), "lr": 1e-3})
-                                    fi = len(funcs.labels) - 1
-                                    C1S["functions created"] += 1
+                                # E11 (11-19): the model creates a function only when one question has TWO answers the
+                                # text confirmed -- the one it holds (stated >= 2x) and this word (stated before, now
+                                # again); a word stated once is only outcounted. (P1+E9 inspection: with "held >= 2x and
+                                # contradicted", 22 functions were made in 500 sentences on words that open a new
+                                # problem -- 'An' 3x, then 'James', 'Carolyn' ... -- and the cap was full)
+                                if (k_ >= 0 and funcs.value(fi, k_)[1] >= 2 and funcs.cnt[fi][k_][zw] >= 1
+                                        and ((fi, k_) in newf or len(funcs.labels) < NF)):
+                                    if (fi, k_) not in newf:
+                                        print(f"M1: function {len(funcs.labels)} created: function {fi} holds "
+                                              f"'{funcs.value(fi, k_)[0]}' ({funcs.value(fi, k_)[1]}x) and '{zw}' "
+                                              f"({funcs.cnt[fi][k_][zw]}x + now) for one question", flush=True)
+                                        lopt.add_param_group({"params": funcs.spawn(r["need"]), "lr": 1e-3})
+                                        newf[(fi, k_)] = len(funcs.labels) - 1
+                                        C1S["functions created"] += 1
+                                    fi = newf[(fi, k_)]
                             # (applied after this sentence's backward: the soft pointing (P1) keeps the memory for the
                             # gradient -- writing it in place before the backward broke autograd, P1+E9 run 11-19)
                             PEND.append((fi, funcs.key(fi, Dx, Dy), zw, zn, nodes[zn]["z"]))
@@ -5610,10 +5692,22 @@ def v11_t5(steps=3000, ep_species=8):
                             # U7 (11-19 audit fix): the perception reads the LLM's state AFTER GNM's last results (the
                             # previous segment's forward with them); only the stream's very first segment reads the LLM alone
                             st_in = st_fb[0] if st_fb[0] is not None else st_all[b]
-                            pri_A = att_prior(att_row(attq, len(ctx), b), A_pos) if A_lat else None
-                            res, c_, nl_, recs_q = (ask_seg(st_in, A_lat, A_men, A_D, train, len(sent_end), tr, pri_A)
+                            pri_A, p0_ = att_prior(att_row(attq, len(ctx), b), A_pos) if A_lat else (None, 0.)
+                            res, c_, nl_, recs_q = (ask_seg(st_in, A_lat, A_men, A_D, train, len(sent_end), tr, pri_A, p0_)
                                                     if A_lat else ([], 0., 0, []))
                             recs.append((b, recs_q))
+                            if ck[b] and recs_q:         # (measurement, benchmark only -- E10 check: did the questions
+                                nums = [p for p in range(b)   # take the two numbers written right before this result?)
+                                        if tword(ids_t[p]).replace(",", "").replace(".", "").isdigit()][-2:]
+                                want = {i for i, ps in enumerate(A_pos) if len(ps) == 1 and ps[0] - len(ctx) in nums}
+                                if len(nums) == 2 and len(want) == 2:
+                                    pol_ = [r for r in recs_q if r["pol"]][:1]
+                                    try_ = [r for r in recs_q if not r["pol"]]
+                                    asked = lambda r: {r["picks"][0][1], r["picks"][1][1] - 1}
+                                    C1S["computed points (both numbers readable)"] += 1
+                                    C1S["... the policy asked them"] += bool(pol_) and asked(pol_[0]) == want
+                                    C1S["... the best try asked them"] += bool(try_) and set(try_[0]["asked"]) == want
+                                    C1S["... some try asked them"] += any(set(r["asked"]) == want for r in try_)
                             cost = cost + c_
                             n_q += nl_
                             if ck[b]:                    # (benchmark measurement: did a result name the computed number?)
@@ -5730,6 +5824,11 @@ def v11_t5(steps=3000, ep_species=8):
                           f"functions: {funcs.n}), functions created by confusion {S['functions created']}", flush=True)
                     print(f"   words GNM supplied right this window: {RW.most_common(12)}", flush=True)
                     RW.clear()
+                    print(f"   E10 check: tries that asked a stored question {S['tries that asked a stored question']}/"
+                          f"{S['tries']} | at {S['computed points (both numbers readable)']} computed points the two "
+                          f"numbers right before it were asked by the best try {S['... the best try asked them']}, by "
+                          f"some try {S['... some try asked them']}, by the policy {S['... the policy asked them']}",
+                          flush=True)
                     if GD and GS:                        # (measurement: mean gradient norm per part and signal)
                         for nm_, _ in grad_groups():
                             print(f"   GRAD {nm_}: " + " | ".join(
