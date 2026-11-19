@@ -5348,15 +5348,17 @@ def v11_t5(steps=3000, ep_species=8):
 
             @torch.no_grad()
             def llm_alone(ctx, tgt):
-                """the LLM alone (same LoRA) over [context][sentence] -> per-token CE and its state before each token"""
+                """the LLM alone (same LoRA) over [context][sentence] -> per-token CE, its state before each token, and
+                whether its own top-1 prediction already was the token (D1 E2: GNM is only needed where it was not)"""
                 emb = Wte(torch.tensor(ctx + tgt, device=dev))
                 G10.ex.active, G10.ex.w = 0, None
                 out = M(inputs_embeds=emb[None], position_ids=torch.arange(len(emb), device=dev)[None],
                         output_hidden_states=True)
                 G10.ex.active = None
                 lp = F.log_softmax(out.logits[0, len(ctx) - 1:-1].float(), -1)
-                return (-lp.gather(1, torch.tensor(tgt, device=dev)[:, None])[:, 0],
-                        out.hidden_states[-1][0, len(ctx) - 1:-1].float())
+                tg = torch.tensor(tgt, device=dev)
+                return (-lp.gather(1, tg[:, None])[:, 0], out.hidden_states[-1][0, len(ctx) - 1:-1].float(),
+                        (lp.argmax(-1) == tg).tolist())
 
             def dump_graph(tag):
                 """inspection: the graph (mention nodes, claim edges), identity neighbours, relation latent groups"""
@@ -5395,13 +5397,15 @@ def v11_t5(steps=3000, ep_species=8):
                             print(f"GRAPH {tag} relation latent '{w}' ({len(grp[w])} edges, spread {1 - tight:.2f}): "
                                   "nearest " + ", ".join(f"'{x}' {s_:.2f}" for x, s_ in nb_[:4]), flush=True)
 
-            def explore_after(qrecs, ids_t, j0, train):
+            def explore_after(qrecs, ids_t, j0, train, top0):
                 """D1, after the sentence is read (the text has now said what came after each point where GNM was asked);
                 general -- nothing here knows about numbers or operators:
                 - E2 the text checks every query asked at a segment: RIGHT = its result is the word the text states right
-                  after that point, and that word was not in view (not in the recent text the perception could point at)
-                  -- GNM is right when it supplies what could not be copied (user 11-16: "the model know its mistakes
-                  and a update is local too (signal dont rely to LLM)");
+                  after that point, where that word was needed -- not in view (not in the recent text the perception
+                  could point at) and not what the LLM alone predicted there (U3: the perception asks "what do we need";
+                  inspection 11-19: with only the first rule the functions learned to say 'The' / 'So' / 'How' at
+                  sentence starts -- words the LLM already predicts) (user 11-16: "the model know its mistakes and a
+                  update is local too (signal dont rely to LLM)");
                 - E3 a right query or try is the target for all its own picks -- its own right trace (D7; user 11-03 "N
                   rollouts, best = target"); a right try teaches the policy's first question;
                 - E4 remember (one shot, no gradient): a firing that pointed at nothing gets that word (user 11-16 "if
@@ -5418,11 +5422,13 @@ def v11_t5(steps=3000, ep_species=8):
                         continue
                     zw = tword(ids_t[b])
                     view = {tword(t) for _, ids in recent_s for t in ids} | {tword(t) for t in ids_t[:b]}
-                    if not any(ch.isalnum() for ch in zw) or zw in view:
+                    if not any(ch.isalnum() for ch in zw) or zw in view or top0[b]:
                         continue
                     zn = j0 + b                          # (the token node of the word the text stated)
                     C1S["new words stated where GNM was asked"] += 1
                     right = [r for r in recs_q if r["result"] is not None and nodes[r["result"]]["names"][0] == zw]
+                    if right:
+                        RW[zw] += 1                      # (measurement: which words GNM supplied right)
                     C1S["right queries"] += len(right)
                     C1S["segments with a right query"] += bool(right)
                     C1S["... one of them before its own stop"] += any(r["pol"] for r in right)
@@ -5451,6 +5457,7 @@ def v11_t5(steps=3000, ep_species=8):
             S, EV = collections.Counter(), collections.Counter()
             st_fb = [None]                               # the LLM's state after the last segment with GNM's results (U7)
             C1S = collections.Counter()                  # (measurements of the current sentence)
+            RW = collections.Counter()                   # (measurement: words GNM supplied right, per window)
             t0 = time.time()
 
             def mem_mask(text, ids_, pos):
@@ -5493,7 +5500,7 @@ def v11_t5(steps=3000, ep_species=8):
                 ctx = stream[-WIN:] or [tk.eos_token_id]
                 mk, ck = mem_mask(text, ids_t, pos), comp_mask(text, len(ids_t))
                 show = heldout and EV["sentences"] < 10 or k_s % 400 == 0
-                ce0, st_all = llm_alone(ctx, ids_t)
+                ce0, st_all, top0 = llm_alone(ctx, ids_t)
                 ce1_l, cec_l, trs, recs = [], [], [], []
                 n_q, loss, sp_st = 0, None, collections.Counter()
                 C1S.clear()
@@ -5536,7 +5543,7 @@ def v11_t5(steps=3000, ep_species=8):
                         ce1 = torch.cat(ce1_l)
                         # the perception reads the sentence into GNM (after the LLM predicted it); local signal first
                         sp_loss, sp_st, sp_tr, j0_ = read_m(text, ids_f, H_c, len(sent_end), train)
-                        hs_loss = explore_after(recs, ids_t, j0_, train)   # (D1: the text checks the queries; remember)
+                        hs_loss = explore_after(recs, ids_t, j0_, train, top0)   # (D1: the text checks the queries)
                         if train:
                             loss = (ce1.mean() + QCOST * cost + (LSP * sp_loss if sp_loss is not None else 0.)
                                     + (LHS * hs_loss if hs_loss is not None else 0.))
@@ -5608,6 +5615,8 @@ def v11_t5(steps=3000, ep_species=8):
                           f"| GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
                     print(f"   memory: facts written {S['facts written']} (keys now {sum(funcs.n)} in {len(funcs.labels)} "
                           f"functions: {funcs.n}), functions created by confusion {S['functions created']}", flush=True)
+                    print(f"   words GNM supplied right this window: {RW.most_common(12)}", flush=True)
+                    RW.clear()
                     torch.cuda.reset_peak_memory_stats()
                     S = collections.Counter()
                 if k_s + 1 == n_tr:
