@@ -4916,7 +4916,18 @@ def v11_t5(steps=3000, ep_species=8):
                         s_.Zv[fi][k] = z
             ask, enc, solver, funcs = Ask().to(dev), Enc().to(dev), Solver().to(dev), Funcs().to(dev)
             proj = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, ED)).to(dev)
-            XL = int(os.environ.get("M1_XLAYERS", "2"))
+            with torch.no_grad():
+                # (F2, diagnosis 11-20: a result latent entered at norm ~16, a token embedding at ~3 -- in the
+                # cross-attention the latents took ~99% of the weight from the exact tokens. A result now enters at
+                # the scale of a token embedding; the Linear can still grow)
+                proj[1].weight.mul_(float(M.transformer.wte.weight.norm(dim=1).mean()) / float(proj[1].weight.norm()))
+                proj[1].bias.zero_()
+            # (F2: ~~2~~ -> 12 blocks. Interface probe 11-20, frozen GPT-2, 150 held-out 'x op y =' points, CE of the
+            # computed number 5.54 without memory: a RIGHT result lowers it by .04 (last 2 blocks, gate .2) / .25 (last
+            # 2, q/k/gate trained) / .79 (all 12 blocks, trained); a wrong one by .01 / .05 / .10; the result in the
+            # LLM's input, untrained: .17 / .01. Injected at the last 2 blocks only the final norm and the head can
+            # use it; from every block the LLM's own layers can carry it to the prediction)
+            XL = int(os.environ.get("M1_XLAYERS", "12"))
 
             class XAttn(nn.Module):
                 """T11 (Claude's design 11-19, replaces inserting result tokens into the LLM's input -- the fair baseline
@@ -4998,6 +5009,61 @@ def v11_t5(steps=3000, ep_species=8):
                                 "xattn": xattn.state_dict(),
                                 "lora": [p.detach()[:1].cpu() for p in G10.eparams()]},
                                os.path.join(ck, f"m1_{'nomem' if nomem else 'gnm'}.pt"))
+
+            def save_mem(done):
+                """F6 (diagnosis 11-20): everything needed to continue reading -- the graph, every function's memory,
+                the word atoms, the stream position, the optimizer, all weights -- so a box reset or a later evaluation
+                keeps what GNM memorized (the model file holds only the function labels; their memories were lost).
+                Resume with M1_RESUME=<this file>."""
+                ck = os.environ.get("V12_CKPT", "")
+                if not ck or nomem:
+                    return
+                os.makedirs(ck, exist_ok=True)
+                st_ = {"version": 1, "done": done, "nodes": nodes, "edges": edges, "outs": outs, "PZb": PZb,
+                       "funcs": {"atoms": funcs.atoms, "K": [K_[:n_].clone() for K_, n_ in zip(funcs.K, funcs.n)],
+                                 "Zv": [Z_[:n_].clone() for Z_, n_ in zip(funcs.Zv, funcs.n)], "n": funcs.n,
+                                 "cnt": funcs.cnt, "at": funcs.at, "used": funcs.used},
+                       "TOKD": TOKD, "gV": gV.get_state(), "stream": stream, "recent_s": list(recent_s),
+                       "recent_p": list(recent_p), "index": dict(index), "sent_end": sent_end, "rd_hist": rd_hist,
+                       "st_fb": st_fb[0], "lopt": lopt.state_dict(),
+                       "model": {k_: m_.state_dict() for k_, m_ in M1_PARTS()},
+                       "lora": [p.detach().cpu() for p in G10.eparams()]}
+                tmp = os.path.join(ck, "m1_mem.pt.tmp")
+                torch.save(st_, tmp)
+                os.replace(tmp, os.path.join(ck, "m1_mem.pt"))
+                print(f"M1: memory saved after {done} sentences ({len(nodes)} nodes, {sum(funcs.n)} function keys)",
+                      flush=True)
+
+            def M1_PARTS():
+                return (("ask", ask), ("proj", proj), ("mem", mem), ("enc", enc), ("solver", solver), ("funcs", funcs),
+                        ("reader", reader), ("relm", relm), ("xattn", xattn))
+
+            def load_mem(path):
+                """F6: restore what save_mem wrote -> the number of sentences already read"""
+                st_ = torch.load(path, map_location=dev, weights_only=False)
+                fm = st_["funcs"]
+                while len(funcs.labels) < len(fm["n"]):
+                    lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0)),
+                                          "lr": 1e-3})
+                for k_, m_ in M1_PARTS():
+                    m_.load_state_dict(st_["model"][k_])
+                for p_, v_ in zip(G10.eparams(), st_["lora"]):
+                    p_.data.copy_(v_.to(dev))
+                for fi in range(len(fm["n"])):
+                    cap = max(1024, 1 << max(0, fm["n"][fi] - 1).bit_length())
+                    funcs.atoms[fi] = fm["atoms"][fi]
+                    funcs.K[fi] = torch.zeros(cap, DV, device=dev)
+                    funcs.Zv[fi] = torch.zeros(cap, E_, device=dev)
+                    funcs.K[fi][:fm["n"][fi]], funcs.Zv[fi][:fm["n"][fi]] = fm["K"][fi], fm["Zv"][fi]
+                funcs.n[:], funcs.cnt[:], funcs.at[:], funcs.used[:] = fm["n"], fm["cnt"], fm["at"], fm["used"]
+                nodes.extend(st_["nodes"])
+                edges.extend(st_["edges"])
+                outs.update(st_["outs"])
+                PZb.update(st_["PZb"])
+                TOKD.update(st_["TOKD"])
+                gV.set_state(st_["gV"].cpu())            # (a CPU generator; map_location moved its state)
+                lopt.load_state_dict(st_["lopt"])
+                return st_
 
             # ---------------------------------------------------------------- memory: nodes (one per mention), edges
             nodes, edges, outs = [], [], {}
@@ -5228,13 +5294,17 @@ def v11_t5(steps=3000, ep_species=8):
                 R = mem.r(enc.rel([H_] * len(claims), [c[0] for c in claims], [c[1] for c in claims], lims))
                 L_ = []
                 if nodes:
-                    Pz = ip(Z)
+                    # (F3, diagnosis 11-20: with A's own latent as the answer -- identity 'stays itself', no firing --
+                    # the score pulled A's latent toward B (gradient cos -0.99 to B) and B's toward A: the encoder could
+                    # lower this loss by merging A and B, no relation needed. Both sides are fixed here, so the loss
+                    # trains what answers: identity pick, halt, edges, functions, relation latent, identity space)
+                    Pz = ip(Z).detach()
                     rnd = torch.randint(0, len(nodes), (32,), device=dev)
                     for ci, c in enumerate(claims):
                         a, b = c[0], c[2]
                         if a[1] >= b[0]:                 # (A must come before B: nothing of B in A or r)
                             continue
-                        menA = (Z[zi[a]], name(a), None, H_[a[0]:a[1] + 1], H_[:a[1] + 1])
+                        menA = (Z[zi[a]].detach(), name(a), None, H_[a[0]:a[1] + 1], H_[:a[1] + 1])
                         tr = [] if len(trs) < 2 else None
                         v_hat, j_, _ = solve(menA, R[ci], train, now=sid, tr=tr, Dm=Dof(a))   # (no 2nd input here)
                         others = [zi[s_] for s_ in spans if s_ != b]
@@ -5692,6 +5762,19 @@ def v11_t5(steps=3000, ep_species=8):
             PEND = []                                    # (D1 E4 memory writes of the current sentence)
             RW = collections.Counter()                   # (measurement: words GNM supplied right, per window)
             t0 = time.time()
+            start_k = 0
+            if os.environ.get("M1_RESUME", ""):          # (F6: continue reading where a saved run stopped)
+                st_r = load_mem(os.environ["M1_RESUME"])
+                stream.extend(st_r["stream"])
+                recent_s.extend(st_r["recent_s"])
+                recent_p.extend(st_r["recent_p"])
+                index.update(st_r["index"])
+                sent_end.extend(st_r["sent_end"])
+                rd_hist.update(st_r["rd_hist"])
+                st_fb[0] = st_r["st_fb"]
+                start_k = st_r["done"]
+                print(f"M1: resumed {os.environ['M1_RESUME']} after {start_k} sentences ({len(nodes)} nodes, "
+                      f"{sum(funcs.n)} function keys in {len(funcs.labels)} functions)", flush=True)
 
             def mem_mask(text, ids_, pos):
                 """memory tokens: rare words of the sentence that an earlier sentence outside the window has and the
@@ -5716,7 +5799,9 @@ def v11_t5(steps=3000, ep_species=8):
                         f"tokens ({D_['n comp']}): {D_['ce0 comp'] / nc_:.3f} -> {D_['ce1 comp'] / nc_:.3f}{ctl} | "
                         f"queries/sentence {D_['queries'] / max(1, D_['sentences']):.2f} | self-prediction (local): "
                         f"{D_['sp hits']}/{D_['sp n']} hit (greedy {D_['sp greedy hits']}), numbers {D_['sp num hits']}/{D_['sp num n']} | a result named "
-                        f"the computed number: {D_['comp hits']}/{D_['comp segs']} segments | D1: new words the text "
+                        f"the computed number: {D_['comp hits']}/{D_['comp segs']} segments (CE drop on that number: "
+                        f"named {D_['comp hit drop'] / max(1, D_['comp hit n']):+.2f}, not named "
+                        f"{D_['comp miss drop'] / max(1, D_['comp miss n']):+.2f} nats) | D1: new words the text "
                         f"stated where GNM was asked {D_['new words stated where GNM was asked']}, segments with a right "
                         f"query or try {D_['segments with a right query']} (a policy query among them "
                         f"{D_['... one of them before its own stop']}; right ones {D_['right queries']}), tries that "
@@ -5724,6 +5809,8 @@ def v11_t5(steps=3000, ep_species=8):
                         f"{D_['function hits']}/{D_['function firings']}")
 
             for k_s, (ai, text) in enumerate(sents):
+                if k_s < start_k:                        # (F6: already read before the saved state)
+                    continue
                 heldout = ai >= len(arts) - n_ev
                 train = not heldout and not notrain
                 ids_f, H_c = sent(text)
@@ -5793,6 +5880,11 @@ def v11_t5(steps=3000, ep_species=8):
                             soft = to_llm(res) if res else None
                             c1, st_fb[0] = llm(ctx + ids_t[:b], soft, ids_t[b:e])   # (soft = the results' memory, T11)
                             ce1_l.append(c1)
+                            if ck[b]:                    # (measurement, diagnosis F2: what a result that names the
+                                for D_ in ((S, EV) if heldout else (S,)):   # number is worth to the LLM, in nats)
+                                    k_h = "hit" if hit_c else "miss"
+                                    D_[f"comp {k_h} n"] += 1
+                                    D_[f"comp {k_h} drop"] += float(ce0[b] - c1[0])
                             if heldout:                  # control: the same number of positions, NO memory content
                                 with torch.no_grad():
                                     cec_l.append(llm(ctx + ids_t[:b], proj(torch.zeros(len(soft), E_, device=dev)), ids_t[b:e])[0]
@@ -5805,7 +5897,11 @@ def v11_t5(steps=3000, ep_species=8):
                         sp_loss, sp_st, sp_tr, j0_ = read_m(text, ids_f, H_c, len(sent_end), train)
                         hs_loss = explore_after(recs, ids_t, j0_, train, top0)   # (D1: the text checks the queries)
                         if train:
-                            loss = (ce1.mean() + QCOST * cost + (LSP * sp_loss if sp_loss is not None else 0.)
+                            # (F1, diagnosis 11-20: CE is a MEAN over the sentence's tokens, the query cost a SUM over
+                            # queries -- a right result lowers ~one token's CE, so on 50-100-token sentences no extra
+                            # query could pay for itself; the cost is now per token too: QCOST nats per query per
+                            # sentence, in the same units as the CE mean)
+                            loss = (ce1.mean() + QCOST * cost / len(ids_t) + (LSP * sp_loss if sp_loss is not None else 0.)
                                     + (LHS * hs_loss if hs_loss is not None else 0.))
                         trs += [f"SELF-PREDICTION {x}" for x in (sp_tr if show else [])]
                 if train:
@@ -5840,6 +5936,9 @@ def v11_t5(steps=3000, ep_species=8):
                     if rl_:
                         (torch.stack(rl_).sum() / GA).backward()
                     if (k_s + 1) % GA == 0:
+                        # (F11, diagnosis 11-20: no clipping -- the imitation CE over ~150 candidates and the halt's
+                        # T12 comparison can spike; one step must not undo many)
+                        torch.nn.utils.clip_grad_norm_([p_ for g_ in lopt.param_groups for p_ in g_["params"]], 1.)
                         lopt.step()
                         lopt.zero_grad()
                 ce1 = ce1.detach()
@@ -5884,6 +5983,8 @@ def v11_t5(steps=3000, ep_species=8):
                     dump_graph(f"s{k_s + 1}")
                 if train and (k_s + 1) % 2000 == 0:
                     save_m1()
+                if train and ((k_s + 1) % 6000 == 0 or k_s + 1 == n_tr):
+                    save_mem(k_s + 1)                    # (F6: graph + function memories; big, so less often)
 
                 if (k_s + 1) % 500 == 0 or k_s + 1 == n_tr or k_s + 1 == len(sents):
                     tag = "EVAL" if heldout else ("train" if train else "read")
