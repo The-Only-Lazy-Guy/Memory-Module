@@ -4898,6 +4898,23 @@ def v11_t5(steps=3000, ep_species=8):
                     a_ = F.softmax(s_.q[i](h) @ s_.k[i](m_).T / 128 ** .5, -1)
                     return torch.tanh(s_.g[i]) * (a_ @ m_)
             xattn = XAttn().to(dev)
+            GD = int(os.environ.get("M1_GRADDIAG", "0"))   # (measurement: every GD-th training sentence, per signal)
+            GS = collections.Counter()
+
+            def grad_groups():
+                """(measurement) the trained parts, grouped -- which of them does each signal reach?"""
+                return [("1st-input pointer", list(ask.q1.parameters()) + list(ask.k1.parameters())),
+                        ("2nd-input pointer", list(ask.q2.parameters()) + list(ask.k2.parameters()) + [ask.none2]),
+                        ("asking state + need", list(ask.inp.parameters()) + list(ask.cell.parameters())
+                         + list(ask.need.parameters())),
+                        ("stop", list(ask.stop.parameters())),
+                        ("halt", list(solver.halt.parameters())),
+                        ("function pick", [solver.ft, solver.hb] + list(funcs.labels)),
+                        ("edge pick", list(mem.aa.parameters()) + [mem.rc]),
+                        ("encoder", list(enc.parameters())), ("identity", list(relm.parameters())),
+                        ("result projector", list(proj.parameters())),
+                        ("cross-attention q/k", list(xattn.q.parameters()) + list(xattn.k.parameters())),
+                        ("gate", [xattn.g]), ("LoRA", list(G10.eparams()))]
             XA = {"mem": None, "s": 0}                   # the results of the segment being predicted, and where it starts
 
             def _xhook(i):
@@ -5549,6 +5566,21 @@ def v11_t5(steps=3000, ep_species=8):
                                     + (LHS * hs_loss if hs_loss is not None else 0.))
                         trs += [f"SELF-PREDICTION {x}" for x in (sp_tr if show else [])]
                 if train:
+                    if GD and k_s % GD == 0 and not nomem:   # (measurement: which parts each signal reaches)
+                        grp = grad_groups()
+                        flat = [p for _, ps in grp for p in ps]
+                        for src, l_ in (("CE", ce1.mean()), ("imitation", hs_loss), ("self-prediction", sp_loss)):
+                            if l_ is None or not torch.is_tensor(l_) or not l_.requires_grad:
+                                continue
+                            gs = torch.autograd.grad(l_, flat, retain_graph=True, allow_unused=True)
+                            i = 0
+                            for nm_, ps in grp:
+                                n2 = sum(float(g.float().pow(2).sum()) for g in gs[i:i + len(ps)] if g is not None)
+                                i += len(ps)
+                                GS[(src, nm_, "sum")] += n2 ** .5 if n2 == n2 else 0.
+                                GS[(src, nm_, "nz")] += n2 > 0
+                                GS[(src, nm_, "nan")] += n2 != n2
+                            GS[(src, "n")] += 1
                     (loss / GA).backward()
                     # (C, 11-19 audit fix: the reader had no training signal) a picked claim edge's logit gradient says
                     # whether picking it lowered the loss (CE + self-prediction); the reader imitates its own reading of
@@ -5617,6 +5649,14 @@ def v11_t5(steps=3000, ep_species=8):
                           f"functions: {funcs.n}), functions created by confusion {S['functions created']}", flush=True)
                     print(f"   words GNM supplied right this window: {RW.most_common(12)}", flush=True)
                     RW.clear()
+                    if GD and GS:                        # (measurement: mean gradient norm per part and signal)
+                        for nm_, _ in grad_groups():
+                            print(f"   GRAD {nm_}: " + " | ".join(
+                                f"{src} {GS[(src, nm_, 'sum')] / max(1, GS[(src, 'n')]):.1e} (nonzero "
+                                f"{GS[(src, nm_, 'nz')]}/{GS[(src, 'n')]}"
+                                + (f", NaN {GS[(src, nm_, 'nan')]}" if GS[(src, nm_, 'nan')] else "") + ")"
+                                for src in ("CE", "imitation", "self-prediction") if GS[(src, "n")]), flush=True)
+                        GS.clear()
                     torch.cuda.reset_peak_memory_stats()
                     S = collections.Counter()
                 if k_s + 1 == n_tr:
