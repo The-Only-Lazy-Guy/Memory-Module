@@ -4667,64 +4667,36 @@ def v11_t5(steps=3000, ep_species=8):
             # "everything to based on classification + memorizaion ... node "1" add on node "1" (transform) and points to
             # node "2" ... model have to have a good definition of each nodes too"; V11 bind -> point -> remember)
             DV = int(os.environ.get("M1_DV", "1024"))    # (V11 vector size: definitions and function keys)
-            LHS = float(os.environ.get("M1_HS", "1"))    # weight of the ask's local signal (C1g)
+            LHS = float(os.environ.get("M1_HS", "1"))    # weight of the perception's own right tries (D1 E3)
+            KT = int(os.environ.get("M1_TRIES", "4"))    # queries per segment while training = exploration (D1 E1)
             gV = torch.Generator().manual_seed(11)
             atomV = lambda: F.normalize(torch.randn(DV, generator=gV), dim=0).to(dev)
             permV = [torch.randperm(DV, generator=gV).to(dev) for _ in range(2)]   # (argument position = a permutation)
-            DIG = {str(d_): atomV() for d_ in range(10)}
-            ROLE = {p_: atomV() for p_ in range(-6, 16)}  # (place of a digit: ... tenths -1, units 0, tens 1, ...)
-            NUMD, TSTR = {}, {}
+            TOKD, TSTR = {}, {}
 
             def bindv(a, b):
                 """V11 binding: circular convolution (fixed math, nothing learned)"""
                 return torch.fft.irfft(torch.fft.rfft(a) * torch.fft.rfft(b), n=a.shape[-1])
-
-            def canon(s):
-                """a number as written -> its value as one string ('1,200' and '1200.00' -> '1200'); None if not a number"""
-                s = s.strip().replace(",", "")
-                if not _re.fullmatch(r"\d+(?:\.\d+)?", s):
-                    return None
-                if "." in s:
-                    s = s.rstrip("0").rstrip(".")
-                s = s.lstrip("0") or "0"
-                return "0" + s if s.startswith(".") else s
-
-            def numD(c):
-                """C1b (V3, proposal): a number's definition = the sum over its digits of role(place) bound with the digit
-                (fixed atoms). By value: every mention of '48' has the same definition; '148' shares 2 of its 3 slots"""
-                if c not in NUMD:
-                    i_, _, f_ = c.partition(".")
-                    t_ = [bindv(ROLE[min(15, p_)], DIG[ch]) for p_, ch in enumerate(reversed(i_))]
-                    t_ += [bindv(ROLE[max(-6, -1 - p_)], DIG[ch]) for p_, ch in enumerate(f_)]
-                    NUMD[c] = F.normalize(torch.stack(t_).sum(0), dim=0)
-                return NUMD[c]
 
             def tstr(t):
                 if t not in TSTR:
                     TSTR[t] = tk.decode([t])
                 return TSTR[t]
 
-            def num_runs(ids_):
-                """C1b, the perception reads digits (proposal): a number in the text = digit tokens joined without a space,
-                with ',' or '.' between digits ('80,000', '1.5') -> [(first token, last token, value)]"""
-                out, i = [], 0
-                while i < len(ids_):
-                    if not tstr(ids_[i]).strip().isdigit():
-                        i += 1
-                        continue
-                    j = i
-                    while j + 1 < len(ids_):
-                        if tstr(ids_[j + 1]).isdigit():
-                            j += 1
-                        elif tstr(ids_[j + 1]) in (",", ".") and j + 2 < len(ids_) and tstr(ids_[j + 2]).isdigit():
-                            j += 2
-                        else:
-                            break
-                    c = canon("".join(tstr(t) for t in ids_[i:j + 1]))
-                    if c is not None:
-                        out.append((i, j, c))
-                    i = j + 1
-                return out
+            def tword(t):
+                """a token's text as a word (' 48' and '48' are the same word)"""
+                return tstr(t).strip()
+
+            def wordD(w):
+                """D1 E5 (general -- nothing knows about numbers): a mention's definition = its exact text (one fixed atom
+                per text: '48', 'Natalia', 'sold 48/2 ='), so every mention of the same text has the same definition"""
+                w = w.strip()
+                if w not in TOKD:
+                    TOKD[w] = atomV()
+                return TOKD[w]
+
+            def tokD(t):
+                return wordD(tword(t))
 
             def split_s(p):
                 if " . " in p or p.endswith(" ."):       # (WikiText's spaced punctuation)
@@ -4745,10 +4717,9 @@ def v11_t5(steps=3000, ep_species=8):
             def segs(ids_):
                 """T5: the LLM gets GNM's results before each segment; a segment ends at punctuation (incl. '=') or
                 after M1_SEG tokens -- so a result can arrive before the tokens that need it (my choice, flagged)"""
-                inner = {p_ for r0, r1, _ in num_runs(ids_) for p_ in range(r0, r1)}   # (C1b: never inside '1,200' / '1.5')
                 b, out = 0, []
                 for i, t in enumerate(ids_):
-                    if (t in PUN and i not in inner) or i + 1 - b >= SEGMAX:
+                    if t in PUN or i + 1 - b >= SEGMAX:
                         out.append((b, i + 1))
                         b = i + 1
                 if b < len(ids_):
@@ -4781,7 +4752,10 @@ def v11_t5(steps=3000, ep_species=8):
                     # operands of 'x op y =' in 8,000 sentences; a match between what the state holds and a candidate is
                     # a product, not a sum)
                     s_.q1, s_.k1 = nn.Linear(256, 128), nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, 128))
-                    s_.q2, s_.k2 = nn.Linear(256, 128), nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, 128))
+                    # (the 2nd input is chosen knowing the 1st: run d 11-19 traces asked (38, 38) for '38 ceiling tiles x
+                    # 2 =' -- the 2nd pointer did not see which number the 1st took)
+                    s_.q2 = nn.Sequential(nn.LayerNorm(256 + E_), nn.Linear(256 + E_, 128))
+                    s_.k2 = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, 128))
                     s_.none2 = nn.Parameter(torch.tensor(0.))
 
                 def step(s_, h, st, prev):
@@ -4790,8 +4764,8 @@ def v11_t5(steps=3000, ep_species=8):
                 def anchor_logits(s_, h, A):
                     return s_.k1(A) @ s_.q1(h) / 128 ** .5
 
-                def arg2_logits(s_, h, Rv):
-                    return torch.cat([s_.none2[None], s_.k2(Rv) @ s_.q2(h) / 128 ** .5])
+                def arg2_logits(s_, h, a, Rv):
+                    return torch.cat([s_.none2[None], s_.k2(Rv) @ s_.q2(torch.cat([h, a])) / 128 ** .5])
 
             class Enc(nn.Module):
                 """T6, the perception's encoder side (U3), learned by the same signals -- no decoder (user 11-19: "why do
@@ -4852,8 +4826,8 @@ def v11_t5(steps=3000, ep_species=8):
                 = a learned label (picked like an edge, by its relevance to the need) + a fixed atom + its OWN memory:
                 key = bind(atom, D(input 1) permuted, D(input 2) permuted), value = the node the text stated (counted; the
                 most counted value answers). A firing = ONE lookup: the exact key -> that node, else unknown. The memory
-                is written only from what the text states (C1f), never by a gradient; the model creates a new function
-                when one is confused (C1h). Replaces the nets of the redesign (they had no memory: R1-R3)"""
+                is written only from what the text states (D1 E4), never by a gradient; the model creates a new function
+                when one is confused (D1 E4). Replaces the nets of the redesign (they had no memory: R1-R3)"""
                 def __init__(s_):
                     super().__init__()
                     s_.labels = nn.ParameterList()
@@ -4910,13 +4884,14 @@ def v11_t5(steps=3000, ep_species=8):
                 gated cross-attention added to the output of its last XL blocks, at the positions that predict the
                 segment. Values = the result vectors themselves (a result node's name-token embeddings + its latent's
                 soft vector), so an exact token can flow to the tied output head; a null slot lets a position take
-                nothing. The gate starts at 0: at the start the LLM is exactly the baseline, and the gate opens only
-                as far as the results lower the loss"""
+                nothing. ~~The gate starts at 0~~ The gate starts slightly open (M1_GATE0, tanh .2 = .197): the query /
+                key get gradient in proportion to tanh(gate), so at 0 they could never learn which result to read; the
+                gate then only learned to stay shut against the junk ones (R3 / R4: .03-.04; C1 run d: about -.01)"""
                 def __init__(s_):
                     super().__init__()
                     s_.q = nn.ModuleList([nn.Linear(ED, 128) for _ in range(XL)])
                     s_.k = nn.ModuleList([nn.Linear(ED, 128) for _ in range(XL)])
-                    s_.g = nn.Parameter(torch.zeros(XL))
+                    s_.g = nn.Parameter(torch.full((XL,), float(os.environ.get("M1_GATE0", ".2"))))
 
                 def delta(s_, i, h, mem_):
                     m_ = torch.cat([mem_, torch.zeros(1, ED, device=dev)])
@@ -5036,14 +5011,17 @@ def v11_t5(steps=3000, ep_species=8):
                 """GNM answers one query: identity (the anchor jumps to the most relevant node, or stays itself) -> up to
                 KS firings (follow an edge, or fire a function = ONE lookup in its own memory, C1a) -> learned halt (also
                 before the first firing: the node identity found can be the answer).
-                Dm / Dy: the definitions of the anchor and of the 2nd input (C1b; None = no value definition: a function
-                cannot key on it). After a firing, the node it gave is the next firing's first input (C1c).
-                fwd=False: computed only for the gradient of an ask 'stop' (T12) -- no credit, no counts.
-                rec: filled with the first firing's logits (halt, pick) for the ask's local signal (C1g).
+                Dm / Dy: the definitions of the anchor and of the 2nd input (D1 E5: exact text; None = no input). After a
+                firing, the node it gave is the next firing's first input (C1c).
+                fwd=False: after the perception's own stop (exploration only) -- no credit, no counts.
+                rec: filled with the query's own trace -- every decision as (logits, the choice taken) -- and each taken
+                function firing as (function, key, the node it pointed at or None) for D1 (check, imitation, remember).
                 men = (latent, name, -, its token states, the text up to it). -> (value, node it ends on, used)"""
                 nb = near(men[0])
                 lg = relm(men, [nodes[j] for j in nb]) if nb else relm.create[None] + relm.cq(men[0])
                 k, w = pick(lg, train)
+                if rec is not None:
+                    rec["picks"].append((lg, k))
                 v = w @ torch.stack([nodes[j]["z"] for j in nb] + [men[0]])
                 cur = nb[k] if k < len(nb) else None
                 Dc = Dm if Dm is not None else (nodes[cur].get("D") if cur is not None else None)
@@ -5053,9 +5031,9 @@ def v11_t5(steps=3000, ep_species=8):
                 nd = need
                 for s_i in range(KS):
                     hl = torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v]))])
-                    if rec is not None and s_i < 2:
-                        rec[f"halt{s_i}"] = hl
                     kh, wh = pick(hl, train)
+                    if rec is not None:
+                        rec["picks"].append((hl, kh))
                     # T12 (11-19: halting before any firing took over -- 'go' got no gradient once 'halt' was picked,
                     # because the firing was never computed): in training the firing is computed in both cases; the
                     # forward keeps the picked branch, the gradient compares the two
@@ -5091,9 +5069,9 @@ def v11_t5(steps=3000, ep_species=8):
                     C_v.append(torch.stack([nodes[j_]["z"] if j_ is not None else solver.unk for j_ in fn_]))
                     C_m += [("func", fi, fn_[fi]) for fi in range(len(fl))]
                     lg_c = torch.cat(C_l)
-                    if rec is not None and s_i == 0:
-                        rec["pick0"], rec["cm0"] = lg_c, list(C_m)
                     k, w = pick(lg_c, train)
+                    if rec is not None and taken:
+                        rec["picks"].append((lg_c, k))
                     o = w @ torch.cat(C_v)
                     if C_m[k][0] == "edge":
                         if taken and fwd and train and torch.is_grad_enabled() and "R" in edges[C_m[k][1]]:
@@ -5105,6 +5083,8 @@ def v11_t5(steps=3000, ep_species=8):
                         fi, nxt, vn = C_m[k][1], C_m[k][2], o
                         if taken and fwd:
                             funcs.used[fi] += 1
+                        if taken and rec is not None and Dc is not None and Dy is not None:
+                            rec["fired"].append((fi, Dc, Dy, nxt))   # (D1 E4: what this firing asked, what it gave)
                         d_ = f"function {fi} -> {'unknown' if nxt is None else repr(nm(nxt))}"
                     v_n = wh[0] * vn + wh[1] * v         # (forward: the picked branch)
                     if not taken:
@@ -5125,7 +5105,7 @@ def v11_t5(steps=3000, ep_species=8):
                 claim (A, r, B) with A before B, GNM solves (A, r) before the claim is written and is scored on B
                 (InfoNCE in identity space against the sentence's other mentions and random memory nodes). Then every
                 mention becomes its own node (T4) and each claim an edge with its relation latent (T6).
-                -> (self-prediction loss or None, stats, traces, {first token of a number in the sentence: its node})"""
+                -> (self-prediction loss or None, stats, traces, index of the sentence's first token node or None)"""
                 claims = [c for c in reader.read(H_) if c[2] is not None and c[0] != c[2]]
                 st_, trs = collections.Counter(), []
                 if not claims:
@@ -5133,7 +5113,7 @@ def v11_t5(steps=3000, ep_species=8):
                 spans = list(dict.fromkeys(sp_ for c in claims for sp_ in (c[0], c[2])))
                 zi = {sp_: i for i, sp_ in enumerate(spans)}
                 name = lambda sp_: tk.decode(ids_[sp_[0]:sp_[1] + 1]).strip()
-                Dof = lambda sp_: numD(canon(name(sp_))) if canon(name(sp_)) is not None else None   # (C1b)
+                Dof = lambda sp_: wordD(name(sp_))       # (D1 E5: exact text)
                 lims = [max(1, c[0][0], c[2][0]) for c in claims]
                 Z = enc.thing([H_[a:b + 1] for a, b in spans], [H_[:b + 1] for a, b in spans])
                 R = mem.r(enc.rel([H_] * len(claims), [c[0] for c in claims], [c[1] for c in claims], lims))
@@ -5173,8 +5153,7 @@ def v11_t5(steps=3000, ep_species=8):
                     z = Z[zi[sp_]].detach()
                     nodes.append({"z": z, "m": [z], "sp": [H_[sp_[0]:sp_[1] + 1]], "cx": [H_[:sp_[1] + 1]],
                                   "names": [name(sp_)], "ids": ids_[sp_[0]:sp_[1] + 1], "sid": sid})
-                    if Dof(sp_) is not None:             # (C1b: a span that is a whole number has its digits' definition)
-                        nodes[-1]["D"] = Dof(sp_)
+                    nodes[-1]["D"] = Dof(sp_)            # (D1 E5: its exact text)
                     js[sp_] = len(nodes) - 1
                 pz_set(len(nodes) - len(spans), torch.stack([nodes[js[s_]]["z"] for s_ in spans]))
                 for ci, c in enumerate(claims):
@@ -5195,39 +5174,28 @@ def v11_t5(steps=3000, ep_species=8):
                 node, linked in reading order ('next'), and each of the reader's spans to its tokens ('part'); both
                 relation latents are learned. A value read once can be pointed at later (the LLM then gets that exact
                 token), and a computation read once ('48/2 = 24') can be found again: identity, then 'next' --
-                cumulative.
-                C1b (always, also without T10): every number in the sentence is a number node -- its definition = its
-                digits (by value), its tokens = the number's tokens ('$18' -> '18'), 'part' edges to its token nodes.
-                -> {first token of a number: its node} (C1f writes the stated values with these nodes)"""
+                cumulative. D1 E5: each token node's definition = its exact text.
+                -> index of the sentence's first token node (D1 E4 remembers stated words with these nodes), or None"""
+                if not TOKN:
+                    return None
+
                 def link(x, y, kind):
                     for dr, (u, v) in ((0, (x, y)), (1, (y, x))):
                         outs.setdefault(u, []).append(len(edges))
                         edges.append({"a": u, "b": v, "kind": kind, "dir": dr, "sid": sid, "rw": f"<{kind}>"})
                 j0 = len(nodes)
-                if TOKN:
-                    Zt = enc.thing([H_[p:p + 1] for p in range(len(ids_))], [H_[:p + 1] for p in range(len(ids_))])
-                    for p in range(len(ids_)):
-                        nodes.append({"z": Zt[p], "m": [Zt[p]], "sp": [H_[p:p + 1]], "cx": [H_[:p + 1]], "tok": True,
-                                      "names": [tk.decode([ids_[p]]).strip() or tk.decode([ids_[p]])], "ids": [ids_[p]],
-                                      "sid": sid})
-                    pz_set(j0, Zt)
-                    for p in range(len(ids_) - 1):
-                        link(j0 + p, j0 + p + 1, "nxt")
-                    for sp_, j in js.items():
-                        for p in range(sp_[0], min(sp_[1] + 1, len(ids_))):
-                            link(j, j0 + p, "part")
-                runs, rn = num_runs(ids_), {}
-                if runs:
-                    Zr = enc.thing([H_[a:b + 1] for a, b, _ in runs], [H_[:b + 1] for a, b, _ in runs])
-                    for (a, b, c_), z in zip(runs, Zr):
-                        nodes.append({"z": z, "m": [z], "sp": [H_[a:b + 1]], "cx": [H_[:b + 1]], "names": [c_],
-                                      "ids": ids_[a:b + 1], "sid": sid, "D": numD(c_), "num": c_})
-                        rn[a] = len(nodes) - 1
-                        if TOKN:
-                            for p in range(a, b + 1):
-                                link(rn[a], j0 + p, "part")
-                    pz_set(len(nodes) - len(runs), Zr)
-                return rn
+                Zt = enc.thing([H_[p:p + 1] for p in range(len(ids_))], [H_[:p + 1] for p in range(len(ids_))])
+                for p in range(len(ids_)):
+                    nodes.append({"z": Zt[p], "m": [Zt[p]], "sp": [H_[p:p + 1]], "cx": [H_[:p + 1]], "tok": True,
+                                  "names": [tk.decode([ids_[p]]).strip() or tk.decode([ids_[p]])], "ids": [ids_[p]],
+                                  "sid": sid, "D": tokD(ids_[p])})
+                pz_set(j0, Zt)
+                for p in range(len(ids_) - 1):
+                    link(j0 + p, j0 + p + 1, "nxt")
+                for sp_, j in js.items():
+                    for p in range(sp_[0], min(sp_[1] + 1, len(ids_))):
+                        link(j, j0 + p, "part")
+                return j0
 
             @torch.no_grad()
             def refresh():
@@ -5252,81 +5220,79 @@ def v11_t5(steps=3000, ep_species=8):
                 """what the perception has read lately: every token position of the last 2 sentences and of the current
                 sentence's prefix -> a span latent (a 4-token window; its learned token weights pick the span) + the
                 mention tuple identity needs. Never the text after the prefix (that is what the LLM predicts).
-                C1b: every number read lately is also its own candidate, with its definition (windows have none).
-                -> (latents, mention tuples, definitions, which candidates are numbers of the current prefix)"""
+                D1 E6: every token read lately is also its own candidate; every candidate has a definition (its exact
+                text, E5). -> (latents, mention tuples, definitions)"""
                 items = list(recent_s) + ([(H_c[:t], ids_c[:t])] if t > 0 else [])
-                sps, cxs, names, Ds, Pre = [], [], [], [], []
-                for ii, (H, ids) in enumerate(items):
+                sps, cxs, names, Ds = [], [], [], []
+                for H, ids in items:
                     for p in range(len(H)):
-                        e = min(len(H), p + 4)
-                        sps.append(H[p:e])
-                        cxs.append(H[:e])
-                        names.append(tk.decode(ids[p:e]).strip())
-                        Ds.append(None)
-                        Pre.append(False)
-                    for a, b, c_ in num_runs(ids[:len(H)]):
-                        sps.append(H[a:b + 1])
-                        cxs.append(H[:b + 1])
-                        names.append(c_)
-                        Ds.append(numD(c_))
-                        Pre.append(t > 0 and ii == len(items) - 1)
+                        for e in sorted({min(len(H), p + 4), p + 1}):   # (the 4-token window and the token itself)
+                            sps.append(H[p:e])
+                            cxs.append(H[:e])
+                            names.append(tk.decode(ids[p:e]).strip())
+                            Ds.append(wordD(names[-1]))
                 if not sps:
-                    return [], [], [], []
+                    return [], [], []
                 Z = enc.thing(sps, cxs)
-                return list(Z), [(z, n_, None, s_, c_) for z, n_, s_, c_ in zip(Z, names, sps, cxs)], Ds, Pre
+                return list(Z), [(z, n_, None, s_, c_) for z, n_, s_, c_ in zip(Z, names, sps, cxs)], Ds
 
-            def ask_seg(st0, A_lat, A_men, A_D, A_pre, train, now, tr=None):
-                """T5: the perception asks on its OWN state (no LLM forward between queries) until its own stop (>= 1
-                query, cold start, flagged); anchor and 2nd input point at recently read spans or earlier results.
-                C1: a function fired by a query keys on the definitions of the anchor and of the 2nd input.
-                -> ([(soft token, node)], expected number of queries, number of queries asked, the first query's record
-                for the local signal C1g)"""
+            def ask_seg(st0, A_lat, A_men, A_D, train, now, tr=None):
+                """T5 + D1: the perception asks on its OWN state (no LLM forward between queries); anchor and 2nd input
+                point at recently read spans / tokens or earlier results; a fired function keys on their definitions.
+                D1 E1 (user 11-19: "when input come for training, it can help explore, basically doing computation
+                multiple times (the multi query thing)"): while training it asks KT queries -- the computation done several
+                times, each sampled from its own beliefs, each seeing the earlier results; the LLM gets the results its
+                own stop would have given (the later ones weight 0 in the forward). At eval: its own stop (<= KQ).
+                -> ([(soft token, node)], expected number of queries, number asked, each query's own trace)"""
                 h, prev = torch.zeros(256, device=dev), torch.zeros(E_, device=dev)
-                res, cost, R_l, R_m, R_D, rec0 = [], 1., [], [], [], None
-                for q in range(KQ):
+                res, cost, R_l, R_m, R_D, recs_q, alive, n_pol = [], 1., [], [], [], [], None, 0
+                explore = train and torch.is_grad_enabled()
+                for q in range(KT if explore else KQ):
                     h = ask.step(h, st0, prev)
-                    gw, ks = None, 0
+                    rec = {"picks": [], "fired": [], "q": q}
                     if q > 0:
                         s_lg = torch.cat([torch.zeros(1, device=dev), ask.stop(h)])
                         cost = cost + F.softmax(s_lg, 0)[0]
                         ks, gw = pick(s_lg, train)
-                        # T12: in training a 'stop' still computes this query for the gradient (forward weight 0)
-                        if ks == 1 and not (train and torch.is_grad_enabled()):
+                        rec["stop"] = (s_lg, ks)
+                        if ks == 1 and not explore:
                             break
+                        alive = gw[0] if alive is None else alive * gw[0]   # (0 after its own stop: exploration only)
+                    pol = alive is None or float(alive) > .5
+                    rec["pol"] = pol
                     CL = torch.stack(A_lat + R_l)
                     CM = A_men + R_m
                     CD = A_D + R_D
                     al = ask.anchor_logits(h, CL)
                     ia, wa = pick(al, train)
+                    rec["picks"].append((al, ia))
                     men = (wa @ CL,) + tuple(CM[ia][1:])
                     need = F.normalize(ask.need(h), dim=-1)
-                    a2l = ask.arg2_logits(h, CL)
+                    a2l = ask.arg2_logits(h, wa @ CL, CL)
                     i2, w2 = pick(a2l, train)
-                    rec = None
-                    if q == 0:                           # (C1g: the numbers of this prefix it could point at, its logits)
-                        rec = rec0 = {"anchor": al, "arg2": a2l, "need": need.detach(),
-                                      "anchor_name": CM[ia][1] if CD[ia] is not None else None,
-                                      "arg2_name": CM[i2 - 1][1] if i2 > 0 and CD[i2 - 1] is not None else None,
-                                      "cands": [(i, d_, CM[i][1]) for i, d_ in enumerate(CD) if d_ is not None and A_pre[i]]}
-                    t_ = [] if tr is not None and ks == 0 else None
-                    v, node, used = solve(men, need, train, now=now, tr=t_, fwd=ks == 0, Dm=CD[ia],
+                    rec["picks"].append((a2l, i2))
+                    rec["need"] = need.detach()
+                    t_ = [] if tr is not None and pol else None
+                    v, node, used = solve(men, need, train, now=now, tr=t_, fwd=pol, Dm=CD[ia],
                                           Dy=CD[i2 - 1] if i2 > 0 else None, rec=rec)
-                    if ks == 1:                          # (the 'stop' branch: in the memory with weight 0 -- forward
-                        res.append((gw[0] * proj(v), None))   # adds one empty slot, like the null slot)
-                        break
-                    if tr is not None:
+                    rec["result"] = node
+                    recs_q.append(rec)
+                    if t_ is not None:
                         tr.append(f"q{q + 1} (2nd input {'none' if i2 == 0 else repr(CM[i2 - 1][1])}): " + " ; ".join(t_))
-                    for u in used:
-                        S["edge picks" if u[0] == "edge" else "function picks"] += 1
-                        if u[0] == "func":               # (C1 measurement: a fired function found the key or not)
-                            C1S["function firings"] += 1
-                            C1S["function hits"] += u[2] is not None
-                    res.append((proj(v) if gw is None else gw[0] * proj(v), node))
+                    if pol:
+                        for u in used:
+                            S["edge picks" if u[0] == "edge" else "function picks"] += 1
+                            if u[0] == "func":           # (measurement: a fired function found the key or not)
+                                C1S["function firings"] += 1
+                                C1S["function hits"] += u[2] is not None
+                    # (after its own stop a result is exploration: weight 0 and no tokens for the LLM)
+                    res.append((proj(v) if alive is None else alive * proj(v), node if pol else None))
+                    n_pol += pol
                     R_l.append(v)
                     R_m.append((v, "<result>", None, v[None], v[None]))
                     R_D.append(nodes[node].get("D") if node is not None else None)
                     prev = v
-                return res, cost, len(R_l), rec0
+                return res, cost, n_pol, recs_q
 
             def to_llm(res):
                 """T1 + T11: each result -> what the LLM's cross-attention reads: its name-token embeddings when its node
@@ -5402,102 +5368,57 @@ def v11_t5(steps=3000, ep_species=8):
                             print(f"GRAPH {tag} relation latent '{w}' ({len(grp[w])} edges, spread {1 - tight:.2f}): "
                                   "nearest " + ", ".join(f"'{x}' {s_:.2f}" for x, s_ in nb_[:4]), flush=True)
 
-            def stated(ids_t, b):
-                """C1f: the number a segment starts with (after an optional '$') -- a value the text states right at a
-                point where GNM was asked: (first token, last token, value) or None"""
-                runs = {r[0]: r for r in num_runs(ids_t)}
-                if b in runs:
-                    return runs[b]
-                if b + 1 in runs and tstr(ids_t[b]).strip() == "$":
-                    return runs[b + 1]
-                return None
-
-            def hindsight(rec, zc):
-                """C1g: which of the first query's own candidate questions (a function, input 1 and input 2 among the
-                numbers of this sentence before zc -- what memory holds is always such a pair, C1f) does GNM's memory
-                answer with zc? -> (times stated, function, anchor index, 2nd-input index) of the most confirmed one,
-                or None. (11-19 C1 run: searching the last 2 sentences' numbers too made 93% of the targets an earlier
-                mention of the same values -- or another pair -- instead of the numbers the text computes with)"""
-                cs = rec["cands"]
-                P = [(a, b_) for a in range(len(cs)) for b_ in range(len(cs)) if a != b_]
-                if not P:
+            def explore_after(qrecs, ids_t, j0, train):
+                """D1, after the sentence is read (the text has now said what came after each point where GNM was asked);
+                general -- nothing here knows about numbers or operators:
+                - E2 the text checks every query asked at a segment: RIGHT = its result is the word the text states right
+                  after that point, and that word was not in view (not in the recent text the perception could point at)
+                  -- GNM is right when it supplies what could not be copied (user 11-16: "the model know its mistakes
+                  and a update is local too (signal dont rely to LLM)");
+                - E3 a right query is the target for all its own picks, and the stop for right after it -- its own right
+                  trace (D7; user 11-03 "N rollouts, best = target");
+                - E4 remember (one shot, no gradient): a firing that pointed at nothing gets that word (user 11-16 "if
+                  cant point -> create new node", T4 open slots filled by later reading); a value the text contradicts
+                  is outcounted, and a function that had it stated twice or more is confused -> the model creates a new
+                  function (label = that query's need) for the fact.
+                -> local loss or None"""
+                if j0 is None:
                     return None
-                Dx, Dy = torch.stack([cs[a][1] for a, _ in P]), torch.stack([cs[b_][1] for _, b_ in P])
-                best = None
-                for fi in range(len(funcs.labels)):
-                    ks, _ = funcs.find(fi, funcs.key(fi, Dx, Dy))
-                    for pi in (ks >= 0).nonzero().flatten().tolist():
-                        c_, n_, _ = funcs.value(fi, int(ks[pi]))
-                        if c_ == zc and (best is None or n_ > best[0]):
-                            best = (n_, fi, cs[P[pi][0]][0], cs[P[pi][1]][0])
-                return best
-
-            def c1_after(recs, ids_t, rn, train):
-                """after the sentence is read (the text has now stated its values):
-                - C1g, the ask's local signal (user 11-16: "the model know its mistakes and a update is local too (signal
-                  dont rely to LLM)"): for each segment that starts with a number z, GNM searches its OWN memory as it was
-                  before this sentence for a question among its first query's candidates that answers z; if one does,
-                  the first query imitates it (anchor, 2nd input, that function, go) -- its own right trace (D7);
-                - C1f, remember (one shot, no gradient): 'x op y = z' -- the two numbers right before z in the sentence
-                  are written (x, y) -> z into the function the operator symbol between them names (the perception
-                  reads the symbol as it reads digits; proposal). A computation that recurs is counted again;
-                - C1h: a symbol no function names yet -> the model creates a function for it (label = this need).
-                -> the local loss or None"""
-                runs, L_, todo = num_runs(ids_t), [], []
-                for b, rec in recs:
-                    st = stated(ids_t, b) if rec is not None else None
-                    if st is None or st[0] not in rn:
+                L_ = []
+                T_ = lambda i: torch.tensor([i], device=dev)
+                for b, recs_q in qrecs:
+                    if not recs_q or b >= len(ids_t):
                         continue
-                    zc = st[2]
-                    C1S["stated numbers"] += 1
-                    hit = hindsight(rec, zc)
-                    if hit is not None:
-                        C1S["memory could answer"] += 1
-                        # (measurement: did the first query point at that pair -- by value, either order?)
-                        vals = {i: c_ for i, _, c_ in rec["cands"]}
-                        pv = (rec["anchor_name"], rec["arg2_name"])
-                        C1S["it pointed at that pair"] += collections.Counter(pv) == collections.Counter((vals[hit[2]], vals[hit[3]]))
-                        if train and "pick0" in rec:
-                            _, fi, xi, yi = hit
-                            pi = next(i for i, m_ in enumerate(rec["cm0"]) if m_[0] == "func" and m_[1] == fi)
-                            T_ = lambda i: torch.tensor([i], device=dev)
-                            # (the whole right trace: point at x and y, go, fire that function, then halt -- run c
-                            # 11-19: without the last part a 2nd firing replaced the right value)
-                            L_.append(F.cross_entropy(rec["anchor"][None], T_(xi)) + F.cross_entropy(rec["arg2"][None], T_(yi + 1))
-                                      + F.cross_entropy(rec["pick0"][None], T_(pi)) + F.cross_entropy(rec["halt0"][None], T_(0))
-                                      + (F.cross_entropy(rec["halt1"][None], T_(1)) if "halt1" in rec else 0.))
-                    todo.append((b, rec, zc, rn[st[0]]))
-                for b, rec, zc, znode in todo:
-                    pre = [r for r in runs if r[1] < b]
-                    if len(pre) < 2:
+                    zw = tword(ids_t[b])
+                    view = {tword(t) for _, ids in recent_s for t in ids} | {tword(t) for t in ids_t[:b]}
+                    if not any(ch.isalnum() for ch in zw) or zw in view:
                         continue
-                    # 'x op y = z': the two numbers right before the stated value, as written (offline check on the
-                    # run's GSM8K split: writing every pair of earlier numbers instead gave 7,173 confused keys and
-                    # 151 wrong held-out answers vs 486 / 83 with this rule -- docs/TASK_STACK.md), into the function
-                    # their operator symbol names. (C1 runs a-b 11-19: routed by the need, every function held mixed
-                    # operators -- e.g. '*' 19%, '+' 16%, '-' 13% -- so the routing had no consistent target to learn)
-                    btw = tk.decode(ids_t[pre[-2][1] + 1:pre[-1][0]])
-                    op = _re.sub(r"[A-Za-z\s$]", "", btw) or btw.strip()
-                    if not op:
-                        continue
-                    fi = OPFN.get(op)
-                    if fi is None:                       # (C1h: a symbol no function has yet -> the model creates one)
-                        free = [i for i in range(len(funcs.labels)) if i not in OPFN.values()]
-                        if free:
-                            fi = free[0]
-                        elif len(funcs.labels) < NF:
-                            lopt.add_param_group({"params": funcs.spawn(rec["need"]), "lr": 1e-3})
-                            fi = len(funcs.labels) - 1
-                        else:
-                            continue
-                        OPFN[op] = fi
-                        C1S["functions created"] += 1
-                        print(f"M1: function {fi} = the one '{op}' names (first fact: "
-                              f"'{tk.decode(ids_t[pre[-2][0]:b]).strip()} {zc}')", flush=True)
-                    q_ = funcs.key(fi, numD(pre[-2][2]), numD(pre[-1][2]))
-                    funcs.write(fi, q_, zc, znode)
-                    C1S["facts written"] += 1
-                    OPF[fi][op[:8]] += 1                 # (measurement: what each function holds)
+                    zn = j0 + b                          # (the token node of the word the text stated)
+                    C1S["new words stated where GNM was asked"] += 1
+                    right = [r for r in recs_q if r["result"] is not None and nodes[r["result"]]["names"][0] == zw]
+                    C1S["right queries"] += len(right)
+                    C1S["segments with a right query"] += bool(right)
+                    C1S["... one of them before its own stop"] += any(r["pol"] for r in right)
+                    if train and right:
+                        jr = min(r["q"] for r in right)
+                        for r in right:
+                            L_ += [F.cross_entropy(lg_[None], T_(k_)) for lg_, k_ in r["picks"]]
+                        L_ += [F.cross_entropy(r["stop"][0][None], T_(int(r["q"] == jr + 1)))
+                               for r in recs_q if "stop" in r and r["q"] <= jr + 1]
+                    for r in recs_q:
+                        # (only the firing that gave the query's answer is judged -- an earlier one in a chain was a step)
+                        for fi, Dx, Dy, gave in r["fired"][-1:] if r["fired"] and r["fired"][-1][3] == r["result"] else []:
+                            if gave is not None and nodes[gave]["names"][0] != zw:   # (contradicted by the text)
+                                k_ = int(funcs.find(fi, funcs.key(fi, Dx, Dy))[0])
+                                if k_ >= 0 and funcs.value(fi, k_)[1] >= 2 and len(funcs.labels) < NF:
+                                    print(f"M1: function {len(funcs.labels)} created: function {fi} said "
+                                          f"'{funcs.value(fi, k_)[0]}' ({funcs.value(fi, k_)[1]}x), the text said '{zw}'",
+                                          flush=True)
+                                    lopt.add_param_group({"params": funcs.spawn(r["need"]), "lr": 1e-3})
+                                    fi = len(funcs.labels) - 1
+                                    C1S["functions created"] += 1
+                            funcs.write(fi, funcs.key(fi, Dx, Dy), zw, zn)
+                            C1S["facts written"] += 1
                 return torch.stack(L_).mean() if L_ else None
 
             # ---------------------------------------------------------------- the stream
@@ -5505,9 +5426,7 @@ def v11_t5(steps=3000, ep_species=8):
             index, sent_end = collections.defaultdict(list), []
             S, EV = collections.Counter(), collections.Counter()
             st_fb = [None]                               # the LLM's state after the last segment with GNM's results (U7)
-            C1S = collections.Counter()                  # (C1 measurements of the current sentence)
-            OPF = collections.defaultdict(collections.Counter)   # (measurement: function -> text between its operands)
-            OPFN = {}                                    # (C1h: operator symbol -> the function it names)
+            C1S = collections.Counter()                  # (measurements of the current sentence)
             t0 = time.time()
 
             def mem_mask(text, ids_, pos):
@@ -5533,11 +5452,11 @@ def v11_t5(steps=3000, ep_species=8):
                         f"tokens ({D_['n comp']}): {D_['ce0 comp'] / nc_:.3f} -> {D_['ce1 comp'] / nc_:.3f}{ctl} | "
                         f"queries/sentence {D_['queries'] / max(1, D_['sentences']):.2f} | self-prediction (local): "
                         f"{D_['sp hits']}/{D_['sp n']} hit (greedy {D_['sp greedy hits']}), numbers {D_['sp num hits']}/{D_['sp num n']} | a result named "
-                        f"the computed number: {D_['comp hits']}/{D_['comp segs']} segments | C1: numbers stated where GNM "
-                        f"was asked {D_['stated numbers']}, its memory held a question among its candidates that answers "
-                        f"them {D_['memory could answer']} (its first query pointed at that pair "
-                        f"{D_['it pointed at that pair']}), fired functions found their key {D_['function hits']}/"
-                        f"{D_['function firings']}")
+                        f"the computed number: {D_['comp hits']}/{D_['comp segs']} segments | D1: new words the text "
+                        f"stated where GNM was asked {D_['new words stated where GNM was asked']}, segments with a right "
+                        f"query {D_['segments with a right query']} (one before its own stop "
+                        f"{D_['... one of them before its own stop']}; right queries {D_['right queries']}), fired "
+                        f"functions found their key {D_['function hits']}/{D_['function firings']}")
 
             for k_s, (ai, text) in enumerate(sents):
                 heldout = ai >= len(arts) - n_ev
@@ -5561,21 +5480,18 @@ def v11_t5(steps=3000, ep_species=8):
                     else:
                         cost = 0.
                         for (b, e) in segs(ids_t):
-                            A_lat, A_men, A_D, A_pre = anchors(recent_s, H_c, ids_f, b)
+                            A_lat, A_men, A_D = anchors(recent_s, H_c, ids_f, b)
                             tr = [] if show else None
                             # U7 (11-19 audit fix): the perception reads the LLM's state AFTER GNM's last results (the
                             # previous segment's forward with them); only the stream's very first segment reads the LLM alone
                             st_in = st_fb[0] if st_fb[0] is not None else st_all[b]
-                            res, c_, nl_, rec_ = (ask_seg(st_in, A_lat, A_men, A_D, A_pre, train, len(sent_end), tr)
-                                                  if A_lat else ([], 0., 0, None))
-                            recs.append((b, rec_))
+                            res, c_, nl_, recs_q = (ask_seg(st_in, A_lat, A_men, A_D, train, len(sent_end), tr)
+                                                    if A_lat else ([], 0., 0, []))
+                            recs.append((b, recs_q))
                             cost = cost + c_
                             n_q += nl_
-                            st_c = stated(ids_t, b)      # (measurement: did a result name the computed number? also '= $18')
-                            if st_c is not None and ck[st_c[0]]:
-                                hit_c = any(n_ is not None and (nodes[n_].get("num") == st_c[2]
-                                                                or nodes[n_]["ids"][:1] == ids_t[st_c[0]:st_c[0] + 1])
-                                            for _, n_ in res)
+                            if ck[b]:                    # (benchmark measurement: did a result name the computed number?)
+                                hit_c = any(n_ is not None and nodes[n_]["ids"][:1] == ids_t[b:b + 1] for _, n_ in res)
                                 for D_ in ((S, EV) if heldout else (S,)):
                                     D_["comp segs"] += 1
                                     D_["comp hits"] += hit_c
@@ -5594,8 +5510,8 @@ def v11_t5(steps=3000, ep_species=8):
                                            f"{float(ce0[b:e].mean()):.2f} -> GNM {float(c1.mean()):.2f} | " + " || ".join(tr))
                         ce1 = torch.cat(ce1_l)
                         # the perception reads the sentence into GNM (after the LLM predicted it); local signal first
-                        sp_loss, sp_st, sp_tr, rn_ = read_m(text, ids_f, H_c, len(sent_end), train)
-                        hs_loss = c1_after(recs, ids_t, rn_, train)   # (C1g local signal, then C1f remember / C1h)
+                        sp_loss, sp_st, sp_tr, j0_ = read_m(text, ids_f, H_c, len(sent_end), train)
+                        hs_loss = explore_after(recs, ids_t, j0_, train)   # (D1: the text checks the queries; remember)
                         if train:
                             loss = (ce1.mean() + QCOST * cost + (LSP * sp_loss if sp_loss is not None else 0.)
                                     + (LHS * hs_loss if hs_loss is not None else 0.))
@@ -5642,7 +5558,7 @@ def v11_t5(steps=3000, ep_species=8):
                     print(f"REASON sentence {k_s}{' (held out)' if heldout else ''}: '{text[:100]}'", flush=True)
                     for t_ in trs:
                         print(f"   {t_}", flush=True)
-                # (function creation is C1h now: a confused function -> a new one, in c1_after)
+                # (function creation: a confused function -> a new one, in explore_after, D1 E4)
                 if not nomem:
                     recent_s.append((H_c, ids_f))
                 for w in rare(text):
@@ -5665,12 +5581,8 @@ def v11_t5(steps=3000, ep_species=8):
                           f"credited +{S['reads credited +']} / -{S['reads credited -']} | nodes {len(nodes)}, edges {len(edges) // 2} "
                           f"| gate {[round(float(torch.tanh(g_)), 3) for g_ in xattn.g]} "
                           f"| GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
-                    print(f"   C1 memory: facts written {S['facts written']} (keys now {sum(funcs.n)} in {len(funcs.labels)} "
-                          f"functions: {funcs.n}), functions created by confusion {S['functions created']} | fired "
-                          f"functions found their key {S['function hits']}/{S['function firings']}", flush=True)
-                    print("   C1 what each function holds (text between the operands of its facts, all so far): " + " | ".join(
-                        f"f{fi}: " + ", ".join(f"'{o}' {n / sum(c.values()):.0%}" for o, n in c.most_common(3))
-                        for fi, c in sorted(OPF.items()) if sum(c.values()) >= 20), flush=True)
+                    print(f"   memory: facts written {S['facts written']} (keys now {sum(funcs.n)} in {len(funcs.labels)} "
+                          f"functions: {funcs.n}), functions created by confusion {S['functions created']}", flush=True)
                     torch.cuda.reset_peak_memory_stats()
                     S = collections.Counter()
                 if k_s + 1 == n_tr:
