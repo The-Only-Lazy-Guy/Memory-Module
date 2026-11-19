@@ -5462,7 +5462,7 @@ def v11_t5(steps=3000, ep_species=8):
                 if train and torch.is_grad_enabled() and h0 is not None and len(A_lat) > 1:   # (D1 E1: the tries)
                     CL0 = torch.stack(A_lat)
                     al0, need0 = ask.anchor_logits(h0, CL0, pri_A), F.normalize(ask.need(h0), dim=-1)
-                    for ia, j2, fi in best_questions(h0, al0, need0, CL0, A_D, pri_A, shares):
+                    for ia, j2, fi in best_questions(need0, A_D, pri_A, shares):
                         rec = {"picks": [], "fired": [], "pol": False, "need": need0.detach()}
                         wa = st(al0, ia)
                         rec["picks"].append((al0, ia))
@@ -5481,23 +5481,27 @@ def v11_t5(steps=3000, ep_species=8):
                 return res, cost, n_pol, recs_q
 
             @torch.no_grad()
-            def best_questions(h0, al0, need0, CL0, D_, pri, shares):
-                """E10 (11-19; user: "why you think random will help ... be clever"): the KT best questions by the
-                model's OWN scores -- log p(anchor) + log p(2nd input | anchor) + log p(function | need, which memories
-                point) -- the same scores the policy and the solver use (the solver's step-0 function score: relevance
-                of the need to the label + whether its memory holds the key). Best-first: the same context asks the
-                same questions, so a value the text states twice is confirmed. KT DIFFERENT input pairs, each with
-                its best function (E10 run 11-19: over whole triples, two functions with near-equal scores took half
-                of the tries for one pair; from '=' the operator is looked at as much as the other number, so the
-                two numbers were asked at 4 of 150 points; a memory that knows the pair still picks its function by
-                the hit). -> [(anchor, 2nd input, function)]"""
-                n_ = len(CL0)
-                lpa = F.log_softmax(al0, 0)
+            def best_questions(need0, D_, pri, shares):
+                """E10 (11-19; user: "why you think random will help ... be clever"): the KT best questions, no dice --
+                inputs ranked by where the LLM looks from the asking point (the E9 prior: log p(anchor) + log p(2nd
+                input | anchor)), each pair with the function the solver itself ranks first (relevance of the need to
+                the label + whether its memory holds the key). Best-first: the same context asks the same questions,
+                so a value the text states twice is confirmed. KT DIFFERENT questions (two tokens with the same text
+                are one key), each with its best function (E10 run 11-19: over whole triples, two functions with
+                near-equal scores took half of the tries for one pair; from '=' the operator is looked at as much as
+                the other number, so the two numbers were asked at 4 of 150 points). -> [(anchor, 2nd input, function)]"""
+                n_ = len(pri)
+                # (ranked by where the LLM looks -- the E9 prior with its learned mix -- not by the pointers' learned
+                # part: E10 run 11-19, within 60 steps the learned part, taught by right tries on sentence-start words
+                # ('The' 7x, 'If', 'He'), made every try at '16 x 2 =' ask ('altogether', '.'), ('spend', '.') ... while
+                # the LLM looked at '2' and '16'. Exploration stays on the text the LLM attends to; the learned part
+                # steers the policy, which imitates the right tries)
+                lpa = F.log_softmax(ask.lam1 * pri, 0)
                 fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
                 fs = solver.ft * (fl @ need0)                     # (per function)
                 cand = []
                 for ia in lpa.topk(min(KT, n_)).indices.tolist():
-                    a2 = ask.arg2_logits(h0, CL0[ia], CL0, pri)[1:]
+                    a2 = ask.lam2 * pri.clone()
                     ex = shares(ia, n_)
                     if bool(ex.all()):
                         continue
