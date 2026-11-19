@@ -5738,7 +5738,7 @@ def v11_t5(steps=3000, ep_species=8):
                             print(f"GRAPH {tag} relation latent '{w}' ({len(grp[w])} edges, spread {1 - tight:.2f}): "
                                   "nearest " + ", ".join(f"'{x}' {s_:.2f}" for x, s_ in nb_[:4]), flush=True)
 
-            def explore_after(qrecs, ids_t, j0, train, top0):
+            def explore_after(qrecs, ids_t, j0, train, top0, ce1):
                 """D1, after the sentence is read (the text has now said what came after each point where GNM was asked);
                 general -- nothing here knows about numbers or operators:
                 - E2 the text checks every query asked at a segment: RIGHT = its result is the word the text states right
@@ -5748,15 +5748,20 @@ def v11_t5(steps=3000, ep_species=8):
                   sentence starts -- words the LLM already predicts) (user 11-16: "the model know its mistakes and a
                   update is local too (signal dont rely to LLM)");
                 - E3 a right query or try is the target for all its own picks -- its own right trace (D7; user 11-03 "N
-                  rollouts, best = target"); a right try teaches the policy's first question;
+                  rollouts, best = target"); a right try teaches the policy's first question; E18 (11-20): the trace's
+                  last step is the LLM saying the result (user: all output said by the LM; the translator gets +/-
+                  signals) -- where the policy's result was right, the LLM's CE there is a target too, its own mean
+                  (e26: a right result reached the LLM 4-14x per window and its CE fell by ~.1, gates closing; the
+                  xprobe: the same interface trained where results land learns a .5 drop with 15% right -- in the run
+                  that point is ~1 of the ~300 token CEs in an 8-sentence step);
                 - E4 remember (one shot, no gradient): a firing that pointed at nothing gets that word (user 11-16 "if
                   cant point -> create new node", T4 open slots filled by later reading); a value the text contradicts
                   is outcounted; E11: when one question has two answers the text confirmed (each stated >= 2x), the
                   model creates a new function (label = that query's need) for the 2nd.
-                -> local loss or None"""
+                -> (local loss of the picks or None, the LLM's 'say' loss or None)"""
                 if j0 is None:
-                    return None
-                L_, newf = [], NEWF                      # (a question split once -> its new function, for good: e22
+                    return None, None
+                L_, SY, newf = [], [], NEWF              # (a question split once -> its new function, for good: e22
                                                          #  split function 18's '30'/'8' question twice)
                 T_ = lambda i: torch.tensor([i], device=dev)
                 for b, recs_q in qrecs:
@@ -5777,6 +5782,10 @@ def v11_t5(steps=3000, ep_species=8):
                     if train and right:
                         for r in right:
                             L_ += [F.cross_entropy(lg_[None], T_(k_)) for lg_, k_ in r["picks"]]
+                    if any(r["pol"] for r in right):     # (E18: the LLM had this right result in its memory)
+                        C1S["say targets"] += 1
+                        if train and ce1.requires_grad:
+                            SY.append(ce1[b])
                     for r in recs_q:
                         # (only the firing that gave the query's answer is judged -- an earlier one in a chain was a step)
                         for fi, Dx, Dy, gave in r["fired"][-1:] if r["fired"] and r["fired"][-1][3] == r["result"] else []:
@@ -5803,7 +5812,7 @@ def v11_t5(steps=3000, ep_species=8):
                             # gradient -- writing it in place before the backward broke autograd, P1+E9 run 11-19)
                             PEND.append((fi, funcs.key(fi, Dx, Dy), zw, zn, nodes[zn]["z"]))
                             C1S["facts written"] += 1
-                return torch.stack(L_).mean() if L_ else None
+                return (torch.stack(L_).mean() if L_ else None), (torch.stack(SY).mean() if SY else None)
 
             # ---------------------------------------------------------------- the stream
             stream, recent_s = [], collections.deque(maxlen=2)
@@ -5967,20 +5976,22 @@ def v11_t5(steps=3000, ep_species=8):
                         ce1 = torch.cat(ce1_l)
                         # the perception reads the sentence into GNM (after the LLM predicted it); local signal first
                         sp_loss, sp_st, sp_tr, j0_ = read_m(text, ids_f, H_c, len(sent_end), train)
-                        hs_loss = explore_after(recs, ids_t, j0_, train, top0)   # (D1: the text checks the queries)
+                        hs_loss, say_loss = explore_after(recs, ids_t, j0_, train, top0, ce1)   # (D1: the text checks)
                         if train:
                             # (F1, diagnosis 11-20: CE is a MEAN over the sentence's tokens, the query cost a SUM over
                             # queries -- a right result lowers ~one token's CE, so on 50-100-token sentences no extra
                             # query could pay for itself; the cost is now per token too: QCOST nats per query per
                             # sentence, in the same units as the CE mean)
                             loss = (ce1.mean() + QCOST * cost / len(ids_t) + (LSP * sp_loss if sp_loss is not None else 0.)
-                                    + (LHS * hs_loss if hs_loss is not None else 0.))
+                                    + (LHS * hs_loss if hs_loss is not None else 0.)
+                                    + (LHS * say_loss if say_loss is not None else 0.))   # (E18)
                         trs += [f"SELF-PREDICTION {x}" for x in (sp_tr if show else [])]
                 if train:
                     if GD and k_s % GD == 0 and not nomem:   # (measurement: which parts each signal reaches)
                         grp = grad_groups()
                         flat = [p for _, ps in grp for p in ps]
-                        for src, l_ in (("CE", ce1.mean()), ("imitation", hs_loss), ("self-prediction", sp_loss)):
+                        for src, l_ in (("CE", ce1.mean()), ("imitation", hs_loss), ("say (E18)", say_loss),
+                                        ("self-prediction", sp_loss)):
                             if l_ is None or not torch.is_tensor(l_) or not l_.requires_grad:
                                 continue
                             gs = torch.autograd.grad(l_, flat, retain_graph=True, allow_unused=True)
@@ -6067,7 +6078,8 @@ def v11_t5(steps=3000, ep_species=8):
                           f"| GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
                     print(f"   memory: facts written {S['facts written']} (keys now {sum(funcs.n)} in {len(funcs.labels)} "
                           f"functions: {funcs.n}), functions created by confusion {S['functions created']}", flush=True)
-                    print(f"   words GNM supplied right this window: {RW.most_common(12)}", flush=True)
+                    print(f"   words GNM supplied right this window: {RW.most_common(12)} | E18 say targets (a right policy "
+                          f"result in the LLM memory, where needed): {S['say targets']}", flush=True)
                     RW.clear()
                     print(f"   E10 check: tries that asked a stored question {S['tries that asked a stored question']}/"
                           f"{S['tries']} | at {S['computed points (both numbers readable)']} computed points the two "
@@ -6083,7 +6095,8 @@ def v11_t5(steps=3000, ep_species=8):
                                 f"{src} {GS[(src, nm_, 'sum')] / max(1, GS[(src, 'n')]):.1e} (nonzero "
                                 f"{GS[(src, nm_, 'nz')]}/{GS[(src, 'n')]}"
                                 + (f", NaN {GS[(src, nm_, 'nan')]}" if GS[(src, nm_, 'nan')] else "") + ")"
-                                for src in ("CE", "imitation", "self-prediction") if GS[(src, "n")]), flush=True)
+                                for src in ("CE", "imitation", "say (E18)", "self-prediction") if GS[(src, "n")]),
+                                  flush=True)
                         GS.clear()
                     torch.cuda.reset_peak_memory_stats()
                     S = collections.Counter()
