@@ -4843,22 +4843,19 @@ def v11_t5(steps=3000, ep_species=8):
                 def __init__(s_):
                     super().__init__()
                     s_.nc = nn.GRUCell(E_, D12)
-                    # (E12 11-19: + 1 input -- how sure a function's memory is of the answer for the current inputs)
-                    s_.halt = nn.Sequential(nn.Linear(D12 + E_ + 1, 128), nn.Tanh(), nn.Linear(128, 1))
+                    # (E17 11-20: the halt decides only whether to follow an edge -- a function that knows the question
+                    # fires by itself; ~~E12: + 1 input, how sure a function's memory is~~)
+                    s_.halt = nn.Sequential(nn.Linear(D12 + E_, 128), nn.Tanh(), nn.Linear(128, 1))
                     # T10: the relation latents of the structure reading gives (reading order; a span and its tokens)
                     s_.nxt = nn.Parameter(F.normalize(torch.randn(D12), dim=0))
                     s_.part = nn.Parameter(F.normalize(torch.randn(D12), dim=0))
                     # C1a: what a firing gives when its memory holds no key for the inputs (unknown -- no value is made up)
                     s_.unk = nn.Parameter(torch.zeros(E_))
-                    # C1: a function is pointed at by the relevance of the need to its label (cosine x this sharpness)
-                    # plus whether its memory points at all (it holds the exact key = it knows the answer)
+                    # C1: a function is pointed at by the relevance of the need to its label (cosine x this sharpness),
+                    # among the functions that know the question (E17; ~~+ hb x whether its memory points~~)
                     s_.ft = nn.Parameter(torch.tensor(10.))
-                    s_.hb = nn.Parameter(torch.tensor(3.))
-                    # E15 (11-20): how sure memory is adds straight to the 'go' logit (like hb in the function pick).
-                    # e23: when the policy asked the two numbers and memory was sure, its answer was the number 11 of
-                    # 11 times -- and the policy fired 0 times: in the halt's input the sureness is 1 of ~1,800 numbers
-                    # (need + a latent of norm ~20) with a weight of ~.02, so it could not move the decision
-                    s_.kw = nn.Parameter(torch.tensor(3.))
+                    # ~~E15 (11-20): how sure memory is adds straight to the 'go' logit, weight kw = 3~~ (e23: memory
+                    # sure 11, its answer the number 11, fired 0; with E15, e25: sure 22-39, fired 0-5 -> E17)
 
             class Funcs(nn.Module):
                 """C1a -- computing = the user's classification + memorization (11-16: "node 1 add on node 1 (transform)
@@ -4984,8 +4981,8 @@ def v11_t5(steps=3000, ep_species=8):
                         ("asking state + need", list(ask.inp.parameters()) + list(ask.cell.parameters())
                          + list(ask.need.parameters())),
                         ("stop", list(ask.stop.parameters())),
-                        ("halt", list(solver.halt.parameters()) + [solver.kw]),
-                        ("function pick", [solver.ft, solver.hb] + list(funcs.labels)),
+                        ("halt", list(solver.halt.parameters())),
+                        ("function pick", [solver.ft] + list(funcs.labels)),
                         ("edge pick", list(mem.aa.parameters()) + [mem.rc]),
                         ("encoder", list(enc.parameters())), ("identity", list(relm.parameters())),
                         ("result projector", list(proj.parameters())),
@@ -5161,17 +5158,18 @@ def v11_t5(steps=3000, ep_species=8):
                     return (PZb["c"][:PZb["n"]] @ ip(z)).topk(min(k, len(nodes))).indices.tolist()
 
             def solve(men, need, train, now=0, tr=None, fwd=True, Dm=None, Dy=None, rec=None, force=None):
-                """GNM answers one query: identity (the anchor jumps to the most relevant node, or stays itself) -> up to
-                KS firings (follow an edge, or fire a function = ONE lookup in its own memory, C1a) -> learned halt (also
-                before the first firing: the node identity found can be the answer).
-                Dm / Dy: the definitions of the anchor and of the 2nd input (D1 E5: exact text; None = no input). After a
-                firing, the node it gave is the next firing's first input (C1c).
+                """GNM answers one query: identity (the anchor jumps to the most relevant node, or stays itself) -> a
+                function whose memory knows the question fires (E17: ONE lookup in its own memory, C1a; it ends the
+                query, E16) -> else up to KS edge steps, each after a learned halt (the node identity found can be the
+                answer).
+                Dm / Dy: the definitions of the anchor and of the 2nd input (D1 E5: exact text; None = no input). After an
+                edge step, the node it gave is the next step's first input (C1c).
                 fwd=False: an exploration try -- no credit, no counts.
                 force = a function index: an exploration try = ONE question = one firing of that function, then it
-                halts (E10; user 11-14 "one firing = one step"; C1 run c: a 2nd firing replaced the right value). The
-                halt's logits are recorded with 'go' then 'halt' and the pick with that function, so a try the text
-                confirms teaches the policy its whole trace (D1 smoke 11-19: tries that used the policy's own halt
-                stopped firing -- picks per 500 sentences 520 -> 181 -> 26 -> 9 -> 0).
+                ends (E10; user 11-14 "one firing = one step"; C1 run c: a 2nd firing replaced the right value). The
+                function pick is recorded with that function, so a try the text confirms teaches the policy its whole
+                question and the function (D1 smoke 11-19: tries that used the policy's own halt stopped firing --
+                picks per 500 sentences 520 -> 181 -> 26 -> 9 -> 0).
                 rec: filled with the query's own trace -- every decision as (logits, the choice taken) -- and each taken
                 function firing as (function, D(input 1), D(input 2), the node it pointed at or None) for D1 (check,
                 imitation, remember).
@@ -5188,35 +5186,71 @@ def v11_t5(steps=3000, ep_species=8):
                 if tr is not None:
                     tr.append(f"'{men[1]}' is {'itself (new)' if cur is None else repr(nm(cur))}")
                 nd = need
+                fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
                 for s_i in range(KS):
                     # C1a: every function is ONE lookup in its own memory: bind(atom, D(focus), D(2nd input)) -> the
-                    # exact key's node (the value the text stated), else unknown. E12 (11-19): the lookups come BEFORE
-                    # the halt, and the halt sees how sure a memory is of the answer for these inputs (the answer's
-                    # share of what the text stated for that key; 0 = no key) -- without it the halt had the same
-                    # features where firing gives the stored answer and where it gives 'unknown' or a word that
-                    # differs every time (opposite targets), learned the average (don't fire) and every run's
-                    # firings went to 0 (D1 smoke 520 -> 0, P1+E9 inspection 229 -> 13 -> 0)
-                    fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
-                    fn_, qk_, sure = [None] * len(fl), [None] * len(fl), 0.
+                    # exact key's node (the value the text stated), else unknown.
+                    # E17 (11-20): a function whose memory KNOWS the question (its key, and the text mostly stated one
+                    # answer for it -- E13) fires: its own recognition of the inputs is the trigger (user: function
+                    # nodes are the only action, "signals trigger them", no controller). ~~E12 / E15: a learned halt
+                    # saw the sureness and decided~~ -- e25 window 4,500-6,000: memory sure for the policy's question
+                    # 22-39 times per 500 sentences and its answer the number 15-29, the halt let 0-5 fire: its one
+                    # threshold is taught 'stop' by every other query (where a firing gives 'unknown'), and the sure
+                    # cases are a few percent of them. The learned halt now decides only whether to follow an edge.
+                    fn_, qk_ = [None] * len(fl), [None] * len(fl)
                     if Dc is not None and Dy is not None:
                         for fi in range(len(fl)):
                             qk_[fi] = funcs.key(fi, Dc, Dy)
                             k_ = int(funcs.find(fi, qk_[fi].detach())[0])
-                            s_k = funcs.sure(fi, k_)
-                            if s_k > .5:                 # (E13: the memory points only when the text mostly said it)
+                            if funcs.sure(fi, k_) > .5:  # (E13: the memory points only when the text mostly said it)
                                 fn_[fi] = funcs.value(fi, k_)[2]
-                                sure = max(sure, s_k)
-                    knows = torch.tensor([sure], device=dev)
-                    hl = torch.cat([solver.kw * knows, solver.halt(torch.cat([nd, v, knows]))])   # ([go, halt])
-                    kh, wh = pick(hl, train)
-                    if force is not None and s_i > 0:    # (a try is one firing: it halts after it)
+                    if force is not None or any(j_ is not None for j_ in fn_):
+                        # which function: the relevance of the need to its label (classification by cosine; the C1 smoke
+                        # 11-19 with an MLP score: function 0 held 502 of 555 keys) -- among the functions that know the
+                        # question; a try (E10) fires the function of its question (exploration: an 'unknown' firing gets
+                        # the word the text states, E4), and a right try teaches this pick
+                        lgf = solver.ft * (fl @ nd)
+                        if force is not None:
+                            k = force
+                            w = st(lgf, k)
+                        else:
+                            lgf = lgf.masked_fill(torch.tensor([j_ is None for j_ in fn_], device=dev), -1e4)
+                            k, w = pick(lgf, train)
                         if rec is not None:
-                            rec["picks"].append((hl, 1))
+                            rec["picks"].append((lgf, k))
+                        fv_ = []
+                        for fi in range(len(fl)):
+                            val = nodes[fn_[fi]]["z"] if fn_[fi] is not None else solver.unk
+                            if Dc is not None and Dy is not None and (Dc.requires_grad or Dy.requires_grad):
+                                # P1 (user 11-19 "sure then lets build"): the forward is the exact lookup; the gradient
+                                # comes from V11's own pointing, softmax(beta * cos) over the keys, so the loss reaches
+                                # the pointers that chose the inputs (gradient measurement 11-19: the 2nd-input pointer
+                                # got 0 from the CE in 150 of 150 measured sentences, the 1st ~1e-4)
+                                sv = funcs.soft(fi, qk_[fi])
+                                if sv is not None:
+                                    val = val + sv - sv.detach()
+                            fv_.append(val)
+                        v, cur = w @ torch.stack(fv_), fn_[k]
+                        if fwd:
+                            funcs.used[k] += 1
+                        if rec is not None and Dc is not None and Dy is not None:
+                            rec["fired"].append((k, Dc.detach(), Dy.detach(), cur))   # (D1 E4: asked / gave)
+                        used.append(("func", k, cur))
+                        if tr is not None:
+                            tr += [f"function {k} -> {'unknown' if cur is None else repr(nm(cur))}", "halts"]
+                        # E16 (11-20): a function firing ends the query -- one firing = one step (user 11-14); a chain is
+                        # the NEXT query, anchored at this result. A 2nd firing here reused the same 2nd / 3rd inputs:
+                        # '48/2' -> 24, then (24, '/', 2) -> 12 (C1 run c; e24 window 3,000: memory right 7, the policy
+                        # fired 6, its result the number 2)
+                        break
+                    # no function knows the question: follow an edge of the current node, or stop (learned halt)
+                    es = outs[cur][-64:] if cur is not None and outs.get(cur) else []   # (compute limit: 64 newest)
+                    if not es:
                         if tr is not None:
                             tr.append("halts")
                         break
-                    if force is not None:                # (an exploration try computes)
-                        kh, wh = 0, torch.tensor([1., 0.], device=dev)
+                    hl = torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v]))])   # ([go, halt])
+                    kh, wh = pick(hl, train)
                     if rec is not None:
                         rec["picks"].append((hl, kh))
                     # T12 (11-19: halting before any firing took over -- 'go' got no gradient once 'halt' was picked,
@@ -5227,84 +5261,30 @@ def v11_t5(steps=3000, ep_species=8):
                         if tr is not None:
                             tr.append("halts")
                         break
-                    C_l, C_v, C_m = [], [], []
-                    if cur is not None and outs.get(cur):
-                        es = outs[cur][-64:]             # (compute limit: its 64 newest edges)
-                        R_ = torch.stack([rlat(e) for e in es])
-                        dr = torch.tensor([[float(edges[e]["dir"])] for e in es], device=dev)
-                        ag = torch.tensor([math.log1p(max(0, now - edges[e]["sid"])) / 5. for e in es], device=dev)
-                        C_l.append(mem.aa(torch.cat([nd[None].expand(len(es), -1), R_, dr], 1)).squeeze(-1) + mem.rc * ag)
-                        C_v.append(torch.stack([nodes[edges[e]["b"]]["z"] for e in es]))
-                        C_m += [("edge", e) for e in es]
-                    # functions compete with edges in the same pick. A function is pointed at by the relevance of the
-                    # need to its label (classification by cosine; the C1 smoke 11-19 with an MLP score: 16 functions
-                    # created, function 0 held 502 of 555 keys -- a function created on confusion attracted nothing,
-                    # operators stayed mixed)
-                    fv_ = []
-                    for fi in range(len(fl)):
-                        q_ = qk_[fi]
-                        val = nodes[fn_[fi]]["z"] if fn_[fi] is not None else solver.unk
-                        if Dc is not None and Dy is not None and (Dc.requires_grad or Dy.requires_grad):
-                            # P1 (user 11-19 "sure then lets build"): the forward is the exact lookup; the gradient
-                            # comes from V11's own pointing, softmax(beta * cos) over the keys, so the loss reaches the
-                            # pointers that chose the inputs (gradient measurement 11-19: the 2nd-input pointer got
-                            # 0 from the CE in 150 of 150 measured sentences, the 1st ~1e-4)
-                            sv = funcs.soft(fi, q_)
-                            if sv is not None:
-                                val = val + sv - sv.detach()
-                        fv_.append(val)
-                    # (C1 run b 11-19: with the score from the need alone, a fact was found only when the pick landed
-                    # on the one function it had been written to -- 1-5 of ~200 computed numbers named per window)
-                    C_l.append(solver.ft * (fl @ nd) + solver.hb * torch.tensor([float(j_ is not None) for j_ in fn_],
-                                                                                 device=dev))
-                    C_v.append(torch.stack(fv_))
-                    C_m += [("func", fi, fn_[fi]) for fi in range(len(fl))]
-                    lg_c = torch.cat(C_l)
-                    # (a try fires the function of its question -- E10: the tries are the model's best whole questions;
-                    # the pick is recorded over all candidates, so a right try teaches the policy that function over the
-                    # edges and the other functions)
-                    nfe = len(C_m) - len(fl)
-                    if force is not None:
-                        k = nfe + force
-                        w = st(torch.cat([lg_c[:nfe] - 1e4, lg_c[nfe:]]), k)
-                    else:
-                        k, w = pick(lg_c, train)
+                    R_ = torch.stack([rlat(e) for e in es])
+                    dr = torch.tensor([[float(edges[e]["dir"])] for e in es], device=dev)
+                    ag = torch.tensor([math.log1p(max(0, now - edges[e]["sid"])) / 5. for e in es], device=dev)
+                    lg_c = mem.aa(torch.cat([nd[None].expand(len(es), -1), R_, dr], 1)).squeeze(-1) + mem.rc * ag
+                    k, w = pick(lg_c, train)
                     if rec is not None and taken:
                         rec["picks"].append((lg_c, k))
-                    o = w @ torch.cat(C_v)
-                    if C_m[k][0] == "edge":
-                        if taken and fwd and train and torch.is_grad_enabled() and "R" in edges[C_m[k][1]]:
-                            lg_c.retain_grad()           # (C: the reading behind a picked claim edge gets this pick's credit)
-                            credit.append((lg_c, k, C_m[k][1]))
-                        nxt, vn = edges[C_m[k][1]]["b"], o
-                        d_ = f"--[{edges[C_m[k][1]].get('rw', '?')}{' (back)' if edges[C_m[k][1]]['dir'] else ''}]--> '{nm(nxt)}'"
-                    else:
-                        fi, nxt, vn = C_m[k][1], C_m[k][2], o
-                        if taken and fwd:
-                            funcs.used[fi] += 1
-                        if taken and rec is not None and Dc is not None and Dy is not None:
-                            rec["fired"].append((fi, Dc.detach(), Dy.detach(), nxt))   # (D1 E4: asked / gave)
-                        d_ = f"function {fi} -> {'unknown' if nxt is None else repr(nm(nxt))}"
-                    v_n = wh[0] * vn + wh[1] * v         # (forward: the picked branch)
-                    if not taken:
+                    if taken and fwd and train and torch.is_grad_enabled() and "R" in edges[es[k]]:
+                        lg_c.retain_grad()               # (C: the reading behind a picked claim edge gets this pick's credit)
+                        credit.append((lg_c, k, es[k]))
+                    nxt = edges[es[k]]["b"]
+                    v_n = wh[0] * (w @ torch.stack([nodes[edges[e]["b"]]["z"] for e in es])) + wh[1] * v
+                    if not taken:                        # (forward: the picked branch)
                         v = v_n
                         if tr is not None:
                             tr.append("halts")
                         break
                     cur, v = nxt, v_n
-                    Dc = nodes[cur].get("D") if cur is not None else None   # (C1c: the node it gave is the next input)
-                    used.append(C_m[k])
+                    Dc = nodes[cur].get("D")             # (C1c: the node it gave is the next input)
+                    used.append(("edge", es[k]))
                     nd = F.normalize(solver.nc(v[None], nd[None])[0], dim=-1)
                     if tr is not None:
-                        tr.append(d_)
-                    if C_m[k][0] == "func":
-                        # E16 (11-20): a function firing ends the query -- one firing = one step (user 11-14); a chain is
-                        # the NEXT query, anchored at this result. A 2nd firing here reused the same 2nd / 3rd inputs:
-                        # '48/2' -> 24, then (24, '/', 2) -> 12 (C1 run c; e24 window 3,000: memory right 7, the policy
-                        # fired 6, its result the number 2)
-                        if tr is not None:
-                            tr.append("halts")
-                        break
+                        tr.append(f"--[{edges[es[k]].get('rw', '?')}{' (back)' if edges[es[k]]['dir'] else ''}]--> "
+                                  f"'{nm(nxt)}'")
                 return v, cur, used
 
             def read_m(text, ids_, H_, sid, train):
@@ -5658,7 +5638,8 @@ def v11_t5(steps=3000, ep_species=8):
                 ks_ = [funcs.find(fi, funcs.key(fi, Dx, Dy))[0].tolist() for fi in range(len(fl))]  # (per function)
                 hit = torch.tensor([[float(funcs.sure(fi, ks_[fi][r_]) > .5) for fi in range(len(fl))]
                                     for r_ in range(len(trip))], device=dev)   # (questions, functions): memory points
-                bf, fb = F.log_softmax(fs[None] + solver.hb * hit, 1).max(1)   # (each question's best function)
+                # (each question's function, as in solve -- E17: one that knows the question, else by its label)
+                bf, fb = F.log_softmax(fs[None] + 1e4 * hit, 1).max(1)
                 order = sorted(range(len(trip)), key=lambda r_: -(trip[r_][0] + float(bf[r_])))
                 out, seen = [], set()
                 for r_ in order:                                  # (different QUESTIONS)
