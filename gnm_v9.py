@@ -5318,20 +5318,24 @@ def v11_t5(steps=3000, ep_species=8):
                         edges[k_]["R"] = edges[k_ + 1]["R"] = r
 
             def anchors(recent_s, H_c, ids_c, t, offs=None):
-                """what the perception has read lately: every token position of the last 2 sentences and of the current
-                sentence's prefix -> a span latent (a 4-token window; its learned token weights pick the span) + the
-                mention tuple identity needs. Never the text after the prefix (that is what the LLM predicts).
-                D1 E6: every token read lately is also its own candidate; every candidate has a definition (its exact
-                text, E5). E9: offs = where each item starts in the LLM's input [context + sentence] (None: not in it),
+                """what the perception has read lately: every token of the last 2 sentences and of the current sentence's
+                prefix -> its latent (the token in its context) + the mention tuple identity needs. Never the text after
+                the prefix (that is what the LLM predicts). D1 E6: every token read lately is a candidate (E6': tokens
+                only, no 4-token windows); every candidate has a definition (its exact text, E5). E9: offs = where each item starts in the LLM's input [context + sentence] (None: not in it),
                 so each candidate also gets its token positions there (for the LLM's attention on it).
                 -> (latents, mention tuples, definitions, positions, spans (item, start, end) -- E10c: which candidates
                 share a token)"""
                 items = list(recent_s) + ([(H_c[:t], ids_c[:t])] if t > 0 else [])
                 offs = list(offs) if offs is not None else [None] * len(items)
                 sps, cxs, names, Ds, pos, spn = [], [], [], [], [], []
+                # E6' (11-19): ~~the 4-token window and the token itself~~ -> every token only. E10 trace: from '=' the
+                # LLM's attention spreads over the whole expression ('2' -1.9, '/' -2.2, 'sold 48/2' -2.3, '/2 =' -2.4,
+                # '48/2 =' -2.5, '48' -2.5 log prior), so the windows -- near-copies of one expression, each defined
+                # by an arbitrary 4-token text that no question repeats -- took the top ranks and the two numbers
+                # were never asked together (some try: 3-4 / 150)
                 for it, ((H, ids), o) in enumerate(zip(items, offs)):
                     for p in range(len(H)):
-                        for e in sorted({min(len(H), p + 4), p + 1}):   # (the 4-token window and the token itself)
+                        for e in (p + 1,):
                             sps.append(H[p:e])
                             cxs.append(H[:e])
                             names.append(tk.decode(ids[p:e]).strip())
