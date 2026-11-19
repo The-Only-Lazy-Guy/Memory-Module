@@ -4854,6 +4854,11 @@ def v11_t5(steps=3000, ep_species=8):
                     # plus whether its memory points at all (it holds the exact key = it knows the answer)
                     s_.ft = nn.Parameter(torch.tensor(10.))
                     s_.hb = nn.Parameter(torch.tensor(3.))
+                    # E15 (11-20): how sure memory is adds straight to the 'go' logit (like hb in the function pick).
+                    # e23: when the policy asked the two numbers and memory was sure, its answer was the number 11 of
+                    # 11 times -- and the policy fired 0 times: in the halt's input the sureness is 1 of ~1,800 numbers
+                    # (need + a latent of norm ~20) with a weight of ~.02, so it could not move the decision
+                    s_.kw = nn.Parameter(torch.tensor(3.))
 
             class Funcs(nn.Module):
                 """C1a -- computing = the user's classification + memorization (11-16: "node 1 add on node 1 (transform)
@@ -4979,7 +4984,7 @@ def v11_t5(steps=3000, ep_species=8):
                         ("asking state + need", list(ask.inp.parameters()) + list(ask.cell.parameters())
                          + list(ask.need.parameters())),
                         ("stop", list(ask.stop.parameters())),
-                        ("halt", list(solver.halt.parameters())),
+                        ("halt", list(solver.halt.parameters()) + [solver.kw]),
                         ("function pick", [solver.ft, solver.hb] + list(funcs.labels)),
                         ("edge pick", list(mem.aa.parameters()) + [mem.rc]),
                         ("encoder", list(enc.parameters())), ("identity", list(relm.parameters())),
@@ -5202,7 +5207,7 @@ def v11_t5(steps=3000, ep_species=8):
                                 fn_[fi] = funcs.value(fi, k_)[2]
                                 sure = max(sure, s_k)
                     knows = torch.tensor([sure], device=dev)
-                    hl = torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v, knows]))])
+                    hl = torch.cat([solver.kw * knows, solver.halt(torch.cat([nd, v, knows]))])   # ([go, halt])
                     kh, wh = pick(hl, train)
                     if force is not None and s_i > 0:    # (a try is one firing: it halts after it)
                         if rec is not None:
