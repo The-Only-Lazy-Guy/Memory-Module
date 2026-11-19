@@ -5760,10 +5760,12 @@ def v11_t5(steps=3000, ep_species=8):
                                     pol_ = [r for r in recs_q if r["pol"]][:1]
                                     try_ = [r for r in recs_q if not r["pol"]]
                                     asked = lambda r: {r["picks"][0][1], r["picks"][1][1] - 1}
+                                    # (the same QUESTION = the same two texts: an earlier '24' asks the same key)
+                                    txt = lambda ix: sorted(A_men[i][1] if 0 <= i < len(A_men) else "" for i in ix)
                                     C1S["computed points (both numbers readable)"] += 1
-                                    C1S["... the policy asked them"] += bool(pol_) and asked(pol_[0]) == want
-                                    C1S["... the best try asked them"] += bool(try_) and set(try_[0]["asked"]) == want
-                                    C1S["... some try asked them"] += any(set(r["asked"]) == want for r in try_)
+                                    C1S["... the policy asked them"] += bool(pol_) and txt(asked(pol_[0])) == txt(want)
+                                    C1S["... the best try asked them"] += bool(try_) and txt(try_[0]["asked"]) == txt(want)
+                                    C1S["... some try asked them"] += any(txt(r["asked"]) == txt(want) for r in try_)
                                     if S["E10 traces"] < 3 and try_:   # (what the LLM looks at vs what was asked)
                                         S["E10 traces"] += 1
                                         nm_c = lambda i: A_men[i][1] if 0 <= i < len(A_men) else ("none" if i < 0 else "<res>")
