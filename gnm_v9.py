@@ -6617,6 +6617,116 @@ def xattn_probe():
     print("XPROBE DONE", flush=True)
 
 
+def xattn_probe_run():
+    """E19 probe (11-20, measurement only): xprobe trained the interface only where a result lands; the run shows a
+    result to every position of its segment and most segments hold no computed point (e27 windows 2,000-3,500 with
+    E18: the CE drop on a named number −.10 … +.15, the late blocks' gates still closing to .04-.09 while the early ones
+    hold ~.19). Run-like here: GSM8K train text; a segment = the 8 tokens after a point; 20% of segments start at a
+    computed number (its result slot: right z 50%, else an echo x / y), 80% at a random point (slot: an echo, a token of
+    the last 30); the slot is visible to all 8 positions, the loss = their mean CE, 8 segments per optimizer step (as
+    M1_ACCUM). Arms: the gate learned (the run) vs fixed at its start (.2, the null slot does the per-position choice),
+    each without / with E18's say term (+ the CE where a right result lands). Held-out: CE drop at a computed point
+    with the right result / an echo, and the mean CE change over plain segments (harm)."""
+    tk, M = lm()
+    Wte, ED, L_ = M.transformer.wte, M.config.n_embd, M.config.n_layer
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio")
+    arts = json.load(open(os.path.join(here, "gsm8k_train.json"), encoding="utf-8"))[:int(os.environ.get("XP_N", "2000"))]
+    num = r"(\d[\d,]*(?:\.\d+)?)"
+    K, rng0 = 8, random.Random(0)
+    comp, plain = [], []
+    for a in arts:
+        text = " " + " ".join(a["text"])
+        enc = tk(text, return_offsets_mapping=True)
+        ids, offs = enc["input_ids"], enc["offset_mapping"]
+        for m in re.finditer(num + r"\s*([-+*/x])\s*" + num + r"\s*=\s*\$?" + num, text):
+            p = next((i for i, (s, e) in enumerate(offs) if s <= m.start(4) < e or (s >= m.start(4) and e > s)), None)
+            if p is None or p < 4 or p + K > len(ids):
+                continue
+            tx, ty = (tk(" " + g)["input_ids"][0] for g in (m.group(1), m.group(3)))
+            if ids[p] not in (tx, ty):
+                comp.append((ids[max(0, p - 200):p], ids[p:p + K], tx, ty))
+        for _ in range(4):
+            q = rng0.randrange(4, max(5, len(ids) - K))
+            if q + K <= len(ids):
+                plain.append((ids[max(0, q - 200):q], ids[q:q + K], ids[max(0, q - 30):q]))
+    rng0.shuffle(comp)
+    rng0.shuffle(plain)
+    NC = int(os.environ.get("XP_TRAIN", "480"))
+    ctr, cte, ptr, pte = comp[:NC], comp[NC:NC + 300], plain[:4 * NC], plain[4 * NC:4 * NC + 300]
+    zs = [c_[1][0] for c_ in comp]
+    print(f"XPROBE-RUN: {len(comp)} computed points, {len(plain)} plain segments; train {len(ctr)} + {len(ptr)} "
+          f"(x 2 epochs, 8 per step), test {len(cte)} + {len(pte)}", flush=True)
+    X = {"xa": None, "mem": None, "s0": 0}
+
+    class XA_(nn.Module):
+        def __init__(s_):
+            super().__init__()
+            s_.q = nn.ModuleList([nn.Linear(ED, 128) for _ in range(L_)])
+            s_.k = nn.ModuleList([nn.Linear(ED, 128) for _ in range(L_)])
+            s_.g = nn.Parameter(torch.full((L_,), .2))
+
+    def hook(i):
+        def h_(mod, inp, out):
+            if X["mem"] is None:
+                return out
+            xa, s0 = X["xa"], X["s0"]
+            h = out[0] if isinstance(out, tuple) else out
+            m_ = torch.cat([X["mem"], torch.zeros(1, ED, device=dev)])
+            a_ = F.softmax(xa.q[i](h[0, s0:].float()) @ xa.k[i](m_).T / 128 ** .5, -1)
+            h2 = torch.cat([h[:, :s0], h[:, s0:] + (torch.tanh(xa.g[i]) * (a_ @ m_)).to(h.dtype)[None]], 1)
+            return (h2,) + tuple(out[1:]) if isinstance(out, tuple) else h2
+        return h_
+    hooks = [blk.register_forward_hook(hook(i)) for i, blk in enumerate(M.transformer.h)]
+
+    def ces(ctx, seg, slot):                     # -> per-position CE of the segment
+        X["mem"] = None if slot is None else Wte(torch.tensor([slot], device=dev)).float()
+        X["s0"] = len(ctx) - 1
+        out = M(input_ids=torch.tensor([ctx + seg], device=dev))
+        X["mem"] = None
+        lp = F.log_softmax(out.logits[0, len(ctx) - 1:-1].float(), -1)
+        return -lp.gather(1, torch.tensor(seg, device=dev)[:, None])[:, 0]
+
+    for learn_gate, say in ((True, False), (True, True), (False, False), (False, True)):
+        torch.manual_seed(0)
+        rng = random.Random(0)
+        X["xa"] = xa = XA_().to(dev)
+        xa.g.requires_grad_(learn_gate)
+        opt = torch.optim.AdamW([p_ for p_ in xa.parameters() if p_.requires_grad], lr=1e-3)
+        t0, n_say = time.time(), 0
+        exs = [("c", c_) for c_ in ctr] + [("p", p_) for p_ in ptr]
+        for ep in range(2):
+            rng.shuffle(exs)
+            for j, (kind, ex) in enumerate(exs):
+                if kind == "c":
+                    ctx, seg, tx, ty = ex
+                    right = rng.random() < .5
+                    c_ = ces(ctx, seg, seg[0] if right else rng.choice([tx, ty]))
+                    loss = c_.mean() + (c_[0] if say and right else 0.)
+                    n_say += say and right
+                else:
+                    ctx, seg, recent = ex
+                    loss = ces(ctx, seg, rng.choice(recent)).mean()
+                (loss / 8).backward()
+                if (j + 1) % 8 == 0:
+                    torch.nn.utils.clip_grad_norm_(xa.parameters(), 1.)
+                    opt.step()
+                    opt.zero_grad()
+        with torch.no_grad():
+            r_ = random.Random(1)
+            b0 = sum(float(ces(c, s, None)[0]) for c, s, x, y in cte) / len(cte)
+            br = sum(float(ces(c, s, s[0])[0]) for c, s, x, y in cte) / len(cte)
+            be = sum(float(ces(c, s, r_.choice([x, y]))[0]) for c, s, x, y in cte) / len(cte)
+            p0 = sum(float(ces(c, s, None).mean()) for c, s, rc in pte) / len(pte)
+            pe = sum(float(ces(c, s, r_.choice(rc)).mean()) for c, s, rc in pte) / len(pte)
+        print(f"XPROBE-RUN gate {'learned' if learn_gate else 'fixed .2'}{', + say (E18)' if say else ''}: computed point "
+              f"CE {b0:.3f} -> right result {br:.3f} (drop {b0 - br:+.3f}), echo {be:.3f} ({b0 - be:+.3f}) | plain "
+              f"segments {p0:.3f} -> {pe:.3f} ({p0 - pe:+.3f}) | gates {[round(float(torch.tanh(g)), 2) for g in xa.g]} | "
+              f"{time.time() - t0:.0f}s", flush=True)
+    for h_ in hooks:
+        h_.remove()
+    print("XPROBE-RUN DONE", flush=True)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("task", nargs="?", default="e1")
@@ -6654,6 +6764,9 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "xprobe":                     # E18: can the interface use a right result among echoes? (measurement)
         xattn_probe()
+        raise SystemExit
+    if a.task == "xprobe2":                    # E19: the same, run-like (whole segments, plain ones) (measurement)
+        xattn_probe_run()
         raise SystemExit
     if a.task == "v11t3":
         v11_t3()
