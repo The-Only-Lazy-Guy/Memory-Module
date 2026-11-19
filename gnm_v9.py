@@ -5794,7 +5794,9 @@ def v11_t5(steps=3000, ep_species=8):
                 n_, nm_, nc_ = max(1, D_["n"]), max(1, D_["n mem"]), max(1, D_["n comp"])
                 ctl = (f" | no-content control: all {D_['cec'] / n_:.3f}, memory {D_['cec mem'] / nm_:.3f}, computed "
                        f"{D_['cec comp'] / nc_:.3f}") if D_.get("cec") else ""
-                return (f"M1 {tag} | CE all: LLM alone {D_['ce0'] / n_:.3f}, with GNM {D_['ce1'] / n_:.3f} | memory "
+                # ('results removed' = the same LLM + LoRA without GNM's results -- not a baseline: with the 12-block
+                # interface the LoRA leans on GNM's input, e20 11-20: 'alone' 2.43 vs the fair no-GNM run 2.39)
+                return (f"M1 {tag} | CE all: same LLM, results removed {D_['ce0'] / n_:.3f}, with GNM {D_['ce1'] / n_:.3f} | memory "
                         f"tokens ({D_['n mem']}): {D_['ce0 mem'] / nm_:.3f} -> {D_['ce1 mem'] / nm_:.3f} | computed "
                         f"tokens ({D_['n comp']}): {D_['ce0 comp'] / nc_:.3f} -> {D_['ce1 comp'] / nc_:.3f}{ctl} | "
                         f"queries/sentence {D_['queries'] / max(1, D_['sentences']):.2f} | self-prediction (local): "
