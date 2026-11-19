@@ -6510,6 +6510,100 @@ def attn_probe():
           f"{one[bl, bh]:.2f})", flush=True)
 
 
+def xattn_probe():
+    """E18 probe (11-20, measurement only -- docs/TASK_STACK.md D2): can the run's interface (T11: gated cross-attention
+    at all 12 blocks, values = the result's exact token embedding, a null slot; frozen GPT-2) learn to use a RIGHT
+    result when most results are echoes of a token already in view? e26 windows 500-3,500: a function's right answer
+    reached the LLM at 4-14 computed points per window, the CE on that number fell by only ~.1, and 5 of 12 gates closed
+    (.20 -> .03-.07). The run gives ~1 result per segment: a function's answer (right ~75% when memory is sure) or an
+    identity result -- at '=' mostly an operand, a token the LLM sees. Per 'x op y =' point (GSM8K train; context =
+    problem + solution up to '='; target = the first token of z): ONE slot -- with prob XP_SHARE a computed result
+    (z, or with prob .25 another point's z), else an echo (x or y). Arms: untyped keys (the run now) vs typed keys
+    (+ a learned vector for how the result was made, 'computed' / 'echo', zero-init; values unchanged). Trained: q / k /
+    gate (+ types) on the target's CE; held-out: CE drop with a right computed slot, a wrong one, an echo. The regex is
+    the measurement's, never a model input."""
+    tk, M = lm()
+    Wte, ED, L_ = M.transformer.wte, M.config.n_embd, M.config.n_layer
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bio")
+    arts = json.load(open(os.path.join(here, "gsm8k_train.json"), encoding="utf-8"))[:int(os.environ.get("XP_N", "1500"))]
+    num = r"(\d[\d,]*(?:\.\d+)?)"
+    pts = []
+    for a in arts:
+        text = " " + " ".join(a["text"])
+        for m in re.finditer(num + r"\s*[-+*/x]\s*" + num + r"\s*=\s*\$?" + num, text):
+            ctx = text[:m.end(2)] + text[m.end(2):m.start(3)].rstrip().rstrip("$").rstrip()
+            if not ctx.endswith("="):
+                continue
+            tx, ty, tz = (tk(" " + g)["input_ids"][0] for g in m.groups())
+            if tz not in (tx, ty):
+                pts.append((tk(ctx)["input_ids"][-256:], tx, ty, tz))
+    random.Random(0).shuffle(pts)
+    NT = int(os.environ.get("XP_TRAIN", "600"))
+    train, test = pts[:NT], pts[NT:NT + 300]
+    zs = [p_[3] for p_ in pts]
+    print(f"XPROBE: {len(pts)} 'x op y = z' points; train {len(train)} (x 2 epochs), test {len(test)}", flush=True)
+    X = {"xa": None, "mem": None}
+
+    class XA_(nn.Module):
+        def __init__(s_, typed):
+            super().__init__()
+            s_.q = nn.ModuleList([nn.Linear(ED, 128) for _ in range(L_)])
+            s_.k = nn.ModuleList([nn.Linear(ED, 128) for _ in range(L_)])
+            s_.g = nn.Parameter(torch.full((L_,), .2))
+            s_.ty = nn.Parameter(torch.zeros(2, ED)) if typed else None   # (how it was made: computed / echo)
+
+    def hook(i):
+        def h_(mod, inp, out):
+            if X["mem"] is None:
+                return out
+            xa, (v_, kd) = X["xa"], X["mem"]
+            h = out[0] if isinstance(out, tuple) else out
+            m_ = torch.cat([v_, torch.zeros(1, ED, device=dev)])
+            kk = m_ if xa.ty is None else torch.cat([v_ + xa.ty[kd][None], torch.zeros(1, ED, device=dev)])
+            a_ = F.softmax(xa.q[i](h[0, -1:].float()) @ xa.k[i](kk).T / 128 ** .5, -1)
+            h2 = torch.cat([h[:, :-1], h[:, -1:] + (torch.tanh(xa.g[i]) * (a_ @ m_)).to(h.dtype)[None]], 1)
+            return (h2,) + tuple(out[1:]) if isinstance(out, tuple) else h2
+        return h_
+    hooks = [blk.register_forward_hook(hook(i)) for i, blk in enumerate(M.transformer.h)]
+
+    def ce(ids, tz, slot):                       # slot: None, or (token id, kind: 0 computed / 1 echo)
+        X["mem"] = None if slot is None else (Wte(torch.tensor([slot[0]], device=dev)).float(), slot[1])
+        out = M(input_ids=torch.tensor([ids], device=dev))
+        X["mem"] = None
+        return -F.log_softmax(out.logits[0, -1].float(), -1)[tz]
+
+    for share in [float(s_) for s_ in os.environ.get("XP_SHARE", ".15,.4").split(",")]:
+        for typed in (False, True):
+            torch.manual_seed(0)
+            rng = random.Random(0)
+            X["xa"] = xa = XA_(typed).to(dev)
+            opt = torch.optim.Adam(xa.parameters(), lr=1e-3)
+            t0 = time.time()
+            for ep in range(2):
+                for ids, tx, ty, tz in train:
+                    if rng.random() < share:
+                        slot = (tz if rng.random() < .75 else rng.choice(zs), 0)
+                    else:
+                        slot = (rng.choice([tx, ty]), 1)
+                    loss = ce(ids, tz, slot)
+                    opt.zero_grad()
+                    loss.backward()
+                    opt.step()
+            with torch.no_grad():
+                r_ = random.Random(1)
+                b = sum(float(ce(i, z, None)) for i, x, y, z in test) / len(test)
+                r = sum(float(ce(i, z, (z, 0))) for i, x, y, z in test) / len(test)
+                w = sum(float(ce(i, z, (r_.choice(zs), 0))) for i, x, y, z in test) / len(test)
+                e = sum(float(ce(i, z, (r_.choice([x, y]), 1))) for i, x, y, z in test) / len(test)
+            print(f"XPROBE {'typed' if typed else 'untyped'} keys, computed share {share}: CE no memory {b:.3f} | right "
+                  f"computed {r:.3f} (drop {b - r:+.3f}) | wrong computed {w:.3f} ({b - w:+.3f}) | echo {e:.3f} "
+                  f"({b - e:+.3f}) | gates {[round(float(torch.tanh(g)), 2) for g in xa.g]} | {time.time() - t0:.0f}s",
+                  flush=True)
+    for h_ in hooks:
+        h_.remove()
+    print("XPROBE DONE", flush=True)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("task", nargs="?", default="e1")
@@ -6544,6 +6638,9 @@ if __name__ == "__main__":
         raise SystemExit
     if a.task == "attnprobe":                  # D1 E9: where GPT-2 looks from 'x op y =' (measurement)
         attn_probe()
+        raise SystemExit
+    if a.task == "xprobe":                     # E18: can the interface use a right result among echoes? (measurement)
+        xattn_probe()
         raise SystemExit
     if a.task == "v11t3":
         v11_t3()
