@@ -5297,6 +5297,14 @@ def v11_t5(steps=3000, ep_species=8):
                     nd = F.normalize(solver.nc(v[None], nd[None])[0], dim=-1)
                     if tr is not None:
                         tr.append(d_)
+                    if C_m[k][0] == "func":
+                        # E16 (11-20): a function firing ends the query -- one firing = one step (user 11-14); a chain is
+                        # the NEXT query, anchored at this result. A 2nd firing here reused the same 2nd / 3rd inputs:
+                        # '48/2' -> 24, then (24, '/', 2) -> 12 (C1 run c; e24 window 3,000: memory right 7, the policy
+                        # fired 6, its result the number 2)
+                        if tr is not None:
+                            tr.append("halts")
+                        break
                 return v, cur, used
 
             def read_m(text, ids_, H_, sid, train):
@@ -5933,6 +5941,8 @@ def v11_t5(steps=3000, ep_species=8):
                                         C1S["... and that answer was the number"] += any(
                                             funcs.value(fi, k_)[0] == tword(ids_t[b]) for fi, k_ in kn_)
                                         C1S["... and the policy fired"] += bool(pol_[0]["fired"])
+                                        C1S["... and fired a function that was sure"] += any(
+                                            f_[0] in {fi for fi, _ in kn_} for f_ in pol_[0]["fired"])
                                         C1S["... and its result was the number"] += (
                                             pol_[0].get("result") is not None
                                             and nodes[pol_[0]["result"]]["names"][0] == tword(ids_t[b]))
@@ -6083,7 +6093,8 @@ def v11_t5(steps=3000, ep_species=8):
                           f"numbers right before it were asked by the best try {S['... the best try asked them']}, by "
                           f"some try {S['... some try asked them']}, by the policy {S['... the policy asked them']} "
                           f"(then: memory sure {S['... and memory was sure of an answer']}, its answer the number "
-                          f"{S['... and that answer was the number']}, fired {S['... and the policy fired']}, result the "
+                          f"{S['... and that answer was the number']}, fired {S['... and the policy fired']} (a sure "
+                          f"function {S['... and fired a function that was sure']}), result the "
                           f"number {S['... and its result was the number']})", flush=True)
                     if GD and GS:                        # (measurement: mean gradient norm per part and signal)
                         for nm_, _ in grad_groups():
