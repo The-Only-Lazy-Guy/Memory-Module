@@ -5744,6 +5744,16 @@ def v11_t5(steps=3000, ep_species=8):
                                     C1S["... the policy asked them"] += bool(pol_) and asked(pol_[0]) == want
                                     C1S["... the best try asked them"] += bool(try_) and set(try_[0]["asked"]) == want
                                     C1S["... some try asked them"] += any(set(r["asked"]) == want for r in try_)
+                                    if S["E10 traces"] < 3 and try_:   # (what the LLM looks at vs what was asked)
+                                        S["E10 traces"] += 1
+                                        nm_c = lambda i: A_men[i][1] if 0 <= i < len(A_men) else ("none" if i < 0 else "<res>")
+                                        top_ = pri_A.topk(min(6, len(pri_A))).indices.tolist()
+                                        trs.append(f"E10 '{tk.decode(ids_t[max(0, b - 8):b])}|{tk.decode(ids_t[b:b + 1])}"
+                                                   f"': numbers {[nm_c(i) for i in sorted(want)]} (prior "
+                                                   f"{[round(float(pri_A[i]), 1) for i in sorted(want)]}); LLM looks at "
+                                                   f"{[(nm_c(i), round(float(pri_A[i]), 1)) for i in top_]}; tries "
+                                                   f"{[(nm_c(r['asked'][0]), nm_c(r['asked'][1])) for r in try_]}; policy "
+                                                   f"{[nm_c(i) for i in sorted(asked(pol_[0]))] if pol_ else None}")
                             cost = cost + c_
                             n_q += nl_
                             if ck[b]:                    # (benchmark measurement: did a result name the computed number?)
