@@ -4668,7 +4668,9 @@ def v11_t5(steps=3000, ep_species=8):
             # node "2" ... model have to have a good definition of each nodes too"; V11 bind -> point -> remember)
             DV = int(os.environ.get("M1_DV", "1024"))    # (V11 vector size: definitions and function keys)
             LHS = float(os.environ.get("M1_HS", "1"))    # weight of the perception's own right tries (D1 E3)
-            KT = int(os.environ.get("M1_TRIES", "4"))    # queries per segment while training = exploration (D1 E1)
+            KT = int(os.environ.get("M1_TRIES", "8"))    # queries per segment while training = exploration (D1 E1)
+            # (8, was 4 -- E10 trace 11-19: from '=' the LLM looks at the operator as much as at the numbers, so the
+            # two numbers are about the 3rd-9th best pair of 'x op y =')
             gV = torch.Generator().manual_seed(11)
             atomV = lambda: F.normalize(torch.randn(DV, generator=gV), dim=0).to(dev)
             permV = [torch.randperm(DV, generator=gV).to(dev) for _ in range(2)]   # (argument position = a permutation)
@@ -4762,6 +4764,12 @@ def v11_t5(steps=3000, ep_species=8):
                     # average puts an operand first 95% of the time from '=', chance 2.6%) with a learned weight each
                     s_.e9 = nn.Parameter(torch.zeros(M.config.n_layer * M.config.n_head))
                     s_.lam1, s_.lam2 = nn.Parameter(torch.tensor(1.)), nn.Parameter(torch.tensor(1.))
+                    # (the learned part of both pointers starts at exactly 0, so they start where the LLM looks -- E10
+                    # trace 11-19: a random start moved the pointers by about as much as the prior's own gaps, '?' over
+                    # '48' at '48/2 =' before any training step; the key side still learns once the query moves)
+                    for l_ in (s_.q1, s_.q2[1]):
+                        nn.init.zeros_(l_.weight)
+                        nn.init.zeros_(l_.bias)
 
                 def step(s_, h, st, prev):
                     return s_.cell(s_.inp(torch.cat([st, prev]))[None], h[None])[0]
@@ -5506,7 +5514,15 @@ def v11_t5(steps=3000, ep_species=8):
                     for r_, j in enumerate(jb):
                         cand.append((float(lpa[ia] + lpb[j] + bf[r_]), ia, j, int(fb[r_])))
                 cand.sort(key=lambda c_: -c_[0])
-                return [(ia, j, fi) for _, ia, j, fi in cand[:KT]]
+                out, seen = [], set()
+                for _, ia, j, fi in cand:                         # (different QUESTIONS: two tokens with the same text
+                    q_id = (id(D_[ia]), id(D_[j]))                #  have one definition, so they ask the same key)
+                    if q_id not in seen:
+                        seen.add(q_id)
+                        out.append((ia, j, fi))
+                    if len(out) == KT:
+                        break
+                return out
 
             def to_llm(res):
                 """T1 + T11: each result -> what the LLM's cross-attention reads: its name-token embeddings when its node
