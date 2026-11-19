@@ -5053,8 +5053,8 @@ def v11_t5(steps=3000, ep_species=8):
                 nd = need
                 for s_i in range(KS):
                     hl = torch.cat([torch.zeros(1, device=dev), solver.halt(torch.cat([nd, v]))])
-                    if rec is not None and s_i == 0:
-                        rec["halt0"] = hl
+                    if rec is not None and s_i < 2:
+                        rec[f"halt{s_i}"] = hl
                     kh, wh = pick(hl, train)
                     # T12 (11-19: halting before any firing took over -- 'go' got no gradient once 'halt' was picked,
                     # because the firing was never computed): in training the firing is computed in both cases; the
@@ -5461,8 +5461,11 @@ def v11_t5(steps=3000, ep_species=8):
                             _, fi, xi, yi = hit
                             pi = next(i for i, m_ in enumerate(rec["cm0"]) if m_[0] == "func" and m_[1] == fi)
                             T_ = lambda i: torch.tensor([i], device=dev)
+                            # (the whole right trace: point at x and y, go, fire that function, then halt -- run c
+                            # 11-19: without the last part a 2nd firing replaced the right value)
                             L_.append(F.cross_entropy(rec["anchor"][None], T_(xi)) + F.cross_entropy(rec["arg2"][None], T_(yi + 1))
-                                      + F.cross_entropy(rec["pick0"][None], T_(pi)) + F.cross_entropy(rec["halt0"][None], T_(0)))
+                                      + F.cross_entropy(rec["pick0"][None], T_(pi)) + F.cross_entropy(rec["halt0"][None], T_(0))
+                                      + (F.cross_entropy(rec["halt1"][None], T_(1)) if "halt1" in rec else 0.))
                     todo.append((b, rec, zc, rn[st[0]]))
                 for b, rec, zc, znode in todo:
                     pre = [r for r in runs if r[1] < b]
