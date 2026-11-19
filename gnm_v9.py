@@ -5470,11 +5470,15 @@ def v11_t5(steps=3000, ep_species=8):
 
             @torch.no_grad()
             def best_questions(h0, al0, need0, CL0, D_, pri, shares):
-                """E10 (11-19; user: "why you think random will help ... be clever"): the KT best whole questions by the
+                """E10 (11-19; user: "why you think random will help ... be clever"): the KT best questions by the
                 model's OWN scores -- log p(anchor) + log p(2nd input | anchor) + log p(function | need, which memories
                 point) -- the same scores the policy and the solver use (the solver's step-0 function score: relevance
                 of the need to the label + whether its memory holds the key). Best-first: the same context asks the
-                same questions, so a value the text states twice is confirmed. -> [(anchor, 2nd input, function)]"""
+                same questions, so a value the text states twice is confirmed. KT DIFFERENT input pairs, each with
+                its best function (E10 run 11-19: over whole triples, two functions with near-equal scores took half
+                of the tries for one pair; from '=' the operator is looked at as much as the other number, so the
+                two numbers were asked at 4 of 150 points; a memory that knows the pair still picks its function by
+                the hit). -> [(anchor, 2nd input, function)]"""
                 n_ = len(CL0)
                 lpa = F.log_softmax(al0, 0)
                 fl = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
@@ -5494,9 +5498,9 @@ def v11_t5(steps=3000, ep_species=8):
                     hit = torch.tensor([[float(funcs.sure(fi, ks_[fi][r_]) > .5) for fi in range(len(fl))]
                                         for r_ in range(len(jb))], device=dev)   # (pairs, functions): memory points
                     lpf = F.log_softmax(fs[None] + solver.hb * hit, 1)
+                    bf, fb = lpf.max(1)                           # (each pair's best function)
                     for r_, j in enumerate(jb):
-                        for fi in range(len(fl)):
-                            cand.append((float(lpa[ia] + lpb[j] + lpf[r_, fi]), ia, j, fi))
+                        cand.append((float(lpa[ia] + lpb[j] + bf[r_]), ia, j, int(fb[r_])))
                 cand.sort(key=lambda c_: -c_[0])
                 return [(ia, j, fi) for _, ia, j, fi in cand[:KT]]
 
