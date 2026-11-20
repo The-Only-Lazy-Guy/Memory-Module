@@ -4967,6 +4967,8 @@ def v11_t5(steps=3000, ep_species=8):
                 def delta(s_, i, h, mem_):
                     m_ = torch.cat([mem_, torch.zeros(1, ED, device=dev)])
                     a_ = F.softmax(s_.q[i](h) @ s_.k[i](m_).T / 128 ** .5, -1)
+                    if XA.get("rec") is not None:        # (measurement: the first position's attention, per block)
+                        XA["rec"].append(a_[0].detach())
                     return torch.tanh(s_.g[i]) * (a_ @ m_)
             xattn = XAttn().to(dev)
             GD = int(os.environ.get("M1_GRADDIAG", "0"))   # (measurement: every GD-th training sentence, per signal)
@@ -5980,8 +5982,28 @@ def v11_t5(steps=3000, ep_species=8):
                                     trs.append(f"COMPUTED '{tk.decode(ids_t[max(0, b - 6):b])}|{tk.decode(ids_t[b:b + 1])}': "
                                                f"results {[nm(n_) for _, n_ in res]} -> {'HIT' if hit_c else 'miss'}")
                             soft = to_llm(res) if res else None
+                            xd = ck[b] and hit_c and soft is not None   # (measurement, below)
+                            XA["rec"] = [] if xd else None
                             c1, st_fb[0] = llm(ctx + ids_t[:b], soft, ids_t[b:e])   # (soft = the results' memory, T11)
                             ce1_l.append(c1)
+                            if xd:
+                                # (measurement, 11-20: where a result named the computed number -- does the cross-attention
+                                # find that slot, per block? and the CE with ONLY that slot in memory (oracle selection):
+                                # e28 named drop ~.15 vs xprobe's .46-.68 -- finding the slot, or the slot too weak?)
+                                with torch.no_grad():
+                                    te_ = Wte(torch.tensor(ids_t[b:b + 1], device=dev)).float()
+                                    rr_ = (soft.detach() - te_).abs().sum(-1) < 1e-4
+                                    for i_, a_ in enumerate(XA["rec"][:XL]):
+                                        S[("xa right", i_)] += float(a_[:-1][rr_].sum())
+                                        S[("xa null", i_)] += float(a_[-1])
+                                    S["xa n"] += 1
+                                    if bool(rr_.any()):
+                                        XA["rec"] = None
+                                        co_ = llm(ctx + ids_t[:b], soft.detach()[rr_], ids_t[b:b + 1])[0]
+                                        S["xa oracle drop"] += float(ce0[b] - co_[0])
+                                        S["xa drop"] += float(ce0[b] - c1[0])
+                                        S["xa oracle n"] += 1
+                            XA["rec"] = None
                             if ck[b]:                    # (measurement, diagnosis F2: what a result that names the
                                 for D_ in ((S, EV) if heldout else (S,)):   # number is worth to the LLM, in nats)
                                     k_h = "hit" if hit_c else "miss"
@@ -6101,6 +6123,13 @@ def v11_t5(steps=3000, ep_species=8):
                           f"functions: {funcs.n}), functions created by confusion {S['functions created']}", flush=True)
                     print(f"   words GNM supplied right this window: {RW.most_common(12)} | E18 say targets (a right policy "
                           f"result in the LLM memory, where needed): {S['say targets']}", flush=True)
+                    if S["xa n"]:                        # (measurement: the interface at named computed points)
+                        n_x, n_o = S["xa n"], max(1, S["xa oracle n"])
+                        print(f"   XA at {n_x} named computed points -- attention on the right slot / on null per block: "
+                              + " ".join(f"{S[('xa right', i_)] / n_x:.2f}/{S[('xa null', i_)] / n_x:.2f}"
+                                         for i_ in range(XL))
+                              + f" | CE drop there {S['xa drop'] / n_o:+.2f}, with ONLY the right slot in memory "
+                                f"{S['xa oracle drop'] / n_o:+.2f} ({S['xa oracle n']} points)", flush=True)
                     RW.clear()
                     print(f"   E10 check: tries that asked a stored question {S['tries that asked a stored question']}/"
                           f"{S['tries']} | at {S['computed points (both numbers readable)']} computed points the two "
