@@ -4961,19 +4961,33 @@ def v11_t5(steps=3000, ep_species=8):
                 soft vector), so an exact token can flow to the tied output head; a null slot lets a position take
                 nothing. ~~The gate starts at 0~~ The gate starts slightly open (M1_GATE0, tanh .2 = .197): the query /
                 key get gradient in proportion to tanh(gate), so at 0 they could never learn which result to read; the
-                gate then only learned to stay shut against the junk ones (R3 / R4: .03-.04; C1 run d: about -.01)"""
+                gate then only learned to stay shut against the junk ones (R3 / R4: .03-.04; C1 run d: about -.01).
+                E22 (11-20, Claude's fix after the user's "it still cant do very well. Something is off"): ~~gate
+                tanh(g) <= 1~~ -> a learned GAIN per block, exp(g), starting at the same .2, learned 10x faster (its own
+                optimizer group, lr 1e-2, no weight decay), up to 64. Evidence: the XA measurement on e28's weights --
+                at named computed points the attention found the right slot (.25-.75 in blocks 0, 1, 4-7; null 0.00) and
+                the CE drop with ONLY that slot (+.76-.98) was no larger than the actual (+1.13-1.41): by the reading
+                written before that measurement, "the slot is too weak where it lands". A slot is a token embedding (norm
+                3.96) times tanh(g) <= 1, added to GPT-2's residual stream (measured 11-20 on a GSM8K text, CPU: median
+                norm 52 after block 0, 89 after block 6, 228 after block 10 -- the push was 1-4%), and the scalar gate moved at
+                Adam's ~.001 per step (e27: block 9 .20 -> .64 in 14,500 sentences); the interface probe (always-right
+                result, 12 blocks trained) lowered the CE only 5.54 -> 4.75. A right result can now be said outright by
+                the LLM's own head (tied embeddings); a wrong one is still routed to the null slot by the attention"""
                 def __init__(s_):
                     super().__init__()
                     s_.q = nn.ModuleList([nn.Linear(ED, 128) for _ in range(XL)])
                     s_.k = nn.ModuleList([nn.Linear(ED, 128) for _ in range(XL)])
-                    s_.g = nn.Parameter(torch.full((XL,), float(os.environ.get("M1_GATE0", ".2"))))
+                    s_.g = nn.Parameter(torch.full((XL,), math.log(max(1e-4, float(os.environ.get("M1_GATE0", ".2"))))))
+
+                def gain(s_):
+                    return torch.exp(s_.g.clamp(max=math.log(64.)))
 
                 def delta(s_, i, h, mem_):
                     m_ = torch.cat([mem_, torch.zeros(1, ED, device=dev)])
                     a_ = F.softmax(s_.q[i](h) @ s_.k[i](m_).T / 128 ** .5, -1)
                     if XA.get("rec") is not None:        # (measurement: the first position's attention, per block)
                         XA["rec"].append(a_[0].detach())
-                    return torch.tanh(s_.g[i]) * (a_ @ m_)
+                    return s_.gain()[i] * (a_ @ m_)
             xattn = XAttn().to(dev)
             GD = int(os.environ.get("M1_GRADDIAG", "0"))   # (measurement: every GD-th training sentence, per signal)
             GS = collections.Counter()
@@ -5007,9 +5021,12 @@ def v11_t5(steps=3000, ep_species=8):
                 return h_
             for i_, blk in enumerate(M.transformer.h[-XL:]):
                 blk.register_forward_hook(_xhook(i_))
-            new_p = [p_ for m_ in (ask, proj, mem, enc, solver, xattn) for p_ in m_.parameters()]
+            new_p = [p_ for m_ in (ask, proj, mem, enc, solver, xattn) for p_ in m_.parameters() if p_ is not xattn.g]
             lopt = torch.optim.AdamW([{"params": new_p, "lr": 1e-3}, {"params": G10.eparams(), "lr": 2e-4},
-                                      {"params": list(reader.parameters()) + list(relm.parameters()), "lr": 1e-4}])
+                                      {"params": list(reader.parameters()) + list(relm.parameters()), "lr": 1e-4},
+                                      # (E22: the interface gain in log space -- 10x faster; no decay, which would pull
+                                      # a log-gain toward gain 1)
+                                      {"params": [xattn.g], "lr": 1e-2, "weight_decay": 0.}])
             for _ in range(int(os.environ.get("M1_FUNCS0", "2"))):
                 lopt.add_param_group({"params": funcs.spawn(F.normalize(torch.randn(D12, device=dev), dim=0)), "lr": 1e-3})
             notrain = os.environ.get("M1_NOTRAIN", "0") == "1"   # (re-read the stream and evaluate a trained M1)
@@ -5782,43 +5799,69 @@ def v11_t5(steps=3000, ep_species=8):
                 - E4 remember (one shot, no gradient): a firing that pointed at nothing gets that word (user 11-16 "if
                   cant point -> create new node", T4 open slots filled by later reading); a value the text contradicts
                   is outcounted; E11: when one question has two answers the text confirmed (each stated >= 2x), the
-                  model creates a new function (label = that query's need) for the 2nd.
+                  model creates a new function (label = that query's need) for the 2nd. E23 (11-20): remembered at
+                  every point where the text states a word, needed there or not; the policy's unanswered question too;
+                  one statement = one count.
                 -> (local loss of the picks or None, the LLM's 'say' loss or None)"""
                 if j0 is None:
                     return None, None
                 L_, SY, newf = [], [], NEWF              # (a question split once -> its new function, for good: e22
                                                          #  split function 18's '30'/'8' question twice)
                 T_ = lambda i: torch.tensor([i], device=dev)
+                with torch.no_grad():
+                    fl_ = F.normalize(torch.stack(list(funcs.labels)), dim=-1)
                 for b, recs_q in qrecs:
                     if not recs_q or b >= len(ids_t):
                         continue
                     zw = tword(ids_t[b])
-                    view = {tword(t) for _, ids in recent_s for t in ids} | {tword(t) for t in ids_t[:b]}
                     wh_ = WH[hash(tuple(ids_t[:b + 1]))]       # (measurement, overfit test: what happened at this point)
-                    if not any(ch.isalnum() for ch in zw) or zw in view or top0[b]:
-                        wh_["not stored: " + ("not a word" if not any(ch.isalnum() for ch in zw) else
-                                              "the word was in view" if zw in view else "the LLM alone's top-1")] += 1
+                    if not any(ch.isalnum() for ch in zw):
+                        wh_["not stored: not a word"] += 1
                         continue
                     zn = j0 + b                          # (the token node of the word the text stated)
-                    C1S["new words stated where GNM was asked"] += 1
-                    right = [r for r in recs_q if r["result"] is not None and nodes[r["result"]]["names"][0] == zw]
-                    if right:
-                        RW[zw] += 1                      # (measurement: which words GNM supplied right)
-                    C1S["right queries"] += len(right)
-                    C1S["segments with a right query"] += bool(right)
-                    C1S["... one of them before its own stop"] += any(r["pol"] for r in right)
-                    if train and right:
-                        for r in right:
-                            L_ += [F.cross_entropy(lg_[None], T_(k_)) for lg_, k_ in r["picks"]]
-                    if any(r["pol"] for r in right):     # (E18: the LLM had this right result in its memory)
-                        C1S["say targets"] += 1
-                        if train and ce1.requires_grad:
-                            SY.append(ce1[b])
+                    view = {tword(t) for _, ids in recent_s for t in ids} | {tword(t) for t in ids_t[:b]}
+                    # E23 (11-20, Claude's fix after the user's "We are allowing the model to store anything in the graph
+                    # right?"): 'needed' (not in view, not the LLM alone's top-1) decides only what TEACHES -- the right
+                    # check, the imitation, the say target, a new function -- no longer what is REMEMBERED. D1 E4 is
+                    # "memory filled from what the text states"; the needed test (79e405d) was added against junk
+                    # IMITATION ('The' / 'So' at sentence starts) and happened to sit before the writes too, so a fact
+                    # stated where its word was in view or guessed by the LLM was never kept -- 34 of 152 computed
+                    # results per pass of the first 60 GSM8K problems are in view (ov_stats.py), and the same question
+                    # later, out of view, found nothing
+                    needed = zw not in view and not top0[b]
+                    if not needed:
+                        wh_["stored where not needed: " + ("the word was in view" if zw in view else
+                                                            "the LLM alone's top-1")] += 1
+                    if needed:
+                        C1S["new words stated where GNM was asked"] += 1
+                        right = [r for r in recs_q if r["result"] is not None and nodes[r["result"]]["names"][0] == zw]
+                        if right:
+                            RW[zw] += 1                  # (measurement: which words GNM supplied right)
+                        C1S["right queries"] += len(right)
+                        C1S["segments with a right query"] += bool(right)
+                        C1S["... one of them before its own stop"] += any(r["pol"] for r in right)
+                        if train and right:
+                            for r in right:
+                                L_ += [F.cross_entropy(lg_[None], T_(k_)) for lg_, k_ in r["picks"]]
+                        if any(r["pol"] for r in right):   # (E18: the LLM had this right result in its memory)
+                            C1S["say targets"] += 1
+                            if train and ce1.requires_grad:
+                                SY.append(ce1[b])
                     for r in recs_q:
                         # (only the firing that gave the query's answer is judged -- an earlier one in a chain was a step)
-                        for fi, Dx, Dy, gave in r["fired"][-1:] if r["fired"] and r["fired"][-1][3] == r["result"] else []:
+                        gv_ = r["fired"][-1:] if r["fired"] and r["fired"][-1][3] == r["result"] else []
+                        qd_ = r.get("qd")
+                        if not gv_ and r["pol"] and qd_ is not None and qd_[0] is not None and qd_[1] is not None:
+                            # E23: the policy's own question that no function knew (E17: then nothing fires, so since
+                            # E17 it was never remembered -- only the tries' questions were) is an open slot: the text's
+                            # word fills it in the function its need points at (C1: "in the function that answered it
+                            # or the one the need points at"; user 11-16 "if cant point -> create new node")
+                            gv_ = [(int((solver.ft.detach() * (fl_ @ r["need"])).argmax()), qd_[0], qd_[1], None)]
+                        for fi, Dx, Dy, gave in gv_:
                             if gave is not None and nodes[gave]["names"][0] != zw:   # (contradicted by the text)
                                 k_ = int(funcs.find(fi, funcs.key(fi, Dx, Dy))[0])
+                                # (E23: a new function is made only where the word was needed, as before E23; a
+                                # question already split still writes into its own function)
                                 # E11 (11-19): the model creates a function only when one question has exactly TWO
                                 # answers and the text confirmed both -- the one it holds (stated >= 2x) and this word
                                 # (stated before, now again), nothing else ever stated for it; a word stated once is only
@@ -5827,7 +5870,7 @@ def v11_t5(steps=3000, ep_species=8):
                                 # 'Carolyn' ... ; E10 run: 'Half' 2x vs 'So' 2x on a question asked after full stops)
                                 if (k_ >= 0 and funcs.value(fi, k_)[1] >= 2 and funcs.cnt[fi][k_][zw] >= 1
                                         and len(funcs.cnt[fi][k_]) == 2
-                                        and ((fi, k_) in newf or len(funcs.labels) < NF)):
+                                        and ((fi, k_) in newf or (needed and len(funcs.labels) < NF))):
                                     if (fi, k_) not in newf:
                                         print(f"M1: function {len(funcs.labels)} created: function {fi} holds "
                                               f"'{funcs.value(fi, k_)[0]}' ({funcs.value(fi, k_)[1]}x) and '{zw}' "
@@ -5838,7 +5881,7 @@ def v11_t5(steps=3000, ep_species=8):
                                     fi = newf[(fi, k_)]
                             # (applied after this sentence's backward: the soft pointing (P1) keeps the memory for the
                             # gradient -- writing it in place before the backward broke autograd, P1+E9 run 11-19)
-                            PEND.append((fi, funcs.key(fi, Dx, Dy), zw, zn, nodes[zn]["z"], r.get("words")))
+                            PEND.append((fi, funcs.key(fi, Dx, Dy), zw, zn, nodes[zn]["z"], r.get("words"), b))
                             C1S["facts written"] += 1
                             wh_["stored " + zw] += 1
                             wh_[("q", r.get("words"))] += 1
@@ -6176,8 +6219,17 @@ def v11_t5(steps=3000, ep_species=8):
                     for t_ in trs:
                         print(f"   {t_}", flush=True)
                 # (function creation: a confused function -> a new one, in explore_after, D1 E4)
+                seen_ = set()
                 for w_ in PEND:                          # (remember: this sentence's facts, after its backward)
-                    QW.setdefault((w_[0], funcs.write(*w_[:5])), w_[5])   # (inspection: the question's words)
+                    # E23: one statement = one count -- the same question asked at the same point by several queries
+                    # (the policy and a try firing the same function) was counted twice, which made a fact look
+                    # confirmed (E11's '>= 2x', E13's share) after the text had said it once
+                    k_f = int(funcs.find(w_[0], w_[1])[0])
+                    if k_f >= 0 and (w_[0], k_f, w_[6]) in seen_:
+                        continue
+                    k_w = funcs.write(*w_[:5])
+                    seen_.add((w_[0], k_w, w_[6]))
+                    QW.setdefault((w_[0], k_w), w_[5])   # (inspection: the question's words)
                 PEND.clear()
                 if not nomem:
                     recent_s.append((H_c, ids_f))
@@ -6202,7 +6254,7 @@ def v11_t5(steps=3000, ep_species=8):
                     print(line(S, f"{tag} {k_s + 1}/{len(sents)}") + f" | picks: edges {S['edge picks']}, functions "
                           f"{S['function picks']} ({len(funcs.labels)} functions) | reads "
                           f"credited +{S['reads credited +']} / -{S['reads credited -']} | nodes {len(nodes)}, edges {len(edges) // 2} "
-                          f"| gate {[round(float(torch.tanh(g_)), 3) for g_ in xattn.g]} "
+                          f"| gain (E22) {[round(float(g_), 3) for g_ in xattn.gain()]} "
                           f"| GPU peak {torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB | {time.time() - t0:.0f}s", flush=True)
                     print(f"   memory: facts written {S['facts written']} (keys now {sum(funcs.n)} in {len(funcs.labels)} "
                           f"functions: {funcs.n}), functions created by confusion {S['functions created']}", flush=True)
