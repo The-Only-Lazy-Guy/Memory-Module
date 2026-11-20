@@ -4646,6 +4646,9 @@ def v11_t5(steps=3000, ep_species=8):
                 return [a for a in a_ if a.get("text")]
             n_ev = int(os.environ.get("M1_EVAL", "40"))
             arts = load_arts(os.environ.get("M1_DATA", "species_e1.json"))[:int(os.environ.get("M1_ARTS", "529"))]
+            # (overfit test, user 11-20 "can you do overfit test or something or inspect": the same articles read
+            # M1_REPEAT times in a row -- after the first pass every fact has been stated before)
+            arts = arts * int(os.environ.get("M1_REPEAT", "1"))
             if os.environ.get("M1_EVAL_DATA"):           # (held-out articles from their own file, e.g. GSM8K test)
                 arts = arts + load_arts(os.environ["M1_EVAL_DATA"])[:n_ev]
             WIN, KQ = int(os.environ.get("M1_WIN", "256")), int(os.environ.get("M1_QUERIES", "3"))
@@ -4934,6 +4937,7 @@ def v11_t5(steps=3000, ep_species=8):
                     s_.at[fi][k][val] = node
                     if s_.cnt[fi][k].most_common(1)[0][0] == val:   # (the answer the key now gives)
                         s_.Zv[fi][k] = z
+                    return k
             ask, enc, solver, funcs = Ask().to(dev), Enc().to(dev), Solver().to(dev), Funcs().to(dev)
             proj = nn.Sequential(nn.LayerNorm(E_), nn.Linear(E_, ED)).to(dev)
             with torch.no_grad():
@@ -5790,7 +5794,10 @@ def v11_t5(steps=3000, ep_species=8):
                         continue
                     zw = tword(ids_t[b])
                     view = {tword(t) for _, ids in recent_s for t in ids} | {tword(t) for t in ids_t[:b]}
+                    wh_ = WH[hash(tuple(ids_t[:b + 1]))]       # (measurement, overfit test: what happened at this point)
                     if not any(ch.isalnum() for ch in zw) or zw in view or top0[b]:
+                        wh_["not stored: " + ("not a word" if not any(ch.isalnum() for ch in zw) else
+                                              "the word was in view" if zw in view else "the LLM alone's top-1")] += 1
                         continue
                     zn = j0 + b                          # (the token node of the word the text stated)
                     C1S["new words stated where GNM was asked"] += 1
@@ -5831,9 +5838,65 @@ def v11_t5(steps=3000, ep_species=8):
                                     fi = newf[(fi, k_)]
                             # (applied after this sentence's backward: the soft pointing (P1) keeps the memory for the
                             # gradient -- writing it in place before the backward broke autograd, P1+E9 run 11-19)
-                            PEND.append((fi, funcs.key(fi, Dx, Dy), zw, zn, nodes[zn]["z"]))
+                            PEND.append((fi, funcs.key(fi, Dx, Dy), zw, zn, nodes[zn]["z"], r.get("words")))
                             C1S["facts written"] += 1
+                            wh_["stored " + zw] += 1
+                            wh_[("q", r.get("words"))] += 1
                 return (torch.stack(L_).mean() if L_ else None), (torch.stack(SY).mean() if SY else None)
+
+            def miss_bucket(recs_q, ids_t, b):
+                """(measurement, overfit test, user 11-20: "We are allowing the model to store anything in the graph
+                right? ... it still cant do very well. Something is off") -- where the chain broke at a computed point
+                whose number no result named: per policy query, how far it got (its question's key in a function's
+                memory -> sure -> the answer is the word); the furthest query counts. WH = what happened at this same
+                point when the same sentence was read before (stored, under which questions, or why not)"""
+                zw = tword(ids_t[b])
+                wh_ = WH.get(hash(tuple(ids_t[:b + 1])), {})
+                best = (0, "no policy query")
+                for r in [r for r in recs_q if r["pol"]]:
+                    qd_ = r.get("qd", (None, None))
+                    if qd_[0] is None or qd_[1] is None:
+                        o_ = (1, "1-input question (no function can look it up)")
+                    else:
+                        kn_ = [(fi, int(funcs.find(fi, funcs.key(fi, qd_[0], qd_[1]))[0])) for fi in range(len(funcs.labels))]
+                        kn_ = [(fi, k_) for fi, k_ in kn_ if k_ >= 0]
+                        sure_ = [(fi, k_) for fi, k_ in kn_ if funcs.sure(fi, k_) > .5]
+                        if not kn_:
+                            sk_ = sorted(k_ for k_ in wh_ if isinstance(k_, str) and k_.startswith("not stored"))
+                            o_ = (2, "question unknown -- the number was stored here before under other questions"
+                                  if wh_.get("stored " + zw) else
+                                  "question unknown -- " + sk_[0] + " when read before" if sk_ else
+                                  "question unknown -- never stored here (first read, or no query here before)")
+                        elif not sure_:
+                            o_ = (3, "question known, memory not sure (conflicting answers)")
+                        elif not any(funcs.value(fi, k_)[0] == zw for fi, k_ in sure_):
+                            o_ = (4, "memory sure of another word")
+                        else:
+                            o_ = (5, "memory right, not among the results the LLM got")
+                    best = max(best, o_)
+                return best[1]
+
+            def print_buckets(D_, tag):
+                """(measurement, overfit test) computed points: named, or the first link of the chain that broke"""
+                bk_ = sorted(((k_[1], v_) for k_, v_ in D_.items() if isinstance(k_, tuple) and k_[0] == "bucket"),
+                             key=lambda t: -t[1])
+                if bk_:
+                    print(f"   computed points ({tag}), named or where the chain broke: "
+                          + "; ".join(f"{k_} {v_}" for k_, v_ in bk_), flush=True)
+
+            def dump_funcs(tag):
+                """(inspection, overfit test 11-20) what each function's memory holds: keys, how many the text stated
+                >= 2x, how many point (sure), and its most stated entries -- the question's words -> answers (times)"""
+                for fi in range(len(funcs.labels)):
+                    n_ = funcs.n[fi]
+                    if not n_:
+                        continue
+                    tot = [sum(c_.values()) for c_ in funcs.cnt[fi][:n_]]
+                    print(f"FUNCS {tag} function {fi}: {n_} keys, stated >= 2x {sum(t_ >= 2 for t_ in tot)}, sure "
+                          f"{sum(funcs.sure(fi, k_) > .5 for k_ in range(n_))}, fired by the policy {funcs.used[fi]}", flush=True)
+                    print(f"FUNCS {tag} function {fi} most stated: " + "; ".join(
+                        f"{QW.get((fi, k_), '?')} -> {dict(funcs.cnt[fi][k_].most_common(3))}"
+                        for k_ in sorted(range(n_), key=lambda k_: -tot[k_])[:10]), flush=True)
 
             # ---------------------------------------------------------------- the stream
             stream, recent_s = [], collections.deque(maxlen=2)
@@ -5845,6 +5908,8 @@ def v11_t5(steps=3000, ep_species=8):
             PEND = []                                    # (D1 E4 memory writes of the current sentence)
             NEWF = {}                                    # (E11: (function, key) split -> the function made for it)
             RW = collections.Counter()                   # (measurement: words GNM supplied right, per window)
+            WH = collections.defaultdict(collections.Counter)   # (measurement: sentence prefix -> what was stored there)
+            QW = {}                                      # (inspection: (function, key) -> the question's words)
             t0 = time.time()
             start_k = 0
             if os.environ.get("M1_RESUME", ""):          # (F6: continue reading where a saved run stopped)
@@ -5887,8 +5952,10 @@ def v11_t5(steps=3000, ep_species=8):
                         f"queries/sentence {D_['queries'] / max(1, D_['sentences']):.2f} | self-prediction (local): "
                         f"{D_['sp hits']}/{D_['sp n']} hit (greedy {D_['sp greedy hits']}), numbers {D_['sp num hits']}/{D_['sp num n']} | a result named "
                         f"the computed number: {D_['comp hits']}/{D_['comp segs']} segments (CE drop on that number: "
-                        f"named {D_['comp hit drop'] / max(1, D_['comp hit n']):+.2f}, not named "
-                        f"{D_['comp miss drop'] / max(1, D_['comp miss n']):+.2f} nats) | D1: new words the text "
+                        f"named {D_['comp hit drop'] / max(1, D_['comp hit n']):+.2f} (CE with GNM "
+                        f"{D_['comp hit ce1'] / max(1, D_['comp hit n']):.2f}), not named "
+                        f"{D_['comp miss drop'] / max(1, D_['comp miss n']):+.2f} (CE with GNM "
+                        f"{D_['comp miss ce1'] / max(1, D_['comp miss n']):.2f}) nats) | D1: new words the text "
                         f"stated where GNM was asked {D_['new words stated where GNM was asked']}, segments with a right "
                         f"query or try {D_['segments with a right query']} (a policy query among them "
                         f"{D_['... one of them before its own stop']}; right ones {D_['right queries']}), tries that "
@@ -5929,6 +5996,8 @@ def v11_t5(steps=3000, ep_species=8):
                             pri_A, p0_ = att_prior(att_row(attq, len(ctx), b), A_pos) if A_lat else (None, 0.)
                             res, c_, nl_, recs_q = (ask_seg(st_in, A_lat, A_men, A_D, train, len(sent_end), tr, pri_A, p0_,
                                                             A_sp) if A_lat else ([], 0., 0, []))
+                            for r in recs_q:             # (inspection: each question's words, in reading order)
+                                r["words"] = tuple(A_men[i][1] if 0 <= i < len(A_men) else "<result>" for i in r["asked"])
                             recs.append((b, recs_q))
                             if ck[b] and recs_q:         # (measurement, benchmark only -- E10 check: did the questions
                                 nums = [p for p in range(b)   # take the two numbers written right before this result?)
@@ -5976,9 +6045,18 @@ def v11_t5(steps=3000, ep_species=8):
                                 hit_c = any(n_ is not None and nodes[n_]["ids"] and any(f_[:1] == ids_t[b:b + 1]
                                                                                        for f_ in forms(n_))
                                             for _, n_ in res)
+                                bk_ = "named" if hit_c else miss_bucket(recs_q, ids_t, b)   # (overfit test)
                                 for D_ in ((S, EV) if heldout else (S,)):
                                     D_["comp segs"] += 1
                                     D_["comp hits"] += hit_c
+                                    D_[("bucket", bk_)] += 1
+                                if heldout and not hit_c and EV["miss traces"] < 12:
+                                    EV["miss traces"] += 1
+                                    wq_ = WH.get(hash(tuple(ids_t[:b + 1])), {})
+                                    trs.append(f"MISS '{tk.decode(ids_t[max(0, b - 8):b])}|{tk.decode(ids_t[b:b + 1])}': "
+                                               f"{bk_} | the policy asked {[r['words'] for r in recs_q if r['pol']]} | "
+                                               f"stored here before: {[k_[1] for k_ in wq_ if isinstance(k_, tuple)][:6]} "
+                                               f"{[k_ for k_ in wq_ if isinstance(k_, str)]}")
                                 if heldout and EV["comp segs"] <= 8:
                                     trs.append(f"COMPUTED '{tk.decode(ids_t[max(0, b - 6):b])}|{tk.decode(ids_t[b:b + 1])}': "
                                                f"results {[nm(n_) for _, n_ in res]} -> {'HIT' if hit_c else 'miss'}")
@@ -6010,6 +6088,7 @@ def v11_t5(steps=3000, ep_species=8):
                                     k_h = "hit" if hit_c else "miss"
                                     D_[f"comp {k_h} n"] += 1
                                     D_[f"comp {k_h} drop"] += float(ce0[b] - c1[0])
+                                    D_[f"comp {k_h} ce1"] += float(c1[0])   # (overfit test: the CE itself)
                             if heldout:                  # control: the same number of positions, NO memory content
                                 with torch.no_grad():
                                     cec_l.append(llm(ctx + ids_t[:b], proj(torch.zeros(len(soft), E_, device=dev)), ids_t[b:e])[0]
@@ -6098,7 +6177,7 @@ def v11_t5(steps=3000, ep_species=8):
                         print(f"   {t_}", flush=True)
                 # (function creation: a confused function -> a new one, in explore_after, D1 E4)
                 for w_ in PEND:                          # (remember: this sentence's facts, after its backward)
-                    funcs.write(*w_)
+                    QW.setdefault((w_[0], funcs.write(*w_[:5])), w_[5])   # (inspection: the question's words)
                 PEND.clear()
                 if not nomem:
                     recent_s.append((H_c, ids_f))
@@ -6137,6 +6216,7 @@ def v11_t5(steps=3000, ep_species=8):
                               + f" | CE drop there {S['xa drop'] / n_o:+.2f}, with ONLY the right slot in memory "
                                 f"{S['xa oracle drop'] / n_o:+.2f} ({S['xa oracle n']} points)", flush=True)
                     RW.clear()
+                    print_buckets(S, "this window")
                     print(f"   E10 check: tries that asked a stored question {S['tries that asked a stored question']}/"
                           f"{S['tries']} | at {S['computed points (both numbers readable)']} computed points the two "
                           f"numbers right before it were asked by the best try {S['... the best try asked them']}, by "
@@ -6160,8 +6240,10 @@ def v11_t5(steps=3000, ep_species=8):
                     print("M1: training stream done; evaluation articles next (memory continues, no training)", flush=True)
             print(line(EV, f"EVAL TOTAL ({EV['sentences']} sentences of {n_ev} held-out articles, memory = everything "
                        f"read before)"), flush=True)
+            print_buckets(EV, "EVAL TOTAL")
             if not nomem:
                 dump_graph("end")
+                dump_funcs("end")
             save_m1()
 
         if os.environ.get("V12_LM", "0") == "1":
