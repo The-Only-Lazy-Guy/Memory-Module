@@ -5770,8 +5770,8 @@ def v11_t5(steps=3000, ep_species=8):
                 - E3 a right query or try is the target for all its own picks -- its own right trace (D7; user 11-03 "N
                   rollouts, best = target"); a right try teaches the policy's first question; E18 (11-20): the trace's
                   last step is the LLM saying the result (user: all output said by the LM; the translator gets +/-
-                  signals) -- where the policy's result was right, the LLM's CE there is a target too, its own mean, for
-                  the reading path only (E21: not the LLM's adapter)
+                  signals) -- where the policy's result was right, the LLM's CE there is a target too, its own mean
+                  (~~E21: for the reading path only~~ -- e29: computed numbers worse)
                   (e26: a right result reached the LLM 4-14x per window and its CE fell by ~.1, gates closing; the
                   xprobe: the same interface trained where results land learns a .5 drop with 15% right -- in the run
                   that point is ~1 of the ~300 token CEs in an 8-sentence step);
@@ -6027,7 +6027,8 @@ def v11_t5(steps=3000, ep_species=8):
                             # query could pay for itself; the cost is now per token too: QCOST nats per query per
                             # sentence, in the same units as the CE mean)
                             loss = (ce1.mean() + QCOST * cost / len(ids_t) + (LSP * sp_loss if sp_loss is not None else 0.)
-                                    + (LHS * hs_loss if hs_loss is not None else 0.))   # (E18's say term: below, E21)
+                                    + (LHS * hs_loss if hs_loss is not None else 0.)
+                                    + (LHS * say_loss if say_loss is not None else 0.))   # (E18)
                         trs += [f"SELF-PREDICTION {x}" for x in (sp_tr if show else [])]
                 if train:
                     if GD and k_s % GD == 0 and not nomem:   # (measurement: which parts each signal reaches)
@@ -6046,18 +6047,11 @@ def v11_t5(steps=3000, ep_species=8):
                                 GS[(src, nm_, "nz")] += n2 > 0
                                 GS[(src, nm_, "nan")] += n2 != n2
                             GS[(src, "n")] += 1
-                    if not nomem and say_loss is not None:
-                        # E21 (11-20): the say target (E18) trains the READING path -- interface, projector, GNM -- not
-                        # the LLM's own weights. e28 window 23,500: its gradient on the LoRA had norm 25 against the text
-                        # CE's 4.6, so the LLM's adapter learned mostly to say results (the same LLM with GNM's results
-                        # removed: 2.189 vs the fair run's 2.111 on held-out; all tokens with GNM +.011 over fair)
-                        lid_ = {id(p_) for p_ in G10.eparams()}
-                        sp_ = [p_ for g_ in lopt.param_groups for p_ in g_["params"]
-                               if id(p_) not in lid_ and p_.requires_grad]
-                        gs_ = torch.autograd.grad(LHS * say_loss / GA, sp_, retain_graph=True, allow_unused=True)
-                        for p_, g_ in zip(sp_, gs_):
-                            if g_ is not None:
-                                p_.grad = g_ if p_.grad is None else p_.grad + g_
+                    # (~~E21: the say target trains only the reading path, not the LLM's adapter; the adapter clipped by
+                    # itself~~ -- e29 vs e28 on the same stream: all tokens with GNM equal (+-.008), computed numbers with
+                    # GNM worse by .05-.18 from window 13,500 (the adapter alone 3.5 vs 3.0 on them): the say target on
+                    # the adapter is what teaches the LLM to say results; neither it nor the joint clip was the all-token
+                    # cost)
                     (loss / GA).backward()
                     # (C, 11-19 audit fix: the reader had no training signal) a picked claim edge's logit gradient says
                     # whether picking it lowered the loss (CE + self-prediction); the reader imitates its own reading of
@@ -6075,12 +6069,8 @@ def v11_t5(steps=3000, ep_species=8):
                         (torch.stack(rl_).sum() / GA).backward()
                     if (k_s + 1) % GA == 0:
                         # (F11, diagnosis 11-20: no clipping -- the imitation CE over ~150 candidates and the halt's
-                        # T12 comparison can spike; one step must not undo many). E21: the LLM's adapter is clipped by
-                        # itself, as in the fair no-GNM run -- not scaled down by GNM's own gradients
-                        lid_ = {id(p_) for p_ in G10.eparams()}
-                        all_ = [p_ for g_ in lopt.param_groups for p_ in g_["params"]]
-                        torch.nn.utils.clip_grad_norm_([p_ for p_ in all_ if id(p_) in lid_], 1.)
-                        torch.nn.utils.clip_grad_norm_([p_ for p_ in all_ if id(p_) not in lid_], 1.)
+                        # T12 comparison can spike; one step must not undo many)
+                        torch.nn.utils.clip_grad_norm_([p_ for g_ in lopt.param_groups for p_ in g_["params"]], 1.)
                         lopt.step()
                         lopt.zero_grad()
                 ce1 = ce1.detach()
