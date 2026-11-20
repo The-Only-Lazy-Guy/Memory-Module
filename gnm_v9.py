@@ -4964,7 +4964,7 @@ def v11_t5(steps=3000, ep_species=8):
                 gate then only learned to stay shut against the junk ones (R3 / R4: .03-.04; C1 run d: about -.01).
                 E22 (11-20, Claude's fix after the user's "it still cant do very well. Something is off"): ~~gate
                 tanh(g) <= 1~~ -> a learned GAIN per block, exp(g), starting at the same .2, learned 10x faster (its own
-                optimizer group, lr 1e-2, no weight decay), up to 64. Evidence: the XA measurement on e28's weights --
+                optimizer group, lr 1e-2, no weight decay). Evidence: the XA measurement on e28's weights --
                 at named computed points the attention found the right slot (.25-.75 in blocks 0, 1, 4-7; null 0.00) and
                 the CE drop with ONLY that slot (+.76-.98) was no larger than the actual (+1.13-1.41): by the reading
                 written before that measurement, "the slot is too weak where it lands". A slot is a token embedding (norm
@@ -4980,7 +4980,9 @@ def v11_t5(steps=3000, ep_species=8):
                     s_.g = nn.Parameter(torch.full((XL,), math.log(max(1e-4, float(os.environ.get("M1_GATE0", ".2"))))))
 
                 def gain(s_):
-                    return torch.exp(s_.g.clamp(max=math.log(64.)))
+                    # (no cap: a clamp has no gradient above it, so a gain pushed past it could never come back down;
+                    # in log space Adam moves it ~1% per step, so it cannot jump)
+                    return torch.exp(s_.g)
 
                 def delta(s_, i, h, mem_):
                     m_ = torch.cat([mem_, torch.zeros(1, ED, device=dev)])
